@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -e
+
+echo "Running project checks..."
+
+# Replace with actual commands once toolchain is known:
+# format
+# lint
+# typecheck
+# test
+
+echo "Checks passed."
+
+# Bump PATCH version in VERSION file (e.g. 1.2.3 → 1.2.4)
+if [[ -f "VERSION" ]]; then
+  VERSION=$(cat VERSION)
+  MAJOR=$(echo "$VERSION" | cut -d. -f1)
+  MINOR=$(echo "$VERSION" | cut -d. -f2)
+  PATCH=$(echo "$VERSION" | cut -d. -f3)
+  NEW_VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
+  echo "$NEW_VERSION" > VERSION
+  git add VERSION
+  echo "Version bumped: $VERSION → $NEW_VERSION"
+fi

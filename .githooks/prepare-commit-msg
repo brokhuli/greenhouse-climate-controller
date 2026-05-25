@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+
+MSG_FILE="$1"
+COMMIT_SOURCE="$2"
+
+if [[ "$COMMIT_SOURCE" == "merge" ]]; then
+  exit 0
+fi
+
+if [[ -s "$MSG_FILE" ]]; then
+  exit 0
+fi
+
+DIFF=$(git diff --cached)
+
+if [[ -z "$DIFF" ]]; then
+  exit 0
+fi
+
+GENERATED_MSG=$(printf "%s" "$DIFF" | claude code commit-message --model sonnet --effort medium 2>/dev/null)
+
+if [[ -z "$GENERATED_MSG" ]]; then
+  exit 0
+fi
+
+printf "%s\n" "$GENERATED_MSG" > "$MSG_FILE"
