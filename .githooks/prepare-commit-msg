@@ -1,26 +1,32 @@
 #!/usr/bin/env bash
+#
+# Pre-fill the commit message with a Claude-generated draft when none is supplied.
+# Fully non-fatal: any failure leaves the normal commit flow untouched.
 
 MSG_FILE="$1"
 COMMIT_SOURCE="$2"
 
-if [[ "$COMMIT_SOURCE" == "merge" ]]; then
+# Only act on a plain `git commit` (editor) or template commit.
+# Skip -m/-F (message), merges, squashes, and amend/-c/-C (commit).
+case "$COMMIT_SOURCE" in
+  message|merge|squash|commit) exit 0 ;;
+esac
+
+# If the user already wrote a real (non-comment, non-blank) line, leave it alone.
+if grep -qvE '^[[:space:]]*(#.*)?$' "$MSG_FILE"; then
   exit 0
 fi
 
-if [[ -s "$MSG_FILE" ]]; then
-  exit 0
-fi
+# Need the Claude CLI; if absent, do nothing.
+command -v claude >/dev/null 2>&1 || exit 0
 
 DIFF=$(git diff --cached)
+[ -z "$DIFF" ] && exit 0
 
-if [[ -z "$DIFF" ]]; then
-  exit 0
-fi
+PROMPT='Write a git commit message for the staged diff provided on stdin. Use Conventional Commits (feat:, fix:, docs:, refactor:, test:, chore:, etc.). Imperative subject, <=72 chars. Add a brief body only if it clarifies the "why". Output ONLY the raw commit message — no code fences, preamble, or quotes.'
 
-GENERATED_MSG=$(printf "%s" "$DIFF" | claude code commit-message --model sonnet --effort medium 2>/dev/null)
+GENERATED_MSG=$(printf '%s' "$DIFF" | claude -p "$PROMPT" --model haiku --output-format text 2>/dev/null)
+[ -z "$GENERATED_MSG" ] && exit 0
 
-if [[ -z "$GENERATED_MSG" ]]; then
-  exit 0
-fi
-
-printf "%s\n" "$GENERATED_MSG" > "$MSG_FILE"
+# Place the draft above the existing comment template so the user can review/edit.
+printf '%s\n\n%s\n' "$GENERATED_MSG" "$(cat "$MSG_FILE")" > "$MSG_FILE"
