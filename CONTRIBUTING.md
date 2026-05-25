@@ -1,7 +1,6 @@
 # Contributing
 
 ## Guidelines
-- Keep changes small and focused
 - Follow commit conventions
 - Ensure all checks pass before committing
 
