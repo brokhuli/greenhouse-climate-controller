@@ -26,20 +26,26 @@ It mirrors real IoT + SaaS architecture patterns without requiring any cloud ser
 
 ## **What Phase 1 Does**
 
+> This is the high‑level summary. The physical system (sensors, actuators, coupling) is detailed in
+> [`physical-system.md`](./physical-system.md); the controller architecture, control loops,
+> configuration, and fault handling are in
+> [`spec-climate-controller.md`](./spec-climate-controller.md).
+
 - Runs a **Rust controller** with a real embedded‑style architecture
 - Implements a **HAL (Hardware Abstraction Layer)**
-  - Simulated sensors: temperature, humidity, CO₂, soil moisture
-  - Simulated actuators: fan, heater, vents, misters, irrigation valves, grow lights
-- Reads all sensors and applies **hysteresis thresholds** to avoid rapid toggling
-- Runs **PID loops** for temperature and humidity
-- **Schedules irrigation** based on soil moisture and time
-- Applies a **rule engine** for multi‑condition actuator logic (e.g. if humidity > X and temp < Y, do Z)
-- Enforces **safety interlocks** (e.g. don't open vents during simulated rain)
+  - Simulated sensors: temperature (×3 redundant), humidity, CO₂, soil moisture (per zone), PAR (light)
+  - Simulated actuators: heater, fans, roof vents, misters, CO₂ injector, irrigation valves (per zone), grow lights, shade screen
+- Fuses the **three redundant temperature probes** by median voting for fault tolerance
+- Runs a **temperature PID loop** (heater + fans + vents) and a **humidity hysteresis band** (misters)
+- Targets **VPD** (computed from temperature + humidity) as the true climate objective
+- Controls **CO₂** with a hard **vent interlock** (no enrichment while vents are open)
+- **Schedules irrigation** by time‑of‑day + soil moisture threshold, per zone
+- Manages **lighting** via daily light integral (DLI) accumulation — grow lights + shade screen
+- Applies a **rule engine** for coupled multi‑condition actuator logic
+- Enforces **safety interlocks** (critical‑temp override, CO₂ ceiling, irrigation fault)
 - Detects **sensor faults** (stuck sensor, outlier rejection)
-- Publishes sensor readings via **MQTT** with QoS + retained messages
-- Receives actuator commands via **MQTT**
-- Exposes a **REST API** for configuration
-- Streams logs and decisions via **WebSockets**
+- Publishes readings + receives actuator commands via **MQTT** (QoS + retained)
+- Exposes a **REST API** for configuration and **WebSockets** for live logs/events
 - Includes a **local frontend** with real‑time charts and manual override controls
 
 ---
@@ -49,14 +55,18 @@ It mirrors real IoT + SaaS architecture patterns without requiring any cloud ser
 ```
 +------------------------------+
 |   Local Frontend (UI)        |
-|   React / SvelteKit          |
+|   SvelteKit                  |
 +---------------+--------------+
                 | REST / WS
                 v
 +------------------------------+
 |   Rust Controller            |
-|  - Hysteresis + Thresholds   |
-|  - PID Loops                 |
+|  - Temp Fusion (3x voting)   |
+|  - Temp PID / Humidity Band  |
+|  - VPD Target                |
+|  - CO₂ + Vent Interlock      |
+|  - Irrigation Scheduler      |
+|  - Lighting / DLI            |
 |  - Rule Engine               |
 |  - Safety Interlocks         |
 |  - Fault Detection           |
@@ -80,14 +90,15 @@ It mirrors real IoT + SaaS architecture patterns without requiring any cloud ser
 
 - **Rust (Tokio)** — deterministic async controller
 - **HAL Layer**
-  - Simulated sensors: temperature, humidity, CO₂, soil moisture
-  - Simulated actuators: fan, heater, vents, misters, irrigation valves, grow lights
-- **PID controller** — temperature + humidity closed‑loop control
-- **Rule engine** — multi‑condition logic + safety interlocks
+  - Simulated sensors: temperature (×3 redundant), humidity, CO₂, soil moisture (per zone), PAR
+  - Simulated actuators: heater, fans, roof vents, misters, CO₂ injector, irrigation valves (per zone), grow lights, shade screen
+- **Sensor fusion** — redundant temperature probes fused by median voting (fault tolerance)
+- **PID + hysteresis control** — temperature PID, humidity band, VPD target
+- **Rule engine** — coupled multi‑condition logic + safety interlocks
 - **MQTT (EMQX or Mosquitto)** — messaging with QoS + retained messages
 - **REST API** — config + status
 - **WebSockets** — logs + real‑time events
-- **React or SvelteKit** — local dashboard with real‑time charts
+- **SvelteKit** — local dashboard with real‑time charts
 - **SQLite (optional)** — local persistence
 
 ---
@@ -97,6 +108,7 @@ It mirrors real IoT + SaaS architecture patterns without requiring any cloud ser
 - **Embedded‑style architecture** (HAL, drivers, control loops)
 - **Rust async systems** (Tokio)
 - **Hysteresis + threshold control**
+- **Sensor fusion** (redundant sensors, median voting, fault tolerance)
 - **PID tuning and closed‑loop control**
 - **Rule engine design and actuator orchestration**
 - **Safety interlock patterns**
@@ -107,6 +119,13 @@ It mirrors real IoT + SaaS architecture patterns without requiring any cloud ser
 - **REST API design for devices**
 - **Simulated hardware modeling**
 - **Local IoT system integration**
+
+## **Pills for Portfolio**
+
+- Rust
+- Sensor fusion
+- MQTT
+- REST
 
 ---
 
@@ -142,7 +161,7 @@ This is your **local cloud**, built from containers.
 ```
 +------------------------------+
 |   Frontend (nginx)           |
-|   React / SvelteKit          |
+|   React                      |
 +---------------+--------------+
                 | HTTP
                 v
@@ -171,7 +190,7 @@ This is your **local cloud**, built from containers.
 
 - **Go (Echo)** — API service
 - **Postgres or TimescaleDB** — time‑series storage
-- **React/SvelteKit** — dashboard
+- **React** — dashboard
 - **Keycloak or JWT** — auth
 - **Traefik or nginx** — reverse proxy
 - **Docker Compose** — orchestration
@@ -273,10 +292,10 @@ Still simpler than cloud‑integrated AI systems.
 
 # **FINAL SUMMARY TABLE**
 
-| Phase       | Purpose                     | Tech Stack                                                          | Skills Learned                                               | Complexity   |
-| ----------- | --------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------ | ------------ |
-| **Phase 1** | Local controller + local UI | Rust, HAL, MQTT, REST, WebSockets, React/SvelteKit                  | Embedded patterns, PID, rule engine, safety interlocks, fault detection, MQTT, real‑time UI | **6 / 10** |
-| **Phase 2** | Local PaaS platform         | Go, Postgres/Timescale, MQTT, Keycloak/JWT, React/SvelteKit, Docker | PaaS design, DB modeling, auth, microservices, reverse proxy | **6 / 10**   |
-| **Phase 3** | Local AI climate optimizer  | Python, FastAPI, NumPy/SciPy, LLM, MQTT, Postgres                   | Simulation, LLM orchestration, constraints, planning         | **7.5 / 10** |
+| Phase       | Purpose                     | Tech Stack                                                | Skills Learned                                                                              | Complexity   |
+| ----------- | --------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------ |
+| **Phase 1** | Local controller + local UI | Rust, HAL, MQTT, REST, WebSockets, SvelteKit              | Embedded patterns, PID, rule engine, safety interlocks, fault detection, MQTT, real‑time UI | **6 / 10**   |
+| **Phase 2** | Local PaaS platform         | Go, Postgres/Timescale, MQTT, Keycloak/JWT, React, Docker | PaaS design, DB modeling, auth, microservices, reverse proxy                                | **6 / 10**   |
+| **Phase 3** | Local AI climate optimizer  | Python, FastAPI, NumPy/SciPy, LLM, MQTT, Postgres         | Simulation, LLM orchestration, constraints, planning                                        | **7.5 / 10** |
 
 ---

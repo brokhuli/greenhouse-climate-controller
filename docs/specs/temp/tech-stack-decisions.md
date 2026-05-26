@@ -18,7 +18,7 @@
 | Hardware Abstraction | Traits + simulated backend (HAL) |
 | API | REST (config + status) |
 | Streaming | WebSockets (logs + real-time events) |
-| Frontend | React or SvelteKit (local dashboard) |
+| Frontend | SvelteKit (local dashboard) |
 | Deployment Target | Local (Docker) |
 
 ### Why This Stack
@@ -47,7 +47,7 @@
 | Web Framework | Echo |
 | API Style | REST + WebSockets |
 | Database | Postgres or TimescaleDB |
-| Frontend | React or SvelteKit |
+| Frontend | React |
 | Auth | Keycloak (OIDC) or simple JWT in Go |
 | Reverse Proxy | Traefik or nginx |
 | Orchestration | Docker Compose |
@@ -57,7 +57,7 @@
 
 - **Go + Echo** — simple, fast, reliable API service
 - **TimescaleDB** — correct time-series database for greenhouse sensor data; Postgres is fine for early phases
-- **React/SvelteKit** — modern SPA dashboard served via nginx or the API
+- **React** — modern SPA dashboard served via nginx or the API
 - **Keycloak** — realistic local OIDC identity provider; swap for simple JWT to start
 - **Traefik/nginx** — reverse proxy routing between containers
 - **Docker Compose** — single-command local orchestration; no cloud account needed
@@ -73,7 +73,7 @@
 | `mqtt` | EMQX or Mosquitto |
 | `auth` | Keycloak, or simple JWT in Go |
 | `proxy` | Traefik or nginx (optional) |
-| `frontend` | Built React/SvelteKit served by nginx or the API |
+| `frontend` | Built React app served by nginx or the API |
 
 **Connections:**
 - **Phase 1 controller** → local MQTT broker
