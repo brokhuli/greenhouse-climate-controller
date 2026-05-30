@@ -27,7 +27,7 @@ It mirrors real IoT + SaaS architecture patterns without requiring any cloud ser
 ## **What Phase 1 Does**
 
 > This is the high‑level summary. The physical system (sensors, actuators, coupling) is detailed in
-> [`physical-system.md`](./physical-system.md); the controller architecture, control loops,
+> [`physical-system-single.md`](./physical-system-single.md); the controller architecture, control loops,
 > configuration, and fault handling are in
 > [`spec-climate-controller.md`](./spec-climate-controller.md).
 
@@ -138,7 +138,7 @@ Isolated and local, but non‑trivial engineering throughout.
 
 # **PHASE 2 — Local PaaS Platform (Docker‑Only)**
 
-**Purpose:** A full SaaS‑like platform running entirely on your laptop.
+**Purpose:** A multi‑greenhouse management platform running entirely on your laptop — aggregates data from multiple Phase 1 controller instances representing separate greenhouses at a single site.
 
 This is your **local cloud**, built from containers.
 
@@ -146,13 +146,15 @@ This is your **local cloud**, built from containers.
 
 ## **What Phase 2 Does**
 
-- Provides a **Go API** for greenhouse data
+- Manages **multiple greenhouse controllers** (Phase 1 instances) representing separate greenhouses at a single site
+- Provides a **Go API** for multi-greenhouse data and fleet management
 - Stores historical data in **Postgres/TimescaleDB**
 - Hosts a **dashboard frontend**
 - Manages users via **Keycloak** or simple JWT
 - Provides a **reverse proxy** for routing
 - Integrates with Phase 1 via MQTT + REST
 - Runs entirely in **Docker Compose**
+- Exposes **operational metrics** + **structured logs**, with **Prometheus/Grafana** dashboards for platform observability
 
 ---
 
@@ -165,12 +167,13 @@ This is your **local cloud**, built from containers.
 +---------------+--------------+
                 | HTTP
                 v
-+------------------------------+
-|   Go API (Echo)              |
-|  - Device mgmt               |
-|  - Data ingestion            |
-|  - Analytics endpoints       |
-+---------------+--------------+
++-------------------------------+   /metrics    +----------------------+
+|   Go API (Echo)               |<--------------|   Prometheus         |
+|  - Device mgmt                |    (scrape)   |   + Grafana (dash)    |
+|  - Data ingestion             |               +----------------------+
+|  - Analytics endpoints        |
+|  - /metrics + structured logs |
++---------------+---------------+
                 | DB / MQTT
                 v
 +------------------+     +------------------+
@@ -181,7 +184,9 @@ This is your **local cloud**, built from containers.
                 |                |
                 +-------+--------+
                         |
-                Phase 1 Controller
+                Phase 1 Controller (greenhouse A, same site)
+                Phase 1 Controller (greenhouse B, same site)
+                Phase 1 Controller (greenhouse N, same site)
 ```
 
 ---
@@ -195,6 +200,8 @@ This is your **local cloud**, built from containers.
 - **Traefik or nginx** — reverse proxy
 - **Docker Compose** — orchestration
 - **MQTT** — device messaging
+- **Prometheus + Grafana** — metrics scraping + dashboards
+- **Structured logging (slog)** — operational logs from the Go API
 
 ---
 
@@ -209,6 +216,7 @@ This is your **local cloud**, built from containers.
 - **Reverse proxy routing**
 - **Frontend–backend integration**
 - **MQTT ingestion pipelines**
+- **Observability** — instrumenting a service (/metrics), Prometheus scraping, Grafana dashboards, structured logging
 
 ---
 
@@ -233,6 +241,24 @@ No cloud = simpler networking, identity, secrets, and deployment.
   - uses an LLM to generate actuator plans
   - validates plans against constraints
   - sends commands to the controller via MQTT or API
+
+---
+
+## **Optimizer Functions (Per Greenhouse)**
+
+The optimizer is the *intelligence* layer above each greenhouse's deterministic Phase 1 controller.
+It operates on one greenhouse at a time (N independent planning problems, mirroring Phase 1's N
+independent control loops); site-wide orchestration across greenhouses is **out of scope**.
+
+- **Predictive / anticipatory control** — simulate the greenhouse forward and pre-position actuators
+  for upcoming conditions instead of reacting after the fact (e.g., pre-cool before a solar peak).
+- **Setpoint optimization** — decide *what the setpoints should be* (e.g. "growing lettuce" → derive
+  VPD / DLI / CO₂ / temperature targets), then push them down to Phase 1 as config.
+- **Coupling-aware planning** — choose the optimal *combination* of coupled actuators
+  (vent / fan / mister / heater) to hit VPD + DLI + CO₂ goals together, rather than independent
+  reactive loops that can fight each other.
+- **Per-greenhouse efficiency** — optimize one greenhouse's own consumption against a cost /
+  time-of-use signal.
 
 ---
 
@@ -295,7 +321,7 @@ Still simpler than cloud‑integrated AI systems.
 | Phase       | Purpose                     | Tech Stack                                                | Skills Learned                                                                              | Complexity   |
 | ----------- | --------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------ |
 | **Phase 1** | Local controller + local UI | Rust, HAL, MQTT, REST, WebSockets, SvelteKit              | Embedded patterns, PID, rule engine, safety interlocks, fault detection, MQTT, real‑time UI | **6 / 10**   |
-| **Phase 2** | Local PaaS platform         | Go, Postgres/Timescale, MQTT, Keycloak/JWT, React, Docker | PaaS design, DB modeling, auth, microservices, reverse proxy                                | **6 / 10**   |
+| **Phase 2** | Multi-greenhouse management platform (single site) | Go, Postgres/Timescale, MQTT, Keycloak/JWT, React, Docker, Prometheus/Grafana | PaaS design, DB modeling, auth, microservices, reverse proxy, observability                 | **6 / 10**   |
 | **Phase 3** | Local AI climate optimizer  | Python, FastAPI, NumPy/SciPy, LLM, MQTT, Postgres         | Simulation, LLM orchestration, constraints, planning                                        | **7.5 / 10** |
 
 ---

@@ -3,7 +3,7 @@
 Architectural specification for the Phase 1 controller: how it senses the greenhouse, decides, and
 acts. This describes the **software**. For the physical system it controls — the sensors, actuators,
 and the coupling between climate variables — see
-[`physical-system.md`](./physical-system.md).
+[`physical-system-single.md`](./physical-system-single.md).
 
 > Scope note: this is an architectural spec (components, responsibilities, behavior, configuration).
 > Concrete code/module/struct design is deferred until implementation.
@@ -19,7 +19,7 @@ actuators — all behind a Hardware Abstraction Layer (HAL). It exposes its stat
 over MQTT, a REST API, and WebSockets.
 
 What is being sensed and actuated (the physical inventory) lives in
-[`physical-system.md`](./physical-system.md); this spec covers how the controller uses them.
+[`physical-system-single.md`](./physical-system-single.md); this spec covers how the controller uses them.
 
 ---
 
@@ -90,7 +90,7 @@ Example default time constants (configurable in TOML):
 ### Coupling matrix
 
 Actuators affect multiple variables at once — this is what makes the controller experience the
-[coupling problem](./physical-system.md#the-coupling-problem) rather than treating it as theoretical:
+[coupling problem](./physical-system-single.md#the-coupling-problem) rather than treating it as theoretical:
 
 | Actuator | Effects on simulated state |
 |---|---|
@@ -155,7 +155,7 @@ are constant in Phase 1; the scheduling mechanism is built to extend to them lat
 
 ### Zone configuration
 
-Each irrigation [zone](./physical-system.md#zones) is a TOML entry. The irrigation scheduler runs
+Each irrigation [zone](./physical-system-single.md#zones) is a TOML entry. The irrigation scheduler runs
 one independent loop per zone.
 
 ```toml
@@ -330,7 +330,7 @@ are defined in [`contracts/`](../../../contracts/) — this section lists respon
 
 Controller features intentionally **out of scope** for Phase 1 (most are Phase 3 territory). Physical
 elements that are simply not instrumented are listed in
-[`physical-system.md`](./physical-system.md#out-of-scope-for-this-physical-model) instead.
+[`physical-system-single.md`](./physical-system-single.md#out-of-scope-for-this-physical-model) instead.
 
 | Deferred capability | Why / where it belongs |
 |---|---|
@@ -338,3 +338,4 @@ elements that are simply not instrumented are listed in
 | Energy-cost optimization | Needs price data + a planning horizon — Phase 3 |
 | Advanced sensor fusion (Kalman / complementary, cross-quantity) | Estimation-theory methods need the physics model — Phase 3. Phase 1 includes only redundant-temperature median voting (§5) |
 | Full heat/mass-balance HAL physics | Reserved for the Phase 3 digital twin; Phase 1 uses coupled first-order lag (§3) |
+| Combustion heater | Multi-variable actuator (heat + CO₂ + humidity) that breaks the independence assumption of the current control loops; requires actuator-selection coordination logic above the individual PIDs — out of scope for Phase 1 |

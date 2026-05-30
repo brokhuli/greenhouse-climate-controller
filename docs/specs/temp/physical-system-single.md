@@ -27,10 +27,10 @@ simulates sensors and actuators in software. The control logic is real; the hard
 
 | Sensor                      | Measures                                        | Notes                                                                   |
 | --------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------- |
-| Temperature (×3, redundant) | Air temperature (°C)                            | Core input; instrumented with three co-located probes for fault tolerance (fusion algorithm in the P1 spec) |
-| Humidity                    | Relative humidity (% RH)                        | Combined with fused temperature to compute VPD                          |
-| CO₂                         | Concentration (ppm)                             | Drives CO₂ injector; interlocked with vent position                     |
-| PAR                         | Photosynthetically active radiation (µmol/m²/s) | Required for grow light and shade screen control                        |
+| Temperature (×3, redundant) | Air temperature (°C)                            | Core climate variable; three co-located probes give fault tolerance |
+| Humidity                    | Relative humidity (% RH)                        | Together with temperature, determines VPD                           |
+| CO₂                         | Concentration (ppm)                             | Consumed by photosynthesis; escapes when roof vents open           |
+| PAR                         | Photosynthetically active radiation (µmol/m²/s) | Photosynthetic light reaching the canopy                           |
 
 ### Root Zone / Irrigation Sensors
 
@@ -48,8 +48,9 @@ growing trays, propagation areas). Each zone is watered independently of the oth
 
 ### Derived Value: VPD
 
-Vapor Pressure Deficit (kPa) is computed from the fused temperature and RH — it is not a sensor
-but a calculated input used as the true control target for the thermal and humidity loops.
+Vapor Pressure Deficit (kPa) is derived from temperature and relative humidity — it is not a sensor
+but a calculated quantity. It is the climate variable that most directly reflects the moisture stress
+a plant experiences, which is why it matters more than temperature or humidity taken alone.
 
 VPD describes the "dryness" of the air from the plant's perspective:
 - **Too high** (hot, dry air): plant transpires faster than roots supply water; stomata close;
@@ -68,21 +69,21 @@ VPD describes the "dryness" of the air from the plant's perspective:
 | ----------------- | ------------------------------------- | ---------------------------------------------------- |
 | Heater            | On/off or modulating                  | Raises air temperature                               |
 | Ventilation fans  | Variable speed                        | Exhausts hot/humid air; cools by air exchange        |
-| Roof vents        | Motorized, variable position (0–100%) | Passive thermal relief via convection; CO₂ interlock |
+| Roof vents        | Motorized, variable position (0–100%) | Passive convective cooling; also vents CO₂ and humidity |
 | Misters / foggers | On/off solenoid                       | Raises humidity; cools air via evaporation           |
 
 ### CO₂
 
 | Actuator     | Type            | Effect                                                 |
 | ------------ | --------------- | ------------------------------------------------------ |
-| CO₂ injector | On/off solenoid | Raises CO₂ concentration; disabled when vents are open |
+| CO₂ injector | On/off solenoid | Raises CO₂ concentration |
 
 ### Lighting
 
 | Actuator     | Type                  | Effect                                                         |
 | ------------ | --------------------- | -------------------------------------------------------------- |
-| Grow lights  | On/off or dimmable    | Supplemental PAR when natural light is insufficient            |
-| Shade screen | Motorized retractable | Reduces solar heat load; only useful if PAR sensor is included |
+| Grow lights  | On/off or dimmable    | Adds photosynthetic light (PAR) beyond available daylight |
+| Shade screen | Motorized retractable | Reduces incoming solar light and heat load                |
 
 ### Irrigation
 
@@ -123,13 +124,15 @@ dynamics using greenhouse volume.
 
 **Crop-specific physiology / plant species** — this is a generic greenhouse, not a crop model. Real
 crops differ in transpiration, CO₂ uptake, and light response; those differences surface only as
-different setpoint *values*, not different physics. Plant-specific dynamics belong to **Phase 3**.
+different preferred *conditions*, not different physics. Plant-specific dynamics belong to **Phase 3**.
 
 **Nutrient subsystem hardware** — EC/pH sensors and dosing pumps are not instrumented. Nutrient
 management is a parallel control discipline, orthogonal to climate control.
 
 **Weather / outdoor instrumentation** — no outdoor-temperature, wind, or rain sensors. The system
 senses only indoor conditions. Weather-reactive behavior belongs to **Phase 3**'s predictive layer.
+
+**Combustion heater** — a natural gas or propane burner that raises temperature, CO₂, and humidity simultaneously. The project models an electric heater (temperature only) paired with a separate CO₂ injector (CO₂ only), keeping actuator effects independent. Combustion heating would couple those effects — one device driving temperature, CO₂, and humidity at once.
 
 **Other physical elements not modeled** — root-zone temperature, evaporative cooling pads, and
 spatial multi-zone temperature gradients. (Note: the three *co-located* redundant temperature
