@@ -100,7 +100,7 @@ simultaneously:
 
 - **Opening vents** → lowers temperature, lowers CO₂, lowers humidity
 - **Running misters** → raises humidity, lowers temperature
-- **CO₂ via combustion burner** → raises CO₂, raises temperature, raises humidity
+- **CO₂ via combustion burner** → raises CO₂, raises temperature, raises humidity *(introduced in Phase 4)*
 - **Heating** → raises temperature, lowers RH (same absolute moisture, lower relative)
 
 A naive controller that chases each variable independently will fight itself — for example,
@@ -130,9 +130,11 @@ different preferred *conditions*, not different physics. Plant-specific dynamics
 management is a parallel control discipline, orthogonal to climate control.
 
 **Weather / outdoor instrumentation** — no outdoor-temperature, wind, or rain sensors. The system
-senses only indoor conditions. Weather-reactive behavior belongs to **Phase 3**'s predictive layer.
+senses only indoor conditions. Phase 3 anticipates only the *deterministic* diurnal cycle (a
+clock-known disturbance); true **weather-reactive** behavior, driven by a live + forecast feed,
+belongs to **Phase 4** (the stretch goal).
 
-**Combustion heater** — a natural gas or propane burner that raises temperature, CO₂, and humidity simultaneously. The project models an electric heater (temperature only) paired with a separate CO₂ injector (CO₂ only), keeping actuator effects independent. Combustion heating would couple those effects — one device driving temperature, CO₂, and humidity at once.
+**Combustion heater** — a natural gas or propane burner that raises temperature, CO₂, and humidity simultaneously. The core product models an electric heater (temperature only) paired with a separate CO₂ injector (CO₂ only), keeping actuator effects independent. Combustion heating would couple those effects — one device driving temperature, CO₂, and humidity at once — which is why it is **introduced in Phase 4** (the stretch goal), where the optimizer gains the actuator-selection coordination needed to plan a coupled multi-variable device.
 
 **Other physical elements not modeled** — root-zone temperature, evaporative cooling pads, and
 spatial multi-zone temperature gradients. (Note: the three *co-located* redundant temperature

@@ -73,7 +73,7 @@ site-wide depletion.
 | Electrical supply | No site power budget, brownout, or load-shedding across greenhouses |
 | Fuel / bulk CO₂ supply | Each CO₂ injector draws from its own assumed-infinite supply; no shared tank depletion |
 | Central heating plant (boiler) | Real sites often pipe heat from one boiler; we model a per-greenhouse heater instead |
-| Site weather station | No shared outdoor-sensor feed; see below |
+| Site weather station | No shared outdoor-sensor feed in the core product; a live + forecast weather feed is introduced in **Phase 4** (see below) |
 | Network / connectivity | No modeled site network, gateway, or its failure modes |
 
 Modeling shared supply (and the contention and failure modes it introduces) would be a site-level
@@ -93,8 +93,9 @@ Two consequences:
 - To represent "the same site," the greenhouses' disturbance profiles can be configured identically
   (same outdoor-temperature curve, same daylight profile) — but this is a configuration choice, not
   an enforced physical link.
-- A single authoritative site weather model feeding all greenhouses would be a shared-input feature,
-  and like the other common inputs above, it is out of scope here (Phase 3 territory).
+- A single authoritative site weather model feeding all greenhouses would be a shared-input feature.
+  It is out of scope for the core product; a live + forecast weather feed is introduced in **Phase 4**
+  (the stretch goal), where it drives weather-reactive predictive control.
 
 ---
 
@@ -110,6 +111,10 @@ A forecast is, in effect, advance notice of the disturbance the greenhouses will
 cold night to be held off, a sunny afternoon's heat to be shed, a humid front rolling in. It is
 information about the *future* of the outdoor environment, as opposed to the live outdoor conditions
 the greenhouses already contend with today.
+
+This forecast feed is consumed by **Phase 4** (the stretch goal), whose weather-reactive predictive
+control pre-positions actuators for the incoming conditions. It goes beyond Phase 3's anticipation of
+the deterministic diurnal cycle, which needs no forecast.
 
 ## Crop
 

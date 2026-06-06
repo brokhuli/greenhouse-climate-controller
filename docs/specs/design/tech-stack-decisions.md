@@ -56,7 +56,7 @@
 ### Why This Stack
 
 - **Go + Echo** — simple, fast, reliable API service
-- **TimescaleDB** — correct time-series database for greenhouse sensor data; Postgres is fine for early phases
+- **TimescaleDB** — correct time-series database for greenhouse sensor data; Postgres is fine for early phases. The same relational store also holds the **greenhouse registry and crop profiles** (per-greenhouse metadata + per-crop/stage climate targets) alongside the time-series data
 - **React** — modern SPA dashboard served via nginx or the API
 - **Keycloak** — realistic local OIDC identity provider; swap for simple JWT to start
 - **Traefik/nginx** — reverse proxy routing between containers

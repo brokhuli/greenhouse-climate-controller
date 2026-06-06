@@ -16,6 +16,11 @@ It simulates:
 Everything runs **locally**, using **Docker**, **MQTT**, **REST**, **WebSockets**, and **local databases**.  
 It mirrors real IoT + SaaS architecture patterns without requiring any cloud services.
 
+> **Beyond the core product:** a **Phase 4** stretch goal — taken on only *after* the three‑phase
+> product is finished — extends the optimizer with a **combustion heater** (coupled multi‑variable
+> actuation) and **real weather** (forecast‑driven, weather‑reactive predictive control). It is
+> described after Phase 3 below.
+
 ---
 
 # **PHASE 1 — Greenhouse Climate Controller (Local‑Only)**
@@ -148,6 +153,7 @@ This is your **local cloud**, built from containers.
 
 - Manages **multiple greenhouse controllers** (Phase 1 instances) representing separate greenhouses at a single site
 - Provides a **Go API** for multi-greenhouse data and fleet management
+- **Owns crop profiles** — a library of per-crop / per-growth-stage climate targets (temperature, humidity band, VPD, DLI, CO₂); assigns one profile to each greenhouse and **resolves it into that controller's setpoints**, pushed down via the Phase 1 REST config API. This is the layer that turns "this is a lettuce house, fruiting stage" into the numbers the crop-agnostic controller regulates to.
 - Stores historical data in **Postgres/TimescaleDB**
 - Hosts a **dashboard frontend**
 - Manages users via **Keycloak** or simple JWT
@@ -170,7 +176,8 @@ This is your **local cloud**, built from containers.
 +-------------------------------+   /metrics    +----------------------+
 |   Go API (Echo)               |<--------------|   Prometheus         |
 |  - Device mgmt                |    (scrape)   |   + Grafana (dash)    |
-|  - Data ingestion             |               +----------------------+
+|  - Crop profiles → setpoints  |               +----------------------+
+|  - Data ingestion             |
 |  - Analytics endpoints        |
 |  - /metrics + structured logs |
 +---------------+---------------+
@@ -209,6 +216,7 @@ This is your **local cloud**, built from containers.
 
 - **Full PaaS architecture** (API, DB, auth, frontend, proxy)
 - **Go backend development**
+- **Crop-profile modeling** — mapping crop + growth stage to climate targets and resolving them into per-controller setpoints
 - **Time‑series database modeling**
 - **Docker Compose orchestration**
 - **Local microservice networking**
@@ -252,8 +260,14 @@ independent control loops); site-wide orchestration across greenhouses is **out 
 
 - **Predictive / anticipatory control** — simulate the greenhouse forward and pre-position actuators
   for upcoming conditions instead of reacting after the fact (e.g., pre-cool before a solar peak).
-- **Setpoint optimization** — decide *what the setpoints should be* (e.g. "growing lettuce" → derive
-  VPD / DLI / CO₂ / temperature targets), then push them down to Phase 1 as config.
+  This is anticipation of *deterministic, clock-known* disturbances (the diurnal solar/temperature
+  curve, the day/night setpoint schedule) — it needs no weather feed. Reacting to a real, variable
+  forecast (a cold front, passing cloud) is **weather-reactive** control and belongs to Phase 4.
+- **Setpoint optimization** — *refine* the crop-profile baseline that Phase 2 already resolves into
+  each controller's setpoints. The static "this crop, this stage → these VPD / DLI / CO₂ / temperature
+  targets" mapping lives in **Phase 2**; Phase 3 adjusts those targets dynamically (anticipatory,
+  cost-aware) within crop-safe bounds and pushes the refined values down — optimizing setpoint
+  management rather than introducing it.
 - **Coupling-aware planning** — choose the optimal *combination* of coupled actuators
   (vent / fan / mister / heater) to hit VPD + DLI + CO₂ goals together, rather than independent
   reactive loops that can fight each other.
@@ -316,12 +330,92 @@ Still simpler than cloud‑integrated AI systems.
 
 ---
 
+# **PHASE 4 — Coupled Actuation + Weather-Reactive Optimization (Stretch Goal)**
+
+**Purpose:** A stretch goal taken on *after* the three‑phase product is finished. It extends the
+Phase 3 optimizer with the two hardest, most realistic capabilities the core product deliberately
+deferred: a **combustion heater** (one device that couples temperature + CO₂ + humidity) and **real
+weather** (a live + forecast feed enabling weather‑reactive predictive control).
+
+---
+
+## **What Phase 4 Does**
+
+- **Combustion heater — coupled optimization**
+  - Introduces a single actuator that raises **temperature, CO₂, and humidity simultaneously** —
+    breaking the independent‑loop assumption the Phase 1 controller relies on.
+  - Requires **actuator‑selection coordination *above* the individual PID loops**: with two ways to
+    add heat (electric heater vs. burner) and two ways to add CO₂ (clean injector vs. burner), the
+    system must *choose the device*, not just run independent loops that can fight each other.
+  - Enriches the optimizer's **coupling‑aware planning** into a genuine combinatorial
+    actuator‑selection problem under joint VPD / DLI / CO₂ constraints.
+
+- **Weather conditions — predictive control**
+  - Ingests a **real weather feed**: live outdoor conditions plus a **site‑wide forecast**.
+  - Enables **weather‑reactive** predictive control — pre‑positioning actuators for incoming
+    conditions (a cold night to hold off, a sunny afternoon's heat to shed, a humid front rolling
+    in), *beyond* Phase 3's anticipation of the deterministic diurnal cycle.
+  - Extends the Phase 3 digital twin to plan against a **stochastic future** rather than only a
+    known daily profile.
+
+---
+
+## **Phase 4 Diagram (Simple)**
+
+```
++------------------------------+      +------------------------------+
+|   Weather Feed               |----->|   Python Optimizer (P3+)     |
+|  - Live outdoor conditions   |      |  - Weather-reactive MPC      |
+|  - Site-wide forecast        |      |  - Combustion-aware planning |
++------------------------------+      |  - Extended digital twin     |
+                                      +---------------+--------------+
+                                                      | MQTT / API
+                                                      v
+                              +------------------------------------+
+                              |   Phase 1 Controller               |
+                              |   + Combustion heater (coupled:    |
+                              |     temp ↑ / CO₂ ↑ / humidity ↑)   |
+                              |   + Actuator-selection coordination |
+                              +------------------------------------+
+```
+
+---
+
+## **Phase 4 Tech Stack**
+
+- **Builds on Phase 3** — Python, FastAPI, NumPy/SciPy, LLM, MQTT, Postgres
+- **Weather integration** — external weather‑API / forecast feed (live + horizon)
+- **Extended digital twin** — heat/mass‑balance simulation with a **combustion model**
+  (joint heat + CO₂ + humidity)
+- **Actuator‑selection coordination** — planning layer above the Phase 1 PIDs
+
+---
+
+## **Skills You Gain in Phase 4**
+
+- **Multi‑variable actuator coordination** (selecting among coupled devices)
+- **Weather / forecast integration** (external feeds, horizons)
+- **Weather‑reactive model‑predictive control** (planning against a stochastic future)
+- **Richer simulation modeling** (combustion dynamics in the digital twin)
+
+---
+
+## **Phase 4 Complexity: 9 / 10**
+
+The most complex phase: it couples the deferred **multi‑variable actuator** with an **external,
+stochastic forecast feed** and weather‑reactive planning. It also raises the *effective* bar on
+Phase 1 — introducing the combustion heater lifts the cap that kept Phase 1 at 6/10, since the
+controller now needs actuator‑selection coordination above its PIDs.
+
+---
+
 # **FINAL SUMMARY TABLE**
 
 | Phase       | Purpose                     | Tech Stack                                                | Skills Learned                                                                              | Complexity   |
 | ----------- | --------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------ |
 | **Phase 1** | Local controller + local UI | Rust, HAL, MQTT, REST, WebSockets, SvelteKit              | Embedded patterns, PID, rule engine, safety interlocks, fault detection, MQTT, real‑time UI | **6 / 10**   |
-| **Phase 2** | Multi-greenhouse management platform (single site) | Go, Postgres/Timescale, MQTT, Keycloak/JWT, React, Docker, Prometheus/Grafana | PaaS design, DB modeling, auth, microservices, reverse proxy, observability                 | **6 / 10**   |
+| **Phase 2** | Multi-greenhouse management platform (single site); owns crop profiles → controller setpoints | Go, Postgres/Timescale, MQTT, Keycloak/JWT, React, Docker, Prometheus/Grafana | PaaS design, DB modeling, crop-profile/setpoint resolution, auth, microservices, reverse proxy, observability | **6 / 10**   |
 | **Phase 3** | Local AI climate optimizer  | Python, FastAPI, NumPy/SciPy, LLM, MQTT, Postgres         | Simulation, LLM orchestration, constraints, planning                                        | **7.5 / 10** |
+| **Phase 4** *(stretch goal)* | Coupled actuation + weather-reactive optimization | Phase 3 stack + weather-API/forecast feed, combustion-model digital twin | Multi-variable actuator coordination, weather/forecast integration, weather-reactive MPC, combustion simulation | **9 / 10** |
 
 ---

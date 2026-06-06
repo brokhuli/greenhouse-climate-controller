@@ -130,6 +130,13 @@ TOML.
 Configuration is a TOML file loaded at startup. Setpoints and thresholds are adjustable at runtime
 via the REST API; structural changes (adding/removing zones) require a restart.
 
+> **The controller is crop-agnostic.** It knows only these numeric setpoints, never a crop. The
+> mapping from a crop (and its growth stage) to target values is owned *above* the controller: in a
+> multi-greenhouse deployment the Phase 2 platform resolves a crop profile into setpoints and applies
+> them over this REST config API (the runtime `PATCH` path below); running standalone, the values
+> come from the TOML file plus direct REST edits. Either way the controller just regulates to the
+> numbers it is given.
+
 ### Global climate setpoints
 
 ```toml
