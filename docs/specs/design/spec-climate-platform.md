@@ -55,33 +55,33 @@ persists to Postgres/TimescaleDB, serves the dashboard, and drives the controlle
                        +---------------+--------------+
                                        | HTTP / WS
                                        v
-+----------------+            +------------------------------+   /metrics   +-------------------+
-|  Auth          |<---------->|   Reverse Proxy (Traefik)    |<-------------|  Prometheus       |
-|  JWT / Keycloak|            +---------------+--------------+   (scrape)   |  + Grafana (dash) |
-+----------------+                            |                             +-------------------+
-                                              v
-                              +------------------------------+
-                              |   Go API (Echo)              |
-                              |  - Telemetry ingestion       |
-                              |  - Fleet / device registry   |
+       +----------------+      +------------------------------+
+       |  Auth          |<---->|   Reverse Proxy (Traefik)    |
+       |  JWT / Keycloak |     +---------------+--------------+
+       +----------------+                      |
+                                               v
+                              +------------------------------+   /metrics   +-------------------+
+                              |   Go API (Echo)              |<-------------|  Prometheus       |
+                              |  - Telemetry ingestion       |   (scrape)   |  + Grafana (dash) |
+                              |  - Fleet / device registry   |              +-------------------+
                               |  - Crop profiles → setpoints |
-                              |  - Control proxy (override)   |
-                              |  - Analytics endpoints        |
-                              |  - WebSocket fan-out          |
-                              |  - /metrics + structured logs |
-                              +----+-------------------+------+
-                          DB / SQL |                   | MQTT (ingest)  +  REST (control, down)
-                                   v                   v
-                       +--------------------+   +------------------+
-                       | Postgres/TimescaleDB|  |  MQTT Broker     |
-                       | - registry + profiles|  |  EMQX/Mosquitto  |
-                       | - telemetry (TSDB)   |  +--------+---------+
-                       +--------------------+            |
-                                                         |  MQTT (up)  ↑   REST (down) ↓
-                                        +----------------+----------------+
-                                        |                |                |
-                                Phase 1 Controller  Phase 1 Controller  Phase 1 Controller
-                                 (greenhouse A)       (greenhouse B)      (greenhouse N)
+                              |  - Control proxy (override)  |
+                              |  - Analytics endpoints       |
+                              |  - WebSocket fan-out         |
+                              |  - /metrics + structured logs|
+                              +----+--------------------+----+
+                          DB / SQL |                    | MQTT (ingest) + REST (control, down)
+                                   v                    v
+                       +----------------------+   +------------------+
+                       | Postgres/TimescaleDB |   |  MQTT Broker     |
+                       | - registry + profiles|   |  EMQX/Mosquitto  |
+                       | - telemetry (TSDB)   |   +--------+---------+
+                       +----------------------+           |
+                                                          |  MQTT (up) ↑   REST (down) ↓
+                                         +----------------+----------------+
+                                         |                |                |
+                                 Phase 1 Controller  Phase 1 Controller  Phase 1 Controller
+                                  (greenhouse A)       (greenhouse B)      (greenhouse N)
 ```
 
 Three data flows cross this topology:
@@ -104,8 +104,8 @@ Three data flows cross this topology:
 
 ## 3. Data Model
 
-The platform keeps two kinds of state, in one Postgres instance (optionally TimescaleDB for the
-time-series side):
+The platform keeps two kinds of state, in one Postgres instance — with the **TimescaleDB extension**
+enabled for the time-series tables (it is a Postgres extension, not a separate database):
 
 **Relational (configuration & metadata)** — low-volume, mutable, strongly related:
 
@@ -114,8 +114,8 @@ time-series side):
 | Site | The logical grouping of greenhouses run as one operation |
 | Greenhouse (registry) | One row per greenhouse: identity, display name, the crop it grows |
 | Controller endpoint | How to reach a greenhouse's controller (MQTT topic root, REST base URL), liveness |
-| Crop profile | A named, **stage-aware** bundle of climate targets for a crop |
-| Profile target bundle | The actual values — mirrors the controller's `[setpoints]` shape (temperature day/night, humidity band, VPD, DLI, CO₂) |
+| Crop profile | A named, **stage-aware** bundle of climate + irrigation targets for a crop |
+| Profile target bundle | The actual values — mirrors the controller's **runtime-adjustable** config: the climate `[setpoints]` (temperature day/night, humidity band, VPD, DLI, CO₂) **plus** per-zone soil-moisture thresholds + watering schedule |
 | Profile assignment | Which profile (and growth stage) is currently assigned to a greenhouse |
 | User / role | Identity and access level (see [§9](#9-authentication--authorization)) |
 
@@ -130,8 +130,14 @@ time-series side):
 The split is deliberate: crop profiles, the registry, and assignments are relational because they are
 small, edited by hand, and heavily cross-referenced; telemetry is time-series because it is
 high-frequency, append-only, and queried by range. The profile target bundle intentionally
-**mirrors the controller's `[setpoints]` schema** so that resolving a profile is a direct mapping,
-not a translation — keeping the contract between platform and controller thin.
+**mirrors the controller's runtime-adjustable config** so that resolving a profile is a direct
+mapping, not a translation — keeping the contract between platform and controller thin.
+
+> **Boundary — zone topology is controller-local.** The bundle covers only what the controller
+> exposes at *runtime*: climate setpoints and per-zone irrigation thresholds/schedule. Zone
+> *structure* — adding or removing [zones](./physical-system-single.md#zones) — is a config-file +
+> restart change on the controller ([P1 §4](./spec-climate-controller.md#4-configuration--setpoints))
+> and is **not** in the platform's write path.
 
 ---
 
@@ -150,6 +156,10 @@ The API subscribes to the controllers' MQTT topics (topic map defined in
 - **Liveness / health** — absence of expected messages (or an MQTT last-will) marks a greenhouse
   **offline**; ingested fault events mark it **degraded**. Per-greenhouse status is derived here and
   surfaced to the fleet view and reconciliation ([§5](#5-crop-profiles--setpoint-resolution)).
+- **Retention & downsampling** — telemetry is append-only and grows without bound, so the time-series
+  store needs a **retention policy** (and optionally continuous aggregates / downsampling for
+  long-range dashboard queries). The specific horizon is an implementation/config choice, not fixed
+  by this spec.
 
 Ingestion is **read-only with respect to the greenhouse**: it never changes a controller. All
 downward writes go through the control path in [§5](#5-crop-profiles--setpoint-resolution) and
@@ -166,9 +176,10 @@ those numbers, and keeping the controller faithful to them.
 
 ### Profiles and assignment
 
-- A **crop profile** is a named, stage-aware bundle of climate targets — e.g. *lettuce / vegetative*
-  → its temperature day/night, humidity band, VPD, DLI, and CO₂ targets. Profiles form a small
-  library, editable in the dashboard.
+- A **crop profile** is a named, stage-aware bundle of targets — e.g. *lettuce / vegetative* → its
+  temperature day/night, humidity band, VPD, DLI, and CO₂ targets, **plus** the per-zone soil-moisture
+  thresholds and watering schedule that crop wants. Profiles form a small library, editable in the
+  dashboard.
 - A greenhouse has exactly **one active assignment** at a time: a profile + the current growth stage.
   Advancing the stage (propagation → vegetative → fruiting) re-selects the stage's target bundle.
 
@@ -181,15 +192,17 @@ mirrors the controller's `[setpoints]` schema ([§3](#3-data-model)), resolution
 
 ### Reconciliation — the platform is the source of truth
 
-The platform does not fire-and-forget. It treats a greenhouse's assigned profile as the **intended
-state** and continuously keeps the live controller matching it:
+The platform does not fire-and-forget. It holds an **intended state** for each greenhouse — the
+resolved profile **plus** any sticky operator setpoint edits layered on top ([§6](#6-fleet-management--control-proxy))
+— and continuously keeps the live controller matching it:
 
 - **Apply on change** — assigning a profile or editing its targets pushes the new setpoints down.
 - **Re-assert on reconnect** — when a controller comes back online ([§4](#4-telemetry-ingestion)),
   the platform re-pushes the intended setpoints so a restarted controller cannot silently revert to
-  its local TOML defaults.
+  its local TOML defaults. If a controller is **offline** when its intended state changes, the change
+  is held and applied on reconnect rather than lost.
 - **Drift detection** — the platform compares the controller's reported setpoints (from telemetry /
-  its REST status) against the intended profile. A mismatch is surfaced as **drift** in the fleet
+  its REST status) against the intended state. A mismatch is surfaced as **drift** in the fleet
   view and may be auto-corrected by re-applying. This catches out-of-band local edits.
 
 ### Boundary with Phase 3
@@ -204,16 +217,21 @@ optimization is out of scope here. See [§14](#14-scope--deferred--out-of-scope)
 
 Beyond profiles, the platform is the operator's single pane of glass for acting on any greenhouse.
 
-- **Device registry** — register/retire greenhouses and their controller endpoints; the registry is
-  what ingestion and resolution key off.
+- **Device registry** — greenhouses and their controller endpoints are **registered manually** via
+  the API/dashboard (the platform does not auto-discover controllers); this registry is the bootstrap
+  that ingestion and resolution key off. Greenhouses can also be retired.
 - **Status aggregation** — per-greenhouse online/degraded/drift status (from [§4](#4-telemetry-ingestion)
   and [§5](#5-crop-profiles--setpoint-resolution)) rolled up into a site-wide fleet view.
 - **Control proxy** — operator actions are relayed to a controller's REST API:
   - **Manual override** — force a specific actuator state, using the controller's
     [override mechanism](./spec-climate-controller.md#10-manual-override) (including its auto-expiry).
+    An override is a real-time action: if the target controller is **offline** it **fails fast with a
+    clear error** rather than being queued (unlike setpoint intended-state, which is held and
+    re-asserted on reconnect — [§5](#5-crop-profiles--setpoint-resolution)).
   - **Ad-hoc setpoint edits** — a one-off setpoint change outside the assigned profile. Because the
-    platform is the source of truth, such an edit is recorded as intended state (or flagged against
-    the profile as deliberate drift), so reconciliation does not immediately revert it.
+    platform is the source of truth, such an edit becomes a **sticky** part of the greenhouse's
+    intended state (layered over the profile, flagged as deliberate drift), so reconciliation does not
+    immediately revert it.
 - **Change attribution** — every downward write (profile application, override, setpoint edit) is
   recorded as an event with who/what/when, for audit and for the dashboard's activity view.
 
@@ -319,6 +337,10 @@ account.
 | `auth` | Simple JWT in the API now; Keycloak later |
 | `proxy` | Traefik or nginx |
 | `frontend` | Built React app served via the proxy |
+
+The platform's own service configuration — database DSN, MQTT broker address, JWT signing secret,
+proxy routing — is supplied via **environment variables / the Compose file**, not a per-greenhouse
+config (contrast the controller's TOML). Per-greenhouse data lives in the registry and assignments.
 
 Each Phase 1 controller connects to this stack over **two channels**: MQTT (telemetry up, into the
 broker) and REST (control/config down, from the API). N controllers attach to one platform; nothing
