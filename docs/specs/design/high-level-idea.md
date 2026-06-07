@@ -156,7 +156,7 @@ This is your **local cloud**, built from containers.
 - **Owns crop profiles** — a library of per-crop / per-growth-stage climate targets (temperature, humidity band, VPD, DLI, CO₂); assigns one profile to each greenhouse and **resolves it into that controller's setpoints**, pushed down via the Phase 1 REST config API. This is the layer that turns "this is a lettuce house, fruiting stage" into the numbers the crop-agnostic controller regulates to.
 - Stores historical data in **Postgres/TimescaleDB**
 - Hosts a **dashboard frontend**
-- Manages users via **Keycloak** or simple JWT
+- Manages users via **Keycloak** (self-hosted OIDC)
 - Provides a **reverse proxy** for routing
 - Integrates with Phase 1 via MQTT + REST
 - Runs entirely in **Docker Compose**
@@ -203,7 +203,7 @@ This is your **local cloud**, built from containers.
 - **Go (Echo)** — API service
 - **Postgres or TimescaleDB** — time‑series storage
 - **React** — dashboard
-- **Keycloak or JWT** — auth
+- **Keycloak (OIDC)** — auth
 - **Traefik or nginx** — reverse proxy
 - **Docker Compose** — orchestration
 - **MQTT** — device messaging
@@ -220,7 +220,7 @@ This is your **local cloud**, built from containers.
 - **Time‑series database modeling**
 - **Docker Compose orchestration**
 - **Local microservice networking**
-- **Auth systems (JWT, Keycloak)**
+- **Auth systems (Keycloak / OIDC)**
 - **Reverse proxy routing**
 - **Frontend–backend integration**
 - **MQTT ingestion pipelines**
@@ -414,7 +414,7 @@ controller now needs actuator‑selection coordination above its PIDs.
 | Phase       | Purpose                     | Tech Stack                                                | Skills Learned                                                                              | Complexity   |
 | ----------- | --------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------ |
 | **Phase 1** | Local controller + local UI | Rust, HAL, MQTT, REST, WebSockets, SvelteKit              | Embedded patterns, PID, rule engine, safety interlocks, fault detection, MQTT, real‑time UI | **6 / 10**   |
-| **Phase 2** | Multi-greenhouse management platform (single site); owns crop profiles → controller setpoints | Go, Postgres/Timescale, MQTT, Keycloak/JWT, React, Docker, Prometheus/Grafana | PaaS design, DB modeling, crop-profile/setpoint resolution, auth, microservices, reverse proxy, observability | **6 / 10**   |
+| **Phase 2** | Multi-greenhouse management platform (single site); owns crop profiles → controller setpoints | Go, Postgres/Timescale, MQTT, Keycloak, React, Docker, Prometheus/Grafana | PaaS design, DB modeling, crop-profile/setpoint resolution, auth, microservices, reverse proxy, observability | **6 / 10**   |
 | **Phase 3** | Local AI climate optimizer  | Python, FastAPI, NumPy/SciPy, LLM, MQTT, Postgres         | Simulation, LLM orchestration, constraints, planning                                        | **7.5 / 10** |
 | **Phase 4** *(stretch goal)* | Coupled actuation + weather-reactive optimization | Phase 3 stack + weather-API/forecast feed, combustion-model digital twin | Multi-variable actuator coordination, weather/forecast integration, weather-reactive MPC, combustion simulation | **9 / 10** |
 

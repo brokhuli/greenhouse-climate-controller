@@ -48,7 +48,7 @@
 | API Style | REST + WebSockets |
 | Database | Postgres or TimescaleDB |
 | Frontend | React |
-| Auth | Keycloak (OIDC) or simple JWT in Go |
+| Auth | Keycloak (OIDC) |
 | Reverse Proxy | Traefik or nginx |
 | Orchestration | Docker Compose |
 | MQTT Broker | EMQX or Mosquitto |
@@ -58,7 +58,7 @@
 - **Go + Echo** — simple, fast, reliable API service
 - **TimescaleDB** — correct time-series database for greenhouse sensor data; Postgres is fine for early phases. The same relational store also holds the **greenhouse registry and crop profiles** (per-greenhouse metadata + per-crop/stage climate targets) alongside the time-series data
 - **React** — modern SPA dashboard served via nginx or the API
-- **Keycloak** — realistic local OIDC identity provider; swap for simple JWT to start
+- **Keycloak** — self-hosted OIDC identity provider; runs locally as a container (no cloud dependency) and owns login, the user store, and roles so the API never handles credentials
 - **Traefik/nginx** — reverse proxy routing between containers
 - **Docker Compose** — single-command local orchestration; no cloud account needed
 
@@ -71,7 +71,7 @@
 | `api` | Go + Echo |
 | `db` | PostgreSQL (optionally TimescaleDB) |
 | `mqtt` | EMQX or Mosquitto |
-| `auth` | Keycloak, or simple JWT in Go |
+| `auth` | Keycloak |
 | `proxy` | Traefik or nginx (optional) |
 | `frontend` | Built React app served by nginx or the API |
 

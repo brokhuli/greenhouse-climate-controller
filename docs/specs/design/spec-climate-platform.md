@@ -33,8 +33,9 @@ The platform is **bidirectional**:
 
 - **Up** — it ingests telemetry (readings, actuator states, fault events) from every controller over
   MQTT and stores the history.
-- **Down** — it resolves crop profiles into controller setpoints and proxies operator control
-  (manual override, ad-hoc setpoint edits) to any controller over that controller's REST API.
+- **Down** — it resolves crop profiles into controller setpoints and applies operator setpoint edits
+  to any controller over that controller's REST API — all as reconciled **intended state**. The
+  platform writes only *targets*; it never commands actuators directly.
 
 Everything runs locally under Docker Compose — zero cloud dependency. The platform **manages**
 greenhouses; it does **not** couple their physics. There is no shared air mass, shared sensing, or
@@ -57,7 +58,7 @@ persists to Postgres/TimescaleDB, serves the dashboard, and drives the controlle
                                        v
        +----------------+      +------------------------------+
        |  Auth          |<---->|   Reverse Proxy (Traefik)    |
-       |  JWT / Keycloak |     +---------------+--------------+
+       |  Keycloak/OIDC |      +---------------+--------------+
        +----------------+                      |
                                                v
                               +------------------------------+   /metrics   +-------------------+
@@ -65,7 +66,7 @@ persists to Postgres/TimescaleDB, serves the dashboard, and drives the controlle
                               |  - Telemetry ingestion       |   (scrape)   |  + Grafana (dash) |
                               |  - Fleet / device registry   |              +-------------------+
                               |  - Crop profiles → setpoints |
-                              |  - Control proxy (override)  |
+                              |  - Ad-hoc setpoint edits     |
                               |  - Analytics endpoints       |
                               |  - WebSocket fan-out         |
                               |  - /metrics + structured logs|
@@ -93,10 +94,10 @@ Three data flows cross this topology:
 | Component | Responsibility |
 |---|---|
 | Reverse Proxy | Single entry point; routes to API and frontend; auth edge |
-| Go API (Echo) | Ingestion, fleet management, profile resolution, control proxy, analytics, WS fan-out |
+| Go API (Echo) | Ingestion, fleet management, profile resolution, setpoint edits, analytics, WS fan-out |
 | Postgres/TimescaleDB | Relational registry + crop profiles; time-series telemetry & events |
 | MQTT Broker | Transport for controller telemetry (ingest) |
-| Auth | Identity & access — JWT now, Keycloak/OIDC later |
+| Auth (Keycloak) | OIDC identity provider — login, user store, roles; the API validates its tokens |
 | Frontend | React dashboard — fleet overview, per-greenhouse detail, profile & control UI |
 | Observability | Prometheus scrape + Grafana dashboards over the API's `/metrics`; structured logs |
 
@@ -125,7 +126,7 @@ enabled for the time-series tables (it is a Postgres extension, not a separate d
 |---|---|
 | Sensor readings | Per-greenhouse fused/raw readings over time (temperature, humidity, CO₂, PAR, per-zone soil moisture) |
 | Actuator states | Commanded/observed actuator positions over time |
-| Events | Fault events, safety-interlock activations, override changes, profile applications |
+| Events | Fault events, safety-interlock activations, profile applications, setpoint edits |
 
 The split is deliberate: crop profiles, the registry, and assignments are relational because they are
 small, edited by hand, and heavily cross-referenced; telemetry is time-series because it is
@@ -163,7 +164,7 @@ The API subscribes to the controllers' MQTT topics (topic map defined in
 
 Ingestion is **read-only with respect to the greenhouse**: it never changes a controller. All
 downward writes go through the control path in [§5](#5-crop-profiles--setpoint-resolution) and
-[§6](#6-fleet-management--control-proxy).
+[§6](#6-fleet-management--operator-control).
 
 ---
 
@@ -193,7 +194,7 @@ mirrors the controller's `[setpoints]` schema ([§3](#3-data-model)), resolution
 ### Reconciliation — the platform is the source of truth
 
 The platform does not fire-and-forget. It holds an **intended state** for each greenhouse — the
-resolved profile **plus** any sticky operator setpoint edits layered on top ([§6](#6-fleet-management--control-proxy))
+resolved profile **plus** any sticky operator setpoint edits layered on top ([§6](#6-fleet-management--operator-control))
 — and continuously keeps the live controller matching it:
 
 - **Apply on change** — assigning a profile or editing its targets pushes the new setpoints down.
@@ -213,7 +214,7 @@ optimization is out of scope here. See [§14](#14-scope--deferred--out-of-scope)
 
 ---
 
-## 6. Fleet Management & Control Proxy
+## 6. Fleet Management & Operator Control
 
 Beyond profiles, the platform is the operator's single pane of glass for acting on any greenhouse.
 
@@ -222,24 +223,22 @@ Beyond profiles, the platform is the operator's single pane of glass for acting 
   that ingestion and resolution key off. Greenhouses can also be retired.
 - **Status aggregation** — per-greenhouse online/degraded/drift status (from [§4](#4-telemetry-ingestion)
   and [§5](#5-crop-profiles--setpoint-resolution)) rolled up into a site-wide fleet view.
-- **Control proxy** — operator actions are relayed to a controller's REST API:
-  - **Manual override** — force a specific actuator state, using the controller's
-    [override mechanism](./spec-climate-controller.md#10-manual-override) (including its auto-expiry).
-    An override is a real-time action: if the target controller is **offline** it **fails fast with a
-    clear error** rather than being queued (unlike setpoint intended-state, which is held and
-    re-asserted on reconnect — [§5](#5-crop-profiles--setpoint-resolution)).
-  - **Ad-hoc setpoint edits** — a one-off setpoint change outside the assigned profile. Because the
-    platform is the source of truth, such an edit becomes a **sticky** part of the greenhouse's
-    intended state (layered over the profile, flagged as deliberate drift), so reconciliation does not
-    immediately revert it.
-- **Change attribution** — every downward write (profile application, override, setpoint edit) is
+- **Ad-hoc setpoint edits** — the operator's manual control surface: a one-off setpoint change outside
+  the assigned profile, relayed to the controller's REST config API. Because the platform is the
+  source of truth, such an edit becomes a **sticky** part of the greenhouse's intended state (layered
+  over the profile, flagged as deliberate drift), so reconciliation does not immediately revert it.
+  It follows the same offline handling as profile resolution — held and re-asserted on reconnect
+  ([§5](#5-crop-profiles--setpoint-resolution)). The platform's downward control is **setpoint-only**;
+  it does not force individual actuators (see [§14](#14-scope--deferred--out-of-scope)).
+- **Change attribution** — every downward write (profile application, ad-hoc setpoint edit) is
   recorded as an event with who/what/when, for audit and for the dashboard's activity view.
 
-> **Safety stays in the controller.** The platform cannot suppress a safety response. Critical-temp
-> and CO₂-ceiling [interlocks](./spec-climate-controller.md#7-safety-interlocks) take unconditional
-> priority **inside the controller**, above even manual override — a platform-issued override is
-> still subject to them, exactly as a local one is. The platform observes and reports interlock
-> activations; it never overrides them.
+> **Safety stays in the controller.** The platform only ever sets *targets* (profile or ad-hoc
+> setpoints) — it never commands actuators directly, so it has no imperative path that could drive an
+> unsafe state. The controller's critical-temp and CO₂-ceiling
+> [interlocks](./spec-climate-controller.md#7-safety-interlocks) keep unconditional priority **inside
+> the controller** and bound actual actuation regardless of which setpoints the platform pushes. The
+> platform observes and reports interlock activations; it never overrides them.
 
 ---
 
@@ -255,10 +254,10 @@ responsibilities only; concrete routes and payloads are deferred to [`contracts/
 | **REST — assignments** | Assign a profile/stage to a greenhouse; trigger apply/reconcile |
 | **REST — telemetry** | Range queries over historical readings/actuator states/events |
 | **REST — analytics** | Aggregations and derived series for dashboards |
-| **REST — control** | Manual override and ad-hoc setpoint edits (proxied to controllers) |
+| **REST — setpoint edits** | Ad-hoc setpoint edits, proxied to controllers as sticky intended state |
 | **WebSockets** | Live fan-out of telemetry, status changes, drift, and events to the dashboard |
 
-Write endpoints (assignments, control) require the **operator** role
+Write endpoints (assignments, setpoint edits) require the **operator** role
 ([§9](#9-authentication--authorization)).
 
 ---
@@ -273,8 +272,8 @@ A React single-page app, served through the reverse proxy, talking to the API ov
   history, fed by the WebSocket stream.
 - **Profile management** — browse/edit the crop-profile library; assign a profile + growth stage to a
   greenhouse and apply it.
-- **Control** — issue manual overrides and ad-hoc setpoint edits (operator role), with safety-owned
-  actions clearly marked as controller-enforced.
+- **Control** — issue ad-hoc setpoint edits (operator role); actuator-level forcing is not offered
+  here — it stays a controller-local action ([§14](#14-scope--deferred--out-of-scope)).
 - **Health surfacing** — drift, faults, offline controllers, and interlock activations raised
   prominently.
 
@@ -282,19 +281,24 @@ A React single-page app, served through the reverse proxy, talking to the API ov
 
 ## 9. Authentication & Authorization
 
-Access is **staged**, per [tech-stack-decisions](./tech-stack-decisions.md#phase-2--local-paas-platform-docker-only):
+Identity is delegated to **Keycloak**, a self-hosted **OIDC identity provider** that runs as a
+container in the stack ([§12](#12-deployment)) — no cloud dependency. Keycloak owns the user store,
+login, password policies, and (optionally) MFA, so the Go API never handles credentials itself.
 
-- **Now — simple JWT in Go.** The API issues/validates JWTs; the frontend attaches them. Lowest
-  friction to start.
-- **Later — Keycloak (OIDC).** A realistic local identity provider, swapped in behind the same
-  proxy/auth edge without changing the API's authorization model.
+The split of responsibility:
+
+- **Authentication → Keycloak.** Users log in against Keycloak; it issues OIDC tokens. The API is an
+  OIDC **relying party** — it validates those tokens and trusts the identity + roles they carry.
+- **Authorization → the API.** Which role may do what is enforced in the API by mapping Keycloak
+  roles onto the platform's two roles below. This authorization model is independent of Keycloak's
+  internals, so the identity provider and the capability rules evolve separately.
 
 Two roles are sufficient for the platform:
 
 | Role | Capability |
 |---|---|
 | Viewer | Read fleet, telemetry, analytics, status |
-| Operator | All of Viewer **plus** every write-path action (assign/apply profiles, override, setpoint edits) |
+| Operator | All of Viewer **plus** every write-path action (assign/apply profiles, ad-hoc setpoint edits) |
 
 Finer-grained RBAC and multi-tenant identity are out of scope ([§14](#14-scope--deferred--out-of-scope)).
 
@@ -334,13 +338,13 @@ account.
 | `api` | Go + Echo |
 | `db` | PostgreSQL (optionally TimescaleDB) |
 | `mqtt` | EMQX or Mosquitto |
-| `auth` | Simple JWT in the API now; Keycloak later |
+| `auth` | Keycloak — self-hosted OIDC identity provider |
 | `proxy` | Traefik or nginx |
 | `frontend` | Built React app served via the proxy |
 
-The platform's own service configuration — database DSN, MQTT broker address, JWT signing secret,
-proxy routing — is supplied via **environment variables / the Compose file**, not a per-greenhouse
-config (contrast the controller's TOML). Per-greenhouse data lives in the registry and assignments.
+The platform's own service configuration — database DSN, MQTT broker address, Keycloak client
+credentials, proxy routing — is supplied via **environment variables / the Compose file**, not a
+per-greenhouse config (contrast the controller's TOML). Per-greenhouse data lives in the registry and assignments.
 
 Each Phase 1 controller connects to this stack over **two channels**: MQTT (telemetry up, into the
 broker) and REST (control/config down, from the API). N controllers attach to one platform; nothing
@@ -353,7 +357,7 @@ about the platform is per-greenhouse except registry rows and assignments.
 | Interface | Direction | Role |
 |---|---|---|
 | **MQTT** | Controller → platform | Telemetry ingest: readings, actuator states, fault/state events |
-| **Controller REST** | Platform → controller | Setpoint resolution (profile apply/reconcile) + control proxy (override, ad-hoc edits) |
+| **Controller REST** | Platform → controller | Setpoint resolution (profile apply/reconcile) + ad-hoc setpoint edits |
 | **WebSockets** | Platform → frontend | Live fan-out of telemetry, status, drift, events |
 
 The MQTT topic map and the controller REST shapes the platform depends on are owned by
@@ -373,4 +377,5 @@ Platform capabilities intentionally **not** in Phase 2:
 | Site-wide orchestration | Coordinated behavior across greenhouses (e.g. staggering loads) needs the shared-infrastructure / resource-contention model that is [out of scope for the site](./physical-system-multi.md#common-inputs--out-of-scope). Phase 2 aggregates and manages; it does not couple physics |
 | Multi-site / multi-tenant | The platform manages a **single site**; multiple sites or tenants are not modeled |
 | Advanced RBAC | Two roles (viewer/operator) only; fine-grained permissions and org hierarchies are out of scope ([§9](#9-authentication--authorization)) |
-| Safety authority | Safety interlocks remain **controller-owned** ([§6](#6-fleet-management--control-proxy)); the platform never overrides them |
+| Manual actuator override | Forcing individual actuators is a **controller-local** action ([P1 §10](./spec-climate-controller.md#10-manual-override)); the platform's downward control is **setpoint-only** and does not proxy actuator overrides |
+| Safety authority | Safety interlocks remain **controller-owned** ([§6](#6-fleet-management--operator-control)); the platform never overrides them |
