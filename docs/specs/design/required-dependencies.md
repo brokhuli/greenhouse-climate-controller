@@ -73,9 +73,9 @@ WebSockets, with optional **SQLite** persistence. See
 | `clippy` | lint | `cargo clippy` (`rustup component add clippy`) |
 | built-in test harness | tests | `cargo test` |
 
-> **Pin the toolchain** with a `rust-toolchain.toml` in `controller/` so the version is reproducible
+> **Pin the toolchain** with a `rust-toolchain.toml` in `climate-controller/` so the version is reproducible
 > across machines and CI. (Added with the Cargo project per
-> [`controller/README.md`](../../../controller/README.md).)
+> [`climate-controller/README.md`](../../../climate-controller/README.md).)
 
 ### 2. Frontend toolchain (the SvelteKit dashboard)
 

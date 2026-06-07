@@ -8,7 +8,7 @@ A running log of decisions about the local development environment, tooling, and
 
 ## 2026-05-25 — Repository layout: single monorepo for all three phases (for now)
 
-**Decision:** Keep `controller` (Phase 1, Rust), `platform` (Phase 2, Go), and `optimizer`
+**Decision:** Keep `climate-controller` (Phase 1, Rust), `climate-platform` (Phase 2, Go), and `climate-optimizer`
 (Phase 3, Python) together in this one repository for now. Plan to split them into separate
 repositories later, after implementation.
 

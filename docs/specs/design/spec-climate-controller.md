@@ -346,3 +346,16 @@ elements that are simply not instrumented are listed in
 | Advanced sensor fusion (Kalman / complementary, cross-quantity) | Estimation-theory methods need the physics model — Phase 3. Phase 1 includes only redundant-temperature median voting (§5) |
 | Full heat/mass-balance HAL physics | Reserved for the Phase 3 digital twin; Phase 1 uses coupled first-order lag (§3) |
 | Combustion heater | Multi-variable actuator (heat + CO₂ + humidity) that breaks the independence assumption of the current control loops; requires actuator-selection coordination logic above the individual PIDs — out of scope for Phase 1 |
+
+---
+
+## 13. Deployment
+
+The controller never runs on a physical device — the HAL ([§3](#3-hal--simulation-model)) is pure simulation, so there is no real hardware path and nothing to run on embedded hardware. How the process is packaged depends on the phase:
+
+- **Phase 1 (standalone):** the controller runs as a **native binary directly on Windows** (the development machine). It is configured by a **TOML file** ([§4](#4-configuration--setpoints)) passed at startup, and its values come from that file plus direct REST edits — there is no platform above it. This is the simplest path for developing and testing the control logic itself.
+- **Phase 2 (managed):** the same controller runs as a **Docker container** alongside the platform stack, configured by a **TOML file mounted at startup**. Multiple containers run concurrently on one machine — one per greenhouse — connecting to the platform over the local Docker network. See [Phase 2 spec §12](./spec-climate-platform.md#12-deployment) for the named-service / variable-N deployment model.
+
+In both cases configuration is the same TOML described in [§4](#4-configuration--setpoints): the controller's unique `controller_id` (its greenhouse identity when registering with the platform), all setpoints, HAL simulation parameters (time constants, coupling gains, disturbance profiles), and zone definitions. Whether native or containerized, each controller instance is one independent greenhouse with no shared state.
+
+Structural changes (adding/removing zones, changing HAL parameters) require a config file edit and a restart, consistent with the startup-vs-runtime boundary in [§4](#4-configuration--setpoints).

@@ -330,8 +330,10 @@ the dashboard ([§3](#3-data-model), [§8](#8-dashboard-frontend)); `/metrics` i
 
 ## 12. Deployment
 
-The whole platform is one **Docker Compose** stack — single-command local orchestration, no cloud
+The whole stack — platform services and controllers — runs locally under **Docker Compose**, no cloud
 account.
+
+### Platform services
 
 | Service | Implementation |
 |---|---|
@@ -346,9 +348,38 @@ The platform's own service configuration — database DSN, MQTT broker address, 
 credentials, proxy routing — is supplied via **environment variables / the Compose file**, not a
 per-greenhouse config (contrast the controller's TOML). Per-greenhouse data lives in the registry and assignments.
 
-Each Phase 1 controller connects to this stack over **two channels**: MQTT (telemetry up, into the
-broker) and REST (control/config down, from the API). N controllers attach to one platform; nothing
-about the platform is per-greenhouse except registry rows and assignments.
+### Controller services
+
+Phase 1 controllers run as **Docker containers on the same local machine**, not on physical devices.
+Because the controller HAL is pure simulation ([P1 spec §3](./spec-climate-controller.md#3-hal--simulation-model)),
+there is no hardware dependency — each controller is a lightweight Rust process that connects to the
+platform over the local Docker network.
+
+Controllers are defined as **named services in a generated `docker-compose.override.yml`** — one
+named service per greenhouse, each mounting its own TOML config file. The TOML supplies the
+controller's unique `controller_id` and all per-greenhouse parameters (setpoints, HAL simulation
+params, zone config). `docker compose up -d` reconciles the full stack in one command.
+
+A generation script takes N (the desired greenhouse count) as input and produces the override file:
+
+```
+scripts/gen-controllers.sh N   →   docker-compose.override.yml (N named controller services)
+docker compose up -d           →   brings up platform + N controllers
+```
+
+`--scale` is not used because each controller requires a distinct identity and its own TOML — named
+services with per-service config mounts are required.
+
+**Why named services over `--scale`:** `docker compose up --scale controller=N` produces N identical
+containers. Each controller needs a unique `controller_id` (so it registers as a distinct greenhouse)
+and independent simulation parameters — `--scale` cannot supply per-replica configuration.
+
+### Performance testing
+
+Varying N in the generation script is the primary mechanism for **performance testing** the platform
+under different greenhouse counts. Because the HAL is simulation, many controllers can run
+concurrently on a developer machine. The NFR doc captures what to observe and target controller
+counts — see [`non-functional-requirements.md`](../artifacts/non-functional-requirements.md).
 
 ---
 
