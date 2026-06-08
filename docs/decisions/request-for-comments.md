@@ -648,3 +648,252 @@ and DB rows. MQTT uses the hierarchical `gh/{greenhouse_id}/...` taxonomy and is
 (`schema_version`, `greenhouse_id`, `zone_id`, `ts` in RFC 3339 UTC) and the units convention.
 Schemas are authored as **JSON Schema (Draft 2020-12)** under `contracts/mqtt/`, versioned by an
 integer `schema_version` major (additive changes do not bump). See ADR entry 2026-06-07.
+
+---
+
+## RFC-008: Phase 3 Telemetry Read Path
+
+| Field   | Value |
+|---------|-------|
+| Status  | Open for Comment |
+| Created | 2026-06-07 |
+| Decided | — |
+| Priority | Medium — blocks Phase 3 data-access implementation |
+
+### Summary
+
+Ratify the optimizer's **direct, read-only access to Phase 2's TimescaleDB** as the telemetry read
+path, but contain the resulting schema coupling: the optimizer connects with a **dedicated read-only
+role** whose grants are limited to a **defined read surface** (a small set of stable telemetry
+**views**, not the raw tables), and that read surface is treated as a **versioned contract** Phase 2
+may not break silently — the same discipline [RFC-007](#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)
+applies to the wire contract, applied here to the read schema.
+
+### Problem
+
+[RFC-005](#rfc-005-setpoint-authority-and-delivery-chain) settled how setpoints are **written** — only
+through the Phase 2 API, never around it — so that bounds enforcement and provenance live in one
+place. The optimizer's **read** path does the opposite, and no RFC has examined it:
+
+- [spec-climate-optimizer.md §8](../specs/design/spec-climate-optimizer.md#8-interfaces--integration)
+  lists "TimescaleDB | Phase 2 store → optimizer | Read-only historical telemetry."
+- [spec-climate-optimizer.md §9](../specs/design/spec-climate-optimizer.md#9-configuration) configures
+  it as a raw DSN: `postgres_dsn = "postgresql://optimizer:***@platform-db:5432/greenhouse"  # read-only`.
+
+So Phase 3 reaches **into Phase 2's database directly** rather than through Phase 2's API. This is the
+classic *shared-database* vs. *API-composition* integration choice, and it is currently **asserted,
+not decided**. Its cost is real: a direct dependency on Phase 2's internal telemetry schema means a
+Phase 2 migration (renamed column, changed hypertable layout, altered retention) can break the
+optimizer with **no contract between them** — exactly the cross-codebase blast radius RFC-007 was
+created to prevent for the wire formats.
+
+The read path is also genuinely different from the write path RFC-005 governed: a read carries **no
+authority and no safety concern** (it cannot drive the greenhouse to an unsafe state), and the
+optimizer's workload — range scans over high-volume time-series plus the hourly `(min, mean, max)`
+summaries from [RFC-004](#rfc-004-phase-3-llm-integration-interface) — is precisely what
+TimescaleDB's SQL and continuous aggregates do well and what a REST layer would have to re-expose.
+
+### Proposal
+
+**Keep the direct read, contain the coupling.** Three parts:
+
+1. **Dedicated read-only role.** The optimizer connects as a Postgres role (`optimizer_ro`) with
+   `SELECT`-only grants. It has **no** access to the relational write tables (registry, crop profiles,
+   assignments, users) beyond what the read surface exposes, and no `INSERT/UPDATE/DELETE` anywhere.
+   The role is the enforcement that "read-only" is a guarantee, not a convention in a comment.
+
+2. **A defined read surface, exposed as views.** The optimizer reads from a small set of **named
+   views** owned by Phase 2 — e.g. `optimizer_sensor_readings`, `optimizer_actuator_states`,
+   `optimizer_current_setpoints` — not from the physical hypertables directly. The views are the
+   contract boundary: Phase 2 may refactor the underlying tables freely as long as it preserves the
+   views. The optimizer's grants are on the views only.
+
+3. **The read surface is versioned like a contract.** A breaking change to a view's shape is an ADR
+   event and follows the RFC-007 discipline (additive change is free; a breaking change is announced,
+   and the previous shape is retained side-by-side during transition). This gives Phase 3 the same
+   stability guarantee against Phase 2's schema that all three phases already have against the MQTT
+   wire contract.
+
+The hourly-summary serialization ([RFC-004](#rfc-004-phase-3-llm-integration-interface)) can be backed
+by a **TimescaleDB continuous aggregate** exposed through the read surface, so the summarization the
+LLM-context strategy needs is computed in the store rather than pulled raw and reduced in Python.
+
+The write path is unchanged: refined setpoints still go **only** through the Phase 2 API per RFC-005.
+This RFC governs reads exclusively.
+
+### Alternatives Considered
+
+**Read through a Phase 2 REST query API** — the optimizer fetches history via Phase 2 HTTP endpoints
+instead of SQL, fully decoupling it from the physical schema. Rejected as the committed path because
+it forces Phase 2 to build and maintain a range/aggregation query API whose only consumer is one
+internal service, re-implements over HTTP what TimescaleDB already does in SQL (windowed aggregates,
+time-bucketing), and serializes potentially large history payloads through JSON for bulk reads. The
+view-based read surface achieves most of the decoupling (the physical tables stay private) at a
+fraction of the cost, and can be promoted to a REST API later if a second external consumer appears.
+
+**Replicate telemetry into a Phase 3-owned store** — the optimizer subscribes to MQTT (or a Phase 2
+feed) and maintains its own copy. Rejected: it duplicates the time-series storage and retention
+problem RFC-002 already solved in Phase 2, and adds a sync/consistency burden for a read workload that
+a `SELECT` against the existing store handles directly.
+
+**Raw-table access, no read surface** (the status quo in the spec text) — simplest to wire up.
+Rejected as the *committed* form because it is the uncontained version of this same decision: it leaves
+Phase 3 bolted to Phase 2's physical schema with no boundary, which is the coupling this RFC exists to
+bound. Granting on views instead of tables is a near-zero-cost change that buys the boundary.
+
+### Open Questions
+
+- Exactly which views constitute the read surface, and whether current setpoints are best read from a
+  view here or fetched from the Phase 2 API (they are small and authority-bearing — the API may be the
+  cleaner source for *current* intended state, leaving the DB read surface to **historical** telemetry
+  only). Lean: history from the read surface, current setpoints from the Phase 2 API.
+- Same Postgres instance vs. a read replica. Default: same instance (local, single-machine — a replica
+  is unjustified at this scale); revisit only if optimizer read load measurably affects platform write
+  latency.
+- Whether the hourly summary should be a TimescaleDB continuous aggregate (precomputed, refreshed) or
+  an on-demand `time_bucket` query. Tie-break during implementation against the actual cycle cadence
+  from RFC-004.
+
+### Resolution
+
+_Pending._
+
+---
+
+## RFC-009: Service-to-Service Auth & Internal Trust Boundaries
+
+| Field   | Value |
+|---------|-------|
+| Status  | Open for Comment |
+| Created | 2026-06-07 |
+| Decided | — |
+| Priority | Medium — blocks the Phase 3 write path and managed-mode controller hardening |
+
+### Summary
+
+Define authentication for the system's **non-human, service-to-service** boundaries, which no RFC has
+settled. Three boundaries exist: (1) **optimizer → Phase 2 API** — a headless write-path client that
+needs the operator capability; (2) **platform → controller REST** — the only inbound write path into a
+controller, currently unauthenticated; (3) **optimizer → Phase 2 DB** — covered by
+[RFC-008](#rfc-008-phase-3-telemetry-read-path)'s read-only role. Proposal: the optimizer authenticates
+to the Phase 2 API as a **Keycloak service account via the OAuth2 client-credentials grant** mapped to
+the operator role; the platform authenticates to each controller's REST API with a **per-controller
+bearer token** (no OIDC in the controller); MQTT stays anonymous on the local network per
+[RFC-001](#rfc-001-mqtt-broker-selection).
+
+### Problem
+
+The platform's authorization model is specified for **humans** but not for **services**:
+
+- [spec-climate-platform.md §7](../specs/design/spec-climate-platform.md#7-api-surface) and
+  [§9](../specs/design/spec-climate-platform.md#9-authentication--authorization): write-path actions
+  (assignments, setpoint edits) "require the **operator** role," carried in a Keycloak **OIDC token**.
+- But [spec-climate-optimizer.md §6](../specs/design/spec-climate-optimizer.md#6-setpoint-refinement--application)
+  makes the optimizer a write-path client — `POST /greenhouses/{id}/setpoints` — with **no statement
+  of how a headless service obtains an operator token**. Keycloak's interactive login flow assumes a
+  human at a browser; the optimizer has neither.
+
+Separately, the **controller's** REST API is unauthenticated:
+
+- [spec-climate-controller.md §11](../specs/design/spec-climate-controller.md#11-interfaces) describes
+  the REST config/override API with no auth. Standalone ([P1 §13](../specs/design/spec-climate-controller.md#13-deployment))
+  that is fine — it is a local dev binary. But in **managed mode** the platform pushes setpoints to it
+  over the Docker network ([P2 §13](../specs/design/spec-climate-platform.md#13-interfaces--integration-with-phase-1)),
+  and that REST surface is the **only inbound write path into the greenhouse** — currently anyone on
+  the Compose network can drive it. Whether that boundary is authenticated, and how, is an unstated
+  decision with real (if local) blast radius: it touches the controller (Rust), the platform's
+  outbound client, and the registry's controller-endpoint record.
+
+These are decided together because they are the system's internal trust model, and the right answer
+for each depends on the others (a single Keycloak posture, a single statement of what is trusted on
+the Docker network).
+
+### Proposal
+
+**1. Optimizer → Phase 2 API: Keycloak service account (client-credentials grant).**
+
+Register the optimizer as a **confidential OAuth2 client** in Keycloak (client id `optimizer`) with a
+**client-credentials** grant — the standard machine-to-machine flow, no browser, no human. Keycloak
+issues an access token carrying a client role that the API maps onto the platform **operator** role,
+so the optimizer authenticates and authorizes through the *same* token-validation path RFC-005 and
+[§9](../specs/design/spec-climate-platform.md#9-authentication--authorization) already define for human
+operators — no second authz mechanism. Provenance is unaffected: the setpoint write is still recorded
+with source `optimizer` (RFC-005), now backed by a verifiable client identity rather than an
+anonymous call. The client secret is supplied via environment variable / Compose secret
+(`PLANNER_*`-style), never in a committed file, consistent with
+[spec-climate-optimizer.md §9](../specs/design/spec-climate-optimizer.md#9-configuration).
+
+**2. Platform → controller REST: per-controller bearer token.**
+
+Each controller is provisioned with a **pre-shared bearer token** in its TOML
+([P1 §4](../specs/design/spec-climate-controller.md#4-configuration--setpoints)); the controller
+requires it on the REST config/override/health-write endpoints and rejects unauthenticated calls. The
+platform stores the matching token in the **registry's controller-endpoint record**
+([P2 §6](../specs/design/spec-climate-platform.md#6-fleet-management--operator-control)) and presents
+it on every downward REST call. This authenticates the *only* inbound write path into a controller
+without putting an OIDC client in the lightweight Rust process — Keycloak/OIDC in the controller would
+be disproportionate for a single trusted caller (the platform). Standalone Phase 1 leaves the token
+unset and the check disabled, preserving the zero-friction local-dev binary
+([P1 §13](../specs/design/spec-climate-controller.md#13-deployment)).
+
+**3. Optimizer → Phase 2 DB:** the read-only `optimizer_ro` role from
+[RFC-008](#rfc-008-phase-3-telemetry-read-path). No additional mechanism here; listed so the three
+internal boundaries are stated in one place.
+
+**4. MQTT:** stays **anonymous** on the local Compose network per
+[RFC-001](#rfc-001-mqtt-broker-selection). MQTT is telemetry-only
+([RFC-007](#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)) — it
+carries no command authority, so it is not a write boundary, and broker auth/ACLs remain the deferred
+item RFC-001 already flagged. This RFC does not change that.
+
+**Trust-boundary summary:**
+
+| Boundary | Direction | Mechanism |
+|---|---|---|
+| Optimizer → Phase 2 API | write (setpoints) | Keycloak service account, client-credentials grant → operator role |
+| Platform → controller REST | write (setpoints/override) | Per-controller pre-shared bearer token (registry ↔ TOML) |
+| Optimizer → Phase 2 DB | read (history) | Read-only `optimizer_ro` role ([RFC-008](#rfc-008-phase-3-telemetry-read-path)) |
+| Any → MQTT broker | telemetry only | Anonymous on local network ([RFC-001](#rfc-001-mqtt-broker-selection)) |
+
+### Alternatives Considered
+
+**Optimizer uses a static API key / shared secret against the Phase 2 API** (not Keycloak) — simpler,
+no Keycloak client registration. Rejected because it introduces a *second* authn/authz path alongside
+the OIDC one the platform already runs, splitting the trust model. The client-credentials grant reuses
+Keycloak — which is already in the stack for human auth — so the API validates one kind of token.
+
+**OIDC/Keycloak client in the controller too** (symmetric with the optimizer) — uniform mechanism
+everywhere. Rejected: the controller is a deliberately minimal Rust process with exactly one trusted
+caller (the platform); a full OIDC relying-party implementation and token refresh in the controller is
+disproportionate to a single point-to-point link on a local network. A pre-shared bearer token is the
+right weight for that boundary.
+
+**No controller-side auth — rely on Docker network isolation alone** — the status quo. Rejected as the
+committed posture because the controller REST API is the only inbound write path into the greenhouse;
+leaving it open means any container (or any process that can reach the published port in dev) can push
+setpoints. The bearer token is cheap and makes the platform the demonstrable sole writer, matching the
+single-authority intent of RFC-005 at the transport level.
+
+**mTLS between all internal services** — strongest, certificate-based mutual auth. Rejected as
+over-scoped for a local, single-machine portfolio system: it adds a certificate-issuance and rotation
+burden (a local CA, per-service certs) far beyond what the threat model of a Docker Compose stack on
+one laptop warrants. The token-based boundaries above are proportionate; mTLS can be revisited if the
+system ever leaves the single-host local model.
+
+### Open Questions
+
+- Token rotation for the per-controller bearer token: static-for-the-lifetime-of-the-deployment is
+  almost certainly fine locally, but the generation script
+  ([P2 §12](../specs/design/spec-climate-platform.md#12-deployment)) is the natural place to mint one
+  per controller if rotation is ever wanted. Default: static, set at provisioning.
+- Whether the optimizer's Keycloak client role should be the full **operator** role or a narrower
+  **service** role scoped to just `POST /setpoints` (operator can also assign profiles, which the
+  optimizer never does). Lean toward a narrow service role — least privilege — finalized when the
+  Keycloak realm is configured.
+- Whether to also require the bearer token on the controller's **read** (status/health) endpoints or
+  only on write endpoints. Default: writes only; reads are low-risk and the platform polls them
+  frequently.
+
+### Resolution
+
+_Pending._
