@@ -11,7 +11,10 @@ with, see [`spec-climate-platform.md`](./spec-climate-platform.md).
 > Scope note: this is an architectural spec (components, responsibilities, behavior, configuration).
 > Concrete code/module/class design is deferred until implementation. Wire formats (MQTT topics,
 > payload schemas, REST shapes) are **referenced**, not redefined here — they live in
-> [`contracts/`](../../../contracts/), the single source of truth all three phases conform to.
+> [`contracts/`](../../../contracts/), the single source of truth all three phases conform to. The
+> conventions those contracts follow (topic taxonomy, `greenhouse_id` / `zone_id` identity, payload
+> envelope, JSON Schema format + versioning) are fixed by
+> [RFC-007](../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format).
 
 ---
 

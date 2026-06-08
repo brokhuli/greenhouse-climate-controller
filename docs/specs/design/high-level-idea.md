@@ -49,7 +49,7 @@ It mirrors real IoT + SaaS architecture patterns without requiring any cloud ser
 - Applies a **rule engine** for coupled multi‑condition actuator logic
 - Enforces **safety interlocks** (critical‑temp override, CO₂ ceiling, irrigation fault)
 - Detects **sensor faults** (stuck sensor, outlier rejection)
-- Publishes readings + receives actuator commands via **MQTT** (QoS + retained)
+- Publishes readings, actuator state, faults, and system state via **MQTT** (QoS + retained); MQTT is telemetry-only — setpoints arrive over the REST config API, not MQTT (the controller is setpoint-only — [RFC-005](../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain))
 - Exposes a **REST API** for configuration and **WebSockets** for live logs/events
 - Includes a **local frontend** with real‑time charts and manual override controls
 

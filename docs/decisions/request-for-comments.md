@@ -493,3 +493,158 @@ pre-building coordination logic in Phase 2 adds Phase 4 complexity to a layer th
 HAL actuator interface must not encode "one actuator → one climate variable" as an invariant.** No
 combustion code, weather feed, or actuator-selection logic lands before Phase 4. See ADR entry
 2026-06-07.
+
+---
+
+## RFC-007: Contract Conventions (MQTT topics, identity, payload envelope, schema format)
+
+| Field   | Value |
+|---------|-------|
+| Status  | Accepted |
+| Created | 2026-06-07 |
+| Decided | 2026-06-07 |
+| Priority | Highest — blocks contract implementation for all three phases |
+
+### Summary
+
+Establish the conventions that govern [`contracts/`](../../../contracts/) before any schema file is
+written: (1) the **MQTT topic taxonomy** and the **canonical identity scheme** (`greenhouse_id` /
+`zone_id`) shared across MQTT topics, REST paths, and DB keys; (2) a **common payload envelope** with
+a fixed timestamp format and units convention; and (3) the **schema format** (JSON Schema, Draft
+2020-12) and a **versioning rule**. Also resolves a standing doc inconsistency: **MQTT carries
+telemetry only** — it is not a command/setpoint channel (setpoints flow over REST per
+[RFC-005](#rfc-005-setpoint-authority-and-delivery-chain)).
+
+### Problem
+
+Every design doc explicitly defers wire formats to `contracts/` — the controller spec
+([§11](../specs/design/spec-climate-controller.md#11-interfaces)), the platform spec
+([§16](../specs/design/spec-climate-platform.md)), the optimizer spec, and the Phase 4 spec all say
+"topic names, payload schemas, REST shapes … live in `contracts/`." But `contracts/` is the single
+source of truth that **all three phases conform to**, and no RFC has settled its shape. RFCs 001–006
+each picked a *component* (broker, store, ingress, LLM backend, setpoint authority, Phase 4 seam);
+none designed the cross-phase wire contract itself — the highest-blast-radius artifact in the system,
+since changing it later means editing Rust, Go, and Python at once.
+
+Three decisions block writing the first schema:
+
+1. **Topic taxonomy & identity.** [spec-climate-platform.md §6](../specs/design/spec-climate-platform.md#L150)
+   already assumes "each controller publishes under its own topic root … maps topic → greenhouse via
+   the registry," but the root structure and the ID format are undecided. The same identity has to key
+   MQTT topics, REST paths (`/greenhouses/{id}/setpoints`, RFC-005), and the registry/telemetry rows
+   (RFC-002).
+2. **Payload envelope.** Timestamp format, units, and a `schema_version` field need to be uniform so a
+   multi-greenhouse ingester can self-describe every message.
+3. **Schema format & versioning.** `contracts/README.md` lists "JSON Schema / AsyncAPI" (undecided)
+   and says changes "should be versioned" with no scheme.
+
+A standing inconsistency also needs resolving: post-RFC-005 the controller is setpoint-only and
+setpoints arrive via REST, yet `contracts/README.md`, [high-level-idea.md](../specs/design/high-level-idea.md)
+and [spec-climate-controller.md §11](../specs/design/spec-climate-controller.md#11-interfaces) still
+describe MQTT actuator-command/plan topics. This RFC fixes the docs to match the decision.
+
+### Proposal
+
+**1. Identity scheme**
+
+| Field | Type | Rule |
+|---|---|---|
+| `greenhouse_id` | string | Stable lowercase kebab slug (e.g. `gh-a`, `lettuce-north`). Matches the named, config-generated Compose services from [RFC-003](#rfc-003-phase-2-platform-ingress) — not opaque UUIDs. Unique site-wide (single site, per spec). |
+| `zone_id` | string | Lowercase kebab slug, unique **within** a greenhouse (e.g. `zone-1`). |
+
+The same `greenhouse_id` / `zone_id` are the keys in MQTT topics, REST paths, and DB rows — one
+identity, no translation layer.
+
+**2. MQTT topic taxonomy** (all publish from the controller — telemetry up; see §4)
+
+```
+gh/{greenhouse_id}/sensor/{metric}                        # greenhouse-scoped sensor (e.g. co2, humidity)
+gh/{greenhouse_id}/zone/{zone_id}/sensor/{metric}         # zone-scoped sensor (e.g. soil_moisture, par)
+gh/{greenhouse_id}/actuator/{actuator}/state              # greenhouse-scoped actuator state
+gh/{greenhouse_id}/zone/{zone_id}/actuator/{actuator}/state
+gh/{greenhouse_id}/fault                                  # fault events
+gh/{greenhouse_id}/state                                  # consolidated last-known system state (RETAINED)
+```
+
+- Hierarchical so the ingester can wildcard-subscribe per greenhouse (`gh/+/#`) or per metric.
+- **QoS 1** for all telemetry; **retained** on the consolidated `gh/{id}/state` topic only, so a
+  subscriber has current state on connect (per [RFC-001](#rfc-001-mqtt-broker-selection)).
+- Greenhouse-scoped vs zone-scoped split mirrors the physical model (CO₂/humidity are house-level;
+  soil moisture / PAR are per-zone).
+
+**3. Payload envelope** (every message)
+
+| Field | Type | Notes |
+|---|---|---|
+| `schema_version` | integer | Major version of the message schema (see §5). |
+| `greenhouse_id` | string | Redundant with topic; lets ingested rows stand alone. |
+| `zone_id` | string \| null | Present for zone-scoped messages. |
+| `ts` | string | RFC 3339 / ISO 8601, UTC, millisecond precision (e.g. `2026-06-07T14:03:00.000Z`). |
+| *(message-specific)* | — | e.g. `value` + `unit` for a sensor reading; `state` for an actuator. |
+
+**Units convention** (carried explicitly in payloads, single source here):
+
+| Quantity | Unit |
+|---|---|
+| Temperature | °C |
+| Relative humidity | %RH |
+| CO₂ | ppm |
+| Soil moisture | %VWC |
+| PAR | µmol·m⁻²·s⁻¹ |
+| VPD | kPa |
+
+**4. MQTT is telemetry-only.** The controller **publishes** sensor readings, actuator state, fault
+events, and consolidated system state; it **subscribes to nothing**. Setpoints reach the controller
+over its REST config API, with Phase 2 as the single authority
+([RFC-005](#rfc-005-setpoint-authority-and-delivery-chain)). There are no command/plan topics. The
+stale references in `contracts/README.md`, `high-level-idea.md`, and `spec-climate-controller.md §11`
+are corrected to match.
+
+**5. Schema format & versioning**
+
+- **JSON Schema (Draft 2020-12)** is the normative artifact: one schema file per message type under
+  `contracts/mqtt/`. Directly consumable for validation in all three stacks (Rust, Go, Python) with no
+  intermediate tooling. AsyncAPI may later wrap these schemas as a documentation layer without
+  becoming the source of truth.
+- **Versioning:** `schema_version` is an **integer major**. Additive, backward-compatible changes (a
+  new optional field) do **not** bump it. Breaking changes bump the major; the previous major's schema
+  is retained side-by-side during transition. Every contract change is accompanied by an ADR, per
+  `contracts/README.md`.
+
+### Alternatives Considered
+
+**Flat topic namespace** (e.g. `sensor_temp_gh_a`) — rejected: defeats per-greenhouse / per-zone
+wildcard subscription, which the ingester relies on.
+
+**UUID identities** — rejected for a local, single-site portfolio system: opaque and hard to debug,
+and they don't align with the named, config-generated controller services from RFC-003. Slugs are
+human-readable in topics, logs, and the MQTT tree.
+
+**AsyncAPI as the normative contract** — rejected: heavier to author and maintain, and validation
+still comes from the JSON Schema it embeds. JSON Schema first; AsyncAPI optional later as docs.
+
+**Bare values, no envelope** — rejected: loses the self-description (version, timestamp, identity,
+units) a multi-greenhouse ingester needs to attribute and validate each message independently.
+
+**Command/plan topics over MQTT** — rejected: contradicts RFC-005, which makes REST the sole setpoint
+path and Phase 2 the single authority. A second write path over MQTT would re-introduce exactly the
+split authority RFC-005 eliminated.
+
+### Open Questions
+
+- Closed enumerations vs open strings for `{metric}` and `{actuator}` names — lean toward an
+  enumerated closed list in the schemas; finalize while authoring them.
+- Whether to additionally retain the last value on each per-sensor topic, or rely solely on the
+  consolidated retained `state` topic. Default: consolidated `state` only.
+- `schema_version` as a single integer (this proposal) vs full semver — integer chosen for
+  simplicity; revisit only if minor-version negotiation is ever needed.
+
+### Resolution
+
+**Accepted 2026-06-07 — contract conventions fixed before schema authoring.** The canonical identity
+is the `greenhouse_id` / `zone_id` kebab-slug pair, shared verbatim across MQTT topics, REST paths,
+and DB rows. MQTT uses the hierarchical `gh/{greenhouse_id}/...` taxonomy and is **telemetry-only**
+(setpoints flow over REST per RFC-005). Every message carries the common envelope
+(`schema_version`, `greenhouse_id`, `zone_id`, `ts` in RFC 3339 UTC) and the units convention.
+Schemas are authored as **JSON Schema (Draft 2020-12)** under `contracts/mqtt/`, versioned by an
+integer `schema_version` major (additive changes do not bump). See ADR entry 2026-06-07.

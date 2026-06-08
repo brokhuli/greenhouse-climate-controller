@@ -333,11 +333,13 @@ The REST API can force any actuator to a specific state, bypassing its control l
 ## 11. Interfaces
 
 Telemetry, configuration, and control surfaces. Wire-format details (topic names, payload schemas)
-are defined in [`contracts/`](../../../contracts/) — this section lists responsibilities only.
+are defined in [`contracts/`](../../../contracts/), under the conventions fixed by
+[RFC-007](../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)
+— this section lists responsibilities only.
 
 | Interface | Role |
 |---|---|
-| **MQTT** | Publishes sensor readings, actuator states, fault events, and system state; subscribes to actuator command topics |
+| **MQTT** | Publishes sensor readings, actuator states, fault events, and system state. Telemetry-only — the controller subscribes to no command topics; setpoints arrive via the REST API ([RFC-005](../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain)) |
 | **REST API** | Setpoint/threshold CRUD, zone status, manual-override management, system health |
 | **WebSockets** | Live log stream and real-time sensor/actuator event feed for the dashboard |
 

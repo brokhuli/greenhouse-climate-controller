@@ -10,7 +10,10 @@ greenhouse with, see [`spec-climate-controller.md`](./spec-climate-controller.md
 > Scope note: this is an architectural spec (services, responsibilities, behavior, data model).
 > Concrete code/schema/struct design is deferred until implementation. Wire formats (MQTT topics,
 > payload schemas, controller REST shapes) are **referenced**, not redefined here — they live in
-> [`contracts/`](../../../contracts/), the single source of truth all three phases conform to.
+> [`contracts/`](../../../contracts/), the single source of truth all three phases conform to. The
+> conventions those contracts follow (topic taxonomy, `greenhouse_id` / `zone_id` identity, payload
+> envelope, JSON Schema format + versioning) are fixed by
+> [RFC-007](../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format).
 
 ---
 
@@ -145,10 +148,13 @@ mapping, not a translation — keeping the contract between platform and control
 ## 4. Telemetry Ingestion
 
 The API subscribes to the controllers' MQTT topics (topic map defined in
-[`contracts/mqtt`](../../../contracts/mqtt/)) and writes what it receives into the time-series store.
+[`contracts/mqtt`](../../../contracts/mqtt/), following the taxonomy and envelope fixed by
+[RFC-007](../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format))
+and writes what it receives into the time-series store.
 
-- **Per-greenhouse routing** — each controller publishes under its own topic root; the ingester maps
-  topic → greenhouse via the registry's controller-endpoint record.
+- **Per-greenhouse routing** — each controller publishes under its own `gh/{greenhouse_id}/...` topic
+  root (RFC-007); the ingester wildcard-subscribes and maps topic → greenhouse via the registry's
+  controller-endpoint record, keyed by the same `greenhouse_id`.
 - **Streams ingested** — sensor readings, actuator states, and fault/state events (the same surface
   the controller publishes in [P1 spec §11](./spec-climate-controller.md#11-interfaces)).
 - **QoS & retained** — readings use the QoS the contract specifies; retained system-state/last-will
@@ -403,8 +409,11 @@ counts — see [`non-functional-requirements.md`](../artifacts/non-functional-re
 | **WebSockets** | Platform → frontend | Live fan-out of telemetry, status, drift, events |
 
 The MQTT topic map and the controller REST shapes the platform depends on are owned by
-[`contracts/`](../../../contracts/) and the [P1 spec §11](./spec-climate-controller.md#11-interfaces);
-this spec consumes those contracts rather than defining them.
+[`contracts/`](../../../contracts/) and the [P1 spec §11](./spec-climate-controller.md#11-interfaces),
+under the conventions fixed by
+[RFC-007](../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format);
+this spec consumes those contracts rather than defining them. Consistent with RFC-007, MQTT is
+**telemetry-only** (controller → platform); all setpoint writes go over the controller REST API.
 
 ---
 

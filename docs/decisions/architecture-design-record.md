@@ -5,6 +5,38 @@ Each entry corresponds to an accepted RFC in [`request-for-comments.md`](./reque
 
 ---
 
+## 2026-06-07 — Contract conventions: topic taxonomy, identity, payload envelope, JSON Schema
+
+**Decision:** Fix the conventions that govern `contracts/` before any schema file is written.
+(1) **Identity** — a single `greenhouse_id` / `zone_id` pair, both lowercase kebab slugs, used
+verbatim as the keys in MQTT topics, REST paths, and DB rows (no UUIDs, no translation layer).
+(2) **MQTT topic taxonomy** — hierarchical `gh/{greenhouse_id}/...` with a greenhouse- vs zone-scoped
+split mirroring the physical model; QoS 1 on all telemetry; retained only on the consolidated
+`gh/{id}/state` topic. MQTT is **telemetry-only** — the controller subscribes to nothing and there
+are no command/plan topics. (3) **Payload envelope** — every message carries `schema_version`,
+`greenhouse_id`, `zone_id`, and `ts` (RFC 3339 UTC, ms precision), plus a fixed units convention
+(°C, %RH, ppm, %VWC, µmol·m⁻²·s⁻¹, kPa). (4) **Schema format & versioning** — JSON Schema
+(Draft 2020-12) is the normative artifact, one file per message type under `contracts/mqtt/`;
+`schema_version` is an integer major, additive/backward-compatible changes do not bump it, breaking
+changes bump and run side-by-side during transition. Each contract change carries an ADR.
+
+**Why:** `contracts/` is the single artifact all three phases (Rust, Go, Python) conform to, yet RFCs
+001–006 each settled a *component* and none designed the wire contract itself — the highest-blast
+-radius decision in the system, since changing it later means editing three codebases at once. The
+specs uniformly defer wire formats to `contracts/`, so these conventions had to be decided before the
+first schema. Slugs over UUIDs because the system is local and single-site and the controllers are
+named, config-generated services (RFC-003) — readable in topics, logs, and the MQTT tree. JSON Schema
+over AsyncAPI because validation is needed in all three stacks with no intermediate tooling; AsyncAPI
+can wrap it later as docs. A common envelope lets a multi-greenhouse ingester attribute and validate
+each message independently. The decision also resolves a standing doc inconsistency: post-RFC-005 the
+controller is setpoint-only with setpoints over REST, so MQTT is telemetry-only — the stale
+"actuator command/plan over MQTT" references in `contracts/README.md`, `high-level-idea.md`, and
+`spec-climate-controller.md §11` are corrected to match.
+
+**RFC:** [RFC-007](./request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)
+
+---
+
 ## 2026-06-07 — Phase 4 seam: HAL actuator interface must not assume one actuator → one variable
 
 **Decision:** Implement Phases 1–3 exactly as specified, with a single forward-looking constraint on
