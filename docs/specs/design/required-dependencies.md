@@ -142,7 +142,8 @@ docker --version; docker compose version  # container runtime (MQTT broker)
 
 > _Stub — to be filled out when Phase 3 begins._
 >
-> Anticipated host tooling: **Python** (+ a virtual-environment / dependency manager and the
-> Pylance/Ruff LSP tooling), a **local LLM runtime** (e.g. Ollama) or an API key for a hosted LLM,
-> and access to the Phase 2 TimescaleDB.
-> See [`tech-stack-decisions.md`](./tech-stack-decisions.md#phase-3--local-llm-climate-optimizer-python-only).
+> Anticipated host tooling: **Python** (+ a virtual-environment / dependency manager and
+> Pylance/Ruff LSP tooling), an **API key for a hosted LLM** (Anthropic or OpenAI — primary
+> backend), a **local Ollama runtime** for the fallback container, and access to the Phase 2
+> TimescaleDB. See [RFC-004](../../decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface)
+> and [`tech-stack-decisions.md`](./tech-stack-decisions.md#phase-3--llm-climate-optimizer-python-only).

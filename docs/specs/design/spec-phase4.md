@@ -117,7 +117,11 @@ the burner raises **three** variables from one device:
 
 This extends the HAL **coupling matrix** ([P1 §3](./spec-climate-controller.md#3-hal--simulation-model))
 with the entry the core product explicitly held back — the burner row foreshadowed by the CO₂
-injector note ("a combustion variant would also add heat + humidity"). It makes the
+injector note ("a combustion variant would also add heat + humidity"). Because Phase 1's HAL actuator
+interface was deliberately shaped to model a *set* of effects rather than a one-to-one
+actuator→variable mapping ([RFC-006](../../decisions/request-for-comments.md#rfc-006-phase-4-seam-strategy)),
+the burner is added as a **new HAL backend implementing the same actuator trait** — an additive
+change, not a rewrite of the trait or the control loops above it. It makes the
 **coupling problem** ([physical-system-single.md — The Coupling Problem](./physical-system-single.md#the-coupling-problem))
 sharper: the burner is the canonical example of one actuator driving three coupled variables at once,
 so naive independent loops will actively fight it (e.g. running the burner for heat over-enriches CO₂

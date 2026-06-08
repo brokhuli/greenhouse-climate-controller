@@ -82,10 +82,10 @@
 
 ---
 
-## Phase 3 — Local LLM Climate Optimizer (Python-Only)
+## Phase 3 — LLM Climate Optimizer (Python-Only)
 
-**Goal:** AI-driven planning, simulation-validated optimization, human-in-the-loop control — running locally  
-**Priority:** Flexibility, experimentation, simulation, local LLM integration
+**Goal:** AI-driven planning, simulation-validated optimization, human-in-the-loop control  
+**Priority:** Flexibility, experimentation, simulation, LLM integration
 
 ### Recommended Stack
 
@@ -93,22 +93,24 @@
 |---|---|
 | Language | Python |
 | Framework | FastAPI |
-| LLM Integration | Local LLM (Ollama) or API call (OpenAI / Anthropic) |
+| LLM Integration | Hosted LLM (Anthropic/OpenAI) primary; local Ollama fallback — see [RFC-004](../../decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface) |
 | Simulation Engine | NumPy + SciPy |
 | Digital Twin | Custom greenhouse physics model |
 | Data Access | TimescaleDB (Phase 2 store) via SQLAlchemy |
 | Safety Layer | Constraint engine in Python |
-| Actuator Delivery | MQTT or Phase 2 REST API |
+| Actuator Delivery | Phase 2 REST API |
 | Deployment | Docker Compose (local) |
 
 ### Why This Stack
 
 - **Python** — best language for LLMs, simulation, and optimization
 - **FastAPI** — clean service interface for the optimizer
-- **Local LLM (Ollama)** — keeps everything offline; swap for an API-based LLM for higher capability
+- **Hosted LLM primary** — frontier models produce more reliably constraint-valid multi-variable plans; Docker Desktop containers have outbound internet access by default, so no special networking is needed
+- **Ollama fallback** — preserves planning continuity when the hosted backend is temporarily unreachable; same `PlannerBackend` protocol, no changes to the planning loop
+- **Backend-agnostic invocation strategy** — fixed token budget, hourly summaries, adaptive horizon, state-change gate, and fixed cadence applied before any backend call; strategy is identical for both backends
 - **NumPy/SciPy** — simulation of heat, humidity, and CO₂ dynamics
-- **Constraint engine** — validates AI-generated actuator plans before execution
+- **Constraint engine** — validates LLM-generated actuator plans before execution
 - **TimescaleDB** — historical data from Phase 2 feeds the optimizer
 - **Flexible by design** — this layer evolves as LLM capabilities do
 
-> **Layer archetype:** AI systems + digital twin + agentic planning (local)
+> **Layer archetype:** AI systems + digital twin + agentic planning

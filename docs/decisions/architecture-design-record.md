@@ -5,6 +5,74 @@ Each entry corresponds to an accepted RFC in [`request-for-comments.md`](./reque
 
 ---
 
+## 2026-06-07 — Phase 4 seam: HAL actuator interface must not assume one actuator → one variable
+
+**Decision:** Implement Phases 1–3 exactly as specified, with a single forward-looking constraint on
+the Phase 1 HAL: the actuator interface (trait) must model an actuator as producing a *set of effects
+on climate variables*, not a one-to-one actuator→variable mapping. The existing simulated actuators
+each happen to affect mostly one variable, but the interface must not encode that as an invariant.
+Nothing else is built ahead of Phase 4 — no combustion-heater implementation (not even behind a
+flag), no weather/forecast ingestion, and no actuator-selection coordination layer above the PIDs.
+
+**Why:** Phase 4's combustion heater is one device that raises temperature, CO₂, and humidity at
+once, breaking the independent-loop assumption. If the HAL trait hard-codes one actuator → one
+variable, adding the burner in Phase 4 forces a HAL rewrite; shaping the trait correctly now makes
+the burner a new HAL backend implementing the same trait — additive, not a rewrite. The constraint
+is zero-cost and provably contained: the actuator→variable coupling already lives in the HAL
+simulation's coupling matrix, not in the control loops (the PIDs target variables, not actuators), so
+it does not bleed Phase 4 complexity into the rule engine or PID wiring. Building anything more ahead
+of Phase 4 (combustion logic, weather feeds, coordination) was rejected as premature — it would raise
+the complexity of layers that should stay at their Phase 1–3 ratings until Phase 4 is actually in
+scope.
+
+**RFC:** [RFC-006](./request-for-comments.md#rfc-006-phase-4-seam-strategy)
+
+---
+
+## 2026-06-07 — Setpoint authority: Phase 2 is the single authority
+
+**Decision:** Phase 2 is the single authority for controller setpoints. Every setpoint source — crop
+-profile assignment, operator override, and the Phase 3 optimizer — writes through the Phase 2
+setpoint API. Phase 2 enforces crop-safe bounds, records provenance (source = `crop_profile`,
+`optimizer`, or `manual_override`, with timestamp and value), and is the sole delivery path to the
+Phase 1 controller via the controller's REST config API. The optimizer submits refined targets via
+`POST /greenhouses/{id}/setpoints` (with an `optimizer_run_id` for tracing) and never writes to the
+controller directly or over MQTT.
+
+**Why:** Phase 2 already holds the crop-safe bounds (from crop profiles) and is the source of truth
+for intended state. Routing every setpoint source through it keeps bounds enforcement and provenance
+in one place, rather than re-implementing validation in the optimizer and splitting the audit trail
+across systems. The alternatives — optimizer publishing over MQTT or calling the Phase 1 REST API
+directly — each create a second setpoint authority and a direct Phase 3 → Phase 1 dependency the
+layer separation is designed to prevent. The latency cost of the extra hop is irrelevant: setpoint
+changes are minutes-scale (the optimizer's planning cadence, per RFC-004), not real-time actuator
+commands.
+
+**RFC:** [RFC-005](./request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain)
+
+---
+
+## 2026-06-07 — Phase 3 LLM integration: hosted primary, Ollama fallback, backend-agnostic strategy
+
+**Decision:** Use a hosted LLM (Anthropic or OpenAI) as the primary planning backend, with Ollama
+as the local fallback when the hosted backend is unreachable or unconfigured. Both backends
+implement a `PlannerBackend` protocol; the planning loop is identical regardless of which is active.
+A single backend-agnostic invocation strategy — fixed token budget (4 000 tokens), hourly telemetry
+summaries, 12-hour adaptive horizon, state-change gate (5% deviation threshold), and 30-minute
+cycle cadence — is applied in the serialization layer before any backend call.
+
+**Why:** Hosted frontier models produce more reliably constraint-valid multi-variable plans than
+7B–13B local models. Docker Desktop containers have outbound internet access by default, so the
+network dependency is low friction. The Ollama fallback preserves planning continuity during
+transient hosted-backend outages without requiring a code change. The backend-agnostic invocation
+strategy is necessary because local models have small context windows (4K–8K tokens) and slow
+inference, while hosted models have per-token cost — a single conservative budget sized for the
+local model addresses both concerns simultaneously, with no per-backend branching in the optimizer.
+
+**RFC:** [RFC-004](./request-for-comments.md#rfc-004-phase-3-llm-integration-interface)
+
+---
+
 ## 2026-06-07 — Phase 2 ingress: single nginx (SPA server + reverse proxy)
 
 **Decision:** Use one nginx container as the platform's single entry point — it serves the built

@@ -217,26 +217,30 @@ remains available in dev for debugging; it just isn't the platform's ingress.)
 
 | Field   | Value |
 |---------|-------|
-| Status  | Open for Comment |
+| Status  | Accepted |
 | Created | 2026-06-07 |
-| Decides | Before Phase 3 optimizer service is scaffolded |
+| Decided | 2026-06-07 |
 
 ### Summary
 
-Define a **model-agnostic LLM interface** in the Python optimizer so the planning loop is not coupled
-to any specific model or provider. Ship with **Ollama** as the default backend (fully local, zero
-cloud dependency), with a hosted-API backend (Anthropic or OpenAI) swappable at configuration time
-for higher capability.
+Define a **backend-agnostic LLM interface** in the Python optimizer. Use a **hosted LLM**
+(Anthropic or OpenAI) as the primary planning backend, with **Ollama** as the local fallback when
+the hosted backend is unavailable or unconfigured. A single **backend-agnostic invocation strategy**
+— fixed token budget, hourly telemetry summaries, adaptive horizon, state-change gate, and fixed
+cycle cadence — governs all LLM calls regardless of which backend is active.
 
 ### Problem
 
 The optimizer (Phase 3) uses an LLM to generate actuator plans from simulation state and constraints.
-The stack is otherwise fully local and offline-resilient. Choosing a specific model or provider
-now risks either locking in a local model that proves insufficient for constraint-valid plan
-generation, or breaking the offline property for all users by requiring an API key. The design docs
-explicitly call this layer "flexible by design — this layer evolves as LLM capabilities do."
+Two competing constraints apply: hosted frontier models produce higher-quality, more reliably
+constraint-valid plans, but introduce per-token cost and a network dependency; local models
+(Ollama) are free and offline but have smaller context windows and lower capability for complex
+multi-variable planning. Neither pure choice is satisfactory. The design docs explicitly call this
+layer "flexible by design — this layer evolves as LLM capabilities do."
 
 ### Proposal
+
+**Backend protocol**
 
 Introduce a `PlannerBackend` protocol (Python `Protocol` or abstract base class) in the optimizer
 service:
@@ -249,21 +253,46 @@ PlannerBackend
 `PlanContext` carries the digital-twin simulation state, current setpoints, crop-safe bounds, and
 cost/time-of-use signals. `ActuatorPlan` carries refined setpoints and a reasoning trace for audit.
 
-**Default backend: Ollama**
-- Runs locally via the `ollama` container in the Compose stack.
-- No API key, no data leaving the host, consistent with the zero-cloud property of Phases 1–2.
-- Model is configured via environment variable (e.g. `PLANNER_MODEL=llama3`); not pinned in code.
-
-**Optional backend: hosted API**
+**Primary backend: hosted API**
 - Enabled by setting `PLANNER_BACKEND=anthropic` (or `openai`) and supplying an API key.
-- Uses the same `PlannerBackend` protocol; the optimizer's planning loop does not change.
-- If the network is unavailable and this backend is selected, the optimizer logs a warning and
-  skips the planning cycle — the Phase 1 controller continues running deterministically on its
-  last setpoints regardless.
+- Provides higher capability for constraint-valid multi-variable plan generation.
+- Docker Desktop containers on the host machine have outbound internet access by default; no special
+  networking configuration is required to reach hosted API endpoints.
+
+**Fallback backend: Ollama**
+- Activated automatically when the hosted backend is unreachable or `PLANNER_BACKEND=ollama` is set.
+- Runs locally via the `ollama` container in the Compose stack; no API key, no data leaving the host.
+- Model is configured via `PLANNER_MODEL` (e.g. `llama3`); not pinned in code.
+- When the hosted backend fails mid-cycle, the optimizer falls back to Ollama for that cycle, logs a
+  warning, and retries the hosted backend on the next cycle.
 
 The constraint-validation layer (safety bounds, crop limits) runs in Python *after* the LLM
 generates a plan, regardless of which backend produced it. No actuator plan reaches the controller
 without passing constraint validation.
+
+**Backend-agnostic invocation strategy**
+
+Context preparation and call gating are the optimizer's responsibility, applied before
+`generate_plan()` is called. The backend never sees raw data and is never aware of which preparation
+decisions were made. This makes the strategy work identically for both backends:
+
+| Lever | What it does |
+|---|---|
+| **Fixed token budget** | `PlanContext` is serialized to a fixed token budget (e.g. 4 000 tokens) before being passed to any backend. Sized to fit a capable local model's context window, ensuring hosted models receive the same compact context. If serialization exceeds the budget the serializer raises an explicit error — no silent truncation. |
+| **Hourly telemetry summaries** | Serialize `(min, mean, max)` per sensor per hour, not raw readings. 24 h at 1-minute resolution is up to 1 440 rows × N sensors; summaries reduce this to 24 rows regardless of sample rate. |
+| **Adaptive planning horizon** | Default to a 12-hour horizon; extend to 24 h only when the cycle window crosses a day boundary (within 4 h of a sunrise/sunset transition). Most cycles do not need the full horizon. |
+| **State-change gate** | Before invoking the LLM, compare the current simulated trajectory against the trajectory used in the last accepted plan. If per-variable deviation is below a configurable threshold, skip the LLM call and extend the current plan. Suppresses calls during stable periods; especially valuable for local inference where each call costs seconds of GPU time. |
+| **Fixed cycle cadence** | Default cadence of 30 minutes (configurable). Combined with the state-change gate, actual LLM calls are well below the maximum cadence. The cadence bounds the worst case; the gate controls the typical case. |
+
+### Token and Context Management
+
+The invocation strategy above is the token and context management strategy. It is fully specified in
+the Proposal — no separate section is needed. Key properties:
+
+- The token budget is a single config value (`llm.context_token_budget`), not a per-backend setting.
+- Prompt caching (an Anthropic-specific API feature) is **out of scope** for the protocol contract.
+  It may be layered onto the hosted backend implementation if cost warrants it, without changing
+  the `PlannerBackend` interface or the invocation strategy.
 
 ### Alternatives Considered
 
@@ -271,20 +300,33 @@ without passing constraint validation.
 explicitly anticipate swapping models, and the `Protocol` boundary is a one-time, low-cost seam that
 prevents a rewrite if a local model proves insufficient.
 
-**Lock in a hosted API only** — higher plan quality from day one. Rejected because it breaks the
-offline property and introduces per-call cost and an external dependency for a system designed to
-run entirely locally.
+**Hosted API only, no local fallback** — higher plan quality, simpler code (no fallback path).
+Rejected because Ollama fallback preserves planning continuity when the hosted backend is
+temporarily unreachable (network outage, API downtime), and adding it costs only one additional
+`PlannerBackend` implementation behind the same protocol.
+
+**Local Ollama only, no hosted backend** — fully offline, zero cost. Rejected because a 7B–13B
+class local model may not reliably produce constraint-valid plans for the Phase 3 multi-variable
+planning scenario; the hosted backend is the primary path precisely to ensure plan quality.
+
+**Per-backend context strategy** — size and compress `PlanContext` differently depending on whether
+the backend is local or hosted. Rejected because it couples context preparation to backend selection,
+requires branching logic outside the `PlannerBackend` abstraction, and makes the system harder to
+reason about when switching backends. A single conservative budget works for both.
 
 ### Open Questions
 
-- Is a locally-runnable model (7B–13B class, hardware-dependent) capable of generating
-  constraint-valid actuator plans for the Phase 3 scenario, or is a hosted frontier model
-  effectively required for usable output?
-- What is the minimum hardware spec (VRAM) for a model that produces acceptable plans?
+- What token budget and state-change deviation threshold produce acceptable plan quality in
+  practice? Reasonable defaults (4 000 tokens, 5% deviation) should be validated once a model
+  and test scenario are in place.
+- What is the right default cycle cadence given the Phase 3 scenario's expected greenhouse count
+  and planning complexity? 30 minutes is a reasonable starting point but should be validated
+  against actual inference latency on target hardware.
 
 ### Resolution
 
-_Pending_
+**Accepted 2026-06-07 — hosted LLM primary (Anthropic/OpenAI), Ollama local fallback, backend-agnostic
+invocation strategy.** See ADR entry 2026-06-07.
 
 ---
 
@@ -292,9 +334,9 @@ _Pending_
 
 | Field   | Value |
 |---------|-------|
-| Status  | Open for Comment |
+| Status  | Accepted |
 | Created | 2026-06-07 |
-| Decides | Before Phase 3 optimizer is integrated with Phase 1/2 |
+| Decided | 2026-06-07 |
 
 ### Summary
 
@@ -355,12 +397,17 @@ the layer separation is designed to prevent.
 
 ### Open Questions
 
-- Does any Phase 3 planning scenario require a setpoint-change cadence fast enough that a REST
-  round-trip through Phase 2 becomes a bottleneck?
+- ~~Does any Phase 3 planning scenario require a setpoint-change cadence fast enough that a REST
+  round-trip through Phase 2 becomes a bottleneck?~~ **Resolved by [RFC-004](#rfc-004-phase-3-llm-integration-interface):**
+  the optimizer plans on a fixed cycle cadence (default 30 minutes), so setpoint changes are
+  minutes-scale at most. A REST round-trip through Phase 2 is never a bottleneck at this frequency.
 
 ### Resolution
 
-_Pending_
+**Accepted 2026-06-07 — Phase 2 is the single authority for controller setpoints.** All setpoint
+sources (crop-profile assignment, operator override, Phase 3 optimizer) write through the Phase 2
+setpoint API; Phase 2 enforces crop-safe bounds, records provenance, and is the sole delivery path
+to the Phase 1 controller. See ADR entry 2026-06-07.
 
 ---
 
@@ -368,9 +415,9 @@ _Pending_
 
 | Field   | Value |
 |---------|-------|
-| Status  | Open for Comment |
+| Status  | Accepted |
 | Created | 2026-06-07 |
-| Decides | Before Phase 1 HAL actuator interface is finalized |
+| Decided | 2026-06-07 |
 | Priority | Lowest — does not block Phases 1–3 |
 
 ### Summary
@@ -430,10 +477,19 @@ pre-building coordination logic in Phase 2 adds Phase 4 complexity to a layer th
 
 ### Open Questions
 
-- Does avoiding "one actuator → one variable" in the HAL trait require any design that bleeds Phase
+- ~~Does avoiding "one actuator → one variable" in the HAL trait require any design that bleeds Phase
   4 complexity into the Phase 1 rule engine or PID wiring, or is it genuinely limited to the trait
-  definition?
+  definition?~~ **Resolved: genuinely limited to the trait definition.** The coupling between an
+  actuator and the climate variables it affects already lives in the HAL simulation's coupling matrix
+  ([P1 §3](../specs/design/spec-climate-controller.md#3-hal--simulation-model)), not in the control
+  loops. The PIDs target *variables*, not actuators, so the actuator→variable cardinality never
+  reaches the rule engine or PID wiring. Deciding *which* coupled actuator to use when several affect
+  one variable is the Phase 4 actuator-selection layer — explicitly deferred, and additive above the
+  unchanged loops.
 
 ### Resolution
 
-_Pending_
+**Accepted 2026-06-07 — implement Phases 1–3 to spec, with the single constraint that the Phase 1
+HAL actuator interface must not encode "one actuator → one climate variable" as an invariant.** No
+combustion code, weather feed, or actuator-selection logic lands before Phase 4. See ADR entry
+2026-06-07.

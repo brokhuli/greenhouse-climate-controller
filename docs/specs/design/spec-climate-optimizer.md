@@ -105,18 +105,37 @@ passing cloud) is **weather-reactive** control and belongs to Phase 4.
 
 ## 4. LLM-Driven Planning
 
-The planner uses an LLM — a **local model (Ollama)** to keep the system fully offline, or an
-**API-based model** (e.g. Anthropic / OpenAI) for higher capability — selected by configuration
-([§9](#9-configuration)). It is prompted with the observed state, the simulated forward trajectory,
-the active crop-safe bounds, and the optimization objectives ([§7](#7-optimization-objectives)), and
-asked to propose a **refined plan**: adjusted setpoints and a coordinated actuator strategy for the
-horizon.
+The planner uses a **hosted LLM** (Anthropic or OpenAI) as its primary backend, with **Ollama** as
+the local fallback when the hosted backend is unreachable or unconfigured — see
+[RFC-004](../../decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface). Both
+backends implement the `PlannerBackend` protocol; the planning loop is identical regardless of which
+is active.
+
+The planner is prompted with the observed state, the simulated forward trajectory, the active
+crop-safe bounds, and the optimization objectives ([§7](#7-optimization-objectives)), and asked to
+propose a **refined plan**: adjusted setpoints and a coordinated actuator strategy for the horizon.
 
 The planner emits a **structured plan** (not prose) conforming to the schema in
 [`contracts/`](../../../contracts/), so the constraint engine and applier can consume it
 deterministically. The LLM **proposes**; it has no authority — every plan it emits is gated by the
 constraint engine ([§5](#5-constraint-engine--safety)) before anything is applied. The plan also
 carries a **confidence** signal used by the application gate ([§6](#6-setpoint-refinement--application)).
+
+### Invocation strategy
+
+Context preparation and call gating are applied in Python before `generate_plan()` is called,
+making the strategy backend-agnostic. The same rules apply whether the active backend is hosted or
+local:
+
+| Lever | Rule |
+|---|---|
+| **Fixed token budget** | `PlanContext` is serialized to a fixed token budget (default 4 000 tokens). If the budget is exceeded the serializer raises an explicit error — no silent truncation. |
+| **Hourly telemetry summaries** | History is serialized as `(min, mean, max)` per sensor per hour, not raw readings. |
+| **Adaptive horizon** | Default 12-hour horizon; extended to 24 h only when the cycle window crosses a day boundary (within 4 h of sunrise/sunset). |
+| **State-change gate** | The LLM is not invoked if the current simulated trajectory deviates from the last accepted plan's trajectory by less than a configurable threshold. The current plan is extended instead. |
+| **Fixed cycle cadence** | Planning cycles run on a fixed interval (default 30 minutes). The state-change gate controls actual LLM call frequency within that cadence. |
+
+All five levers are configurable ([§9](#9-configuration)).
 
 ---
 
@@ -151,9 +170,14 @@ It **writes targets only**; it never commands actuators and never edits the crop
 **Delivery is through Phase 2.** The optimizer applies a refined setpoint bundle via the **Phase 2
 REST API**, layered on the crop-profile baseline exactly as a sticky operator setpoint edit is
 ([P2 §5 — Resolution and the write path](./spec-climate-platform.md#5-crop-profiles--setpoint-resolution)).
-Phase 2 remains the **single source of truth for intended state** and reconciles the refined targets
-down to the controller — applying on change, re-asserting on reconnect, and detecting drift. The
-optimizer does **not** write to controllers directly and does **not** publish actuator commands.
+Phase 2 is the **single authority for controller setpoints**
+([RFC-005](../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain)):
+it enforces crop-safe bounds, records provenance (source `optimizer`, with an `optimizer_run_id` for
+tracing), and is the sole delivery path to the controller — applying on change, re-asserting on
+reconnect, and detecting drift. The optimizer submits refined targets via
+`POST /greenhouses/{id}/setpoints` and either receives `202` (accepted) or `422` (rejected with the
+violated bound); it does **not** write to controllers directly and does **not** publish actuator
+commands.
 
 **Application gate — auto-apply within bounds:**
 
@@ -214,16 +238,24 @@ postgres_dsn = "postgresql://optimizer:***@platform-db:5432/greenhouse"  # read-
 platform_api_url = "https://platform/api"
 
 [llm]
-provider = "ollama"           # "ollama" (local) | "api"
-model = "llama3"
-endpoint = "http://ollama:11434"
+# Primary backend: "anthropic" | "openai"
+# Falls back to "ollama" automatically if the primary is unreachable.
+provider = "anthropic"
+model = "claude-sonnet-4-6"
+api_key = ""                          # set via PLANNER_API_KEY env var; never in file
+fallback_provider = "ollama"
+fallback_model = "llama3"
+fallback_endpoint = "http://ollama:11434"
 
 [planning]
-horizon_hours = 24
+cycle_interval_minutes = 30
+horizon_hours = 12                    # extended to 24 only near day boundaries
+context_token_budget = 4000           # serializer raises if exceeded; no silent truncation
+state_change_threshold = 0.05         # fraction deviation to suppress a cycle's LLM call
 objective_weights = { anticipation = 1.0, coupling = 1.0, efficiency = 0.5 }
 
 [application]
-confidence_threshold = 0.8    # below → escalate to operator
+confidence_threshold = 0.8            # below → escalate to operator
 # crop-safe bounds come from the Phase 2 crop profile, not from here
 ```
 

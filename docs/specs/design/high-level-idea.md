@@ -246,9 +246,10 @@ No cloud = simpler networking, identity, secrets, and deployment.
 - Runs a **Python service** that:
   - pulls historical data from Postgres
   - simulates greenhouse climate dynamics
-  - uses an LLM to generate actuator plans
+  - uses an LLM to propose refined setpoints
   - validates plans against constraints
-  - sends commands to the controller via MQTT or API
+  - submits refined setpoints **through the Phase 2 API** — Phase 2 is the single authority for
+    controller setpoints ([RFC-005](../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain))
 
 ---
 
@@ -304,8 +305,8 @@ independent control loops); site-wide orchestration across greenhouses is **out 
 - **Python** — core logic
 - **FastAPI** — service interface
 - **NumPy/SciPy** — simulation
-- **Local LLM or API call** — planning
-- **MQTT** — actuator plan delivery
+- **Hosted LLM (primary) or local Ollama (fallback)** — planning; see [RFC-004](../../decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface)
+- **Phase 2 REST API** — refined-setpoint delivery (Phase 2 is the single setpoint authority; see [RFC-005](../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain))
 - **Postgres** — historical data
 
 ---

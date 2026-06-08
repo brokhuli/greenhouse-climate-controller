@@ -212,6 +212,15 @@ The platform owns the **static** mapping — "this crop, this stage → these ta
 **refines** those targets dynamically (anticipatory, cost-aware) within crop-safe bounds; that
 optimization is out of scope here. See [§14](#14-scope--deferred--out-of-scope).
 
+Crucially, the optimizer is **not** a second setpoint authority. The platform is the **single
+authority for controller setpoints**
+([RFC-005](../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain)):
+when Phase 3 lands, the optimizer submits refined targets through this same setpoint write path
+(a setpoint-submission endpoint), and the platform enforces the crop-safe bounds, records the write
+with its source (`optimizer`), and remains the sole delivery path to the controller — exactly as it
+does for a crop-profile assignment or an operator override. The optimizer never writes to a
+controller directly.
+
 ---
 
 ## 6. Fleet Management & Operator Control

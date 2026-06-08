@@ -103,6 +103,16 @@ Actuators affect multiple variables at once — this is what makes the controlle
 | Shade screen | PAR ↓, reduces incoming solar heat gain (temperature effect) |
 | Irrigation valve (per zone) | soil moisture ↑ (that zone) |
 
+> **Interface constraint — actuators have a *set* of effects, not one.** The HAL actuator interface
+> models each actuator as producing a **set of effects on climate variables**, never a one-to-one
+> actuator→variable mapping. The actuators above each happen to affect mostly one variable, but the
+> interface must not encode single-variable as an invariant (no field or type parameter pinning an
+> actuator to one target). This is the one forward-looking accommodation for Phase 4's combustion
+> heater — a single device that raises temperature, CO₂, and humidity at once — which can then be
+> added as a new HAL backend implementing the same trait rather than forcing a HAL rewrite. The
+> coupling lives here in the HAL; the control loops target *variables*, not actuators, so this costs
+> nothing above the HAL. See [RFC-006](../../decisions/request-for-comments.md#rfc-006-phase-4-seam-strategy).
+
 ### Hidden disturbance model
 
 The simulation maintains internal state the controller **cannot** see — it only ever reads sensor
@@ -345,7 +355,7 @@ elements that are simply not instrumented are listed in
 | Energy-cost optimization | Needs price data + a planning horizon — Phase 3 |
 | Advanced sensor fusion (Kalman / complementary, cross-quantity) | Estimation-theory methods need the physics model — Phase 3. Phase 1 includes only redundant-temperature median voting (§5) |
 | Full heat/mass-balance HAL physics | Reserved for the Phase 3 digital twin; Phase 1 uses coupled first-order lag (§3) |
-| Combustion heater | Multi-variable actuator (heat + CO₂ + humidity) that breaks the independence assumption of the current control loops; requires actuator-selection coordination logic above the individual PIDs — out of scope for Phase 1 |
+| Combustion heater | Multi-variable actuator (heat + CO₂ + humidity) that breaks the independence assumption of the current control loops; requires actuator-selection coordination logic above the individual PIDs — out of scope for Phase 1. The only accommodation made now is the HAL interface constraint (§3): because actuators are modeled as a *set* of effects, the burner lands in Phase 4 as a new HAL backend, not a HAL rewrite ([RFC-006](../../decisions/request-for-comments.md#rfc-006-phase-4-seam-strategy)) |
 
 ---
 
