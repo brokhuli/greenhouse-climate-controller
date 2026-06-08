@@ -44,7 +44,7 @@ The optimizer runs a planning cycle per greenhouse: read history → simulate fo
 setpoints back through the Phase 2 REST API, which remains the single authority on intended state.
 
 ```
-Phase 2 Postgres / TimescaleDB
+Phase 2 TimescaleDB
       │  historical telemetry (read-only)
       ▼
 Data Access                          ← loads recent readings, actuator states, current setpoints
@@ -188,7 +188,7 @@ the crop-safe bounds enforced in [§5](#5-constraint-engine--safety).
 
 | Interface | Direction | Role |
 |---|---|---|
-| **Postgres / TimescaleDB** | Phase 2 store → optimizer | Read-only historical telemetry, actuator states, and current setpoints for one greenhouse |
+| **TimescaleDB** | Phase 2 store → optimizer | Read-only historical telemetry, actuator states, and current setpoints for one greenhouse |
 | **Phase 2 REST API** | Optimizer → platform | Write refined setpoint bundles (layered on the crop baseline); platform reconciles to the controller |
 | **Service API (FastAPI)** | Operator/tools → optimizer | Trigger planning cycles, inspect proposed plans, review and act on escalations |
 

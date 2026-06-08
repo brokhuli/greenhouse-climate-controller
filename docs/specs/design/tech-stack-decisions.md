@@ -14,7 +14,7 @@
 | Language | Rust |
 | Async Runtime | Tokio |
 | Local Database | SQLite (optional persistence) |
-| Messaging | MQTT (Mosquitto or EMQX) |
+| Messaging | MQTT (Mosquitto) |
 | Hardware Abstraction | Traits + simulated backend (HAL) |
 | API | REST (config + status) |
 | Streaming | WebSockets (logs + real-time events) |
@@ -46,20 +46,20 @@
 | Language | Go |
 | Web Framework | Echo |
 | API Style | REST + WebSockets |
-| Database | Postgres or TimescaleDB |
+| Database | TimescaleDB (PostgreSQL extension) |
 | Frontend | React |
 | Auth | Keycloak (OIDC) |
-| Reverse Proxy | Traefik or nginx |
+| Reverse Proxy | nginx |
 | Orchestration | Docker Compose |
-| MQTT Broker | EMQX or Mosquitto |
+| MQTT Broker | Mosquitto |
 
 ### Why This Stack
 
 - **Go + Echo** — simple, fast, reliable API service
-- **TimescaleDB** — correct time-series database for greenhouse sensor data; Postgres is fine for early phases. The same relational store also holds the **greenhouse registry and crop profiles** (per-greenhouse metadata + per-crop/stage climate targets) alongside the time-series data
-- **React** — modern SPA dashboard served via nginx or the API
+- **TimescaleDB** — adopted from day one as the correct time-series database for greenhouse sensor data; because it is a PostgreSQL *extension* (not a separate database), the same store also holds the **greenhouse registry and crop profiles** (per-greenhouse metadata + per-crop/stage climate targets) in ordinary relational tables alongside the time-series telemetry. See [RFC-002](../../decisions/request-for-comments.md#rfc-002-phase-2-persistence-layer)
+- **React** — modern SPA dashboard served by the nginx entry point
 - **Keycloak** — self-hosted OIDC identity provider; runs locally as a container (no cloud dependency) and owns login, the user store, and roles so the API never handles credentials
-- **Traefik/nginx** — reverse proxy routing between containers
+- **nginx** — single entry point: serves the SPA and reverse-proxies `/api` and `/auth`; chosen over Traefik because the service map is static and config-driven (see [RFC-003](../../decisions/request-for-comments.md#rfc-003-phase-2-platform-ingress))
 - **Docker Compose** — single-command local orchestration; no cloud account needed
 
 > **Layer archetype:** PaaS platform + microservice architecture (local)
@@ -69,11 +69,11 @@
 | Service | Implementation |
 |---|---|
 | `api` | Go + Echo |
-| `db` | PostgreSQL (optionally TimescaleDB) |
-| `mqtt` | EMQX or Mosquitto |
+| `db` | TimescaleDB (PostgreSQL + extension) |
+| `mqtt` | Mosquitto |
 | `auth` | Keycloak |
-| `proxy` | Traefik or nginx (optional) |
-| `frontend` | Built React app served by nginx or the API |
+| `proxy` | nginx (single entry point; also serves the SPA) |
+| `frontend` | Built React app served by the `proxy` nginx |
 
 **Connections:**
 - **Phase 1 controller** → local MQTT broker
@@ -96,7 +96,7 @@
 | LLM Integration | Local LLM (Ollama) or API call (OpenAI / Anthropic) |
 | Simulation Engine | NumPy + SciPy |
 | Digital Twin | Custom greenhouse physics model |
-| Data Access | Postgres/TimescaleDB via SQLAlchemy |
+| Data Access | TimescaleDB (Phase 2 store) via SQLAlchemy |
 | Safety Layer | Constraint engine in Python |
 | Actuator Delivery | MQTT or Phase 2 REST API |
 | Deployment | Docker Compose (local) |

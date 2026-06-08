@@ -48,7 +48,7 @@ greenhouse remains an independent climate and failure domain. Cross-greenhouse i
 ## 2. Architecture
 
 A set of containers behind a single reverse proxy. The Go API is the hub: it ingests from MQTT,
-persists to Postgres/TimescaleDB, serves the dashboard, and drives the controllers' REST APIs.
+persists to TimescaleDB, serves the dashboard, and drives the controllers' REST APIs.
 
 ```
                        +------------------------------+
@@ -57,7 +57,7 @@ persists to Postgres/TimescaleDB, serves the dashboard, and drives the controlle
                                        | HTTP / WS
                                        v
        +----------------+      +------------------------------+
-       |  Auth          |<---->|   Reverse Proxy (Traefik)    |
+       |  Auth          |<---->|   Reverse Proxy (nginx)      |
        |  Keycloak/OIDC |      +---------------+--------------+
        +----------------+                      |
                                                v
@@ -74,8 +74,8 @@ persists to Postgres/TimescaleDB, serves the dashboard, and drives the controlle
                           DB / SQL |                    | MQTT (ingest) + REST (control, down)
                                    v                    v
                        +----------------------+   +------------------+
-                       | Postgres/TimescaleDB |   |  MQTT Broker     |
-                       | - registry + profiles|   |  EMQX/Mosquitto  |
+                       | TimescaleDB          |   |  MQTT Broker     |
+                       | - registry + profiles|   |  Mosquitto       |
                        | - telemetry (TSDB)   |   +--------+---------+
                        +----------------------+           |
                                                           |  MQTT (up) ↑   REST (down) ↓
@@ -95,7 +95,7 @@ Three data flows cross this topology:
 |---|---|
 | Reverse Proxy | Single entry point; routes to API and frontend; auth edge |
 | Go API (Echo) | Ingestion, fleet management, profile resolution, setpoint edits, analytics, WS fan-out |
-| Postgres/TimescaleDB | Relational registry + crop profiles; time-series telemetry & events |
+| TimescaleDB | Relational registry + crop profiles; time-series telemetry & events |
 | MQTT Broker | Transport for controller telemetry (ingest) |
 | Auth (Keycloak) | OIDC identity provider — login, user store, roles; the API validates its tokens |
 | Frontend | React dashboard — fleet overview, per-greenhouse detail, profile & control UI |
@@ -306,10 +306,12 @@ Finer-grained RBAC and multi-tenant identity are out of scope ([§14](#14-scope-
 
 ## 10. Reverse Proxy & Routing
 
-A single reverse proxy (**Traefik or nginx**) is the platform's one entry point. It routes inbound
-requests to the frontend (static SPA assets) and to the Go API (REST + WebSocket upgrade), and is the
-natural place to terminate the auth edge. Running everything behind one proxy mirrors a real PaaS
-ingress while keeping local networking to a single exposed port.
+A single **nginx** container is the platform's one entry point. It serves the frontend (static SPA
+assets) directly and reverse-proxies inbound requests to the Go API (REST + WebSocket upgrade) and to
+Keycloak, and is the natural place to terminate the auth edge. Running everything behind one proxy
+mirrors a real PaaS ingress while keeping local networking to a single exposed port. nginx (not
+Traefik) is the choice because the service map is static and config-driven — see
+[RFC-003](../../decisions/request-for-comments.md#rfc-003-phase-2-platform-ingress).
 
 ---
 
@@ -338,11 +340,11 @@ account.
 | Service | Implementation |
 |---|---|
 | `api` | Go + Echo |
-| `db` | PostgreSQL (optionally TimescaleDB) |
-| `mqtt` | EMQX or Mosquitto |
+| `db` | TimescaleDB (PostgreSQL + extension) |
+| `mqtt` | Mosquitto |
 | `auth` | Keycloak — self-hosted OIDC identity provider |
-| `proxy` | Traefik or nginx |
-| `frontend` | Built React app served via the proxy |
+| `proxy` | nginx (single entry point; also serves the SPA) |
+| `frontend` | Built React app served by the `proxy` nginx |
 
 The platform's own service configuration — database DSN, MQTT broker address, Keycloak client
 credentials, proxy routing — is supplied via **environment variables / the Compose file**, not a

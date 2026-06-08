@@ -85,7 +85,7 @@ It mirrors real IoT + SaaS architecture patterns without requiring any cloud ser
                 v
 +------------------------------+
 |   Local MQTT Broker          |
-|   EMQX / Mosquitto           |
+|   Mosquitto                  |
 +------------------------------+
 ```
 
@@ -100,7 +100,7 @@ It mirrors real IoT + SaaS architecture patterns without requiring any cloud ser
 - **Sensor fusion** — redundant temperature probes fused by median voting (fault tolerance)
 - **PID + hysteresis control** — temperature PID, humidity band, VPD target
 - **Rule engine** — coupled multi‑condition logic + safety interlocks
-- **MQTT (EMQX or Mosquitto)** — messaging with QoS + retained messages
+- **MQTT (Mosquitto)** — messaging with QoS + retained messages
 - **REST API** — config + status
 - **WebSockets** — logs + real‑time events
 - **SvelteKit** — local dashboard with real‑time charts
@@ -154,7 +154,7 @@ This is your **local cloud**, built from containers.
 - Manages **multiple greenhouse controllers** (Phase 1 instances) representing separate greenhouses at a single site
 - Provides a **Go API** for multi-greenhouse data and fleet management
 - **Owns crop profiles** — a library of per-crop / per-growth-stage climate targets (temperature, humidity band, VPD, DLI, CO₂); assigns one profile to each greenhouse and **resolves it into that controller's setpoints**, pushed down via the Phase 1 REST config API. This is the layer that turns "this is a lettuce house, fruiting stage" into the numbers the crop-agnostic controller regulates to.
-- Stores historical data in **Postgres/TimescaleDB**
+- Stores historical data in **TimescaleDB**
 - Hosts a **dashboard frontend**
 - Manages users via **Keycloak** (self-hosted OIDC)
 - Provides a **reverse proxy** for routing
@@ -184,8 +184,8 @@ This is your **local cloud**, built from containers.
                 | DB / MQTT
                 v
 +------------------+     +------------------+
-| Postgres/TSDB    |     | MQTT Broker      |
-| Time-series data |     | EMQX/Mosquitto   |
+| TimescaleDB      |     | MQTT Broker      |
+| Time-series data |     | Mosquitto        |
 +------------------+     +------------------+
                 ^                ^
                 |                |
@@ -201,10 +201,10 @@ This is your **local cloud**, built from containers.
 ## **Phase 2 Tech Stack**
 
 - **Go (Echo)** — API service
-- **Postgres or TimescaleDB** — time‑series storage
+- **TimescaleDB** — time‑series storage
 - **React** — dashboard
 - **Keycloak (OIDC)** — auth
-- **Traefik or nginx** — reverse proxy
+- **nginx** — reverse proxy + SPA server (single entry point)
 - **Docker Compose** — orchestration
 - **MQTT** — device messaging
 - **Prometheus + Grafana** — metrics scraping + dashboards
@@ -414,7 +414,7 @@ controller now needs actuator‑selection coordination above its PIDs.
 | Phase       | Purpose                     | Tech Stack                                                | Skills Learned                                                                              | Complexity   |
 | ----------- | --------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------ |
 | **Phase 1** | Local controller + local UI | Rust, HAL, MQTT, REST, WebSockets, SvelteKit              | Embedded patterns, PID, rule engine, safety interlocks, fault detection, MQTT, real‑time UI | **6 / 10**   |
-| **Phase 2** | Multi-greenhouse management platform (single site); owns crop profiles → controller setpoints | Go, Postgres/Timescale, MQTT, Keycloak, React, Docker, Prometheus/Grafana | PaaS design, DB modeling, crop-profile/setpoint resolution, auth, microservices, reverse proxy, observability | **6 / 10**   |
+| **Phase 2** | Multi-greenhouse management platform (single site); owns crop profiles → controller setpoints | Go, TimescaleDB, MQTT, Keycloak, React, Docker, Prometheus/Grafana | PaaS design, DB modeling, crop-profile/setpoint resolution, auth, microservices, reverse proxy, observability | **6 / 10**   |
 | **Phase 3** | Local AI climate optimizer  | Python, FastAPI, NumPy/SciPy, LLM, MQTT, Postgres         | Simulation, LLM orchestration, constraints, planning                                        | **7.5 / 10** |
 | **Phase 4** *(stretch goal)* | Coupled actuation + weather-reactive optimization | Phase 3 stack + weather-API/forecast feed, combustion-model digital twin | Multi-variable actuator coordination, weather/forecast integration, weather-reactive MPC, combustion simulation | **9 / 10** |
 

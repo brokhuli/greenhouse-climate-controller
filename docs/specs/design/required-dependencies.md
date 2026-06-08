@@ -99,7 +99,7 @@ and the test runner (**Vitest** / **Playwright**) — comes from the frontend's 
 
 ### 4. MQTT broker + client tooling
 
-- **Broker (runtime, Docker — not a host install):** Mosquitto or EMQX runs as a container from the
+- **Broker (runtime, Docker — not a host install):** Mosquitto runs as a container from the
   Phase 1 / deploy compose stack. Nothing to install on the host.
 - **MQTT client (dev/debug, optional but recommended):** a client to watch topics and hand-publish
   actuator commands while developing:
@@ -133,7 +133,7 @@ docker --version; docker compose version  # container runtime (MQTT broker)
 > _Stub — to be filled out when Phase 2 begins._
 >
 > Anticipated host tooling: **Go** toolchain (+ `gopls` LSP), **Node.js** (React dashboard), Docker
-> Compose stack (Postgres/TimescaleDB, MQTT broker, Keycloak, reverse proxy), and a Postgres client.
+> Compose stack (TimescaleDB, MQTT broker, Keycloak, reverse proxy), and a Postgres client.
 > See [`tech-stack-decisions.md`](./tech-stack-decisions.md#phase-2--local-paas-platform-docker-only).
 
 ---
@@ -144,5 +144,5 @@ docker --version; docker compose version  # container runtime (MQTT broker)
 >
 > Anticipated host tooling: **Python** (+ a virtual-environment / dependency manager and the
 > Pylance/Ruff LSP tooling), a **local LLM runtime** (e.g. Ollama) or an API key for a hosted LLM,
-> and access to the Phase 2 Postgres/TimescaleDB.
+> and access to the Phase 2 TimescaleDB.
 > See [`tech-stack-decisions.md`](./tech-stack-decisions.md#phase-3--local-llm-climate-optimizer-python-only).
