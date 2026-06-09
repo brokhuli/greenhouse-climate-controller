@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "greenhouse_id": "gh-a",
+  "zone_id": null,
+  "ts": "2026-06-07T14:03:00.000Z",
+  "controller": {
+    "mode": "normal",
+    "healthy": true
+  },
+  "sensors": {
+    "temperature": { "value": 22.4, "unit": "°C" },
+    "humidity": { "value": 68.0, "unit": "%RH" },
+    "co2": { "value": 980.0, "unit": "ppm" },
+    "par": { "value": 412.0, "unit": "µmol·m⁻²·s⁻¹" },
+    "vpd": { "value": 0.95, "unit": "kPa" }
+  },
+  "zones": [
+    {
+      "zone_id": "bench-a",
+      "soil_moisture": { "value": 0.42, "unit": "%VWC" },
+      "irrigation": { "on": false, "level_pct": null },
+      "faulted": false
+    },
+    {
+      "zone_id": "seedling-tray",
+      "soil_moisture": { "value": 0.58, "unit": "%VWC" },
+      "irrigation": { "on": true, "level_pct": null },
+      "faulted": false
+    }
+  ],
+  "actuators": [
+    { "actuator": "heater", "state": { "on": false, "level_pct": 0.0 }, "overridden": false },
+    { "actuator": "fans", "state": { "on": true, "level_pct": 30.0 }, "overridden": false },
+    { "actuator": "roof_vents", "state": { "on": true, "level_pct": 45.0 }, "overridden": false },
+    { "actuator": "misters", "state": { "on": false, "level_pct": null }, "overridden": false },
+    { "actuator": "co2_injector", "state": { "on": true, "level_pct": null }, "overridden": false },
+    { "actuator": "grow_lights", "state": { "on": true, "level_pct": 80.0 }, "overridden": false },
+    { "actuator": "shade_screen", "state": { "on": false, "level_pct": 0.0 }, "overridden": false }
+  ],
+  "faults": [],
+  "overrides": [
+    {
+      "actuator": "grow_lights",
+      "zone_id": null,
+      "state": { "on": true, "level_pct": 80.0 },
+      "expires_at": "2026-06-07T16:00:00.000Z"
+    }
+  ]
+}

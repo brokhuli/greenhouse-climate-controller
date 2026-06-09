@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://greenhouse.local/contracts/mqtt/fault-event.schema.json",
+  "title": "Fault Event",
+  "description": "A sensor, actuator, or subsystem fault detected by the controller, published on gh/{greenhouse_id}/fault (controller spec §7 safety interlocks, §8 sensor fault detection). The envelope zone_id scopes zone-local faults (e.g. a zone's soil-moisture sensor or irrigation valve).",
+  "type": "object",
+  "$defs": {
+    "fault_type": {
+      "type": "string",
+      "enum": [
+        "stuck",
+        "out_of_range",
+        "sensor_disagreement",
+        "redundancy_degraded",
+        "temperature_unavailable",
+        "critical_temperature",
+        "co2_ceiling",
+        "irrigation_no_response"
+      ],
+      "description": "Closed set of fault conditions. stuck/out_of_range are generic sensor faults (§8); sensor_disagreement/redundancy_degraded/temperature_unavailable are temperature-fusion faults (§5); critical_temperature/co2_ceiling/irrigation_no_response are safety-interlock triggers (§7)."
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["warning", "alarm"],
+      "description": "warning = degraded but operating; alarm = safety-interlock or loss-of-trust condition."
+    }
+  },
+  "allOf": [
+    { "$ref": "https://greenhouse.local/contracts/mqtt/envelope.schema.json" },
+    {
+      "properties": {
+        "component": {
+          "type": "string",
+          "description": "Identifier of the faulted sensor, actuator, or subsystem (e.g. temperature, humidity, co2, par, soil_moisture, irrigation_valve)."
+        },
+        "fault_type": { "$ref": "#/$defs/fault_type" },
+        "severity": { "$ref": "#/$defs/severity" },
+        "message": {
+          "type": "string",
+          "description": "Human-readable description of the fault."
+        },
+        "response": {
+          "type": "string",
+          "description": "Fail-safe action the controller took (e.g. 'disabled injector', 'opened vents, disabled injector', 'disabled zone irrigation')."
+        }
+      },
+      "required": ["component", "fault_type", "severity", "message", "response"]
+    }
+  ],
+  "unevaluatedProperties": false
+}

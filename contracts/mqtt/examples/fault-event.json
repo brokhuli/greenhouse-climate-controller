@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "greenhouse_id": "gh-a",
+  "zone_id": null,
+  "ts": "2026-06-07T14:03:00.000Z",
+  "component": "co2",
+  "fault_type": "out_of_range",
+  "severity": "alarm",
+  "message": "CO₂ sensor reading 6200 ppm exceeds plausibility bound (~200–5000 ppm)",
+  "response": "disabled injector (fail-closed)"
+}

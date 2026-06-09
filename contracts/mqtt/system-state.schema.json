@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://greenhouse.local/contracts/mqtt/system-state.schema.json",
+  "title": "Consolidated System State",
+  "description": "Last-known full snapshot of one greenhouse, published RETAINED on gh/{greenhouse_id}/state so a subscriber has current state on connect (RFC-007 §2, controller spec §10). Greenhouse-scoped: envelope zone_id is null; per-zone detail lives in the zones array. Reuses the actuator and fault shapes from their owning schemas so the snapshot cannot drift from the per-topic messages.",
+  "type": "object",
+  "allOf": [
+    { "$ref": "https://greenhouse.local/contracts/mqtt/envelope.schema.json" },
+    {
+      "properties": {
+        "zone_id": {
+          "const": null,
+          "description": "Always null: the consolidated state is greenhouse-scoped."
+        },
+        "controller": {
+          "type": "object",
+          "description": "Controller operating mode and health.",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": ["normal", "degraded", "interlock"],
+              "description": "normal = all loops nominal; degraded = a non-critical fault is active; interlock = a safety interlock is overriding control (controller spec §7)."
+            },
+            "healthy": {
+              "type": "boolean",
+              "description": "False when any active fault is present."
+            }
+          },
+          "required": ["mode", "healthy"],
+          "additionalProperties": false
+        },
+        "sensors": {
+          "type": "object",
+          "description": "Latest house-level sensor readings. Each is a {value, unit} pair with the unit fixed per metric, or null when unavailable.",
+          "properties": {
+            "temperature": { "type": ["object", "null"], "properties": { "value": { "type": "number" }, "unit": { "const": "°C" } }, "required": ["value", "unit"], "additionalProperties": false },
+            "humidity": { "type": ["object", "null"], "properties": { "value": { "type": "number" }, "unit": { "const": "%RH" } }, "required": ["value", "unit"], "additionalProperties": false },
+            "co2": { "type": ["object", "null"], "properties": { "value": { "type": "number" }, "unit": { "const": "ppm" } }, "required": ["value", "unit"], "additionalProperties": false },
+            "par": { "type": ["object", "null"], "properties": { "value": { "type": "number" }, "unit": { "const": "µmol·m⁻²·s⁻¹" } }, "required": ["value", "unit"], "additionalProperties": false },
+            "vpd": { "type": ["object", "null"], "properties": { "value": { "type": "number" }, "unit": { "const": "kPa" } }, "required": ["value", "unit"], "additionalProperties": false }
+          },
+          "required": ["temperature", "humidity", "co2", "par", "vpd"],
+          "additionalProperties": false
+        },
+        "zones": {
+          "type": "array",
+          "description": "Per-zone irrigation state, one entry per configured zone.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "zone_id": {
+                "type": "string",
+                "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+              },
+              "soil_moisture": { "type": ["object", "null"], "properties": { "value": { "type": "number" }, "unit": { "const": "%VWC" } }, "required": ["value", "unit"], "additionalProperties": false },
+              "irrigation": { "$ref": "https://greenhouse.local/contracts/mqtt/actuator-state.schema.json#/$defs/state" },
+              "faulted": {
+                "type": "boolean",
+                "description": "True when this zone's irrigation is disabled by a fault (controller spec §7, §8)."
+              }
+            },
+            "required": ["zone_id", "soil_moisture", "irrigation", "faulted"],
+            "additionalProperties": false
+          }
+        },
+        "actuators": {
+          "type": "array",
+          "description": "Current state of every house-level actuator.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "actuator": { "$ref": "https://greenhouse.local/contracts/mqtt/actuator-state.schema.json#/$defs/name" },
+              "state": { "$ref": "https://greenhouse.local/contracts/mqtt/actuator-state.schema.json#/$defs/state" },
+              "overridden": { "type": "boolean" }
+            },
+            "required": ["actuator", "state", "overridden"],
+            "additionalProperties": false
+          }
+        },
+        "faults": {
+          "type": "array",
+          "description": "Active fault summaries. Empty when healthy.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "component": { "type": "string" },
+              "zone_id": { "type": ["string", "null"], "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
+              "fault_type": { "$ref": "https://greenhouse.local/contracts/mqtt/fault-event.schema.json#/$defs/fault_type" },
+              "severity": { "$ref": "https://greenhouse.local/contracts/mqtt/fault-event.schema.json#/$defs/severity" }
+            },
+            "required": ["component", "fault_type", "severity"],
+            "additionalProperties": false
+          }
+        },
+        "overrides": {
+          "type": "array",
+          "description": "Active manual overrides (controller spec §10). Empty when none.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "actuator": { "$ref": "https://greenhouse.local/contracts/mqtt/actuator-state.schema.json#/$defs/name" },
+              "zone_id": { "type": ["string", "null"], "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
+              "state": { "$ref": "https://greenhouse.local/contracts/mqtt/actuator-state.schema.json#/$defs/state" },
+              "expires_at": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "When the override auto-expires (RFC 3339 UTC), or null for no timeout."
+              }
+            },
+            "required": ["actuator", "state", "expires_at"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["controller", "sensors", "zones", "actuators", "faults", "overrides"]
+    }
+  ],
+  "unevaluatedProperties": false
+}

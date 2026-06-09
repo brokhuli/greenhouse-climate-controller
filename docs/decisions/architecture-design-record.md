@@ -8,6 +8,42 @@ alternatives and tradeoffs.
 
 ---
 
+## 2026-06-09 — MQTT contract schemas authored (implements RFC-007)
+
+**Decision:** Wrote the first `contracts/mqtt/` schemas under the RFC-007 conventions — five
+message types as JSON Schema (Draft 2020-12), plus a topic-map README and example fixtures. The
+shared envelope lives in `envelope.schema.json` and is composed into every message via `allOf`;
+each schema carries a stable `$id` under base `https://greenhouse.local/contracts/mqtt/` so
+cross-schema `$ref`s resolve by `$id` in all three stacks. Message types:
+`sensor-reading`, `actuator-state`, `fault-event`, `system-state`.
+
+Three shape choices were settled while authoring:
+- **Sensor units** are bound to the metric (`if/then`: `temperature` ⇒ `°C`, etc.), so a
+  mismatched unit is rejected at the contract boundary, not just discouraged by the units table.
+- **Actuator state** is one unified shape `{ on, level_pct }` for all eight actuators —
+  `level_pct` is `0–100` for variable/modulating devices and `null` for pure on/off devices —
+  rather than per-type sub-schemas. One shape for the ingester to handle.
+- The retained **`gh/{id}/state`** topic is a **full snapshot**: latest house sensors, every
+  actuator state, per-zone irrigation status, active faults, active overrides, and controller
+  mode/health. The actuator and fault shapes are `$ref`'d from their owning schemas so the
+  snapshot cannot drift from the per-topic messages.
+
+This also closes two RFC-007 open questions: `metric`/`actuator` names are **closed enums**, and
+**only** the consolidated `state` topic is retained (no per-sensor retain).
+
+**Why:** `contracts/` is the single artifact all three phases conform to, and RFC-007 explicitly
+deferred writing the first schema. Binding units and using closed enums turns the conventions into
+checks that actually bite (proven by two negative fixtures that must fail validation). A single
+envelope source and `$ref`-shared `$defs` keep the contract DRY and drift-free; per-language `$id`
+resolution is documented in `mqtt/README.md`. The scope ambiguity for `par` (RFC-007 examples vs
+the physical/controller specs) is sidestepped: the sensor-reading schema is scope-agnostic — any
+metric is valid on either the greenhouse or zone topic, with scope carried by the topic and
+envelope `zone_id`.
+
+**RFC:** [RFC-007](./request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)
+
+---
+
 ## 2026-06-08 — Internal trust model: no service-to-service auth; authentication is human-only
 
 **Decision:** Authenticate **human actors only**; the non-human, service-to-service boundaries are

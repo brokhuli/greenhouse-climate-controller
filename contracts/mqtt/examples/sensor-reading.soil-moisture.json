@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "greenhouse_id": "gh-a",
+  "zone_id": "bench-a",
+  "ts": "2026-06-07T14:03:00.000Z",
+  "metric": "soil_moisture",
+  "value": 0.42,
+  "unit": "%VWC"
+}

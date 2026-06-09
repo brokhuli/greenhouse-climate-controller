@@ -2,7 +2,8 @@
 
 Shared message and data contracts — the single source of truth that all three phases conform to.
 
-- `mqtt/` — MQTT topic map and message payload schemas (JSON Schema / AsyncAPI).
+- `mqtt/` — MQTT topic map and message payload schemas (JSON Schema, Draft 2020-12). See
+  [`mqtt/README.md`](./mqtt/README.md) for the topic map, envelope, units, and versioning rule.
 
 Phase 1 (controller) publishes telemetry to these schemas; Phase 2 (platform) ingests them; Phase 3
 (optimizer) reads that history. **MQTT carries telemetry only** (sensor readings, actuator state,

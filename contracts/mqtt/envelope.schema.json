@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://greenhouse.local/contracts/mqtt/envelope.schema.json",
+  "title": "MQTT Message Envelope",
+  "description": "Common envelope carried by every MQTT telemetry message (RFC-007 §3). Message schemas compose this via allOf and add their message-specific fields, then close the object with `unevaluatedProperties: false`. This schema intentionally leaves `additionalProperties`/`unevaluatedProperties` unset so it annotates only its own four fields — setting `additionalProperties: true` here would mark every property as evaluated and defeat the composing schema's `unevaluatedProperties: false`. Identity fields are redundant with the topic so an ingested row stands alone.",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Major version of the message schema. Additive, backward-compatible changes do not bump it; breaking changes do (RFC-007 §5)."
+    },
+    "greenhouse_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "Stable lowercase kebab slug, unique site-wide (e.g. gh-a, lettuce-north). Same identity used in topics, REST paths, and DB rows."
+    },
+    "zone_id": {
+      "type": ["string", "null"],
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "Lowercase kebab slug, unique within a greenhouse (e.g. zone-1). Present for zone-scoped messages; null for greenhouse-scoped messages."
+    },
+    "ts": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Reading/event timestamp. RFC 3339 / ISO 8601, UTC, millisecond precision (e.g. 2026-06-07T14:03:00.000Z)."
+    }
+  },
+  "required": ["schema_version", "greenhouse_id", "zone_id", "ts"],
+  "additionalProperties": true
+}

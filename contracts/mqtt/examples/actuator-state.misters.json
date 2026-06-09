@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "greenhouse_id": "gh-a",
+  "zone_id": null,
+  "ts": "2026-06-07T14:03:00.000Z",
+  "actuator": "misters",
+  "state": {
+    "on": false,
+    "level_pct": null
+  },
+  "overridden": false
+}

@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "greenhouse_id": "gh-a",
+  "zone_id": null,
+  "ts": "2026-06-07T14:03:00.000Z",
+  "actuator": "roof_vents",
+  "state": {
+    "on": true,
+    "level_pct": 45.0
+  },
+  "overridden": false
+}
