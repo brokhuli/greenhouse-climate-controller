@@ -215,7 +215,7 @@ the crop-safe bounds enforced in [§5](#5-constraint-engine--safety).
 
 | Interface | Direction | Role |
 |---|---|---|
-| **TimescaleDB** | Phase 2 store → optimizer | Read-only historical telemetry, actuator states, and current setpoints for one greenhouse |
+| **TimescaleDB** | Phase 2 store → optimizer | Read-only historical telemetry, actuator states, and current setpoints for one greenhouse. Per [RFC-008](../../decisions/request-for-comments.md#rfc-008-phase-3-telemetry-read-path): connects as the dedicated `optimizer_ro` role with `SELECT`-only grants on a small set of named telemetry **views** (not the raw hypertables), which are a versioned read-surface contract. |
 | **Phase 2 REST API** | Optimizer → platform | Write refined setpoint bundles (layered on the crop baseline); platform reconciles to the controller |
 | **Service API (FastAPI)** | Operator/tools → optimizer | Trigger planning cycles, inspect proposed plans, review and act on escalations |
 
@@ -237,7 +237,7 @@ Phase 2 at cycle time, not configured here.
 
 ```toml
 [data]
-postgres_dsn = "postgresql://optimizer:***@platform-db:5432/greenhouse"  # read-only
+postgres_dsn = "postgresql://optimizer_ro:***@platform-db:5432/greenhouse"  # read-only role; SELECT on the RFC-008 view surface only
 platform_api_url = "https://platform/api"
 
 [llm]

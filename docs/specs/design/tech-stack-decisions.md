@@ -12,9 +12,7 @@
 | Concern | Choice |
 |---|---|
 | Language | Rust |
-| Async Runtime | Tokio |
-| Local Database | SQLite (optional persistence) |
-| Messaging | MQTT (Mosquitto) |
+| Async Runtime | Tokio || Messaging | MQTT (Mosquitto) |
 | Hardware Abstraction | Traits + simulated backend (HAL) |
 | API | REST (config + status) |
 | Streaming | WebSockets (logs + real-time events) |
@@ -24,9 +22,7 @@
 ### Why This Stack
 
 - **Rust + Tokio** — deterministic async, memory safety, real-time performance
-- **HAL layer** — simulates sensors (temp, humidity, CO₂, soil moisture) and actuators (fan, heater, vents, misters, irrigation, grow lights); swap in real hardware later
-- **SQLite** — offline resilience, no external dependencies
-- **MQTT** — lightweight, reliable IoT messaging with QoS + retained messages
+- **HAL layer** — simulates sensors (temp, humidity, CO₂, soil moisture) and actuators (fan, heater, vents, misters, irrigation, grow lights); swap in real hardware later- **MQTT** — lightweight, reliable IoT messaging with QoS + retained messages
 - **WebSockets** — real-time log and telemetry streaming to the UI
 - **Zero cloud dependency** — controller keeps running regardless of network
 

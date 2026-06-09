@@ -1,7 +1,74 @@
 # Architecture Design Record
 
 A running log of significant architectural decisions and their rationale. Newest entries at the top.
-Each entry corresponds to an accepted RFC in [`request-for-comments.md`](./request-for-comments.md).
+Most entries correspond to an accepted RFC in [`request-for-comments.md`](./request-for-comments.md).
+The foundational tech-stack entries (early June 2026) predate the RFC process and record stack
+choices no RFC covers — language, framework, and supporting-service selections, with their
+alternatives and tradeoffs.
+
+---
+
+## 2026-06-08 — Internal trust model: no service-to-service auth; authentication is human-only
+
+**Decision:** Authenticate **human actors only**; the non-human, service-to-service boundaries are
+**not** authenticated and rely on the trusted local Docker Compose network. This **reverses the
+RFC-009 proposal** (a Keycloak service-account client-credentials grant for the optimizer plus a
+per-controller pre-shared bearer token); neither is adopted. The committed boundaries:
+(1) **Human → platform** — Keycloak OIDC, unchanged ([P2 §9](../specs/design/spec-climate-platform.md#9-authentication--authorization));
+the only authenticated boundary. (2) **Optimizer → Phase 2 API** (setpoint writes) — no service
+token; trusted on the internal network. (3) **Platform → controller REST** — no controller-side auth;
+the REST config/override API stays unauthenticated in managed mode exactly as standalone, protected
+only by Docker network isolation. (4) **Optimizer → Phase 2 DB** — unchanged: the read-only
+`optimizer_ro` role ([RFC-008](./request-for-comments.md#rfc-008-phase-3-telemetry-read-path)), a
+least-privilege database credential rather than service authn. (5) **MQTT** — anonymous on the local
+network, unchanged ([RFC-001](./request-for-comments.md#rfc-001-mqtt-broker-selection)).
+
+**Why:** The threat model is a single-machine, local Docker Compose portfolio system, where the host
+network is itself the trust boundary. Standing up service-credential machinery — Keycloak client
+registration and token refresh in the optimizer, and per-controller token generation, registry
+storage, and TOML provisioning — is operational surface disproportionate to a one-laptop deployment;
+it is the same reasoning RFC-009 used to reject mTLS, applied consistently to the token mechanisms.
+Keeping authentication human-only preserves a single auth concept (Keycloak OIDC for people) with no
+second authn path for services. The cost is accepted explicitly: any process reachable on the Docker
+network (or a published port in dev) can call the controller REST API or the Phase 2 setpoint
+endpoint, and optimizer setpoint provenance (`source = optimizer`, RFC-005) is recorded by the
+application but self-asserted rather than backed by a verified token identity. If the system ever
+leaves the single-host local model, the controller's REST API and the registry's controller-endpoint
+record are the seams to add a per-controller token, and the optimizer the place to add a service
+account.
+
+**RFC:** [RFC-009](./request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)
+
+---
+
+## 2026-06-08 — Phase 3 telemetry read path: direct read-only DB access via a versioned view surface
+
+**Decision:** The optimizer reads historical telemetry by connecting **directly** to Phase 2's
+TimescaleDB, but the schema coupling is contained. (1) It connects as a dedicated `optimizer_ro`
+Postgres role with `SELECT`-only grants — no access to the relational write tables (registry, crop
+profiles, assignments, users) beyond the read surface, and no `INSERT/UPDATE/DELETE` anywhere. (2) The
+grants are on a small set of **named views** owned by Phase 2 (e.g. `optimizer_sensor_readings`,
+`optimizer_actuator_states`), not on the raw hypertables — the views are the contract boundary, so
+Phase 2 may refactor the physical tables freely as long as it preserves the views. (3) That read
+surface is **versioned like a contract**: a breaking change to a view's shape is an ADR event under
+the same RFC-007 discipline as the wire contract (additive is free; breaking is announced and the
+previous shape kept side-by-side during transition). The RFC-004 hourly `(min, mean, max)` summaries
+may be backed by a TimescaleDB continuous aggregate exposed through the surface. The write path is
+unchanged — setpoints flow only through the Phase 2 API per RFC-005.
+
+**Why:** A read carries no authority and no safety concern (it cannot drive the greenhouse unsafe), so
+the strict single-authority routing RFC-005 imposed on *writes* is not needed for reads. The
+optimizer's workload — range scans over high-volume time-series plus hourly windowed aggregates — is
+exactly what TimescaleDB's SQL and continuous aggregates do well and what a Phase 2 REST query API
+would have to re-implement over HTTP for a single internal consumer. The real cost of direct access is
+coupling to Phase 2's internal schema; granting on views instead of raw tables is a near-zero-cost
+change that buys a stable boundary, giving Phase 3 the same protection against Phase 2 schema churn
+that all three phases already have against the MQTT wire contract. Replicating telemetry into a
+Phase 3-owned store was rejected as duplicating the storage/retention problem RFC-002 already solved;
+a REST query API was rejected as building and maintaining HTTP endpoints whose only consumer is one
+service. The view surface can be promoted to a REST API later if a second external consumer appears.
+
+**RFC:** [RFC-008](./request-for-comments.md#rfc-008-phase-3-telemetry-read-path)
 
 ---
 
@@ -151,3 +218,308 @@ dashboard, clustering, and per-client ACLs provide no benefit at this scale. The
 pure MQTT, so swapping to EMQX later is a Compose and config change, not a code change.
 
 **RFC:** [RFC-001](./request-for-comments.md#rfc-001-mqtt-broker-selection)
+
+---
+
+## 2026-06-06 — Phase 3 digital twin: NumPy / SciPy forward model
+
+**Decision:** Build the Phase 3 digital twin — the forward model that rolls temperature, humidity,
+CO₂, VPD, and DLI over the planning horizon — on **NumPy and SciPy**. The coupled first-order lag
+dynamics, the actuator coupling matrix, and trajectory integration are expressed as NumPy arrays and
+SciPy numerical routines ([P3 §3](../specs/design/spec-climate-optimizer.md#3-digital-twin--simulation-engine)).
+
+**Why:** The twin is small-dimensional numerical integration over a coupling matrix — exactly the
+vectorized, C-backed linear-algebra and ODE work NumPy/SciPy are built for. They are the de-facto
+standard for this in Python, so they sit naturally alongside the Python optimizer and its LLM SDKs
+with no second runtime. Heavy inner loops execute in compiled C, so the simulation is fast despite
+the Python host.
+
+**Alternatives considered:** *Pure-Python loops* — no dependency, but interpreted per-step math is too
+slow for repeated horizon rollouts. *PyTorch / JAX* — fast and differentiable, but autodiff and GPU
+tensors are unneeded for first-order lag and add heavyweight dependencies. *A physics engine /
+Modelica-class simulator* — far more fidelity than the deliberately bounded first-order-lag model
+calls for ([P3 §3](../specs/design/spec-climate-optimizer.md#3-digital-twin--simulation-engine)).
+
+**Tradeoffs accepted:** NumPy/SciPy are non-trivial dependencies and not as fast as a fully compiled
+model — acceptable because the planning cadence is minutes-scale (default 30 min,
+[RFC-004](./request-for-comments.md#rfc-004-phase-3-llm-integration-interface)) and the vectorized
+core comfortably covers a single greenhouse's rollout.
+
+**Basis:** Foundational tech-stack choice — predates the RFC process; no RFC.
+
+---
+
+## 2026-06-06 — Phase 3 service API: FastAPI
+
+**Decision:** Expose the optimizer's service surface — trigger planning cycles, inspect proposed
+plans, review escalations, report health — with **FastAPI**
+([P3 §2](../specs/design/spec-climate-optimizer.md#2-architecture),
+[§8](../specs/design/spec-climate-optimizer.md#8-interfaces--integration)).
+
+**Why:** FastAPI's Pydantic models give declarative request/response validation that lines up
+directly with the JSON-Schema-first contract discipline of
+[RFC-007](./request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format),
+and they are the same models used to validate the structured plan the LLM emits
+([P3 §4](../specs/design/spec-climate-optimizer.md#4-llm-driven-planning)) — one validation tool for
+both the API boundary and the planner output. Async I/O suits a service that calls hosted LLM and
+Phase 2 REST endpoints, and the auto-generated OpenAPI docs are useful for an operator/tooling
+surface.
+
+**Alternatives considered:** *Flask* — ubiquitous, but synchronous and without built-in
+validation/serialization (would bolt on `marshmallow` + an async server). *Django / DRF* — a full ORM
+and admin stack the optimizer does not need; it owns no relational data (it reads Phase 2's store and
+writes the Phase 2 API). *Bare ASGI* — no batteries; reimplements what FastAPI already provides.
+
+**Tradeoffs accepted:** async adds some concurrency-reasoning overhead, and FastAPI is younger and
+less universally known than Flask — outweighed by the Pydantic/contract alignment and async fit.
+
+**Basis:** Foundational tech-stack choice — predates the RFC process; no RFC.
+
+---
+
+## 2026-06-05 — Phase 3 optimizer language: Python
+
+**Decision:** Implement the Phase 3 optimizer — the intelligence layer that simulates each
+greenhouse forward, plans with an LLM, validates, and writes refined setpoints — in **Python**
+([P3 §1](../specs/design/spec-climate-optimizer.md#1-overview)).
+
+**Why:** Phase 3's two demanding dependencies — scientific computing (the digital twin) and LLM
+integration — both have their richest, best-maintained ecosystems in Python: NumPy/SciPy for the
+simulation and first-class vendor SDKs (Anthropic, OpenAI) plus Ollama clients for the
+backend-agnostic planner ([RFC-004](./request-for-comments.md#rfc-004-phase-3-llm-integration-interface)).
+Python's fast iteration also suits a layer the specs call "flexible by design — this layer evolves as
+LLM capabilities do."
+
+**Alternatives considered:** *Rust or Go* — strong elsewhere in the stack but with markedly thinner
+scientific-computing and LLM-SDK ecosystems, forcing reimplementation or FFI for the very libraries
+that motivate the choice. *Julia* — excellent numerics, but a smaller LLM-tooling ecosystem and less
+common operational footing.
+
+**Tradeoffs accepted:** Python's interpreter speed, the GIL, and dependency packaging are real, but
+the optimizer is not on a real-time path — it plans on a minutes-scale cadence (default 30 min,
+[RFC-004](./request-for-comments.md#rfc-004-phase-3-llm-integration-interface)), the heavy math runs
+in NumPy/SciPy's C core, and the dominant latency is the remote LLM call. Runtime speed is therefore
+not the binding constraint. This sits opposite the Phase 1 controller's
+[Rust](#2026-06-01--phase-1-controller-language-rust) real-time choice — deliberately, because the two
+layers have opposite constraints.
+
+**Basis:** Foundational tech-stack choice — predates the RFC process; no RFC.
+
+---
+
+## 2026-06-04 — Phase 2 observability: Prometheus + Grafana
+
+**Decision:** Instrument the platform's **own** health with **Prometheus** scraping the Go API's
+`/metrics` endpoint and **Grafana** rendering the dashboards, alongside structured logs
+([P2 §11](../specs/design/spec-climate-platform.md#11-observability),
+[§12](../specs/design/spec-climate-platform.md#12-deployment)). This is platform-service telemetry
+(ingestion rate, API latency/errors, reconciliation actions, per-controller connectivity) — distinct
+from the greenhouse climate telemetry that lives in TimescaleDB and the dashboard.
+
+**Why:** Prometheus + Grafana are the de-facto local, self-hosted metrics-and-dashboards pairing, so
+they hold to the zero-cloud posture and add only two well-understood containers. They also give the
+visibility needed for the platform's primary performance-testing mechanism — running a variable
+number of controllers and watching the platform under load
+([P2 §12](../specs/design/spec-climate-platform.md#12-deployment)).
+
+**Alternatives considered:** *Logs only* — simplest, but no time-series view of ingestion rate or
+latency, which the perf-testing story needs. *Hosted APM (Datadog, New Relic)* — turnkey but a cloud
+dependency that breaks the local-only design. *Full OpenTelemetry + a separate backend* — more moving
+parts than a single-site local platform warrants today; the Prometheus exposition format keeps an OTel
+migration open later.
+
+**Tradeoffs accepted:** two extra containers and a little dashboard upkeep for a local dev system —
+arguably more ops surface than strictly required, accepted because it mirrors a real PaaS operations
+posture and directly serves performance testing.
+
+**Basis:** Foundational tech-stack choice — predates the RFC process; no RFC.
+
+---
+
+## 2026-06-04 — Phase 2 identity: Keycloak (self-hosted OIDC)
+
+**Decision:** Delegate platform identity to **Keycloak**, a self-hosted OIDC identity provider
+running as a container in the stack; the Go API is a relying party that validates Keycloak's tokens
+and maps their roles onto the platform's viewer/operator roles
+([P2 §9](../specs/design/spec-climate-platform.md#9-authentication--authorization)). The API never
+handles credentials itself.
+
+**Why:** Keycloak owns the user store, login, password policy, and optional MFA, so none of that is
+hand-rolled in the API — and being self-hosted it keeps the zero-cloud posture. It also concentrates
+authentication in a single concept: [RFC-009](./request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)
+later settled that authentication is **human-only** (services are trusted on the local Docker
+network), which makes Keycloak OIDC the system's one and only auth mechanism.
+
+**Alternatives considered:** *Roll-your-own auth in the API* — no extra service, but reintroduces
+exactly the credential-handling, hashing, and session risk Keycloak removes. *Hosted IdP (Auth0,
+Okta, Cognito)* — managed and capable, but a cloud dependency that breaks the local-only design.
+*Lighter self-hosted IdPs (Authentik, Zitadel, Ory)* — viable, but Keycloak is the most established
+OIDC option and standard token validation keeps it swappable.
+
+**Tradeoffs accepted:** Keycloak is heavyweight (a JVM service with real memory cost and realm
+configuration) for a two-role local platform. Accepted because it removes credential handling from
+the API entirely and mirrors a realistic PaaS identity edge; the API's role-mapping is independent of
+Keycloak internals, so the IdP can be replaced without touching the authorization rules.
+
+**Basis:** Foundational tech-stack choice — predates the RFC process; no RFC.
+
+---
+
+## 2026-06-03 — Phase 2 dashboard: React single-page app
+
+**Decision:** Build the operator dashboard as a **React single-page application** — fleet overview,
+per-greenhouse detail, profile management, and control — served as a static bundle by the platform's
+nginx and talking to the Go API over HTTP + WebSockets
+([P2 §8](../specs/design/spec-climate-platform.md#8-dashboard-frontend)).
+
+**Why:** The dashboard is a live, interactive client: real-time charts of readings vs setpoints and a
+streaming event feed driven by the API's WebSocket fan-out
+([P2 §7](../specs/design/spec-climate-platform.md#7-api-surface)). React's mature ecosystem
+(component model, charting libraries, WebSocket integration) fits that directly, and a built static
+bundle drops straight into the single-nginx entry point from
+[RFC-003](./request-for-comments.md#rfc-003-phase-2-platform-ingress) with no extra serving component.
+
+**Alternatives considered:** *Vue / Svelte / Angular* — all capable SPA frameworks; React chosen for
+the largest ecosystem and charting/real-time library support, not a technical disqualifier of the
+others. *Server-rendered HTML (Go templates) or HTMX* — lighter, no build toolchain, but a weaker fit
+for many live-updating WebSocket-fed charts on one screen.
+
+**Tradeoffs accepted:** an SPA brings a JS build toolchain and bundle-size considerations and pushes
+view state to the client. Accepted for the real-time interactivity, and it pairs cleanly with the
+existing nginx static-serve + reverse-proxy setup
+([RFC-003](./request-for-comments.md#rfc-003-phase-2-platform-ingress)). This is a different framework
+from the Phase 1 controller's [SvelteKit dashboard](#2026-06-01--phase-1-dashboard-sveltekit) — a
+deliberate split: React's larger ecosystem earns its weight for the multi-greenhouse operator console,
+while Phase 1's lighter single-controller panel favors SvelteKit.
+
+**Basis:** Foundational tech-stack choice — predates the RFC process; no RFC.
+
+---
+
+## 2026-06-02 — Phase 2 API: Go + Echo
+
+**Decision:** Implement the platform's API hub in **Go** using the **Echo** web framework. The Go API
+is the platform's center: it ingests telemetry from MQTT, persists to TimescaleDB, resolves crop
+profiles into setpoints, drives the controllers' REST APIs, and fans telemetry out to the dashboard
+over WebSockets ([P2 §2](../specs/design/spec-climate-platform.md#2-architecture),
+[§12](../specs/design/spec-climate-platform.md#12-deployment)).
+
+**Why:** The API's workload is concurrency-heavy — a steady MQTT ingest stream, frequent downward
+REST calls to many controllers, and live WebSocket fan-out to dashboard clients. Go's goroutine model
+handles that many-connection concurrency cleanly, compiles to a single static binary that
+containerizes trivially, and has mature Postgres, MQTT, and HTTP/WebSocket libraries. Echo is a
+lightweight router/middleware layer over `net/http` with first-class WebSocket-upgrade support, which
+is what the API surface ([P2 §7](../specs/design/spec-climate-platform.md#7-api-surface)) needs
+without a heavier framework.
+
+**Alternatives considered:** *Node.js / TypeScript* — strong async I/O and shares a language with the
+React frontend, but single-threaded execution is a weaker fit for the CPU-touching ingestion path.
+*Python* — would unify with Phase 3, but the GIL and interpreter speed are a poorer match for the
+sustained-concurrency hub. *Rust* — excellent performance (and Phase 1's choice), but slower
+development velocity for what is largely a CRUD-plus-ingestion service. *Other Go routers (gin, chi,
+stdlib `net/http`)* — all viable; Echo chosen for its batteries-included middleware and WebSocket
+ergonomics, and the abstraction is thin enough to swap.
+
+**Tradeoffs accepted:** Go's error-handling verbosity and historically lean generics, and a dependency
+on a third-party framework (Echo) over the standard library. Accepted: the concurrency fit and
+operational simplicity (one static binary) dominate for this service, and Echo stays close to
+`net/http`.
+
+**Basis:** Foundational tech-stack choice — predates the RFC process; no RFC.
+
+---
+
+## 2026-06-01 — Phase 1 dashboard: SvelteKit
+
+**Decision:** Build the Phase 1 controller's **local dashboard** — real-time charts of sensor and
+actuator state plus the manual-override controls — as a **SvelteKit** app, talking to the controller
+over its REST API and WebSocket event stream
+([P1 §10](../specs/design/spec-climate-controller.md#10-manual-override),
+[§11](../specs/design/spec-climate-controller.md#11-interfaces)). The frontend toolchain (Node.js,
+Vite, Prettier/ESLint, `svelte-check`, Vitest/Playwright) is scoped to this project alone.
+
+**Why:** Phase 1 is a single standalone binary per greenhouse, and its UI is a lightweight local
+panel — not a multi-tenant fleet console. SvelteKit's compiler emits a small, dependency-light bundle
+with no heavy client runtime, which fits the controller's low-resource, offline-capable, zero-cloud
+ethos ([tech-stack-decisions.md §Phase 1](../specs/design/tech-stack-decisions.md)). Svelte's
+compile-time reactivity suits live WebSocket-fed charts, and the static bundle can be served beside
+the Rust binary without a separate platform.
+
+**Alternatives considered:** *React* — the choice for the [Phase 2 operator
+console](#2026-06-03--phase-2-dashboard-react-single-page-app), but a heavier runtime and toolchain
+than this single-controller panel needs; the two UIs deliberately diverge so Phase 1 stays lean.
+*Vue / Angular* — capable, but no advantage for a small local panel. *Server-rendered HTML from the
+Rust controller (e.g. Askama templates)* — avoids a JS toolchain entirely, but a weaker fit for
+real-time charts and interactive override controls.
+
+**Tradeoffs accepted:** this adds a Node/JS toolchain to an otherwise all-Rust phase, and the system
+now carries **two** frontend frameworks (SvelteKit here, [React in
+Phase 2](#2026-06-03--phase-2-dashboard-react-single-page-app)). Accepted because the two dashboards
+have genuinely different scopes — a single-controller local panel vs. a multi-greenhouse operator
+console — and each picks the lighter-fitting tool; Svelte's smaller ecosystem than React is not a
+constraint at this UI's size.
+
+**Basis:** Foundational tech-stack choice — predates the RFC process; no RFC.
+
+---
+
+## 2026-06-01 — Phase 1 async runtime: Tokio
+
+**Decision:** Run the Rust controller on the **Tokio** async runtime. Tokio drives the controller's
+concurrent I/O surfaces — MQTT telemetry publishing, the REST config/override server, and the
+WebSocket live feed ([P1 §11](../specs/design/spec-climate-controller.md#11-interfaces)) — around the
+fixed-tick control loop ([P1 §2](../specs/design/spec-climate-controller.md#2-architecture)).
+
+**Why:** The controller services several concurrent I/O channels alongside its periodic control tick,
+and Tokio is the de-facto async runtime in the Rust ecosystem — the mature MQTT, HTTP, and WebSocket
+crates are built on it. Async I/O keeps those channels non-blocking without a thread per connection,
+and the control loop runs as a scheduled interval task. Timing predictability for the tick comes from
+Rust's no-GC execution plus a dedicated timer ([see the Rust
+entry](#2026-06-01--phase-1-controller-language-rust)); Tokio handles the surrounding I/O concurrency.
+
+**Alternatives considered:** *`std` threads + blocking I/O* — no async dependency, but a thread per
+connection and manual coordination across the MQTT/REST/WS surfaces. *`async-std`* — comparable model,
+but a smaller and less actively maintained ecosystem than Tokio. *`smol`* — lightweight, but the
+controller's I/O crates assume Tokio.
+
+**Tradeoffs accepted:** async Rust adds real complexity (`Send`/`Sync` bounds and `.await` coloring),
+and Tokio is a sizable dependency. Accepted because it is the ecosystem standard the I/O libraries
+target, and the alternative is hand-managing concurrency for several long-lived connections.
+
+**Basis:** Foundational tech-stack choice — predates the RFC process; no RFC.
+
+---
+
+## 2026-06-01 — Phase 1 controller language: Rust
+
+**Decision:** Implement the Phase 1 controller in **Rust** — the deterministic, real-time control
+loop that reads simulated sensors, runs the control hierarchy against setpoints, enforces safety
+interlocks, and drives simulated actuators behind the HAL
+([P1 §1](../specs/design/spec-climate-controller.md#1-overview),
+[§2](../specs/design/spec-climate-controller.md#2-architecture)).
+
+**Why:** The controller is a fixed-tick real-time loop where timing predictability and correctness
+matter most. Rust has no garbage collector, so there are no GC pauses to perturb the tick; its
+ownership model gives memory safety without a runtime; and its trait system expresses the HAL
+actuator interface cleanly — including the forward-looking constraint that an actuator produces a
+*set* of effects on climate variables rather than a one-to-one mapping
+([P1 §3](../specs/design/spec-climate-controller.md#3-hal--simulation-model),
+[RFC-006](./request-for-comments.md#rfc-006-phase-4-seam-strategy)). It compiles to a small static
+binary, so each greenhouse runs as a lightweight container
+([P1 §13](../specs/design/spec-climate-controller.md#13-deployment)).
+
+**Alternatives considered:** *C / C++* — comparable real-time determinism and control over timing,
+but manual memory management reintroduces the safety class Rust eliminates at compile time. *Go* — fast
+to develop and the platform's choice, but its garbage collector can introduce pauses that undermine a
+deterministic control tick. *Python* — fastest to prototype, but interpreter speed and the GIL make it
+unsuitable for a tight real-time loop.
+
+**Tradeoffs accepted:** a steeper learning curve, longer compile times, and borrow-checker friction;
+and because the HAL is pure simulation, some of Rust's bare-metal/embedded advantages go unused here.
+Accepted because the deterministic-timing and memory-safety guarantees, plus the typed
+actuator-effects trait that keeps the Phase 4 seam additive, are worth it for the system's
+safety-critical layer. The opposite call is made for the
+[Phase 3 optimizer (Python)](#2026-06-05--phase-3-optimizer-language-python), whose constraints are
+the reverse.
+
+**Basis:** Foundational tech-stack choice — predates the RFC process; no RFC.

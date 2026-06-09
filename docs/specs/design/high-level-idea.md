@@ -104,7 +104,6 @@ It mirrors real IoT + SaaS architecture patterns without requiring any cloud ser
 - **REST API** — config + status
 - **WebSockets** — logs + real‑time events
 - **SvelteKit** — local dashboard with real‑time charts
-- **SQLite (optional)** — local persistence
 
 ---
 

@@ -655,9 +655,9 @@ integer `schema_version` major (additive changes do not bump). See ADR entry 202
 
 | Field   | Value |
 |---------|-------|
-| Status  | Open for Comment |
+| Status  | Accepted |
 | Created | 2026-06-07 |
-| Decided | — |
+| Decided | 2026-06-08 |
 | Priority | Medium — blocks Phase 3 data-access implementation |
 
 ### Summary
@@ -756,7 +756,18 @@ bound. Granting on views instead of tables is a near-zero-cost change that buys 
 
 ### Resolution
 
-_Pending._
+**Accepted 2026-06-08 — direct read-only access to Phase 2's TimescaleDB, with the coupling contained
+by a versioned view-based read surface.** The optimizer connects as a dedicated `optimizer_ro` role
+with `SELECT`-only grants on a small set of named telemetry **views** owned by Phase 2 (not the raw
+hypertables) — no access to the relational write tables, no write grants anywhere. The views are the
+contract boundary: Phase 2 may refactor the physical tables freely as long as it preserves the views,
+and a breaking change to a view's shape is an ADR event following the same RFC-007 discipline as the
+wire contract (additive is free; breaking is announced and the previous shape retained side-by-side
+during transition). The hourly `(min, mean, max)` summaries from RFC-004 may be backed by a
+TimescaleDB continuous aggregate exposed through the read surface. The write path is unchanged —
+setpoints still go only through the Phase 2 API per RFC-005; this RFC governs reads exclusively. The
+open questions (exact view set, current-setpoints-via-view-vs-API, same-instance-vs-replica,
+continuous-aggregate-vs-on-demand) are implementation tuning, not blockers. See ADR entry 2026-06-08.
 
 ---
 
@@ -764,10 +775,19 @@ _Pending._
 
 | Field   | Value |
 |---------|-------|
-| Status  | Open for Comment |
+| Status  | Accepted |
 | Created | 2026-06-07 |
-| Decided | — |
+| Decided | 2026-06-08 |
 | Priority | Medium — blocks the Phase 3 write path and managed-mode controller hardening |
+
+> **Decision (2026-06-08 — diverges from the Proposal below):** The system authenticates **human
+> actors only**. The non-human, service-to-service boundaries are **not** authenticated; they rely on
+> the trusted local Docker Compose network. Concretely: **no controller-side auth** (the
+> platform→controller REST link is protected by Docker network isolation alone, not a token), and the
+> optimizer→Phase 2 API write path is trusted on the internal network rather than carrying a Keycloak
+> service-account token. The Proposal below (Keycloak service-account client-credentials grant +
+> per-controller pre-shared bearer token) was considered and **not adopted** — see [Resolution](#resolution-8).
+> The Proposal and its Alternatives are retained as the deliberation record.
 
 ### Summary
 
@@ -896,4 +916,36 @@ system ever leaves the single-host local model.
 
 ### Resolution
 
-_Pending._
+**Accepted 2026-06-08 — no service-to-service authentication; the local Docker network is the trust
+boundary and authentication is human-only. This adopts an alternative, not the Proposal above.** The
+proposed mechanisms (a Keycloak service-account client-credentials grant for the optimizer and a
+per-controller pre-shared bearer token) are **not** adopted. The committed posture:
+
+| Boundary | Direction | Mechanism (accepted) |
+|---|---|---|
+| Human operator → Phase 2 API/SPA | write + read | **Keycloak OIDC** — unchanged from [P2 §9](../specs/design/spec-climate-platform.md#9-authentication--authorization). The only authenticated boundary. |
+| Optimizer → Phase 2 API | write (setpoints) | **None** — trusted on the internal Docker network; the Phase 2 write endpoints accept the internal call without a service token. |
+| Platform → controller REST | write (setpoints/override) | **None** — Docker network isolation alone; the controller REST API stays unauthenticated in managed mode exactly as in standalone ([P1 §11](../specs/design/spec-climate-controller.md#11-interfaces), [§13](../specs/design/spec-climate-controller.md#13-deployment)). |
+| Optimizer → Phase 2 DB | read (history) | Read-only `optimizer_ro` role ([RFC-008](#rfc-008-phase-3-telemetry-read-path)) — a least-privilege **database** credential, not service authn; unchanged. |
+| Any → MQTT broker | telemetry only | Anonymous on the local network ([RFC-001](#rfc-001-mqtt-broker-selection)) — unchanged. |
+
+**Why the Proposal was not adopted.** The threat model is a single-machine, local Docker Compose
+portfolio system. Within that one host the network *is* the trust boundary, so adding service-credential
+machinery — Keycloak client registration plus token acquisition/refresh in the optimizer, and
+per-controller token generation, registry storage, and TOML provisioning for the controller — is
+operational surface disproportionate to a one-laptop deployment. That is the same reasoning the
+Proposal itself used to reject mTLS; applied consistently, it rejects the token mechanisms too. Keeping
+authentication **human-only** preserves a single auth concept (Keycloak OIDC for people) and avoids
+standing up a second authn path for services.
+
+**Costs accepted explicitly.** Any process that can reach a service on the Docker network (or a
+published port in dev) can call the controller REST API or the Phase 2 setpoint endpoint — this is the
+open inbound write path the Proposal's bearer token was meant to close, and it is accepted here as
+within the local threat model. Setpoint provenance (`source = optimizer`, [RFC-005](#rfc-005-setpoint-authority-and-delivery-chain))
+is still recorded by the application but is **self-asserted** by the caller rather than backed by a
+verified token identity. The controller's REST API ([P1 §11](../specs/design/spec-climate-controller.md#11-interfaces))
+and the registry's controller-endpoint record ([P2 §6](../specs/design/spec-climate-platform.md#6-fleet-management--operator-control))
+remain the natural seams to add a per-controller token, and the optimizer the natural place to add a
+service account, **if** the system ever leaves the single-host local model. The Proposal's open
+questions (token rotation, narrow service role vs. operator, auth on read endpoints) are moot under
+this decision. See ADR entry 2026-06-08.
