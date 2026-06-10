@@ -1,0 +1,18 @@
+{
+  "parameters": [{ "$ref": "../components/parameters.json#/GreenhouseId" }],
+  "get": {
+    "operationId": "getHealth",
+    "summary": "Controller operating mode and active faults",
+    "description": "Overall controller health: operating mode, a healthy flag, and the active fault summaries surfaced from sensor fault detection and safety interlocks (controller spec §7, §8). Mirrors the `controller` and `faults` of the retained MQTT system-state snapshot.",
+    "responses": {
+      "200": {
+        "description": "Controller health.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "../components/schemas/health.json#/Health" }
+          }
+        }
+      }
+    }
+  }
+}

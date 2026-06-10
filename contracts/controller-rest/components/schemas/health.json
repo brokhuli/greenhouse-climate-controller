@@ -1,0 +1,65 @@
+{
+  "Health": {
+    "type": "object",
+    "description": "Controller operating mode and active faults. mode/healthy and the fault summaries mirror the MQTT system-state snapshot's `controller` and `faults`.",
+    "properties": {
+      "mode": {
+        "type": "string",
+        "enum": ["normal", "degraded", "interlock"],
+        "description": "normal = all loops nominal; degraded = a non-critical fault is active; interlock = a safety interlock is overriding control (controller spec §7)."
+      },
+      "healthy": {
+        "type": "boolean",
+        "description": "False when any active fault is present."
+      },
+      "faults": {
+        "type": "array",
+        "description": "Active fault summaries; empty when healthy.",
+        "items": { "$ref": "#/FaultSummary" }
+      },
+      "ts": {
+        "type": "string",
+        "format": "date-time",
+        "description": "When this health snapshot was produced (RFC 3339 UTC, ms)."
+      }
+    },
+    "required": ["mode", "healthy", "faults", "ts"],
+    "additionalProperties": false
+  },
+  "FaultSummary": {
+    "type": "object",
+    "description": "A single active fault (mirrors the MQTT fault-event / system-state fault summary).",
+    "properties": {
+      "component": {
+        "type": "string",
+        "description": "Identifier of the faulted sensor, actuator, or subsystem (e.g. temperature, humidity, co2, par, soil_moisture, irrigation_valve)."
+      },
+      "zone_id": {
+        "type": ["string", "null"],
+        "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+        "description": "Zone for a zone-local fault; null for a house-level fault."
+      },
+      "fault_type": {
+        "type": "string",
+        "enum": [
+          "stuck",
+          "out_of_range",
+          "sensor_disagreement",
+          "redundancy_degraded",
+          "temperature_unavailable",
+          "critical_temperature",
+          "co2_ceiling",
+          "irrigation_no_response"
+        ],
+        "description": "Closed set of fault conditions; kept in sync with the MQTT fault-event contract (controller spec §5, §7, §8)."
+      },
+      "severity": {
+        "type": "string",
+        "enum": ["warning", "alarm"],
+        "description": "warning = degraded but operating; alarm = safety-interlock or loss-of-trust condition."
+      }
+    },
+    "required": ["component", "fault_type", "severity"],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,78 @@
+{
+  "ZoneConfig": {
+    "type": "object",
+    "description": "An irrigation zone's runtime-mutable configuration (controller spec §4, §6).",
+    "properties": {
+      "moisture_low_threshold": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1,
+        "description": "Irrigation triggers below this soil moisture (VWC, 0–1)."
+      },
+      "moisture_high_threshold": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1,
+        "description": "Irrigation stops above this soil moisture (VWC, 0–1). Must be above moisture_low_threshold."
+      },
+      "drain_period_secs": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "Minimum gap between irrigation cycles, to prevent root saturation (seconds)."
+      },
+      "schedule": {
+        "type": "string",
+        "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9](,([01][0-9]|2[0-3]):[0-5][0-9])*$",
+        "description": "Comma-separated time-of-day triggers, HH:MM (e.g. \"06:00,14:00\")."
+      }
+    },
+    "additionalProperties": false
+  },
+  "ZoneConfigPatch": {
+    "allOf": [{ "$ref": "#/ZoneConfig" }],
+    "description": "Partial update of a zone's config — any subset of ZoneConfig fields. Cross-field invariants (moisture_low_threshold < moisture_high_threshold) are enforced by the controller and surface as 422.",
+    "minProperties": 1
+  },
+  "ZoneStatus": {
+    "type": "object",
+    "description": "An irrigation zone's configuration plus its live state.",
+    "properties": {
+      "zone_id": { "$ref": "./common.json#/Slug" },
+      "moisture_low_threshold": { "$ref": "#/ZoneConfig/properties/moisture_low_threshold" },
+      "moisture_high_threshold": { "$ref": "#/ZoneConfig/properties/moisture_high_threshold" },
+      "drain_period_secs": { "$ref": "#/ZoneConfig/properties/drain_period_secs" },
+      "schedule": { "$ref": "#/ZoneConfig/properties/schedule" },
+      "soil_moisture_vwc": {
+        "type": ["number", "null"],
+        "minimum": 0,
+        "maximum": 1,
+        "description": "Latest soil-moisture reading (VWC, 0–1), or null when the zone's sensor is faulted/unavailable."
+      },
+      "irrigating": {
+        "type": "boolean",
+        "description": "Whether the zone's irrigation valve is currently open."
+      },
+      "faulted": {
+        "type": "boolean",
+        "description": "True when this zone's irrigation is disabled by a fault (controller spec §7, §8)."
+      },
+      "last_cycle_ts": {
+        "type": ["string", "null"],
+        "format": "date-time",
+        "description": "End of the most recent irrigation cycle (RFC 3339 UTC, ms), or null if none yet."
+      }
+    },
+    "required": [
+      "zone_id",
+      "moisture_low_threshold",
+      "moisture_high_threshold",
+      "drain_period_secs",
+      "schedule",
+      "soil_moisture_vwc",
+      "irrigating",
+      "faulted",
+      "last_cycle_ts"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "parameters": [{ "$ref": "../components/parameters.json#/GreenhouseId" }],
+  "get": {
+    "operationId": "listZones",
+    "summary": "Live status of all irrigation zones",
+    "description": "One entry per configured zone (controller spec §4, §6 irrigation scheduler). Zones are defined in the TOML config; adding or removing one needs a restart, so this collection is read-only.",
+    "responses": {
+      "200": {
+        "description": "All zones.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "array",
+              "items": { "$ref": "../components/schemas/zones.json#/ZoneStatus" }
+            }
+          }
+        }
+      },
+      "404": { "$ref": "../components/responses.json#/NotFound" }
+    }
+  }
+}

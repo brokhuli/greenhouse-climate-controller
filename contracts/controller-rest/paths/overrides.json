@@ -1,0 +1,22 @@
+{
+  "parameters": [{ "$ref": "../components/parameters.json#/GreenhouseId" }],
+  "get": {
+    "operationId": "listOverrides",
+    "summary": "Active manual overrides",
+    "description": "Every actuator currently forced to a manual state, bypassing its control loop (controller spec §10). Empty when none are active. Safety interlocks still apply regardless of any override.",
+    "responses": {
+      "200": {
+        "description": "Active overrides.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "array",
+              "items": { "$ref": "../components/schemas/overrides.json#/Override" }
+            }
+          }
+        }
+      },
+      "404": { "$ref": "../components/responses.json#/NotFound" }
+    }
+  }
+}

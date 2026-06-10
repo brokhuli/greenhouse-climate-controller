@@ -335,7 +335,8 @@ The REST API can force any actuator to a specific state, bypassing its control l
 Telemetry, configuration, and control surfaces. Wire-format details (topic names, payload schemas)
 are defined in [`contracts/`](../../../contracts/), under the conventions fixed by
 [RFC-007](../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)
-— this section lists responsibilities only.
+— this section lists responsibilities only. The full set of system contracts is catalogued in
+[`spec-contracts.md`](./spec-contracts.md).
 
 | Interface | Role |
 |---|---|

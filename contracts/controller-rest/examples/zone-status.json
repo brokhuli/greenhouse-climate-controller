@@ -1,0 +1,11 @@
+{
+  "zone_id": "bench-a",
+  "moisture_low_threshold": 0.35,
+  "moisture_high_threshold": 0.55,
+  "drain_period_secs": 300,
+  "schedule": "06:00,14:00",
+  "soil_moisture_vwc": 0.41,
+  "irrigating": false,
+  "faulted": false,
+  "last_cycle_ts": "2026-06-07T14:03:00.000Z"
+}

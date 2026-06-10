@@ -1,0 +1,4 @@
+{
+  "moisture_low_threshold": 0.4,
+  "schedule": "07:00,13:00,18:00"
+}

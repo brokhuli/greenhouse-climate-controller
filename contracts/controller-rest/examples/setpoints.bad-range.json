@@ -1,0 +1,12 @@
+{
+  "temperature_day_c": 24.0,
+  "temperature_night_c": 18.0,
+  "day_start": "06:00",
+  "day_end": "20:00",
+  "humidity_low_pct": 65.0,
+  "humidity_high_pct": 150.0,
+  "co2_target_ppm": 1000,
+  "co2_vent_interlock_threshold_pct": 15.0,
+  "vpd_target_kpa": 1.0,
+  "dli_target_mol": 20.0
+}

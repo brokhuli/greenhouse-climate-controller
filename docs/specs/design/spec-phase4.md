@@ -22,6 +22,8 @@ physical system whose dynamics it adds to — the combustion burner and the weat
 > conventions those contracts follow (topic taxonomy, `greenhouse_id` / `zone_id` identity, payload
 > envelope, JSON Schema format + versioning) are fixed by
 > [RFC-007](../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format).
+> The full set of system contracts — every cross-component boundary — is catalogued in
+> [`spec-contracts.md`](./spec-contracts.md).
 
 ---
 

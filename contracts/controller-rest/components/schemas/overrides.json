@@ -1,0 +1,46 @@
+{
+  "OverridePut": {
+    "type": "object",
+    "description": "Request to force an actuator. The actuator is taken from the path; this body carries the forced state, an optional auto-expiry, and (for irrigation_valve) the target zone.",
+    "properties": {
+      "state": { "$ref": "./actuator.json#/ActuatorOutputState" },
+      "ttl_secs": {
+        "type": ["integer", "null"],
+        "minimum": 1,
+        "description": "Seconds until the override auto-expires; omit or null to use the controller's configured default timeout (controller spec §10)."
+      },
+      "zone_id": {
+        "type": ["string", "null"],
+        "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+        "description": "Target zone, required for the per-zone irrigation_valve; null/absent for house-level actuators."
+      }
+    },
+    "required": ["state"],
+    "additionalProperties": false
+  },
+  "Override": {
+    "type": "object",
+    "description": "An active manual override (controller spec §10).",
+    "properties": {
+      "actuator": { "$ref": "./actuator.json#/ActuatorName" },
+      "zone_id": {
+        "type": ["string", "null"],
+        "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+        "description": "Target zone for a per-zone actuator (irrigation_valve); null for house-level actuators."
+      },
+      "state": { "$ref": "./actuator.json#/ActuatorOutputState" },
+      "created_at": {
+        "type": "string",
+        "format": "date-time",
+        "description": "When the override was set (RFC 3339 UTC, ms)."
+      },
+      "expires_at": {
+        "type": ["string", "null"],
+        "format": "date-time",
+        "description": "When the override auto-expires (RFC 3339 UTC, ms), or null for no timeout."
+      }
+    },
+    "required": ["actuator", "zone_id", "state", "created_at", "expires_at"],
+    "additionalProperties": false
+  }
+}

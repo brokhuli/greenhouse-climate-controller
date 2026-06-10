@@ -1,0 +1,46 @@
+{
+  "parameters": [
+    { "$ref": "../components/parameters.json#/GreenhouseId" },
+    { "$ref": "../components/parameters.json#/ZoneId" }
+  ],
+  "get": {
+    "operationId": "getZone",
+    "summary": "Live status of one irrigation zone",
+    "responses": {
+      "200": {
+        "description": "Zone status.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "../components/schemas/zones.json#/ZoneStatus" }
+          }
+        }
+      },
+      "404": { "$ref": "../components/responses.json#/NotFound" }
+    }
+  },
+  "patch": {
+    "operationId": "updateZone",
+    "summary": "Update a zone's irrigation thresholds and schedule",
+    "description": "Partial (merge) update of a zone's runtime-mutable config (controller spec §4). Threshold or schedule values outside their bounds are rejected with 422.",
+    "requestBody": {
+      "required": true,
+      "content": {
+        "application/json": {
+          "schema": { "$ref": "../components/schemas/zones.json#/ZoneConfigPatch" }
+        }
+      }
+    },
+    "responses": {
+      "200": {
+        "description": "Zone status after the update.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "../components/schemas/zones.json#/ZoneStatus" }
+          }
+        }
+      },
+      "404": { "$ref": "../components/responses.json#/NotFound" },
+      "422": { "$ref": "../components/responses.json#/ValidationFailed" }
+    }
+  }
+}

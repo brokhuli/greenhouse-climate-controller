@@ -1,0 +1,95 @@
+{
+  "Setpoints": {
+    "type": "object",
+    "description": "The controller's global climate setpoints (controller spec §4). The controller is crop-agnostic: these are numeric targets, never a crop. Temperature is a day/night pair resolved against the day window each tick.",
+    "properties": {
+      "temperature_day_c": {
+        "type": "number",
+        "minimum": -20,
+        "maximum": 60,
+        "description": "Daytime air-temperature target (°C)."
+      },
+      "temperature_night_c": {
+        "type": "number",
+        "minimum": -20,
+        "maximum": 60,
+        "description": "Nighttime air-temperature target (°C)."
+      },
+      "day_start": {
+        "type": "string",
+        "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+        "description": "Start of the day window, local time-of-day HH:MM (24h)."
+      },
+      "day_end": {
+        "type": "string",
+        "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+        "description": "End of the day window, local time-of-day HH:MM (24h)."
+      },
+      "humidity_low_pct": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 100,
+        "description": "Fog-on threshold; relative humidity below this turns misters on (%RH). Must be below humidity_high_pct."
+      },
+      "humidity_high_pct": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 100,
+        "description": "Fog-off threshold; relative humidity above this turns misters off (%RH). Must be above humidity_low_pct."
+      },
+      "co2_target_ppm": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 5000,
+        "description": "CO₂ enrichment target; injector opens below this, closes when reached (ppm)."
+      },
+      "co2_vent_interlock_threshold_pct": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 100,
+        "description": "Vent position above which the CO₂ injector is hard-interlocked off, to avoid enriching while venting (% open)."
+      },
+      "vpd_target_kpa": {
+        "type": "number",
+        "minimum": 0,
+        "description": "Vapor-pressure-deficit target jointly served by the temperature and humidity loops (kPa)."
+      },
+      "dli_target_mol": {
+        "type": "number",
+        "minimum": 0,
+        "description": "Daily Light Integral target driving supplemental lighting (mol·m⁻²·day⁻¹)."
+      }
+    },
+    "required": [
+      "temperature_day_c",
+      "temperature_night_c",
+      "day_start",
+      "day_end",
+      "humidity_low_pct",
+      "humidity_high_pct",
+      "co2_target_ppm",
+      "co2_vent_interlock_threshold_pct",
+      "vpd_target_kpa",
+      "dli_target_mol"
+    ],
+    "additionalProperties": false
+  },
+  "SetpointsPatch": {
+    "type": "object",
+    "description": "Partial update of Setpoints — any subset of the same fields, same bounds. Absent fields are unchanged. Cross-field invariants (humidity_low_pct < humidity_high_pct) are enforced by the controller, not the schema, and surface as 422 on violation.",
+    "properties": {
+      "temperature_day_c": { "$ref": "#/Setpoints/properties/temperature_day_c" },
+      "temperature_night_c": { "$ref": "#/Setpoints/properties/temperature_night_c" },
+      "day_start": { "$ref": "#/Setpoints/properties/day_start" },
+      "day_end": { "$ref": "#/Setpoints/properties/day_end" },
+      "humidity_low_pct": { "$ref": "#/Setpoints/properties/humidity_low_pct" },
+      "humidity_high_pct": { "$ref": "#/Setpoints/properties/humidity_high_pct" },
+      "co2_target_ppm": { "$ref": "#/Setpoints/properties/co2_target_ppm" },
+      "co2_vent_interlock_threshold_pct": { "$ref": "#/Setpoints/properties/co2_vent_interlock_threshold_pct" },
+      "vpd_target_kpa": { "$ref": "#/Setpoints/properties/vpd_target_kpa" },
+      "dli_target_mol": { "$ref": "#/Setpoints/properties/dli_target_mol" }
+    },
+    "minProperties": 1,
+    "additionalProperties": false
+  }
+}

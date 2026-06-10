@@ -1,0 +1,44 @@
+{
+  "parameters": [{ "$ref": "../components/parameters.json#/GreenhouseId" }],
+  "get": {
+    "operationId": "getSetpoints",
+    "summary": "Current global climate setpoints",
+    "description": "Returns the controller's active `[setpoints]` bundle (controller spec §4). The temperature setpoint returned is the configured day/night pair, not the currently-resolved value.",
+    "responses": {
+      "200": {
+        "description": "Current setpoints.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "../components/schemas/setpoints.json#/Setpoints" }
+          }
+        }
+      },
+      "404": { "$ref": "../components/responses.json#/NotFound" }
+    }
+  },
+  "patch": {
+    "operationId": "updateSetpoints",
+    "summary": "Update setpoints at runtime",
+    "description": "Partial (merge) update of the global setpoints — the runtime path Phase 2 uses to push resolved crop-profile or optimizer setpoints (RFC-005), and the operator uses for ad-hoc edits. Only the fields present are changed. Out-of-range values, and cross-field invariants the schema cannot express (e.g. `humidity_low_pct` must be below `humidity_high_pct`), are rejected with 422 naming the violated bound.",
+    "requestBody": {
+      "required": true,
+      "content": {
+        "application/json": {
+          "schema": { "$ref": "../components/schemas/setpoints.json#/SetpointsPatch" }
+        }
+      }
+    },
+    "responses": {
+      "200": {
+        "description": "Setpoints after applying the update.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "../components/schemas/setpoints.json#/Setpoints" }
+          }
+        }
+      },
+      "404": { "$ref": "../components/responses.json#/NotFound" },
+      "422": { "$ref": "../components/responses.json#/ValidationFailed" }
+    }
+  }
+}

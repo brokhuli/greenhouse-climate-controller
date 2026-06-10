@@ -1,0 +1,18 @@
+{
+  "NotFound": {
+    "description": "The greenhouse, zone, or actuator does not exist.",
+    "content": {
+      "application/json": {
+        "schema": { "$ref": "./schemas/common.json#/Error" }
+      }
+    }
+  },
+  "ValidationFailed": {
+    "description": "A value is out of range or violates a setpoint/threshold invariant; the body names the violated bound.",
+    "content": {
+      "application/json": {
+        "schema": { "$ref": "./schemas/common.json#/ValidationError" }
+      }
+    }
+  }
+}

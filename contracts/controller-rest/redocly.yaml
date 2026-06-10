@@ -1,0 +1,15 @@
+# Redocly lint config for the controller REST contract.
+# Starts from the recommended ruleset, with three intentional exceptions:
+extends:
+  - recommended
+rules:
+  # The controller REST API is unauthenticated by design — it is reachable only on the trusted
+  # local Docker network, not protected by credentials (RFC-009). It therefore declares no
+  # `securitySchemes`, so the "every operation must define security" rule does not apply.
+  security-defined: off
+  # This is an internal cross-component contract; licensing is covered by the repo LICENSE.md,
+  # not per-document.
+  info-license: off
+  # GET /health has no error path — it always returns a health snapshot — so it legitimately has
+  # no 4XX response.
+  operation-4xx-response: off

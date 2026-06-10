@@ -1,0 +1,13 @@
+{
+  "mode": "degraded",
+  "healthy": false,
+  "faults": [
+    {
+      "component": "co2",
+      "zone_id": null,
+      "fault_type": "stuck",
+      "severity": "warning"
+    }
+  ],
+  "ts": "2026-06-07T14:03:00.000Z"
+}

@@ -1,0 +1,29 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Greenhouse Climate Controller — REST API",
+    "version": "1.0.0",
+    "description": "The Phase 1 controller's REST configuration and control surface: runtime setpoint/threshold updates, irrigation-zone status, manual-override management, and system health (controller spec §11). One controller process serves exactly one greenhouse; paths are greenhouse-scoped so the same `greenhouse_id` keys MQTT topics, REST paths, and DB rows with no translation layer (RFC-007). MQTT carries telemetry only — setpoints reach the controller here, with Phase 2 as the single authority that calls this API (RFC-005). The API is unauthenticated: it is reachable only on the trusted local Docker network and protected by network isolation, not credentials (RFC-009). `info.version` is the contract version; its major bumps on a breaking change, which is then run side-by-side with the prior major and recorded in an ADR — the same discipline RFC-007 fixes for the MQTT contract. This document is split across files: each path is a file under `paths/`, and the shared schemas, parameters, and responses live under `components/`. Run `redocly bundle` to emit a single self-contained file for tools that want one."
+  },
+  "servers": [
+    {
+      "url": "http://{controller_host}:{port}",
+      "description": "The controller's address on the local Docker network (or localhost when run standalone). No TLS and no auth (RFC-009).",
+      "variables": {
+        "controller_host": {
+          "default": "localhost",
+          "description": "Compose service name in managed mode (matches greenhouse_id), or localhost standalone."
+        },
+        "port": { "default": "8080" }
+      }
+    }
+  ],
+  "paths": {
+    "/greenhouses/{greenhouse_id}/setpoints": { "$ref": "./paths/setpoints.json" },
+    "/greenhouses/{greenhouse_id}/zones": { "$ref": "./paths/zones.json" },
+    "/greenhouses/{greenhouse_id}/zones/{zone_id}": { "$ref": "./paths/zone-by-id.json" },
+    "/greenhouses/{greenhouse_id}/overrides": { "$ref": "./paths/overrides.json" },
+    "/greenhouses/{greenhouse_id}/overrides/{actuator}": { "$ref": "./paths/override-by-actuator.json" },
+    "/greenhouses/{greenhouse_id}/health": { "$ref": "./paths/health.json" }
+  }
+}

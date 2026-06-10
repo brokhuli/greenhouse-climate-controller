@@ -10,7 +10,7 @@ the relevant ADR / RFC.
 
 | Item | Why | Blocked on / When | Reference |
 |---|---|---|---|
-| Add a checked-in JSON Schema validation harness for `contracts/` | The MQTT schemas and their `examples/` fixtures are validated only by a one-off Ajv (Draft 2020-12, strict) run; nothing re-runs it, so a schema regression or a drifted example would go unnoticed. | When CI is available — there is no build system or CI in the repo yet. | [`contracts/mqtt/README.md`](../contracts/mqtt/README.md); ADR [2026-06-09](./decisions/architecture-design-record.md) |
+| Add a checked-in JSON Schema validation harness for `contracts/` | The MQTT schemas, the `controller-rest/openapi.json` document, and their `examples/` fixtures are validated only by one-off runs (Ajv Draft 2020-12 strict for the schemas/fixtures, a 3.1-aware lint for the OpenAPI doc); nothing re-runs them, so a schema regression or a drifted example would go unnoticed. | When CI is available — there is no build system or CI in the repo yet. | [`contracts/mqtt/README.md`](../contracts/mqtt/README.md); [`contracts/controller-rest/README.md`](../contracts/controller-rest/README.md); ADR [2026-06-09](./decisions/architecture-design-record.md) |
 
 ### Notes
 

@@ -1,0 +1,30 @@
+{
+  "GreenhouseId": {
+    "name": "greenhouse_id",
+    "in": "path",
+    "required": true,
+    "description": "Site-unique greenhouse identity; the same slug used in MQTT topics and DB rows (RFC-007).",
+    "schema": { "$ref": "./schemas/common.json#/Slug" }
+  },
+  "ZoneId": {
+    "name": "zone_id",
+    "in": "path",
+    "required": true,
+    "description": "Irrigation-zone identity, unique within the greenhouse.",
+    "schema": { "$ref": "./schemas/common.json#/Slug" }
+  },
+  "ZoneIdQuery": {
+    "name": "zone_id",
+    "in": "query",
+    "required": false,
+    "description": "Required only for the per-zone irrigation_valve; selects which zone's override to clear.",
+    "schema": { "$ref": "./schemas/common.json#/Slug" }
+  },
+  "Actuator": {
+    "name": "actuator",
+    "in": "path",
+    "required": true,
+    "description": "Which actuator to override.",
+    "schema": { "$ref": "./schemas/actuator.json#/ActuatorName" }
+  }
+}

@@ -8,6 +8,51 @@ alternatives and tradeoffs.
 
 ---
 
+## 2026-06-09 — Controller REST API contract authored (OpenAPI 3.1, greenhouse-scoped)
+
+**Decision:** Authored the controller's REST contract under `contracts/controller-rest/` as an
+**OpenAPI 3.1** document (`openapi.json`) plus a topic-map-style README and example fixtures —
+filling the §2.2 "Controller REST API" entry in the
+[contract catalog](../specs/design/spec-contracts.md) that was previously "to author." The
+surface is exactly the responsibilities in controller spec §11: global setpoints (`GET`/`PATCH
+/setpoints`), irrigation-zone status (`GET /zones`, `GET`/`PATCH /zones/{zone_id}`),
+manual-override management (`GET /overrides`, `PUT`/`DELETE /overrides/{actuator}`), and system
+health (`GET /health`). Two shape choices were settled while authoring:
+
+- **OpenAPI 3.1 as the artifact.** It uses the same JSON Schema 2020-12 dialect the MQTT contract
+  already uses (RFC-007), so the two contracts share a validation dialect, while OpenAPI natively
+  expresses the paths, methods, and status codes a REST surface needs. Request/response bodies are
+  `components.schemas`; the actuator enum, `{ on, level_pct }` output state, and fault summary are
+  **inlined** (not cross-folder `$ref`'d) but documented as kept in sync with `contracts/mqtt/`.
+  The document is split for navigability — one file per path under `paths/`, shared
+  schemas/parameters/responses under `components/`, with `openapi.json` as the `$ref` entry point;
+  `redocly bundle` re-emits a single self-contained file for tools that want one.
+- **Greenhouse-scoped paths** (`/greenhouses/{greenhouse_id}/...`). A controller process is a
+  single greenhouse, but scoping the paths under the identity keeps RFC-007's "same slug in MQTT
+  topics, REST paths, and DB rows — no translation layer," and makes the platform's downward
+  setpoint delivery (RFC-005) a direct pass-through of the identity it already holds.
+
+Only the runtime-mutable surfaces accept writes; adding/removing a zone stays config-file + restart
+(spec §4), so there is no zone create/delete. A rejected write returns **422** with a
+`ValidationError` naming the violated `field` and `bound` — the shape Phase 2 relays under RFC-005;
+cross-field invariants JSON Schema can't express (e.g. `humidity_low_pct < humidity_high_pct`) are
+controller-enforced and surface as the same 422. Per RFC-009 the API declares **no**
+`securitySchemes` — it is unauthenticated, trusted on the local Docker network.
+
+**Why:** `contracts/` is the single artifact all phases conform to, and this REST surface — the
+controller's only inbound write path and the REST leg of the RFC-005 setpoint chain — had a catalog
+entry but no schema. Reusing the JSON Schema 2020-12 dialect (via OpenAPI 3.1) keeps one validation
+discipline across MQTT and REST and lets the same Ajv tooling check the fixtures; greenhouse-scoped
+paths keep the identity model uniform end to end. Validation mirrors the MQTT contract — a 3.1-aware
+lint plus an Ajv run of each fixture against its component schema, with two negative fixtures that
+must fail — and automating it stays the same `contracts/` backlog item.
+
+**RFC:** [RFC-005](./request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain),
+[RFC-007](./request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format),
+[RFC-009](./request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)
+
+---
+
 ## 2026-06-09 — MQTT contract schemas authored (implements RFC-007)
 
 **Decision:** Wrote the first `contracts/mqtt/` schemas under the RFC-007 conventions — five
