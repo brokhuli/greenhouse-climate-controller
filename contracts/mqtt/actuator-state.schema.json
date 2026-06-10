@@ -27,6 +27,10 @@
       },
       "required": ["on", "level_pct"],
       "additionalProperties": false
+    },
+    "overridden": {
+      "type": "boolean",
+      "description": "True when a manual override is forcing this actuator's state, bypassing its control loop (controller spec §10)."
     }
   },
   "allOf": [
@@ -35,10 +39,7 @@
       "properties": {
         "actuator": { "$ref": "#/$defs/name" },
         "state": { "$ref": "#/$defs/state" },
-        "overridden": {
-          "type": "boolean",
-          "description": "True when a manual override is forcing this actuator's state, bypassing its control loop (controller spec §10)."
-        }
+        "overridden": { "$ref": "#/$defs/overridden" }
       },
       "required": ["actuator", "state", "overridden"]
     }

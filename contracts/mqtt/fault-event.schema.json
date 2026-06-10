@@ -23,26 +23,29 @@
       "type": "string",
       "enum": ["warning", "alarm"],
       "description": "warning = degraded but operating; alarm = safety-interlock or loss-of-trust condition."
+    },
+    "component": {
+      "type": "string",
+      "description": "Identifier of the faulted sensor, actuator, or subsystem (e.g. temperature, humidity, co2, par, soil_moisture, irrigation_valve)."
+    },
+    "message": {
+      "type": "string",
+      "description": "Human-readable description of the fault."
+    },
+    "response": {
+      "type": "string",
+      "description": "Fail-safe action the controller took (e.g. 'disabled injector', 'opened vents, disabled injector', 'disabled zone irrigation')."
     }
   },
   "allOf": [
     { "$ref": "https://greenhouse.local/contracts/mqtt/envelope.schema.json" },
     {
       "properties": {
-        "component": {
-          "type": "string",
-          "description": "Identifier of the faulted sensor, actuator, or subsystem (e.g. temperature, humidity, co2, par, soil_moisture, irrigation_valve)."
-        },
+        "component": { "$ref": "#/$defs/component" },
         "fault_type": { "$ref": "#/$defs/fault_type" },
         "severity": { "$ref": "#/$defs/severity" },
-        "message": {
-          "type": "string",
-          "description": "Human-readable description of the fault."
-        },
-        "response": {
-          "type": "string",
-          "description": "Fail-safe action the controller took (e.g. 'disabled injector', 'opened vents, disabled injector', 'disabled zone irrigation')."
-        }
+        "message": { "$ref": "#/$defs/message" },
+        "response": { "$ref": "#/$defs/response" }
       },
       "required": ["component", "fault_type", "severity", "message", "response"]
     }

@@ -4,24 +4,29 @@
   "title": "Sensor Reading",
   "description": "A single conditioned sensor reading published by the controller. Used on both gh/{greenhouse_id}/sensor/{metric} (greenhouse-scoped, zone_id null) and gh/{greenhouse_id}/zone/{zone_id}/sensor/{metric} (zone-scoped). Scope is determined by the topic and the envelope zone_id, not by the metric.",
   "type": "object",
+  "$defs": {
+    "metric": {
+      "type": "string",
+      "enum": ["temperature", "humidity", "co2", "par", "vpd", "soil_moisture"],
+      "description": "Closed set of measured/derived quantities (RFC-007). vpd is derived from temperature + humidity."
+    },
+    "unit": {
+      "type": "string",
+      "enum": ["°C", "%RH", "ppm", "µmol·m⁻²·s⁻¹", "kPa", "%VWC"],
+      "description": "Unit of measure. Bound to the metric by the conditional clauses below (RFC-007 units convention)."
+    },
+    "value": {
+      "type": "number",
+      "description": "Numeric reading in the unit fixed for this metric."
+    }
+  },
   "allOf": [
     { "$ref": "https://greenhouse.local/contracts/mqtt/envelope.schema.json" },
     {
       "properties": {
-        "metric": {
-          "type": "string",
-          "enum": ["temperature", "humidity", "co2", "par", "vpd", "soil_moisture"],
-          "description": "Closed set of measured/derived quantities (RFC-007). vpd is derived from temperature + humidity."
-        },
-        "value": {
-          "type": "number",
-          "description": "Numeric reading in the unit fixed for this metric."
-        },
-        "unit": {
-          "type": "string",
-          "enum": ["°C", "%RH", "ppm", "µmol·m⁻²·s⁻¹", "kPa", "%VWC"],
-          "description": "Unit of measure. Bound to the metric by the conditional clauses below (RFC-007 units convention)."
-        }
+        "metric": { "$ref": "#/$defs/metric" },
+        "value": { "$ref": "#/$defs/value" },
+        "unit": { "$ref": "#/$defs/unit" }
       },
       "required": ["metric", "value", "unit"]
     },

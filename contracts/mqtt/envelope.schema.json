@@ -4,7 +4,7 @@
   "title": "MQTT Message Envelope",
   "description": "Common envelope carried by every MQTT telemetry message (RFC-007 §3). Message schemas compose this via allOf and add their message-specific fields, then close the object with `unevaluatedProperties: false`. This schema intentionally leaves `additionalProperties`/`unevaluatedProperties` unset so it annotates only its own four fields — setting `additionalProperties: true` here would mark every property as evaluated and defeat the composing schema's `unevaluatedProperties: false`. Identity fields are redundant with the topic so an ingested row stands alone.",
   "type": "object",
-  "properties": {
+  "$defs": {
     "schema_version": {
       "type": "integer",
       "minimum": 1,
@@ -25,6 +25,12 @@
       "format": "date-time",
       "description": "Reading/event timestamp. RFC 3339 / ISO 8601, UTC, millisecond precision (e.g. 2026-06-07T14:03:00.000Z)."
     }
+  },
+  "properties": {
+    "schema_version": { "$ref": "#/$defs/schema_version" },
+    "greenhouse_id": { "$ref": "#/$defs/greenhouse_id" },
+    "zone_id": { "$ref": "#/$defs/zone_id" },
+    "ts": { "$ref": "#/$defs/ts" }
   },
   "required": ["schema_version", "greenhouse_id", "zone_id", "ts"],
   "additionalProperties": true
