@@ -51,9 +51,9 @@ After cloning, point Git at the repo's hooks once: `git config core.hooksPath .g
 
 ## Phase 1 — Greenhouse Climate Controller
 
-Stack: **Rust (Tokio)** controller + **SvelteKit** dashboard, talking over **MQTT** / REST /
-WebSockets, with optional **SQLite** persistence. See
-[`spec-climate-controller.md`](./spec-climate-controller.md) and
+Stack: **Rust (Tokio)** controller talking over **MQTT** / REST, with optional **SQLite**
+persistence. The controller is headless — there is no Phase 1 frontend (the Phase 2 React app is the
+system's only UI). See [`spec-climate-controller.md`](./spec-climate-controller.md) and
 [`tech-stack-decisions.md`](./tech-stack-decisions.md).
 
 ### 1. Rust toolchain (the controller)
@@ -77,27 +77,14 @@ WebSockets, with optional **SQLite** persistence. See
 > across machines and CI. (Added with the Cargo project per
 > [`climate-controller/README.md`](../../../climate-controller/README.md).)
 
-### 2. Frontend toolchain (the SvelteKit dashboard)
-
-| Tool | Purpose | Install (Windows) |
-|---|---|---|
-| **Node.js LTS** | Runs SvelteKit dev server / build; bundles `npm` | `winget install OpenJS.NodeJS.LTS` |
-| **(optional) pnpm via Corepack** | Faster, disk-efficient package manager | `corepack enable` (ships with Node) |
-
-Project-level tooling — **Prettier**, **ESLint**, **`svelte-check`** (TypeScript/Svelte typecheck),
-and the test runner (**Vitest** / **Playwright**) — comes from the frontend's `package.json` via
-`npm install`; it is **not** a host install. Pin the Node version with an `.nvmrc` or the
-`engines` field once the frontend project is scaffolded.
-
-### 3. Language servers & editor extensions (LSP)
+### 2. Language servers & editor extensions (LSP)
 
 | Extension | Provides | Install |
 |---|---|---|
 | **rust-analyzer** | Rust LSP — diagnostics, completion, inline types, go-to-def | `code --install-extension rust-lang.rust-analyzer` |
-| **Svelte for VS Code** | Svelte/SvelteKit LSP (`svelte-language-server`) + syntax | `code --install-extension svelte.svelte-vscode` |
 | **Even Better TOML** | LSP for the TOML config files (setpoints, zones, τ/coupling params) | `code --install-extension tamasfe.even-better-toml` |
 
-### 4. MQTT broker + client tooling
+### 3. MQTT broker + client tooling
 
 - **Broker (runtime, Docker — not a host install):** Mosquitto runs as a container from the
   Phase 1 / deploy compose stack. Nothing to install on the host.
@@ -107,7 +94,7 @@ and the test runner (**Vitest** / **Playwright**) — comes from the frontend's 
   - or **mosquitto clients** (`mosquitto_pub` / `mosquitto_sub`) — already available inside the
     broker container via `docker exec`, so a separate install is optional.
 
-### 5. SQLite (optional persistence)
+### 4. SQLite (optional persistence)
 
 - The controller links SQLite **into the binary** via the Rust `rusqlite` crate's `bundled` feature,
   so **no host install is needed** for the app to run.
@@ -122,7 +109,6 @@ After installing, confirm the workflow toolchain resolves (matches the
 ```powershell
 rustc --version; cargo --version          # Rust toolchain
 cargo fmt --version; cargo clippy --version   # format + lint
-node --version; npm --version             # frontend toolchain
 docker --version; docker compose version  # container runtime (MQTT broker)
 ```
 
@@ -143,7 +129,9 @@ docker --version; docker compose version  # container runtime (MQTT broker)
 > _Stub — to be filled out when Phase 3 begins._
 >
 > Anticipated host tooling: **Python** (+ a virtual-environment / dependency manager and
-> Pylance/Ruff LSP tooling), an **API key for a hosted LLM** (Anthropic or OpenAI — primary
-> backend), a **local Ollama runtime** for the fallback container, and access to the Phase 2
-> TimescaleDB. See [RFC-004](../../decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface)
+> Pylance/Ruff LSP tooling), the **LangChain packages** (`langchain-anthropic`, `langchain-openai`,
+> `langchain-community`) as Python dependencies, an **API key for a hosted LLM** (Anthropic or
+> OpenAI — primary backend), a **local Ollama runtime** for the fallback container, and access to
+> the Phase 2 TimescaleDB. See
+> [RFC-004](../../decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface)
 > and [`tech-stack-decisions.md`](./tech-stack-decisions.md#phase-3--llm-climate-optimizer-python-only).

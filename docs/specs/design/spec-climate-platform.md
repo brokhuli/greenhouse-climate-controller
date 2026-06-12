@@ -48,6 +48,40 @@ greenhouses; it does **not** couple their physics. There is no shared air mass, 
 greenhouse remains an independent climate and failure domain. Cross-greenhouse intelligence
 (optimization, weather) belongs to later phases — see [§14](#14-scope--deferred--out-of-scope).
 
+Because Phase 1 controllers are [headless](./spec-climate-controller.md#11-interfaces), this
+platform's frontend is the **only UI in the system** — it monitors **one or more** controllers, a
+single greenhouse being the fleet-of-one case.
+
+### Delivery phases — 2a and 2b
+
+Phase 2 ships in two slices. **2a** is the MVP that lets the frontend talk to a controller in both
+directions — the telemetry pipeline plus a thin setpoint-edit relay, **unauthenticated** on the
+trusted local Docker network. **2b** adds the platform's defining crop-profile/reconciliation
+machinery, authentication, and observability. Sections and the deployment table below are tagged
+**(2a)** / **(2b)** accordingly; the boundary is recorded in
+[ADR 2026-06-11](../../decisions/architecture-design-record.md).
+
+| Capability | Slice |
+|---|---|
+| Mosquitto broker; TimescaleDB (telemetry + minimal greenhouse/endpoint registry) | **2a** |
+| Telemetry ingestion → store ([§4](#4-telemetry-ingestion)) | **2a** |
+| Greenhouse/endpoint registration + status aggregation ([§6](#6-fleet-management--operator-control)) | **2a** |
+| Ad-hoc setpoint edits relayed to the controller REST API ([§6](#6-fleet-management--operator-control)) | **2a** |
+| API: telemetry queries, WebSocket fan-out ([§7](#7-api-surface)) | **2a** |
+| nginx serving the SPA + proxying `/api` ([§10](#10-reverse-proxy--routing)) | **2a** |
+| Dashboard: fleet overview, per-greenhouse detail, setpoint-edit control ([§8](#8-dashboard-frontend)) | **2a** |
+| Crop profiles + setpoint **resolution**; profile-management UI ([§5](#5-crop-profiles--setpoint-resolution), [§8](#8-dashboard-frontend)) | **2b** |
+| Reconciliation / drift detection / re-assert on reconnect ([§5](#5-crop-profiles--setpoint-resolution)) | **2b** |
+| Keycloak OIDC + viewer/operator roles + nginx `/auth` ([§9](#9-authentication--authorization), [§10](#10-reverse-proxy--routing)) | **2b** |
+| Single-authority `POST /setpoints` (optimizer write path, RFC-005) + provenance ([§5](#5-crop-profiles--setpoint-resolution), [§7](#7-api-surface)) | **2b** |
+| Prometheus + Grafana observability ([§11](#11-observability)) | **2b** |
+
+In 2a, an ad-hoc setpoint edit is a **thin relay** (operator edit → Go API → controller REST
+`PATCH /setpoints`); the full setpoint-authority layer — crop-safe bounds, provenance, the
+optimizer-facing `POST /setpoints`, and reconciliation — arrives in 2b. The split changes no
+committed interface and leaves [RFC-005](../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain)
+intact.
+
 ---
 
 ## 2. Architecture
@@ -178,6 +212,10 @@ downward writes go through the control path in [§5](#5-crop-profiles--setpoint-
 
 ## 5. Crop Profiles & Setpoint Resolution
 
+> **Phase 2b.** This whole section — profiles, resolution, and reconciliation — is 2b. In 2a the
+> only downward write is the ad-hoc setpoint relay in [§6](#6-fleet-management--operator-control);
+> the controller otherwise regulates to its own TOML setpoints.
+
 This is the platform's defining responsibility. A controller is
 [crop-agnostic](./spec-climate-controller.md#4-configuration--setpoints) — it regulates to whatever
 numbers it is given. The platform owns the layer above: turning a crop (and its growth stage) into
@@ -234,19 +272,24 @@ controller directly.
 ## 6. Fleet Management & Operator Control
 
 Beyond profiles, the platform is the operator's single pane of glass for acting on any greenhouse.
+Registration, status aggregation, and the ad-hoc setpoint relay are **2a**; the **sticky /
+reconciled** behavior of an edit (below) depends on the intended-state machinery from
+[§5](#5-crop-profiles--setpoint-resolution) and so lands in **2b**.
 
-- **Device registry** — greenhouses and their controller endpoints are **registered manually** via
-  the API/dashboard (the platform does not auto-discover controllers); this registry is the bootstrap
-  that ingestion and resolution key off. Greenhouses can also be retired.
-- **Status aggregation** — per-greenhouse online/degraded/drift status (from [§4](#4-telemetry-ingestion)
-  and [§5](#5-crop-profiles--setpoint-resolution)) rolled up into a site-wide fleet view.
-- **Ad-hoc setpoint edits** — the operator's manual control surface: a one-off setpoint change outside
-  the assigned profile, relayed to the controller's REST config API. Because the platform is the
-  source of truth, such an edit becomes a **sticky** part of the greenhouse's intended state (layered
-  over the profile, flagged as deliberate drift), so reconciliation does not immediately revert it.
-  It follows the same offline handling as profile resolution — held and re-asserted on reconnect
-  ([§5](#5-crop-profiles--setpoint-resolution)). The platform's downward control is **setpoint-only**;
-  it does not force individual actuators (see [§14](#14-scope--deferred--out-of-scope)).
+- **Device registry** *(2a)* — greenhouses and their controller endpoints are **registered manually**
+  via the API/dashboard (the platform does not auto-discover controllers); this registry is the
+  bootstrap that ingestion and resolution key off. Greenhouses can also be retired.
+- **Status aggregation** *(2a; drift in 2b)* — per-greenhouse online/degraded status (from
+  [§4](#4-telemetry-ingestion)) rolled up into a site-wide fleet view; the **drift** dimension arrives
+  with reconciliation ([§5](#5-crop-profiles--setpoint-resolution), 2b).
+- **Ad-hoc setpoint edits** *(2a relay; sticky/reconciled in 2b)* — the operator's manual control
+  surface: a one-off setpoint change relayed to the controller's REST config API. In 2a this is a
+  direct relay. Once the platform is the source of truth (2b), such an edit becomes a **sticky** part
+  of the greenhouse's intended state (layered over the profile, flagged as deliberate drift) so
+  reconciliation does not immediately revert it, and it follows the same offline handling as profile
+  resolution — held and re-asserted on reconnect ([§5](#5-crop-profiles--setpoint-resolution)). The
+  platform's downward control is **setpoint-only**; it does not force individual actuators (see
+  [§14](#14-scope--deferred--out-of-scope)).
 - **Change attribution** — every downward write (profile application, ad-hoc setpoint edit) is
   recorded as an event with who/what/when, for audit and for the dashboard's activity view.
 
@@ -264,39 +307,49 @@ Beyond profiles, the platform is the operator's single pane of glass for acting 
 The Go API exposes REST for request/response and WebSockets for live push. This lists
 responsibilities only; concrete routes and payloads are deferred to [`contracts/`](../../../contracts/).
 
-| Surface | Role |
-|---|---|
-| **REST — greenhouses** | Register/retire greenhouses; read fleet + per-greenhouse status |
-| **REST — crop profiles** | CRUD on the profile library and their stage-aware target bundles |
-| **REST — assignments** | Assign a profile/stage to a greenhouse; trigger apply/reconcile |
-| **REST — telemetry** | Range queries over historical readings/actuator states/events |
-| **REST — analytics** | Aggregations and derived series for dashboards |
-| **REST — setpoint edits** | Ad-hoc setpoint edits, proxied to controllers as sticky intended state |
-| **WebSockets** | Live fan-out of telemetry, status changes, drift, and events to the dashboard |
+| Surface | Role | Slice |
+|---|---|---|
+| **REST — greenhouses** | Register/retire greenhouses; read fleet + per-greenhouse status | 2a |
+| **REST — telemetry** | Range queries over historical readings/actuator states/events | 2a |
+| **REST — analytics** | Aggregations and derived series for dashboards | 2a |
+| **REST — setpoint edits** | Ad-hoc setpoint edits, relayed to controllers (sticky intended state once reconciliation exists) | 2a |
+| **WebSockets** | Live fan-out of telemetry, status changes, drift, and events to the dashboard | 2a |
+| **REST — crop profiles** | CRUD on the profile library and their stage-aware target bundles | 2b |
+| **REST — assignments** | Assign a profile/stage to a greenhouse; trigger apply/reconcile | 2b |
+| **REST — setpoints (`POST`)** | Single-authority setpoint submission (the optimizer's RFC-005 write path) + provenance | 2b |
 
-Write endpoints (assignments, setpoint edits) require the **operator** role
-([§9](#9-authentication--authorization)).
+Write endpoints require the **operator** role once auth lands ([§9](#9-authentication--authorization),
+**2b**); in the unauthenticated 2a MVP the setpoint-edit and registration endpoints are open on the
+trusted local network.
 
 ---
 
 ## 8. Dashboard (Frontend)
 
-A React single-page app, served through the reverse proxy, talking to the API over HTTP + WebSockets:
+A React single-page app, served through the reverse proxy, talking to the API over HTTP + WebSockets.
+It is the **only frontend in the system** and serves **one or more** greenhouses — a single
+greenhouse is the fleet-of-one case. Its monitoring and setpoint-edit core ships in **2a**; profile
+management follows in **2b**.
 
-- **Fleet overview** — every greenhouse at the site, its crop, status (online/degraded/drift), and a
-  glance at current climate vs target.
-- **Per-greenhouse detail** — real-time charts of readings vs setpoints, actuator states, and event
-  history, fed by the WebSocket stream.
-- **Profile management** — browse/edit the crop-profile library; assign a profile + growth stage to a
-  greenhouse and apply it.
-- **Control** — issue ad-hoc setpoint edits (operator role); actuator-level forcing is not offered
-  here — it stays a controller-local action ([§14](#14-scope--deferred--out-of-scope)).
-- **Health surfacing** — drift, faults, offline controllers, and interlock activations raised
-  prominently.
+- **Fleet overview** *(2a)* — every greenhouse at the site, its crop, status (online/degraded/drift),
+  and a glance at current climate vs target.
+- **Per-greenhouse detail** *(2a)* — real-time charts of readings vs setpoints, actuator states, and
+  event history, fed by the WebSocket stream.
+- **Profile management** *(2b)* — browse/edit the crop-profile library; assign a profile + growth
+  stage to a greenhouse and apply it.
+- **Control** *(2a)* — issue ad-hoc setpoint edits (operator role once auth lands in 2b);
+  actuator-level forcing is not offered here — it stays a controller-local action
+  ([§14](#14-scope--deferred--out-of-scope)).
+- **Health surfacing** *(2a)* — faults, offline controllers, and interlock activations raised
+  prominently (drift surfacing arrives with reconciliation in 2b).
 
 ---
 
 ## 9. Authentication & Authorization
+
+> **Phase 2b.** 2a runs unauthenticated on the trusted local Docker network (consistent with
+> [RFC-009](../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries));
+> Keycloak, the viewer/operator roles, and the nginx `/auth` route land in 2b.
 
 Identity is delegated to **Keycloak**, a self-hosted **OIDC identity provider** that runs as a
 container in the stack ([§12](#12-deployment)) — no cloud dependency. Keycloak owns the user store,
@@ -324,15 +377,19 @@ Finer-grained RBAC and multi-tenant identity are out of scope ([§14](#14-scope-
 ## 10. Reverse Proxy & Routing
 
 A single **nginx** container is the platform's one entry point. It serves the frontend (static SPA
-assets) directly and reverse-proxies inbound requests to the Go API (REST + WebSocket upgrade) and to
-Keycloak, and is the natural place to terminate the auth edge. Running everything behind one proxy
-mirrors a real PaaS ingress while keeping local networking to a single exposed port. nginx (not
-Traefik) is the choice because the service map is static and config-driven — see
+assets) directly and reverse-proxies inbound requests to the Go API (REST + WebSocket upgrade). In
+**2a** that is the whole job (SPA + `/api`); the `/auth` route to Keycloak and the auth edge are
+added in **2b** with authentication ([§9](#9-authentication--authorization)). Running everything
+behind one proxy mirrors a real PaaS ingress while keeping local networking to a single exposed port.
+nginx (not Traefik) is the choice because the service map is static and config-driven — see
 [RFC-003](../../decisions/request-for-comments.md#rfc-003-phase-2-platform-ingress).
 
 ---
 
 ## 11. Observability
+
+> **Phase 2b.** Prometheus + Grafana are a 2b addition; the 2a MVP runs without them (the Go API's
+> structured logs are still available).
 
 The platform instruments **itself**, distinct from the greenhouse telemetry it ingests:
 
@@ -354,17 +411,22 @@ account.
 
 ### Platform services
 
-| Service | Implementation |
-|---|---|
-| `api` | Go + Echo |
-| `db` | TimescaleDB (PostgreSQL + extension) |
-| `mqtt` | Mosquitto |
-| `auth` | Keycloak — self-hosted OIDC identity provider |
-| `proxy` | nginx (single entry point; also serves the SPA) |
-| `frontend` | Built React app served by the `proxy` nginx |
+The **2a** MVP stands up only the telemetry-pipeline + frontend services; **2b** adds authentication
+and observability.
+
+| Service | Implementation | Slice |
+|---|---|---|
+| `api` | Go + Echo | 2a |
+| `db` | TimescaleDB (PostgreSQL + extension) | 2a |
+| `mqtt` | Mosquitto | 2a |
+| `proxy` | nginx (single entry point; also serves the SPA) | 2a |
+| `frontend` | Built React app served by the `proxy` nginx | 2a |
+| `auth` | Keycloak — self-hosted OIDC identity provider | 2b |
+| `prometheus` | Prometheus — scrapes the API's `/metrics` ([§11](#11-observability)) | 2b |
+| `grafana` | Grafana — platform dashboards ([§11](#11-observability)) | 2b |
 
 The platform's own service configuration — database DSN, MQTT broker address, Keycloak client
-credentials, proxy routing — is supplied via **environment variables / the Compose file**, not a
+credentials (2b), proxy routing — is supplied via **environment variables / the Compose file**, not a
 per-greenhouse config (contrast the controller's TOML). Per-greenhouse data lives in the registry and assignments.
 
 ### Controller services

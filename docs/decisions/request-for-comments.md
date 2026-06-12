@@ -221,6 +221,20 @@ remains available in dev for debugging; it just isn't the platform's ingress.)
 | Created | 2026-06-07 |
 | Decided | 2026-06-07 |
 
+> **Revision (2026-06-11 — supersedes the Proposal below):** The `PlannerBackend` protocol defined
+> in the Proposal below has been superseded. LangChain now provides the planner internals via a
+> `Runnable` chain (`ChatPromptTemplate | LLM | StructuredOutputParser`), replacing manual prompt
+> construction and output parsing. Concretely: `ChatAnthropic` / `ChatOpenAI` (packages
+> `langchain-anthropic`, `langchain-openai`) replace the bespoke hosted-backend implementation;
+> `ChatOllama` (package `langchain-community`) replaces the bespoke Ollama backend; LangChain's
+> native `.with_fallbacks([ChatOllama(...)])` replaces the manual try/catch retry logic. The call
+> site changes from `backend.generate_plan(context)` to `chain.invoke(context_dict)`. Structured
+> output is parsed via `.with_structured_output(ActuatorPlan)`, with `ActuatorPlan` remaining a
+> Pydantic model. Everything outside the planner boundary is unchanged — the five
+> invocation-strategy levers and their values, `PlanContext`, the constraint validation layer,
+> configuration structure, and all other RFCs. The Proposal and its Alternatives are retained as the
+> deliberation record. See ADR entry 2026-06-11.
+
 ### Summary
 
 Define a **backend-agnostic LLM interface** in the Python optimizer. Use a **hosted LLM**

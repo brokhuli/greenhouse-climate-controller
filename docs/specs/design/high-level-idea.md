@@ -50,8 +50,8 @@ It mirrors real IoT + SaaS architecture patterns without requiring any cloud ser
 - Enforces **safety interlocks** (critical‑temp override, CO₂ ceiling, irrigation fault)
 - Detects **sensor faults** (stuck sensor, outlier rejection)
 - Publishes readings, actuator state, faults, and system state via **MQTT** (QoS + retained); MQTT is telemetry-only — setpoints arrive over the REST config API, not MQTT (the controller is setpoint-only — [RFC-005](../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain))
-- Exposes a **REST API** for configuration and **WebSockets** for live logs/events
-- Includes a **local frontend** with real‑time charts and manual override controls
+- Exposes a **REST API** for configuration and control (the sole write path)
+- Is **headless** — no local UI; visualization is the Phase 2 frontend's job (Phase 1 is observed in standalone dev via MQTT tooling + REST)
 
 ---
 
@@ -59,13 +59,8 @@ It mirrors real IoT + SaaS architecture patterns without requiring any cloud ser
 
 ```
 +------------------------------+
-|   Local Frontend (UI)        |
-|   SvelteKit                  |
-+---------------+--------------+
-                | REST / WS
-                v
-+------------------------------+
 |   Rust Controller            |
+|  (headless — MQTT + REST)    |
 |  - Temp Fusion (3x voting)   |
 |  - Temp PID / Humidity Band  |
 |  - VPD Target                |
@@ -78,8 +73,7 @@ It mirrors real IoT + SaaS architecture patterns without requiring any cloud ser
 |  - HAL Layer                 |
 |     - Simulated Sensors      |
 |     - Simulated Actuators    |
-|  - Config API                |
-|  - Log Stream                |
+|  - Config / Control API (REST)|
 +---------------+--------------+
                 | MQTT
                 v
@@ -101,9 +95,7 @@ It mirrors real IoT + SaaS architecture patterns without requiring any cloud ser
 - **PID + hysteresis control** — temperature PID, humidity band, VPD target
 - **Rule engine** — coupled multi‑condition logic + safety interlocks
 - **MQTT (Mosquitto)** — messaging with QoS + retained messages
-- **REST API** — config + status
-- **WebSockets** — logs + real‑time events
-- **SvelteKit** — local dashboard with real‑time charts
+- **REST API** — config + status + control (the sole write path)
 
 ---
 
@@ -118,8 +110,6 @@ It mirrors real IoT + SaaS architecture patterns without requiring any cloud ser
 - **Safety interlock patterns**
 - **Sensor fault detection**
 - **MQTT pub/sub patterns** with QoS
-- **Real‑time UI design** (charts, logs, controls)
-- **WebSockets for streaming telemetry**
 - **REST API design for devices**
 - **Simulated hardware modeling**
 - **Local IoT system integration**
@@ -145,6 +135,12 @@ Isolated and local, but non‑trivial engineering throughout.
 **Purpose:** A multi‑greenhouse management platform running entirely on your laptop — aggregates data from multiple Phase 1 controller instances representing separate greenhouses at a single site.
 
 This is your **local cloud**, built from containers.
+
+> **Ships in two slices.** **2a** is the MVP that makes the frontend usable against a controller —
+> the telemetry pipeline (MQTT → API → DB → WebSocket → React) plus a thin setpoint-edit relay,
+> unauthenticated on the local network. **2b** adds crop profiles + setpoint resolution,
+> reconciliation/drift, Keycloak auth, and Prometheus/Grafana. Since Phase 1 controllers are now
+> headless, **this frontend is the system's only UI**, and it monitors **one or more** greenhouses.
 
 ---
 
@@ -304,7 +300,7 @@ independent control loops); site-wide orchestration across greenhouses is **out 
 - **Python** — core logic
 - **FastAPI** — service interface
 - **NumPy/SciPy** — simulation
-- **Hosted LLM (primary) or local Ollama (fallback)** — planning; see [RFC-004](../../decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface)
+- **LangChain** (`langchain-anthropic`/`langchain-openai` primary, `langchain-community` Ollama fallback) — planning chain; see [RFC-004](../../decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface)
 - **Phase 2 REST API** — refined-setpoint delivery (Phase 2 is the single setpoint authority; see [RFC-005](../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain))
 - **Postgres** — historical data
 
@@ -413,9 +409,9 @@ controller now needs actuator‑selection coordination above its PIDs.
 
 | Phase       | Purpose                     | Tech Stack                                                | Skills Learned                                                                              | Complexity   |
 | ----------- | --------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------ |
-| **Phase 1** | Local controller + local UI | Rust, HAL, MQTT, REST, WebSockets, SvelteKit              | Embedded patterns, PID, rule engine, safety interlocks, fault detection, MQTT, real‑time UI | **6 / 10**   |
-| **Phase 2** | Multi-greenhouse management platform (single site); owns crop profiles → controller setpoints | Go, TimescaleDB, MQTT, Keycloak, React, Docker, Prometheus/Grafana | PaaS design, DB modeling, crop-profile/setpoint resolution, auth, microservices, reverse proxy, observability | **6 / 10**   |
-| **Phase 3** | Local AI climate optimizer  | Python, FastAPI, NumPy/SciPy, LLM, MQTT, Postgres         | Simulation, LLM orchestration, constraints, planning                                        | **7.5 / 10** |
+| **Phase 1** | Headless local controller    | Rust, HAL, MQTT, REST                                     | Embedded patterns, PID, rule engine, safety interlocks, fault detection, MQTT, REST device APIs | **6 / 10**   |
+| **Phase 2** | Multi-greenhouse management platform (single site); the system's only UI for 1+ greenhouses; owns crop profiles → controller setpoints. Ships as **2a** (monitoring + setpoint-edit MVP) then **2b** (profiles, auth, observability) | Go, TimescaleDB, MQTT, React, nginx, Docker (2a) + Keycloak, Prometheus/Grafana (2b) | PaaS design, DB modeling, crop-profile/setpoint resolution, auth, microservices, reverse proxy, observability | **6 / 10**   |
+| **Phase 3** | Local AI climate optimizer  | Python, FastAPI, NumPy/SciPy, LangChain, MQTT, Postgres    | Simulation, LLM orchestration, constraints, planning                                        | **7.5 / 10** |
 | **Phase 4** *(stretch goal)* | Coupled actuation + weather-reactive optimization | Phase 3 stack + weather-API/forecast feed, combustion-model digital twin | Multi-variable actuator coordination, weather/forecast integration, weather-reactive MPC, combustion simulation | **9 / 10** |
 
 ---

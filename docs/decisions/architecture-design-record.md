@@ -8,6 +8,96 @@ alternatives and tradeoffs.
 
 ---
 
+## 2026-06-11 — Phase 1 local dashboard and WebSocket interface eliminated; Phase 2 frontend is the sole UI
+
+**Decision:** Remove the Phase 1 controller's **local dashboard** and the controller-side
+**WebSocket** stream that fed it. This **reverses** the 2026-06-01 "Phase 1 dashboard: SvelteKit"
+decision (that ADR entry is removed) and retires the controller WebSocket contract authored on
+2026-06-09 (`contracts/controller-websocket/` is deleted). The controller's only external surfaces
+are now **MQTT** (telemetry out) and **REST** (the sole write path). The controller is **headless**:
+in standalone Phase 1, telemetry is observed via MQTT tooling (e.g. MQTT Explorer) and the REST
+surface directly. The **Phase 2 React frontend becomes the only UI in the system**, monitoring
+**one or more** greenhouse controllers — a single greenhouse is simply the fleet-of-one case.
+
+**Why:** With the dashboard gone the WebSocket surface had no consumer — MQTT already fans telemetry
+out to any upstream consumer and REST remains the command path, so the controller WebSocket frame
+set, its AsyncAPI contract, and the SvelteKit toolchain were carrying no load. Consolidating all
+visualization into the Phase 2 frontend removes a second frontend framework and a Node/JS toolchain
+from an otherwise all-Rust phase, and gives the controller a cleaner control-process boundary (MQTT +
+REST only). The cost — Phase 1 has no UI of its own during standalone development — is accepted: the
+control logic is exercised through tests and inspected through MQTT/REST, and any dashboard need is
+met by bringing up the Phase 2 stack (see the 2a slice below).
+
+**Basis:** Operator-directed architecture change; reverses the 2026-06-01 SvelteKit decision. No RFC
+governed the Phase 1 dashboard or WebSocket stream (they lived in P1 §11 and the tech-stack docs).
+
+---
+
+## 2026-06-11 — Phase 2 split into delivery slices 2a (monitoring + setpoint edits) and 2b (profiles, auth, observability)
+
+**Decision:** Split Phase 2 into two delivery slices. **Phase 2a** is the minimum for the Phase 2
+frontend to talk to a controller in **both directions**: MQTT telemetry ingestion into TimescaleDB,
+telemetry REST queries, WebSocket fan-out to the SPA, manual greenhouse/endpoint registration, and
+**ad-hoc setpoint edits relayed to the controller's REST `PATCH /setpoints`** — served by the Go API
+behind nginx, **unauthenticated** on the trusted local Docker network. **Phase 2b** adds everything
+else: crop profiles and setpoint **resolution**, reconciliation / drift detection / re-assert on
+reconnect, Keycloak OIDC with viewer/operator roles (and the nginx `/auth` route), the bounds-enforced
+single-authority setpoint API (`POST /setpoints`, the optimizer's RFC-005 write path) with provenance,
+Prometheus/Grafana observability, and the profile-management UI.
+
+| Capability | Slice |
+|---|---|
+| Mosquitto broker; TimescaleDB (telemetry + minimal registry) | 2a |
+| Go API: MQTT ingest → DB, telemetry REST, WebSocket fan-out, greenhouse registration | 2a |
+| Go API: ad-hoc setpoint edits relayed to controller REST | 2a |
+| nginx (SPA + `/api`, no `/auth`); React fleet overview + per-greenhouse detail + setpoint-edit control | 2a |
+| Crop profiles + setpoint resolution; profile-management UI | 2b |
+| Reconciliation / drift detection / re-assert on reconnect | 2b |
+| Keycloak OIDC + roles + `/auth`; single-authority `POST /setpoints` + provenance | 2b |
+| Prometheus + Grafana observability | 2b |
+
+**Why:** Making the Phase 2 frontend the system's only UI ([see the entry above](#2026-06-11--phase-1-local-dashboard-and-websocket-interface-eliminated-phase-2-frontend-is-the-sole-ui))
+means a usable monitoring surface for even a single greenhouse now depends on Phase 2 — so the
+telemetry pipeline (MQTT → API → DB → WebSocket → React) plus a thin setpoint-edit relay is the real
+MVP, and is worth delivering before the platform's defining-but-heavier crop-profile/reconciliation
+machinery. Deferring Keycloak keeps 2a light and is consistent with
+[RFC-009](./request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)'s
+posture that the local Docker network is the trust boundary. The split changes **no** committed
+interface: 2a's ad-hoc edits are a thin relay (operator edit → Go API → controller REST), and the
+full RFC-005 authority layer — crop-safe bounds, provenance, the optimizer-facing `POST /setpoints`,
+reconciliation — lands intact in 2b. RFC-001/002/003/005/007/009 are all unaffected.
+
+**Basis:** Operator-directed delivery sequencing; no interface change, so no RFC. Recorded here as
+the home for the 2a/2b boundary; the Phase 2 spec carries the per-section tags.
+
+---
+
+## 2026-06-11 — Phase 3 LLM integration: LangChain replaces custom PlannerBackend internals
+
+**Decision:** The `PlannerBackend` protocol from RFC-004 is replaced by a LangChain `Runnable`
+chain as the planner implementation. The chain is `ChatPromptTemplate | LLM | StructuredOutputParser`,
+constructed with `.with_structured_output(ActuatorPlan)` for plan parsing. `ChatAnthropic` /
+`ChatOpenAI` (packages `langchain-anthropic`, `langchain-openai`) replace the bespoke hosted-backend
+implementation; `ChatOllama` (package `langchain-community`) replaces the bespoke Ollama backend.
+Fallback routing uses LangChain's native `.with_fallbacks([ChatOllama(...)])` instead of the manual
+try/catch retry in the Proposal. The call site changes from `backend.generate_plan(context)` to
+`chain.invoke(context_dict)`. `ActuatorPlan`, `PlanContext`, the five invocation-strategy levers
+and their values, the constraint validation layer, and the configuration structure are all unchanged.
+This change is internal to the planner component; no other RFC is affected.
+
+**Why:** LangChain provides prompt templating, LLM routing, fallback chaining, and structured-output
+parsing as tested, maintained abstractions — eliminating custom code for each of those concerns.
+`.with_fallbacks()` expresses the hosted→Ollama fallback topology in one declaration rather than a
+try/catch wrapper, making the intent explicit and reducing the surface for subtle retry bugs.
+`.with_structured_output(ActuatorPlan)` ties the output parser directly to the existing Pydantic
+model, so LLM output validation and the constraint engine use the same schema. Consistent with the
+design doc principle that Phase 3 is "flexible by design — this layer evolves as LLM capabilities
+do."
+
+**RFC:** [RFC-004](./request-for-comments.md#rfc-004-phase-3-llm-integration-interface)
+
+---
+
 ## 2026-06-09 — Controller REST API contract authored (OpenAPI 3.1, greenhouse-scoped)
 
 **Decision:** Authored the controller's REST contract under `contracts/controller-rest/` as an
@@ -468,10 +558,11 @@ for many live-updating WebSocket-fed charts on one screen.
 **Tradeoffs accepted:** an SPA brings a JS build toolchain and bundle-size considerations and pushes
 view state to the client. Accepted for the real-time interactivity, and it pairs cleanly with the
 existing nginx static-serve + reverse-proxy setup
-([RFC-003](./request-for-comments.md#rfc-003-phase-2-platform-ingress)). This is a different framework
-from the Phase 1 controller's [SvelteKit dashboard](#2026-06-01--phase-1-dashboard-sveltekit) — a
-deliberate split: React's larger ecosystem earns its weight for the multi-greenhouse operator console,
-while Phase 1's lighter single-controller panel favors SvelteKit.
+([RFC-003](./request-for-comments.md#rfc-003-phase-2-platform-ingress)). This React SPA is the
+**system's only frontend** — there is no separate Phase 1 dashboard (see the
+[2026-06-11 entry](#2026-06-11--phase-1-local-dashboard-and-websocket-interface-eliminated-phase-2-frontend-is-the-sole-ui))
+— and it serves **one or more** greenhouses, a single greenhouse being the fleet-of-one case. Its
+monitoring core ships in the 2a slice; profile management and richer control follow in 2b.
 
 **Basis:** Foundational tech-stack choice — predates the RFC process; no RFC.
 
@@ -510,56 +601,22 @@ operational simplicity (one static binary) dominate for this service, and Echo s
 
 ---
 
-## 2026-06-01 — Phase 1 dashboard: SvelteKit
-
-**Decision:** Build the Phase 1 controller's **local dashboard** — real-time charts of sensor and
-actuator state plus the manual-override controls — as a **SvelteKit** app, talking to the controller
-over its REST API and WebSocket event stream
-([P1 §10](../specs/design/spec-climate-controller.md#10-manual-override),
-[§11](../specs/design/spec-climate-controller.md#11-interfaces)). The frontend toolchain (Node.js,
-Vite, Prettier/ESLint, `svelte-check`, Vitest/Playwright) is scoped to this project alone.
-
-**Why:** Phase 1 is a single standalone binary per greenhouse, and its UI is a lightweight local
-panel — not a multi-tenant fleet console. SvelteKit's compiler emits a small, dependency-light bundle
-with no heavy client runtime, which fits the controller's low-resource, offline-capable, zero-cloud
-ethos ([tech-stack-decisions.md §Phase 1](../specs/design/tech-stack-decisions.md)). Svelte's
-compile-time reactivity suits live WebSocket-fed charts, and the static bundle can be served beside
-the Rust binary without a separate platform.
-
-**Alternatives considered:** *React* — the choice for the [Phase 2 operator
-console](#2026-06-03--phase-2-dashboard-react-single-page-app), but a heavier runtime and toolchain
-than this single-controller panel needs; the two UIs deliberately diverge so Phase 1 stays lean.
-*Vue / Angular* — capable, but no advantage for a small local panel. *Server-rendered HTML from the
-Rust controller (e.g. Askama templates)* — avoids a JS toolchain entirely, but a weaker fit for
-real-time charts and interactive override controls.
-
-**Tradeoffs accepted:** this adds a Node/JS toolchain to an otherwise all-Rust phase, and the system
-now carries **two** frontend frameworks (SvelteKit here, [React in
-Phase 2](#2026-06-03--phase-2-dashboard-react-single-page-app)). Accepted because the two dashboards
-have genuinely different scopes — a single-controller local panel vs. a multi-greenhouse operator
-console — and each picks the lighter-fitting tool; Svelte's smaller ecosystem than React is not a
-constraint at this UI's size.
-
-**Basis:** Foundational tech-stack choice — predates the RFC process; no RFC.
-
----
-
 ## 2026-06-01 — Phase 1 async runtime: Tokio
 
 **Decision:** Run the Rust controller on the **Tokio** async runtime. Tokio drives the controller's
-concurrent I/O surfaces — MQTT telemetry publishing, the REST config/override server, and the
-WebSocket live feed ([P1 §11](../specs/design/spec-climate-controller.md#11-interfaces)) — around the
-fixed-tick control loop ([P1 §2](../specs/design/spec-climate-controller.md#2-architecture)).
+concurrent I/O surfaces — MQTT telemetry publishing and the REST config/override server
+([P1 §11](../specs/design/spec-climate-controller.md#11-interfaces)) — around the fixed-tick control
+loop ([P1 §2](../specs/design/spec-climate-controller.md#2-architecture)).
 
 **Why:** The controller services several concurrent I/O channels alongside its periodic control tick,
-and Tokio is the de-facto async runtime in the Rust ecosystem — the mature MQTT, HTTP, and WebSocket
-crates are built on it. Async I/O keeps those channels non-blocking without a thread per connection,
-and the control loop runs as a scheduled interval task. Timing predictability for the tick comes from
+and Tokio is the de-facto async runtime in the Rust ecosystem — the mature MQTT and HTTP crates are
+built on it. Async I/O keeps those channels non-blocking without a thread per connection, and the
+control loop runs as a scheduled interval task. Timing predictability for the tick comes from
 Rust's no-GC execution plus a dedicated timer ([see the Rust
 entry](#2026-06-01--phase-1-controller-language-rust)); Tokio handles the surrounding I/O concurrency.
 
 **Alternatives considered:** *`std` threads + blocking I/O* — no async dependency, but a thread per
-connection and manual coordination across the MQTT/REST/WS surfaces. *`async-std`* — comparable model,
+connection and manual coordination across the MQTT/REST surfaces. *`async-std`* — comparable model,
 but a smaller and less actively maintained ecosystem than Tokio. *`smol`* — lightweight, but the
 controller's I/O crates assume Tokio.
 

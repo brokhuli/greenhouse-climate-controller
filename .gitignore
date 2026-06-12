@@ -9,7 +9,6 @@ Cargo.lock
 # Node / frontend
 node_modules/
 dist/
-.svelte-kit/
 *.log
 
 # Python

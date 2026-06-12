@@ -20,7 +20,7 @@ and [`spec-phase4.md`](./spec-phase4.md).
 ## 1. Overview
 
 A contract exists wherever two independently-built components must agree on a wire or data format.
-The system has eight such boundaries, spread across the three core phases and the Phase 4 stretch
+The system has seven such boundaries, spread across the three core phases and the Phase 4 stretch
 goal. They are catalogued here in one place because the contracts are otherwise scattered across
 RFC-004/005/007/008/009 and the interface sections of four separate specs, making it hard to see the
 full set at a glance.
@@ -37,13 +37,12 @@ is versioned and accompanied by an ADR, per [`contracts/README.md`](../../../con
 | # | Contract | Producer → Consumer | Format | Phase | Governing decision |
 |---|---|---|---|---|---|
 | 1 | MQTT telemetry schemas | Controller → platform, optimizer | JSON Schema (Draft 2020-12) | 1 | [RFC-007](../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format), [RFC-001](../../decisions/request-for-comments.md#rfc-001-mqtt-broker-selection) |
-| 2 | Controller REST API | Controller → platform + controller frontend | OpenAPI 3.1 | 1 | [RFC-005](../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain), [RFC-009](../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries) |
-| 3 | Controller WebSocket stream | Controller → controller frontend | WebSocket message schema | 1 | [P1 §11](./spec-climate-controller.md#11-interfaces) |
-| 4 | Phase 2 Setpoint API | Optimizer (+ Phase 4) → platform | REST (OpenAPI-style) | 2 / 3 | [RFC-005](../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain) |
-| 5 | Phase 2 operator/fleet REST API | SPA / operator → platform | REST (OpenAPI-style) | 2 | [P2 §7](./spec-climate-platform.md#7-api-surface) |
-| 6 | Phase 2 WebSocket fan-out | Platform → SPA | WebSocket message schema | 2 | [P2 §7](./spec-climate-platform.md#7-api-surface) |
-| 7 | Optimizer plan schema | Planner → constraint engine / applier | Structured schema (JSON Schema) | 3 | [RFC-004](../../decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface) |
-| 8 | Telemetry read-surface views | Platform → optimizer | Versioned SQL views | 2 / 3 | [RFC-008](../../decisions/request-for-comments.md#rfc-008-phase-3-telemetry-read-path) |
+| 2 | Controller REST API | Controller → platform | OpenAPI 3.1 | 1 | [RFC-005](../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain), [RFC-009](../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries) |
+| 3 | Phase 2 Setpoint API | Optimizer (+ Phase 4) → platform | REST (OpenAPI-style) | 2b / 3 | [RFC-005](../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain) |
+| 4 | Phase 2 operator/fleet REST API | SPA / operator → platform | REST (OpenAPI-style) | 2a (telemetry/registration/edits) / 2b (profiles/assignments) | [P2 §7](./spec-climate-platform.md#7-api-surface) |
+| 5 | Phase 2 WebSocket fan-out | Platform → SPA | WebSocket message schema | 2a | [P2 §7](./spec-climate-platform.md#7-api-surface) |
+| 6 | Optimizer plan schema | Planner → constraint engine / applier | Structured schema (JSON Schema) | 3 | [RFC-004](../../decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface) |
+| 7 | Telemetry read-surface views | Platform → optimizer | Versioned SQL views | 2b / 3 | [RFC-008](../../decisions/request-for-comments.md#rfc-008-phase-3-telemetry-read-path) |
 
 ### 2.1 MQTT telemetry schemas
 
@@ -62,62 +61,50 @@ is versioned and accompanied by an ADR, per [`contracts/README.md`](../../../con
 | | |
 |---|---|
 | **Purpose** | The controller's setpoint/threshold CRUD, zone status, manual-override management, and health surface — the only inbound write path into a controller. |
-| **Parties / direction** | Controller (producer) → platform (managed mode) **and** controller frontend (standalone); two consumers of one surface |
+| **Parties / direction** | Controller (producer) → platform (the sole consumer). The Phase 2 frontend reaches the controller **through** the Go API, not directly; there is no controller-local frontend. |
 | **Format** | OpenAPI 3.1 (uses the JSON Schema 2020-12 dialect); greenhouse-scoped paths; 422 names the violated bound |
-| **Phase introduced** | Phase 1 (consumed by the platform from Phase 2) |
+| **Phase introduced** | Phase 1 (consumed by the platform from Phase 2 — the ad-hoc setpoint relay in 2a, the full resolution path in 2b) |
 | **Governing decision** | [RFC-005](../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain) (controller is setpoint-only), [RFC-009](../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries) (unauthenticated — Docker network is the trust boundary), [P1 §11](./spec-climate-controller.md#11-interfaces) |
 | **Location** | [`contracts/controller-rest/`](../../../contracts/controller-rest/) |
 | **Status** | Authored — `openapi.json` + README + example fixtures exist under [`contracts/controller-rest/`](../../../contracts/controller-rest/) |
 
-### 2.3 Controller WebSocket stream
-
-| | |
-|---|---|
-| **Purpose** | Live log stream and real-time sensor/actuator event feed for the controller's own dashboard. Distinct from the Phase 2 fleet fan-out (§2.6). |
-| **Parties / direction** | Controller → controller frontend |
-| **Format** | WebSocket message schema (shares the RFC-007 identity / timestamp envelope) |
-| **Phase introduced** | Phase 1 |
-| **Governing decision** | [P1 §11](./spec-climate-controller.md#11-interfaces) |
-| **Location** | To be created |
-| **Status** | To author |
-
-### 2.4 Phase 2 Setpoint API
+### 2.3 Phase 2 Setpoint API
 
 | | |
 |---|---|
 | **Purpose** | The single setpoint-authority endpoint (`POST /greenhouses/{id}/setpoints`): the optimizer submits refined targets; the platform validates against crop-safe bounds, records provenance, and delivers to the controller. |
 | **Parties / direction** | Optimizer (and Phase 4 planner) → platform (write) |
 | **Format** | REST request/response — accept (202) / reject with violated bound (422) |
-| **Phase introduced** | Phase 2 (the endpoint); first cross-phase consumer in Phase 3 |
+| **Phase introduced** | Phase 2b (the bounds-enforcing endpoint); first cross-phase consumer in Phase 3 |
 | **Governing decision** | [RFC-005](../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain) |
 | **Location** | To be created |
 | **Status** | To author |
 
-### 2.5 Phase 2 operator/fleet REST API
+### 2.4 Phase 2 operator/fleet REST API
 
 | | |
 |---|---|
-| **Purpose** | The operator-facing surface: greenhouse registry, crop-profile CRUD, assignments, historical telemetry range queries, analytics, and ad-hoc setpoint edits. |
+| **Purpose** | The operator-facing surface: greenhouse registry, historical telemetry range queries, analytics, and ad-hoc setpoint edits (**2a**); crop-profile CRUD and assignments (**2b**). |
 | **Parties / direction** | SPA / operator tooling → platform |
 | **Format** | REST request/response (OpenAPI-style description recommended) |
-| **Phase introduced** | Phase 2 |
+| **Phase introduced** | Phase 2 — registration/telemetry/edits in 2a, profiles/assignments in 2b |
 | **Governing decision** | [P2 §7](./spec-climate-platform.md#7-api-surface) |
 | **Location** | To be created |
 | **Status** | To author |
 
-### 2.6 Phase 2 WebSocket fan-out
+### 2.5 Phase 2 WebSocket fan-out
 
 | | |
 |---|---|
 | **Purpose** | Live, fleet-wide push of telemetry, status changes, drift, and events to the dashboard. |
 | **Parties / direction** | Platform → SPA |
 | **Format** | WebSocket message schema (shares the RFC-007 identity / timestamp envelope) |
-| **Phase introduced** | Phase 2 |
+| **Phase introduced** | Phase 2a |
 | **Governing decision** | [P2 §7](./spec-climate-platform.md#7-api-surface) |
 | **Location** | To be created |
 | **Status** | To author |
 
-### 2.7 Optimizer plan schema
+### 2.6 Optimizer plan schema
 
 | | |
 |---|---|
@@ -129,7 +116,7 @@ is versioned and accompanied by an ADR, per [`contracts/README.md`](../../../con
 | **Location** | [`contracts/`](../../../contracts/), to be created |
 | **Status** | To author |
 
-### 2.8 Telemetry read-surface views
+### 2.7 Telemetry read-surface views
 
 | | |
 |---|---|

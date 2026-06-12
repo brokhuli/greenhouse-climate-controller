@@ -16,7 +16,8 @@ Phase 1 is a **deterministic, real-time control loop** for a single simulated gr
 Rust controller that reads simulated sensors, fuses and conditions those readings, runs a hierarchy
 of control loops against configurable setpoints, enforces safety interlocks, and drives simulated
 actuators — all behind a Hardware Abstraction Layer (HAL). It exposes its state and configuration
-over MQTT, a REST API, and WebSockets.
+over MQTT (telemetry out) and a REST API (the sole write path). The controller is **headless** — it
+has no UI of its own; visualization is the Phase 2 frontend's job (see [§11](#11-interfaces)).
 
 What is being sensed and actuated (the physical inventory) lives in
 [`physical-system-single.md`](./physical-system-single.md); this spec covers how the controller uses them.
@@ -49,7 +50,7 @@ Actuator Constraints                 ← rate limits / min cycle times
 HAL (simulated actuators)
 ```
 
-External surface (MQTT / REST / WebSockets) observes and configures the controller; **manual
+External surface (MQTT / REST) observes and configures the controller; **manual
 override** injects forced actuator states downstream of the control loops but still upstream of
 safety interlocks.
 
@@ -62,7 +63,7 @@ safety interlocks.
 | Control Loops | Compute desired actuator states from trusted readings + setpoints |
 | Safety Interlocks | Unconditionally override outputs on dangerous conditions |
 | Actuator Constraints | Enforce hardware limits (slew rate, min on/off time) |
-| Interfaces | MQTT / REST / WebSockets for telemetry, config, and control |
+| Interfaces | MQTT (telemetry) / REST (config + control) |
 
 ---
 
@@ -324,7 +325,7 @@ The REST API can force any actuator to a specific state, bypassing its control l
   used instead.
 - An override is cleared via REST or auto-expires after a configurable timeout (so a forgotten
   override cannot strand the greenhouse indefinitely).
-- Active overrides are published over MQTT and WebSockets as part of system state.
+- Active overrides are published over MQTT as part of system state.
 - **Safety interlocks still apply.** An override cannot suppress a critical-temperature or
   CO₂-ceiling response; the interlock wins.
 
@@ -338,11 +339,15 @@ are defined in [`contracts/`](../../../contracts/), under the conventions fixed 
 — this section lists responsibilities only. The full set of system contracts is catalogued in
 [`spec-contracts.md`](./spec-contracts.md).
 
+The controller has **no UI of its own** — it is headless. There is no local dashboard and no
+WebSocket stream; the only frontend in the system is the Phase 2 platform's, which monitors one or
+more controllers ([P2 §8](./spec-climate-platform.md#8-dashboard-frontend)). In standalone Phase 1,
+the controller is observed directly through MQTT tooling (e.g. MQTT Explorer) and the REST surface.
+
 | Interface | Role |
 |---|---|
 | **MQTT** | Publishes sensor readings, actuator states, fault events, and system state. Telemetry-only — the controller subscribes to no command topics; setpoints arrive via the REST API ([RFC-005](../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain)) |
-| **REST API** | Setpoint/threshold CRUD, zone status, manual-override management, system health |
-| **WebSockets** | Live log stream and real-time sensor/actuator event feed for the dashboard |
+| **REST API** | Setpoint/threshold CRUD, zone status, manual-override management, system health — the sole inbound write path |
 
 ---
 

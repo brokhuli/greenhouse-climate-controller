@@ -12,18 +12,20 @@
 | Concern | Choice |
 |---|---|
 | Language | Rust |
-| Async Runtime | Tokio || Messaging | MQTT (Mosquitto) |
+| Async Runtime | Tokio |
+| Messaging | MQTT (Mosquitto) |
 | Hardware Abstraction | Traits + simulated backend (HAL) |
-| API | REST (config + status) |
-| Streaming | WebSockets (logs + real-time events) |
-| Frontend | SvelteKit (local dashboard) |
+| API | REST (config + status + control) |
+| Frontend | None — headless; UI is the Phase 2 frontend |
 | Deployment Target | Local (Docker) |
 
 ### Why This Stack
 
 - **Rust + Tokio** — deterministic async, memory safety, real-time performance
-- **HAL layer** — simulates sensors (temp, humidity, CO₂, soil moisture) and actuators (fan, heater, vents, misters, irrigation, grow lights); swap in real hardware later- **MQTT** — lightweight, reliable IoT messaging with QoS + retained messages
-- **WebSockets** — real-time log and telemetry streaming to the UI
+- **HAL layer** — simulates sensors (temp, humidity, CO₂, soil moisture) and actuators (fan, heater, vents, misters, irrigation, grow lights); swap in real hardware later
+- **MQTT** — lightweight, reliable IoT messaging with QoS + retained messages
+- **REST** — the controller's only inbound write path (config + setpoints + manual override); telemetry goes out over MQTT
+- **Headless** — no local dashboard; the Phase 2 React frontend is the system's only UI (monitors 1+ controllers). In standalone Phase 1 the controller is inspected via MQTT tooling + REST
 - **Zero cloud dependency** — controller keeps running regardless of network
 
 > **Layer archetype:** Embedded systems + real-time control
@@ -34,6 +36,13 @@
 
 **Goal:** Full SaaS-like platform for dashboards, analytics, and device management — running entirely on localhost  
 **Priority:** Local completeness, realistic PaaS architecture patterns, zero cloud dependency
+
+> **Delivered in two slices.** **2a** (the MVP that makes the frontend usable against a controller):
+> Go API, TimescaleDB, Mosquitto, nginx, React — the telemetry pipeline plus an ad-hoc setpoint-edit
+> relay, unauthenticated on the local network. **2b** adds **Keycloak** (auth) and
+> **Prometheus/Grafana** (observability) alongside crop profiles, resolution, and reconciliation. The
+> stack table below is the full Phase 2 set; the Compose service split (2a vs 2b) is in
+> [spec-climate-platform.md §12](./spec-climate-platform.md#12-deployment).
 
 ### Recommended Stack
 
@@ -89,7 +98,7 @@
 |---|---|
 | Language | Python |
 | Framework | FastAPI |
-| LLM Integration | Hosted LLM (Anthropic/OpenAI) primary; local Ollama fallback — see [RFC-004](../../decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface) |
+| LLM Integration | LangChain (`langchain-anthropic`, `langchain-openai`, `langchain-community`) — `ChatAnthropic`/`ChatOpenAI` primary, `ChatOllama` fallback via `.with_fallbacks()`; see [RFC-004](../../decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface) |
 | Simulation Engine | NumPy + SciPy |
 | Digital Twin | Custom greenhouse physics model |
 | Data Access | TimescaleDB (Phase 2 store) via SQLAlchemy |
@@ -102,7 +111,8 @@
 - **Python** — best language for LLMs, simulation, and optimization
 - **FastAPI** — clean service interface for the optimizer
 - **Hosted LLM primary** — frontier models produce more reliably constraint-valid multi-variable plans; Docker Desktop containers have outbound internet access by default, so no special networking is needed
-- **Ollama fallback** — preserves planning continuity when the hosted backend is temporarily unreachable; same `PlannerBackend` protocol, no changes to the planning loop
+- **LangChain** — provides `Runnable` chain composition, `ChatPromptTemplate`, `.with_structured_output(ActuatorPlan)`, and `.with_fallbacks()` routing; replaces bespoke prompt construction, output parsing, and fallback logic
+- **Ollama fallback** — preserves planning continuity when the hosted backend is temporarily unreachable; wired via LangChain's `.with_fallbacks()`, transparent to the planning loop
 - **Backend-agnostic invocation strategy** — fixed token budget, hourly summaries, adaptive horizon, state-change gate, and fixed cadence applied before any backend call; strategy is identical for both backends
 - **NumPy/SciPy** — simulation of heat, humidity, and CO₂ dynamics
 - **Constraint engine** — validates LLM-generated actuator plans before execution

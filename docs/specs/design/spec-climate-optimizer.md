@@ -110,11 +110,12 @@ passing cloud) is **weather-reactive** control and belongs to Phase 4.
 
 ## 4. LLM-Driven Planning
 
-The planner uses a **hosted LLM** (Anthropic or OpenAI) as its primary backend, with **Ollama** as
-the local fallback when the hosted backend is unreachable or unconfigured — see
-[RFC-004](../../decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface). Both
-backends implement the `PlannerBackend` protocol; the planning loop is identical regardless of which
-is active.
+The planner is implemented as a LangChain `Runnable` chain —
+`ChatPromptTemplate | LLM | StructuredOutputParser` — with `ChatAnthropic` / `ChatOpenAI` as the
+primary LLM wrappers and `ChatOllama` as the fallback, wired via `.with_fallbacks()`. Structured
+plan output is parsed via `.with_structured_output(ActuatorPlan)`. See
+[RFC-004](../../decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface)
+(revised ADR entry 2026-06-11).
 
 The planner is prompted with the observed state, the simulated forward trajectory, the active
 crop-safe bounds, and the optimization objectives ([§7](#7-optimization-objectives)), and asked to
@@ -128,7 +129,7 @@ carries a **confidence** signal used by the application gate ([§6](#6-setpoint-
 
 ### Invocation strategy
 
-Context preparation and call gating are applied in Python before `generate_plan()` is called,
+Context preparation and call gating are applied in Python before `.invoke()` is called,
 making the strategy backend-agnostic. The same rules apply whether the active backend is hosted or
 local:
 

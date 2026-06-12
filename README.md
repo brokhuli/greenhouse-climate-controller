@@ -3,8 +3,9 @@
 ## Overview
 A local, containerized greenhouse automation and intelligence platform. Phase 1 is a
 deterministic real-time Rust controller with a hardware abstraction layer over simulated
-sensors and actuators, PID and rule-based control, safety interlocks, and MQTT/REST/WebSocket
-interfaces. Later phases add a local PaaS (Go + TimescaleDB) and an AI climate optimizer (Python).
+sensors and actuators, PID and rule-based control, safety interlocks, and MQTT/REST
+interfaces (headless — no local UI). Later phases add a local PaaS (Go + TimescaleDB) whose
+React frontend is the system's only dashboard, and an AI climate optimizer (Python).
 
 ## Development Commands
 
