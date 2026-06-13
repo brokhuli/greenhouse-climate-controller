@@ -1,13 +1,23 @@
 #!/usr/bin/env bash
 set -e
 
+export PATH="$HOME/.cargo/bin:$PATH"
+
 echo "Running project checks..."
 
-# Replace with actual commands once toolchain is known:
-# format
-# lint
-# typecheck
-# test
+# Phase 1 (Rust) gate: format, lint, typecheck, test — scoped to climate-controller.
+# Only run when staged changes touch the crate, so docs-only / future Go/Python commits
+# are not blocked on cargo. Mirrors the CLAUDE.md completion gate.
+if git diff --cached --name-only | grep -q '^climate-controller/'; then
+  echo "climate-controller changes staged — running Rust gate..."
+  (
+    cd climate-controller
+    cargo fmt --all -- --check
+    cargo clippy --all-targets --all-features -- -D warnings
+    cargo check --all-targets
+    cargo test
+  )
+fi
 
 echo "Checks passed."
 

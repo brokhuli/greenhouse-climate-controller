@@ -2,9 +2,10 @@
 research/
 
 # Rust
-/target/
+# Unanchored so it also matches climate-controller/target/ (the crate is not at repo root).
+target/
 **/*.rs.bk
-Cargo.lock
+# Cargo.lock is committed: the controller is a binary, so the lockfile pins reproducible builds.
 
 # Node / frontend
 node_modules/
