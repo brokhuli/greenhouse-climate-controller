@@ -16,15 +16,13 @@
 | Messaging | MQTT (Mosquitto broker; `rumqttc` client) |
 | Hardware Abstraction | Traits + simulated backend (HAL) |
 | API | REST via `axum` (config + status + control) |
-| Persistence (optional) | SQLite via `rusqlite` (`bundled` — linked into the binary) |
 | Frontend | None — headless; UI is the Phase 2 frontend |
 | Deployment Target | Local (Docker) |
 
 > **Crate selections.** The broker is fixed by
 > [RFC-001](../../decisions/request-for-comments.md#rfc-001-mqtt-broker-selection); the Rust
-> client (`rumqttc`), web framework (`axum`), and persistence (`rusqlite`, `bundled`) crates are
-> selected at the Cargo bootstrap. All are Tokio-native and recorded here rather than in a
-> separate RFC. Full host-tooling list is in
+> client (`rumqttc`) and web framework (`axum`) crates are selected at the Cargo bootstrap. Both
+> are Tokio-native and recorded here rather than in a separate RFC. Full host-tooling list is in
 > [`required-dependencies.md`](./required-dependencies.md#phase-1--greenhouse-climate-controller).
 
 ### Why This Stack

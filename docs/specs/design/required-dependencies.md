@@ -51,9 +51,9 @@ After cloning, point Git at the repo's hooks once: `git config core.hooksPath .g
 
 ## Phase 1 — Greenhouse Climate Controller
 
-Stack: **Rust (Tokio)** controller talking over **MQTT** / REST, with optional **SQLite**
-persistence. The controller is headless — there is no Phase 1 frontend (the Phase 2 React app is the
-system's only UI). See [`spec-climate-controller.md`](./spec-climate-controller.md) and
+Stack: **Rust (Tokio)** controller talking over **MQTT** / REST. The controller is headless — there
+is no Phase 1 frontend (the Phase 2 React app is the system's only UI). See
+[`spec-climate-controller.md`](./spec-climate-controller.md) and
 [`tech-stack-decisions.md`](./tech-stack-decisions.md).
 
 ### 1. Rust toolchain (the controller)
@@ -92,13 +92,6 @@ system's only UI). See [`spec-climate-controller.md`](./spec-climate-controller.
   - **MQTT Explorer** (GUI) — visual topic tree, retained-message inspection. [Download](https://mqtt-explorer.com/).
   - or **mosquitto clients** (`mosquitto_pub` / `mosquitto_sub`) — already available inside the
     broker container via `docker exec`, so a separate install is optional.
-
-### 4. SQLite (optional persistence)
-
-- The controller links SQLite **into the binary** via the Rust `rusqlite` crate's `bundled` feature,
-  so **no host install is needed** for the app to run.
-- **Optional for inspection during development:** the `sqlite3` CLI
-  (`winget install SQLite.SQLite`) or a VS Code SQLite viewer extension to open the local `.db` file.
 
 ### Phase 1 verification checklist
 
