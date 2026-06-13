@@ -1,0 +1,115 @@
+# Example controller configuration (controller spec §4, §3, §9, §13).
+#
+# A working single-greenhouse config: identity, MQTT/REST connection, global setpoints,
+# irrigation zones, and the full HAL simulation model. Copy and edit for a real deployment.
+# Setpoint and zone bounds mirror the REST contract (contracts/controller-rest/); the HAL
+# gains/constants are illustrative defaults tuned during HAL implementation.
+
+# Greenhouse identity — its key in MQTT topics, REST paths, and DB rows (lowercase kebab).
+controller_id = "gh-a"
+
+[mqtt]
+broker_url = "mqtt://localhost:1883" # native controller connects to the deploy/ Mosquitto here
+
+[api]
+bind_addr = "127.0.0.1:8080" # REST config/control surface
+
+# --- Global climate setpoints (spec §4) ---------------------------------------------------
+[setpoints]
+temperature_day_c = 24.0
+temperature_night_c = 18.0
+day_start = "06:00"
+day_end = "20:00"
+humidity_low_pct = 65.0  # fog on below this
+humidity_high_pct = 75.0 # fog off above this
+co2_target_ppm = 1000
+co2_vent_interlock_threshold_pct = 15.0
+vpd_target_kpa = 1.0
+dli_target_mol = 20.0
+
+# --- Irrigation zones (spec §4) ------------------------------------------------------------
+[[zones]]
+id = "bench-a"
+moisture_low_threshold = 0.35  # VWC — irrigation triggers below this
+moisture_high_threshold = 0.55 # VWC — irrigation stops above this
+drain_period_secs = 300        # minimum gap between cycles
+schedule = "06:00,14:00"       # time-of-day triggers
+
+[[zones]]
+id = "seedling-tray"
+moisture_low_threshold = 0.50
+moisture_high_threshold = 0.70
+drain_period_secs = 600
+schedule = "07:00,13:00,18:00"
+
+# --- HAL simulation model (spec §3) --------------------------------------------------------
+[hal.time_constants] # first-order-lag τ per state variable (seconds)
+temperature_s = 120
+humidity_s = 60
+co2_s = 30
+par_s = 10
+soil_moisture_s = 1800
+
+[hal.disturbances] # hidden load the controller cannot see and must fight
+outdoor_temp_c = 10.0
+ambient_humidity_pct = 50.0
+heat_loss_coeff = 0.02
+plant_co2_uptake_ppm_per_s = 0.5
+soil_drying_rate_per_s = 0.00001
+
+# Coupling matrix (spec §3): each actuator declares a SET of effects on climate variables,
+# never a one-to-one mapping (RFC-006). `gain` is the signed influence on that variable.
+[[hal.actuators]]
+actuator = "heater"
+effects = [{ variable = "temperature", gain = 0.05 }]
+constraints = { min_on_secs = 60, min_off_secs = 60 }
+
+[[hal.actuators]]
+actuator = "fans"
+effects = [
+  { variable = "temperature", gain = -0.03 }, # pulls toward outdoor
+  { variable = "humidity", gain = -0.02 },
+  { variable = "co2", gain = -0.5 },          # pulls toward ambient
+]
+constraints = { ramp_pct_per_s = 10.0 }
+
+[[hal.actuators]]
+actuator = "roof_vents"
+effects = [
+  { variable = "temperature", gain = -0.04 },
+  { variable = "humidity", gain = -0.03 },
+  { variable = "co2", gain = -0.6 },
+]
+constraints = { slew_pct_per_s = 5.0 }
+
+[[hal.actuators]]
+actuator = "misters"
+effects = [
+  { variable = "humidity", gain = 0.08 },
+  { variable = "temperature", gain = -0.01 }, # evaporative cooling
+]
+
+[[hal.actuators]]
+actuator = "co2_injector"
+effects = [{ variable = "co2", gain = 2.0 }]
+constraints = { min_on_secs = 30, min_off_secs = 30 }
+
+[[hal.actuators]]
+actuator = "grow_lights"
+effects = [
+  { variable = "par", gain = 1.5 },
+  { variable = "temperature", gain = 0.01 }, # waste heat
+]
+
+[[hal.actuators]]
+actuator = "shade_screen"
+effects = [
+  { variable = "par", gain = -1.0 },
+  { variable = "temperature", gain = -0.02 }, # sheds solar heat gain
+]
+constraints = { slew_pct_per_s = 3.0 }
+
+[[hal.actuators]]
+actuator = "irrigation_valve"
+effects = [{ variable = "soil_moisture", gain = 0.01 }]
+constraints = { min_open_secs = 10 }

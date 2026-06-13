@@ -117,6 +117,8 @@ It mirrors real IoT + SaaS architecture patterns without requiring any cloud ser
 ## **Pills for Portfolio**
 
 - Rust
+- HAL
+- PID
 - Sensor fusion
 - MQTT
 - REST
@@ -223,6 +225,20 @@ This is your **local cloud**, built from containers.
 
 ---
 
+## **Pills for Portfolio**
+
+- PaaS
+- Go
+- React
+- TimescaleDB
+- Docker
+- Keycloak (OIDC)
+- MQTT
+- Prometheus
+- Grafana
+
+---
+
 ## **Phase 2 Complexity: 6 / 10**
 
 A real PaaS, but local‑only.  
@@ -319,6 +335,16 @@ independent control loops); site-wide orchestration across greenhouses is **out 
 
 ---
 
+## **Pills for Portfolio**
+
+- LLM-Orchestration
+- Python
+- FastAPI
+- NumPy/SciPy
+- LangChain
+
+---
+
 ## **Phase 3 Complexity: 7.5 / 10**
 
 Most complex phase due to simulation + AI + planning + constraints.  
@@ -407,11 +433,11 @@ controller now needs actuator‑selection coordination above its PIDs.
 
 # **FINAL SUMMARY TABLE**
 
-| Phase       | Purpose                     | Tech Stack                                                | Skills Learned                                                                              | Complexity   |
-| ----------- | --------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------ |
-| **Phase 1** | Headless local controller    | Rust, HAL, MQTT, REST                                     | Embedded patterns, PID, rule engine, safety interlocks, fault detection, MQTT, REST device APIs | **6 / 10**   |
-| **Phase 2** | Multi-greenhouse management platform (single site); the system's only UI for 1+ greenhouses; owns crop profiles → controller setpoints. Ships as **2a** (monitoring + setpoint-edit MVP) then **2b** (profiles, auth, observability) | Go, TimescaleDB, MQTT, React, nginx, Docker (2a) + Keycloak, Prometheus/Grafana (2b) | PaaS design, DB modeling, crop-profile/setpoint resolution, auth, microservices, reverse proxy, observability | **6 / 10**   |
-| **Phase 3** | Local AI climate optimizer  | Python, FastAPI, NumPy/SciPy, LangChain, MQTT, Postgres    | Simulation, LLM orchestration, constraints, planning                                        | **7.5 / 10** |
-| **Phase 4** *(stretch goal)* | Coupled actuation + weather-reactive optimization | Phase 3 stack + weather-API/forecast feed, combustion-model digital twin | Multi-variable actuator coordination, weather/forecast integration, weather-reactive MPC, combustion simulation | **9 / 10** |
+| Phase                        | Purpose                                                                                                                                                                                                                              | Tech Stack                                                                           | Skills Learned                                                                                                  | Complexity   |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- | ------------ |
+| **Phase 1**                  | Headless local controller                                                                                                                                                                                                            | Rust, HAL, MQTT, REST                                                                | Embedded patterns, PID, rule engine, safety interlocks, fault detection, MQTT, REST device APIs                 | **6 / 10**   |
+| **Phase 2**                  | Multi-greenhouse management platform (single site); the system's only UI for 1+ greenhouses; owns crop profiles → controller setpoints. Ships as **2a** (monitoring + setpoint-edit MVP) then **2b** (profiles, auth, observability) | Go, TimescaleDB, MQTT, React, nginx, Docker (2a) + Keycloak, Prometheus/Grafana (2b) | PaaS design, DB modeling, crop-profile/setpoint resolution, auth, microservices, reverse proxy, observability   | **6 / 10**   |
+| **Phase 3**                  | Local AI climate optimizer                                                                                                                                                                                                           | Python, FastAPI, NumPy/SciPy, LangChain, MQTT, Postgres                              | Simulation, LLM orchestration, constraints, planning                                                            | **7.5 / 10** |
+| **Phase 4** *(stretch goal)* | Coupled actuation + weather-reactive optimization                                                                                                                                                                                    | Phase 3 stack + weather-API/forecast feed, combustion-model digital twin             | Multi-variable actuator coordination, weather/forecast integration, weather-reactive MPC, combustion simulation | **9 / 10**   |
 
 ---
