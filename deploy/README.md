@@ -2,8 +2,23 @@
 
 Root orchestration for the local stack — **Docker Compose**.
 
-Brings up the MQTT broker, Phase 2 platform (API + database), and supporting services so the
-whole greenhouse system runs with a single command. Also hosts the cross-phase end-to-end
-harness (e.g. MQTT broker + device simulator + platform) used for integration testing.
+The eventual stack is the full Phase 2 platform (API, database, reverse proxy, frontend, auth,
+observability) plus the MQTT broker, running with a single command — and the cross-phase
+end-to-end harness used for integration testing.
 
-The `docker-compose.yml` is scaffolded alongside the spec before implementation begins, so the MQTT broker is available from the first day of development.
+**Today (Phase 1) the only live service is the Mosquitto MQTT broker.** The Phase 1 controller
+runs as a native Windows binary (controller spec §13), not a container, and connects to the
+broker at `localhost:1883`. The Phase 2 platform services are present in
+[`docker-compose.yml`](./docker-compose.yml) as commented-out placeholders (full topology in
+[spec-climate-platform.md §12](../docs/specs/design/spec-climate-platform.md#12-deployment)) and
+are activated when Phase 2 begins.
+
+Run the broker:
+
+```
+docker compose -f deploy/docker-compose.yml up -d
+```
+
+Broker config is [`mosquitto/config/mosquitto.conf`](./mosquitto/config/mosquitto.conf)
+(anonymous auth + persistence per RFC-001); retained and in-flight QoS state persist in named
+volumes across restarts.
