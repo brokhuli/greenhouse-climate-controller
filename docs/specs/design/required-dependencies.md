@@ -74,8 +74,7 @@ system's only UI). See [`spec-climate-controller.md`](./spec-climate-controller.
 | built-in test harness | tests | `cargo test` |
 
 > **Pin the toolchain** with a `rust-toolchain.toml` in `climate-controller/` so the version is reproducible
-> across machines and CI. (Added with the Cargo project per
-> [`climate-controller/README.md`](../../../climate-controller/README.md).)
+> across machines and CI. This is part of the pre-implementation bootstrap alongside `Cargo.toml`.
 
 ### 2. Language servers & editor extensions (LSP)
 

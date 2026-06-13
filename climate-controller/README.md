@@ -10,4 +10,4 @@ commands over MQTT per the schemas in `../contracts/`.
 - `src/` — controller source (unit tests live inline via `#[cfg(test)]`).
 - `tests/` — Cargo integration tests.
 
-Cargo project (`Cargo.toml`) is added in a later step.
+The Cargo project (`Cargo.toml`, `rust-toolchain.toml`) is bootstrapped alongside the spec before implementation begins.

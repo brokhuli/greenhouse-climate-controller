@@ -6,4 +6,4 @@ Brings up the MQTT broker, Phase 2 platform (API + database), and supporting ser
 whole greenhouse system runs with a single command. Also hosts the cross-phase end-to-end
 harness (e.g. MQTT broker + device simulator + platform) used for integration testing.
 
-`docker-compose.yml` is added in a later step.
+The `docker-compose.yml` is scaffolded alongside the spec before implementation begins, so the MQTT broker is available from the first day of development.
