@@ -1,5 +1,8 @@
 //! Shared validation primitives.
 //!
+//! This module is is the project’s validation toolkit: create consistent field errors,
+//! collect them, format them, serialize them, and wrap them into config-loading errors.
+//!
 //! [`FieldViolation`] mirrors the REST contract's `ValidationError`
 //! (`contracts/controller-rest/components/schemas/common.json`), so the same value can be
 //! returned by config loading now and by the REST `PATCH` handlers later — one validator,
