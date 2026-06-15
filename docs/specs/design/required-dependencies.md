@@ -112,7 +112,10 @@ docker --version; docker compose version  # container runtime (MQTT broker)
 >
 > Anticipated host tooling: **Go** toolchain (+ `gopls` LSP), **Node.js** (React dashboard), Docker
 > Compose stack (TimescaleDB, MQTT broker, Keycloak, reverse proxy), and a Postgres client.
-> See [`tech-stack-decisions.md`](./tech-stack-decisions.md#phase-2--local-paas-platform-docker-only).
+> Frontend testing adds **Playwright** (E2E browser automation — needs `npx playwright install` for
+> the browser binaries, a host step beyond the npm manifest) and **Lighthouse CI** (`@lhci/cli`, a
+> project dev-dependency). See
+> [`tech-stack-decisions.md`](./tech-stack-decisions.md#phase-2--local-paas-platform-docker-only).
 
 ---
 

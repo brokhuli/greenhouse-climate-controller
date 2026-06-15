@@ -59,6 +59,7 @@
 | API Style | REST + WebSockets |
 | Database | TimescaleDB (PostgreSQL extension) |
 | Frontend | React |
+| Frontend Testing | Playwright (E2E + live-update) + Lighthouse CI (perf/a11y) |
 | Auth | Keycloak (OIDC) |
 | Reverse Proxy | nginx |
 | Orchestration | Docker Compose |
@@ -69,6 +70,7 @@
 - **Go + Echo** — simple, fast, reliable API service
 - **TimescaleDB** — adopted from day one as the correct time-series database for greenhouse sensor data; because it is a PostgreSQL *extension* (not a separate database), the same store also holds the **greenhouse registry and crop profiles** (per-greenhouse metadata + per-crop/stage climate targets) in ordinary relational tables alongside the time-series telemetry. See [RFC-002](../../decisions/request-for-comments.md#rfc-002-phase-2-persistence-layer)
 - **React** — modern SPA dashboard served by the nginx entry point
+- **Playwright + Lighthouse CI** — Playwright drives the real SPA for E2E flows and live-update (WebSocket) latency assertions; Lighthouse CI gates initial-load performance and accessibility against the production build. Together they cover both halves of `P2-USE-1` ([Non-Functional Requirements](../artifacts/non-functional-requirements.md))
 - **Keycloak** — self-hosted OIDC identity provider; runs locally as a container (no cloud dependency) and owns login, the user store, and roles so the API never handles credentials
 - **nginx** — single entry point: serves the SPA and reverse-proxies `/api` and `/auth`; chosen over Traefik because the service map is static and config-driven (see [RFC-003](../../decisions/request-for-comments.md#rfc-003-phase-2-platform-ingress))
 - **Docker Compose** — single-command local orchestration; no cloud account needed

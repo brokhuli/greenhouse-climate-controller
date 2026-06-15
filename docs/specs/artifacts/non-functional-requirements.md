@@ -1,5 +1,318 @@
 # Non-Functional Requirements
 
+## NFR Priority by Phase
+
+Rated **Critical / High / Medium / Low / N/A** based on what each phase is and what would go wrong
+if the NFR were ignored.
+
+### Phase 1 — Rust controller, real-time control loop, simulated HAL
+
+| NFR                 | Importance | Why                                                                                        |
+| ------------------- | ---------- | ------------------------------------------------------------------------------------------ |
+| **Reliability**     | Critical   | Fault tolerance *is* the feature — sensor fusion, fault detection, fail-safe responses     |
+| **Resilience**      | Critical   | Graceful degradation when probes fail IS the designed behavior                             |
+| **Performance**     | Critical   | Tick rate and safety latency are load-bearing decisions; jitter means missed interlocks    |
+| **Testability**     | Critical   | Safety logic cannot be shipped untested; HAL exists specifically to enable this            |
+| **Observability**   | High       | MQTT telemetry is the only window into a headless process                                  |
+| **Modifiability**   | High       | Explicit seams for Phases 2–4 (HAL trait, actuator-as-set-of-effects)                      |
+| **Maintainability** | High       | Sets patterns inherited by later phases                                                    |
+| **Availability**    | High       | Models a real production system — an unresponsive controller means an unmanaged greenhouse |
+| Portability         | Medium     | Windows binary → Docker container for Phase 2; HAL trait handles the rest                  |
+| Scalability         | N/A        | Single controller by design                                                                |
+| Usability           | N/A        | Headless                                                                                   |
+| Security            | N/A        | Local dev machine, no auth planned                                                         |
+
+### Phase 2 — Platform, fleet management, dashboard, TimescaleDB
+
+| NFR                 | Importance | Why                                                                                             |
+| ------------------- | ---------- | ----------------------------------------------------------------------------------------------- |
+| **Scalability**     | Critical   | Core design question: N controllers publishing concurrently                                     |
+| **Observability**   | Critical   | The dashboard *is* the product — making internal state visible to operators                     |
+| **Performance**     | High       | Ingestion throughput, WebSocket fan-out lag, DB write rate under load                           |
+| **Usability**       | High       | First user-facing surface in the system                                                         |
+| **Availability**    | High       | Operators need the platform running; controllers are independent but blind without it           |
+| **Maintainability** | High       | Platform is the integration point for Phase 3                                                   |
+| Reliability         | Medium     | Platform failure is an operational inconvenience, not a safety event (controllers keep running) |
+| Resilience          | Medium     | Missed telemetry during downtime is a data gap, not a control failure                           |
+| Testability         | Medium     | Integration-heavy; harder to test but important                                                 |
+| Modifiability       | Medium     | Must accept Phase 3 optimizer as a new caller without rework                                    |
+| Security            | Low        | Local Docker network, no external exposure planned                                              |
+| Portability         | Low        | Docker handles this                                                                             |
+
+### Phase 3 — Python optimizer, LLM-assisted planning, digital twin simulation
+
+| NFR               | Importance | Why                                                                                                     |
+| ----------------- | ---------- | ------------------------------------------------------------------------------------------------------- |
+| **Performance**   | Critical   | Optimizer must solve within the planning horizon it targets; a slow solve is useless                    |
+| **Testability**   | Critical   | LLM proposals must be validated against crop-safe constraints; this is the entire correctness guarantee |
+| **Reliability**   | High       | Fallback when optimizer fails must be clean (hold last setpoints, don't crash controller)               |
+| **Resilience**    | High       | Graceful degradation = Phase 2 static baseline continues unchanged if optimizer is down                 |
+| **Modifiability** | High       | Phase 4 extends the optimizer with weather feeds and combustion-aware planning                          |
+| **Observability** | High       | LLM proposals must be inspectable — operators need to see why the optimizer chose a plan                |
+| Maintainability   | Medium     | Python service with LLM integration — likely to change most between phases                              |
+| Scalability       | Low        | N independent per-greenhouse planners; each is stateless relative to the others                         |
+| Security          | Low        | LLM API key handling is the one concern                                                                 |
+| Usability         | Low        | Likely no direct UI                                                                                     |
+| Availability      | Low        | Optimizer being down is tolerable; Phase 2 baseline continues                                           |
+| Portability       | Low        | Python + Docker                                                                                         |
+
+### Phase 4 — Combustion heater, weather-reactive control, actuator coordination
+
+| NFR               | Importance | Why                                                                                               |
+| ----------------- | ---------- | ------------------------------------------------------------------------------------------------- |
+| **Modifiability** | Critical   | The HAL seam must hold — new actuator as a new backend, not a HAL rewrite                         |
+| **Testability**   | Critical   | Combustion heater couples three variables; actuator-selection logic is the new complexity surface |
+| **Reliability**   | High       | Combustion heater faults are more dangerous than electric heater faults                           |
+| **Resilience**    | High       | Fall back to electric heater if combustion fails                                                  |
+| Performance       | Medium     | Weather-reactive planning adds an external I/O dependency (forecast API latency)                  |
+| Security          | Medium     | First real external network call (weather API); first external credential                         |
+
+---
+
+## Specific Requirements by Phase
+
+Concrete, committed targets for every applicable (non-N/A) NFR category. Each requirement has a stable
+ID (`P{phase}-{CATEGORY}-{n}`) so it can be cited from tests, ADRs, and commit messages. Numbers are
+grounded in the design specs where those fix a value; otherwise they are committed engineering
+defaults appropriate to a local, simulated, single-machine system. These are firm targets, not
+aspirations — a change validates against them.
+
+### Phase 1 — Rust controller, real-time control loop, simulated HAL
+
+HAL time constants (spec §3): temperature τ = 120 s, humidity τ = 60 s, CO₂ τ = 30 s.
+
+**Performance**
+
+- **P1-PERF-1** — The control loop runs on a fixed **1 Hz tick (1000 ms)**. *(Committed default;
+  comfortably faster than the smallest τ of 30 s.)*
+- **P1-PERF-2** — Tick jitter stays **≤ 50 ms** (5% of the tick period). *(Committed default.)*
+- **P1-PERF-3** — Full-pipeline compute per tick (fusion → actuators) stays **≤ 100 ms** on one core.
+  *(Committed default.)*
+- **P1-PERF-4** — Resident memory **≤ 50 MB** and steady-state CPU **≤ 5%** of one core. *(Committed
+  default; consistent with running 20–50 controllers concurrently on one dev machine.)*
+
+**Reliability**
+
+- **P1-REL-1** — A safety interlock condition is acted on **within one tick (≤ 1 s)** of detection.
+  *(Hard requirement; spec §7 — interlocks are always active with unconditional priority.)*
+- **P1-REL-2** — Temperature tolerates **one faulty probe with no degradation** via 3-probe TMR median
+  voting. *(Spec §5.)*
+- **P1-REL-3** — Stuck and out-of-range sensor faults are detected within a **configurable window
+  (default 5 ticks)**. *(Spec §8.)*
+
+**Resilience**
+
+- **P1-RESIL-1** — On loss of a temperature probe, control continues on the remaining two (degraded);
+  on total disagreement, the controller holds a safe state — **zero unhandled-fault crashes**.
+  *(Spec §5, §7.)*
+- **P1-RESIL-2** — A manual override **auto-expires after a configurable timeout** so a forgotten
+  override cannot strand the greenhouse. *(Spec §10.)*
+
+**Testability**
+
+- **P1-TEST-1** — **≥ 90% line coverage** on the control-loop and safety-interlock modules. *(Committed
+  default; CLAUDE.md "avoid untested logic".)*
+- **P1-TEST-2** — The HAL simulation is **deterministic under a fixed seed** for reproducible tests.
+  *(Spec §3.)*
+
+**Observability**
+
+- **P1-OBS-1** — Telemetry (readings, actuator states, system state) is published **every tick at
+  1 Hz**; fault events are published **within one tick** of detection. *(Spec §11.)*
+- **P1-OBS-2** — The REST `/health` endpoint reflects **every active fault and alarm**. *(Spec §8, §11.)*
+
+**Modifiability**
+
+- **P1-MOD-1** — A new actuator (e.g. the Phase 4 combustion heater) is added as a **new HAL backend
+  implementing the same trait, with zero changes to the control loops**. *(Spec §3 interface
+  constraint; RFC-006.)*
+
+**Maintainability**
+
+- **P1-MAINT-1** — Each pipeline stage (fusion, setpoint resolution, control loops, interlocks,
+  constraints) is a **separately testable module behind an explicit interface**. *(Spec §2;
+  CLAUDE.md architecture.)*
+
+**Availability**
+
+- **P1-AVAIL-1** — **≥ 99.9% availability** over a continuous run; restart to first control tick is
+  **< 5 s**. *(Committed default; the controller models a real production system.)*
+
+**Portability**
+
+- **P1-PORT-1** — The **same binary runs native on Windows and as a Docker container** with no code
+  change (configuration via TOML). *(Spec §13.)*
+
+### Phase 2 — Platform, fleet management, dashboard, TimescaleDB
+
+**Scalability**
+
+- **P2-SCAL-1** — Establish baseline behavior at **5, 20, and 50 concurrent controllers** and confirm
+  **≥ 50 controllers** on one dev machine as the supported target. *(See Performance Testing below.)*
+
+**Performance**
+
+- **P2-PERF-1** — Telemetry ingestion sustains **≥ 50 msg/s** (50 controllers × 1 Hz) with **no
+  backlog growth**. *(Derived from P1-OBS-1 × P2-SCAL-1.)*
+- **P2-PERF-2** — WebSocket fan-out lag (ingest → dashboard) is **< 1 s** at 50 controllers.
+  *(Committed default.)*
+- **P2-PERF-3** — REST API **p95 latency < 200 ms** under concurrent operator + dashboard load.
+  *(Committed default.)*
+- **P2-PERF-4** — TimescaleDB sustains the full telemetry insert rate at **< 1 s write latency**.
+  *(Committed default.)*
+
+**Observability**
+
+- **P2-OBS-1** — The Go API exposes `/metrics`; Prometheus scrapes on a **15 s interval**; Grafana
+  dashboards cover ingestion rate, API latency/errors, reconciliation actions, and per-controller
+  connectivity. *(Spec §11; 2b.)*
+- **P2-OBS-2** — Every setpoint write emits a **structured (`slog`) audit log entry with provenance**.
+  *(Spec §5, §11.)*
+
+**Usability**
+
+- **P2-USE-1** — Dashboard **initial load < 2 s**; live charts update at **≥ 1 Hz**. *(Committed
+  default; initial-load half validated by Lighthouse CI against the production build, live-update half
+  by Playwright — see P2-TEST-2.)*
+
+**Availability**
+
+- **P2-AVAIL-1** — Platform **≥ 99.5% availability**; a platform restart **never interrupts controller
+  control loops** (controllers are independent failure domains). *(Spec §1.)*
+
+**Reliability**
+
+- **P2-REL-1** — Setpoint reconciliation **re-asserts intended state on controller reconnect within
+  one reconciliation cycle**. *(Spec §5; 2b.)*
+
+**Resilience**
+
+- **P2-RESIL-1** — Telemetry lost during platform downtime is a **recoverable data gap, not a control
+  failure**; ingestion resumes automatically on restart. *(Spec §1.)*
+
+**Testability**
+
+- **P2-TEST-1** — An integration test covers the **full up/down path** (MQTT ingest → store; profile
+  resolve → controller REST). *(Spec §2.)*
+- **P2-TEST-2** — The React dashboard is validated with **Playwright** (E2E flows + live-update latency
+  over the WebSocket stream — the ≥ 1 Hz half of P2-USE-1) and **Lighthouse CI** (initial-load
+  performance + accessibility), both run against the **production build**, not the dev server.
+  *(Committed default.)*
+
+**Modifiability**
+
+- **P2-MOD-1** — The Phase 3 optimizer integrates via the **existing `POST /setpoints` path with zero
+  breaking interface changes**. *(Spec §5; RFC-005.)*
+
+**Security**
+
+- **P2-SEC-1** — 2b: **Keycloak OIDC with viewer/operator roles**; every write path requires the
+  operator role. *(Spec §9; 2b.)*
+
+**Portability**
+
+- **P2-PORT-1** — The whole stack stands up with **one `docker compose up`**, no cloud account.
+  *(Spec §12.)*
+
+### Phase 3 — Python optimizer, LLM-assisted planning, digital twin simulation
+
+**Performance**
+
+- **P3-PERF-1** — Each planning cycle completes **within its 30-min cadence** (default
+  `cycle_interval_minutes = 30`). *(Spec §4.)*
+- **P3-PERF-2** — A single LLM plan call returns in **< 60 s**; on timeout the current plan is extended
+  rather than blocking. *(Committed default; spec §4 state-change gate.)*
+- **P3-PERF-3** — `PlanContext` serializes to a **fixed 4 000-token budget**; exceeding it raises an
+  explicit error (no silent truncation). *(Spec §4.)*
+
+**Testability**
+
+- **P3-TEST-1** — **100% of LLM-proposed plans pass through the deterministic constraint engine before
+  apply**; the engine's bound checks have **≥ 90% coverage**. *(Spec §5.)*
+
+**Reliability**
+
+- **P3-REL-1** — On optimizer failure the controller holds its last accepted setpoints — **zero
+  controller crashes caused by the optimizer**. *(Spec §5, §6.)*
+
+**Resilience**
+
+- **P3-RESIL-1** — With the optimizer down, the **Phase 2 static crop-profile baseline continues
+  unchanged**. *(Spec §6.)*
+
+**Modifiability**
+
+- **P3-MOD-1** — The invocation strategy is **backend-agnostic** (hosted or local LLM) with no change
+  to the plan path. *(Spec §4.)*
+
+**Observability**
+
+- **P3-OBS-1** — Every applied or escalated plan is **traceable by `optimizer_run_id`**; escalations
+  surface the proposed plan and the reason it was held. *(Spec §6.)*
+
+**Maintainability**
+
+- **P3-MAINT-1** — Context preparation, constraint engine, and applier are **separable modules**; the
+  LLM backend is swappable without touching them. *(Spec §4, §5.)*
+
+**Scalability**
+
+- **P3-SCAL-1** — The optimizer plans **one greenhouse at a time** — N independent planners, no shared
+  state. *(Spec §1.)*
+
+**Security**
+
+- **P3-SEC-1** — The LLM API key is supplied **via environment/secret and never logged**. *(Committed
+  default.)*
+
+**Usability**
+
+- **P3-USE-1** — Escalated plans are **surfaced for operator review** with plan + reason, not silently
+  dropped. *(Spec §6.)*
+
+**Availability**
+
+- **P3-AVAIL-1** — Optimizer downtime is tolerable: control and the Phase 2 baseline are unaffected
+  (see P3-RESIL-1). *(Spec §6.)*
+
+**Portability**
+
+- **P3-PORT-1** — Runs as a **Python service under Docker Compose**, no cloud account. *(Spec §1.)*
+
+### Phase 4 — Combustion heater, weather-reactive control, actuator coordination
+
+**Modifiability**
+
+- **P4-MOD-1** — The combustion heater is added as a **new HAL backend with zero HAL rewrite**;
+  actuator-selection coordination is layered above the existing PIDs. *(Spec §1; RFC-006.)*
+
+**Testability**
+
+- **P4-TEST-1** — Actuator-selection coordination (electric vs burner, injector vs burner) has
+  **dedicated tests for the coupled temperature + CO₂ + humidity case**. *(Spec §1.)*
+
+**Reliability / Resilience**
+
+- **P4-REL-1** — On a combustion fault the controller **falls back to the electric heater within one
+  tick**. *(Committed default; spec §3.)*
+
+**Performance**
+
+- **P4-PERF-1** — A weather forecast fetch completes in **< 5 s** and is cached; a fetch failure falls
+  back to the last-known forecast and **never blocks the control tick**. *(Committed default; spec §1.)*
+
+**Observability**
+
+- **P4-OBS-1** — Device-selection decisions (which heat/CO₂ source ran and why) are **published in
+  telemetry** for after-the-fact analysis. *(Committed default; spec §1.)*
+
+**Security**
+
+- **P4-SEC-1** — The weather API credential is supplied **via environment/secret and never logged**
+  (the system's first external network egress). *(Committed default.)*
+
+---
+
 ## Performance Testing
 
 The primary performance concern is **platform scalability with controller count** — how the Phase 2
@@ -14,21 +327,21 @@ Controllers run as Docker containers on the local development machine (see
 full stack up. To vary N, regenerate and redeploy.
 
 Because the controller HAL is pure simulation, each controller is a lightweight process — running
-20–50 controllers concurrently on a developer machine is the expected practical range. An upper bound
-will be established empirically during implementation.
+20–50 controllers concurrently on a developer machine is the expected practical range. These tests
+confirm the committed **≥ 50-controller** target (`P2-SCAL-1`) and characterize headroom above it.
 
 ### What to observe
 
-| Signal | Why it matters |
-|---|---|
-| Telemetry ingestion rate | MQTT → DB write throughput under N concurrent publishers |
-| Reconciliation latency | Time from a profile/setpoint change to the controller acknowledging it |
-| WebSocket fan-out lag | Delay from ingestion to the dashboard receiving a live update |
-| DB write throughput | TimescaleDB insert rate under sustained telemetry load |
-| API response times | REST endpoint latency under concurrent operator and dashboard load |
+| Signal                   | Why it matters                                                         |
+| ------------------------ | ---------------------------------------------------------------------- |
+| Telemetry ingestion rate | MQTT → DB write throughput under N concurrent publishers               |
+| Reconciliation latency   | Time from a profile/setpoint change to the controller acknowledging it |
+| WebSocket fan-out lag    | Delay from ingestion to the dashboard receiving a live update          |
+| DB write throughput      | TimescaleDB insert rate under sustained telemetry load                 |
+| API response times       | REST endpoint latency under concurrent operator and dashboard load     |
 
 ### Goals
 
-No hard SLAs are fixed at this stage. The goal for Phase 2 is to **establish baseline behavior** at
-representative controller counts (e.g. 5, 20, 50) and identify bottlenecks before they become
-production issues. SLAs will be defined once baseline measurements are available.
+These tests **validate the committed Phase 2 targets** (`P2-SCAL-1`, `P2-PERF-1`…`P2-PERF-4`) at
+representative controller counts (5, 20, 50) and surface bottlenecks before they reach those limits.
+Baselines captured here become the regression reference for the targets above.

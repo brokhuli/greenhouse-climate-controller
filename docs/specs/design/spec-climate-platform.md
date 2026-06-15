@@ -343,6 +343,11 @@ management follows in **2b**.
 - **Health surfacing** *(2a)* — faults, offline controllers, and interlock activations raised
   prominently (drift surfacing arrives with reconciliation in 2b).
 
+**Testing.** The SPA is validated with **Playwright** (E2E flows + live-update latency over the
+WebSocket stream) and **Lighthouse CI** (initial-load performance + accessibility, run against the
+production build). See [tech-stack-decisions.md](./tech-stack-decisions.md#phase-2--local-paas-platform-docker-only)
+and the `P2-USE-1` / `P2-TEST-2` targets in [non-functional-requirements.md](../artifacts/non-functional-requirements.md).
+
 ---
 
 ## 9. Authentication & Authorization
