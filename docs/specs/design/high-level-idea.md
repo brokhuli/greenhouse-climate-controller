@@ -34,7 +34,7 @@ It mirrors real IoT + SaaS architecture patterns without requiring any cloud ser
 > This is the high‑level summary. The physical system (sensors, actuators, coupling) is detailed in
 > [`physical-system-single.md`](./physical-system-single.md); the controller architecture, control loops,
 > configuration, and fault handling are in
-> [`spec-climate-controller.md`](./spec-climate-controller.md).
+> [`spec-controller-overview.md`](./controller/spec-controller-overview.md).
 
 - Runs a **Rust controller** with a real embedded‑style architecture
 - Implements a **HAL (Hardware Abstraction Layer)**

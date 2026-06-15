@@ -5,7 +5,7 @@ each greenhouse's deterministic Phase 1 controller and refines the climate targe
 from crop profiles. This describes the **software service**. For the physical system whose dynamics
 it simulates — the sensors, actuators, and the coupling between climate variables — see
 [`physical-system-single.md`](./physical-system-single.md); for the controller it ultimately steers,
-see [`spec-climate-controller.md`](./spec-climate-controller.md); for the platform it integrates
+see [`spec-controller-overview.md`](./controller/spec-controller-overview.md); for the platform it integrates
 with, see [`spec-climate-platform.md`](./spec-climate-platform.md).
 
 > Scope note: this is an architectural spec (components, responsibilities, behavior, configuration).
@@ -94,7 +94,7 @@ The simulation engine is a **forward model** of a single greenhouse's climate, b
 Given an observed state and a candidate setpoint trajectory, it predicts how temperature, humidity,
 CO₂, **VPD**, and accumulated **DLI** evolve over a planning horizon — the physics the Phase 1
 controller deliberately approximates with first-order lag and the platform does not model at all
-([P1 §12](./spec-climate-controller.md#12-scope--deferred-controller-capabilities)).
+([P1 §12](./controller/spec-controller-constraints.md#9-scope--deferred-controller-capabilities)).
 
 It models the **coupling** between climate variables and the **lag** between an actuator change and
 its effect (see the coupling problem in
@@ -160,7 +160,7 @@ a plan that violates any bound is **never applied** — it is rejected and escal
 Safety is **layered and the controller is final**. The optimizer's constraint engine is an *advisory*
 pre-filter on intended targets; it does **not** replace or override the Phase 1 controller's safety
 interlocks, which remain controller-owned, run unconditionally on the live system, and are never
-reachable by Phase 3 ([P1 spec](./spec-climate-controller.md#2-architecture)). Because the optimizer
+reachable by Phase 3 ([P1 spec](./controller/spec-controller-architecture.md#2-the-tick-pipeline)). Because the optimizer
 writes only setpoints — never actuator commands — the controller's interlocks and actuator
 constraints still bound everything that actually happens in the greenhouse.
 
@@ -274,9 +274,9 @@ Optimizer capabilities intentionally **not** in Phase 3:
 | Deferred / excluded | Why / where it belongs |
 |---|---|
 | Weather / forecast-reactive control | Reacting to a live + forecast outdoor feed (cold fronts, clouds) needs a weather source and stochastic planning — **Phase 4** ([spec-phase4.md](./spec-phase4.md)). Phase 3 anticipates only clock-known disturbances ([§3](#3-digital-twin--simulation-engine)) |
-| Combustion-heater coordination | A single actuator coupling temperature + CO₂ + humidity breaks the independence the control loops assume and needs dedicated multi-variable coordination — **Phase 4** ([P1 §12](./spec-climate-controller.md#12-scope--deferred-controller-capabilities)) |
+| Combustion-heater coordination | A single actuator coupling temperature + CO₂ + humidity breaks the independence the control loops assume and needs dedicated multi-variable coordination — **Phase 4** ([P1 §12](./controller/spec-controller-constraints.md#9-scope--deferred-controller-capabilities)) |
 | Site-wide orchestration | Coordinated behavior across greenhouses (staggering loads, sharing constrained resources) needs a shared-infrastructure model that is out of scope; Phase 3 plans **one greenhouse at a time** ([§1](#1-overview)) |
 | Introducing the crop → targets mapping | The static "this crop, this stage → these targets" mapping is **owned by Phase 2** ([P2 §5](./spec-climate-platform.md#5-crop-profiles--setpoint-resolution)); Phase 3 only **refines** within its crop-safe bounds |
-| Direct actuator commanding | Driving individual actuators is **controller-owned** ([P1 spec](./spec-climate-controller.md#2-architecture)); Phase 3's downward influence is **setpoint-only**, through Phase 2 |
+| Direct actuator commanding | Driving individual actuators is **controller-owned** ([P1 spec](./controller/spec-controller-architecture.md#2-the-tick-pipeline)); Phase 3's downward influence is **setpoint-only**, through Phase 2 |
 | Safety authority | Safety interlocks remain **controller-owned** and unconditional; the optimizer's constraint engine is an advisory pre-filter and never overrides them ([§5](#5-constraint-engine--safety)) |
 | Writing directly to controllers | Phase 2 is the single authority on intended state; the optimizer writes refined setpoints **through the Phase 2 API**, never straight to a controller ([§6](#6-setpoint-refinement--application)) |

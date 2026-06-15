@@ -53,7 +53,7 @@ After cloning, point Git at the repo's hooks once: `git config core.hooksPath .g
 
 Stack: **Rust (Tokio)** controller talking over **MQTT** / REST. The controller is headless — there
 is no Phase 1 frontend (the Phase 2 React app is the system's only UI). See
-[`spec-climate-controller.md`](./spec-climate-controller.md) and
+[`spec-controller-overview.md`](./controller/spec-controller-overview.md) and
 [`tech-stack-decisions.md`](./tech-stack-decisions.md).
 
 ### 1. Rust toolchain (the controller)

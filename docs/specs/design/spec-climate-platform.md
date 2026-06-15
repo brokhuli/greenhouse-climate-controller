@@ -5,7 +5,7 @@ controllers, stores history, manages the fleet, and **owns crop profiles — res
 controller's setpoints**. This describes the **software platform**. For the physical world it manages
 — the site and its independent greenhouses — see
 [`physical-system-multi.md`](./physical-system-multi.md); for the controller it manages each
-greenhouse with, see [`spec-climate-controller.md`](./spec-climate-controller.md).
+greenhouse with, see [`spec-controller-overview.md`](./controller/spec-controller-overview.md).
 
 > Scope note: this is an architectural spec (services, responsibilities, behavior, data model).
 > Concrete code/schema/struct design is deferred until implementation. Wire formats (MQTT topics,
@@ -31,7 +31,7 @@ The site is [homogeneous in capability but heterogeneous in configuration](./phy
 identical hardware in every house, but a different [crop](./physical-system-multi.md#crop) — and so a
 different ideal climate — growing in each. That heterogeneity is what makes a management platform
 worthwhile, and it is why the platform **owns crop profiles**: it turns "this is a lettuce house,
-fruiting stage" into the numeric setpoints the [crop-agnostic controller](./spec-climate-controller.md#4-configuration--setpoints)
+fruiting stage" into the numeric setpoints the [crop-agnostic controller](./controller/spec-controller-config-and-parameters.md)
 regulates to.
 
 The platform is **bidirectional**:
@@ -48,7 +48,7 @@ greenhouses; it does **not** couple their physics. There is no shared air mass, 
 greenhouse remains an independent climate and failure domain. Cross-greenhouse intelligence
 (optimization, weather) belongs to later phases — see [§14](#14-scope--deferred--out-of-scope).
 
-Because Phase 1 controllers are [headless](./spec-climate-controller.md#11-interfaces), this
+Because Phase 1 controllers are [headless](./controller/spec-controller-interfaces.md), this
 platform's frontend is the **only UI in the system** — it monitors **one or more** controllers, a
 single greenhouse being the fleet-of-one case.
 
@@ -176,7 +176,7 @@ mapping, not a translation — keeping the contract between platform and control
 > **Boundary — zone topology is controller-local.** The bundle covers only what the controller
 > exposes at *runtime*: climate setpoints and per-zone irrigation thresholds/schedule. Zone
 > *structure* — adding or removing [zones](./physical-system-single.md#zones) — is a config-file +
-> restart change on the controller ([P1 §4](./spec-climate-controller.md#4-configuration--setpoints))
+> restart change on the controller ([P1 §4](./controller/spec-controller-config-and-parameters.md))
 > and is **not** in the platform's write path.
 
 ---
@@ -192,7 +192,7 @@ and writes what it receives into the time-series store.
   root (RFC-007); the ingester wildcard-subscribes and maps topic → greenhouse via the registry's
   controller-endpoint record, keyed by the same `greenhouse_id`.
 - **Streams ingested** — sensor readings, actuator states, and fault/state events (the same surface
-  the controller publishes in [P1 spec §11](./spec-climate-controller.md#11-interfaces)).
+  the controller publishes in [P1 spec §11](./controller/spec-controller-interfaces.md)).
 - **QoS & retained** — readings use the QoS the contract specifies; retained system-state/last-will
   messages let the platform recover a controller's current state on (re)connect without waiting for
   the next sample.
@@ -217,7 +217,7 @@ downward writes go through the control path in [§5](#5-crop-profiles--setpoint-
 > the controller otherwise regulates to its own TOML setpoints.
 
 This is the platform's defining responsibility. A controller is
-[crop-agnostic](./spec-climate-controller.md#4-configuration--setpoints) — it regulates to whatever
+[crop-agnostic](./controller/spec-controller-config-and-parameters.md) — it regulates to whatever
 numbers it is given. The platform owns the layer above: turning a crop (and its growth stage) into
 those numbers, and keeping the controller faithful to them.
 
@@ -234,7 +234,7 @@ those numbers, and keeping the controller faithful to them.
 
 Applying an assignment **resolves** the profile's target bundle into the controller's setpoints and
 pushes them down via the controller's REST config API — the runtime `PATCH` path described in
-[P1 spec §4](./spec-climate-controller.md#4-configuration--setpoints). Because the target bundle
+[P1 spec §4](./controller/spec-controller-config-and-parameters.md). Because the target bundle
 mirrors the controller's `[setpoints]` schema ([§3](#3-data-model)), resolution is a direct mapping.
 
 ### Reconciliation — the platform is the source of truth
@@ -296,7 +296,7 @@ reconciled** behavior of an edit (below) depends on the intended-state machinery
 > **Safety stays in the controller.** The platform only ever sets *targets* (profile or ad-hoc
 > setpoints) — it never commands actuators directly, so it has no imperative path that could drive an
 > unsafe state. The controller's critical-temp and CO₂-ceiling
-> [interlocks](./spec-climate-controller.md#7-safety-interlocks) keep unconditional priority **inside
+> [interlocks](./controller/spec-controller-safety-and-constraints.md#2-safety-interlocks) keep unconditional priority **inside
 > the controller** and bound actual actuation regardless of which setpoints the platform pushes. The
 > platform observes and reports interlock activations; it never overrides them.
 
@@ -437,7 +437,7 @@ per-greenhouse config (contrast the controller's TOML). Per-greenhouse data live
 ### Controller services
 
 Phase 1 controllers run as **Docker containers on the same local machine**, not on physical devices.
-Because the controller HAL is pure simulation ([P1 spec §3](./spec-climate-controller.md#3-hal--simulation-model)),
+Because the controller HAL is pure simulation ([P1 spec §3](./controller/spec-controller-hal-simulation.md)),
 there is no hardware dependency — each controller is a lightweight Rust process that connects to the
 platform over the local Docker network.
 
@@ -478,7 +478,7 @@ counts — see [`non-functional-requirements.md`](../artifacts/non-functional-re
 | **WebSockets** | Platform → frontend | Live fan-out of telemetry, status, drift, events |
 
 The MQTT topic map and the controller REST shapes the platform depends on are owned by
-[`contracts/`](../../../contracts/) and the [P1 spec §11](./spec-climate-controller.md#11-interfaces),
+[`contracts/`](../../../contracts/) and the [P1 spec §11](./controller/spec-controller-interfaces.md),
 under the conventions fixed by
 [RFC-007](../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format);
 this spec consumes those contracts rather than defining them. Consistent with RFC-007, MQTT is
@@ -497,5 +497,5 @@ Platform capabilities intentionally **not** in Phase 2:
 | Site-wide orchestration | Coordinated behavior across greenhouses (e.g. staggering loads) needs the shared-infrastructure / resource-contention model that is [out of scope for the site](./physical-system-multi.md#common-inputs--out-of-scope). Phase 2 aggregates and manages; it does not couple physics |
 | Multi-site / multi-tenant | The platform manages a **single site**; multiple sites or tenants are not modeled |
 | Advanced RBAC | Two roles (viewer/operator) only; fine-grained permissions and org hierarchies are out of scope ([§9](#9-authentication--authorization)) |
-| Manual actuator override | Forcing individual actuators is a **controller-local** action ([P1 §10](./spec-climate-controller.md#10-manual-override)); the platform's downward control is **setpoint-only** and does not proxy actuator overrides |
+| Manual actuator override | Forcing individual actuators is a **controller-local** action ([P1 §10](./controller/spec-controller-architecture.md#6-manual-override)); the platform's downward control is **setpoint-only** and does not proxy actuator overrides |
 | Safety authority | Safety interlocks remain **controller-owned** ([§6](#6-fleet-management--operator-control)); the platform never overrides them |

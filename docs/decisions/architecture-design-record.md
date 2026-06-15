@@ -605,8 +605,8 @@ operational simplicity (one static binary) dominate for this service, and Echo s
 
 **Decision:** Run the Rust controller on the **Tokio** async runtime. Tokio drives the controller's
 concurrent I/O surfaces — MQTT telemetry publishing and the REST config/override server
-([P1 §11](../specs/design/spec-climate-controller.md#11-interfaces)) — around the fixed-tick control
-loop ([P1 §2](../specs/design/spec-climate-controller.md#2-architecture)).
+([P1 §11](../specs/design/controller/spec-controller-interfaces.md)) — around the fixed-tick control
+loop ([P1 §2](../specs/design/controller/spec-controller-architecture.md#2-the-tick-pipeline)).
 
 **Why:** The controller services several concurrent I/O channels alongside its periodic control tick,
 and Tokio is the de-facto async runtime in the Rust ecosystem — the mature MQTT and HTTP crates are
@@ -633,18 +633,18 @@ target, and the alternative is hand-managing concurrency for several long-lived 
 **Decision:** Implement the Phase 1 controller in **Rust** — the deterministic, real-time control
 loop that reads simulated sensors, runs the control hierarchy against setpoints, enforces safety
 interlocks, and drives simulated actuators behind the HAL
-([P1 §1](../specs/design/spec-climate-controller.md#1-overview),
-[§2](../specs/design/spec-climate-controller.md#2-architecture)).
+([P1 §1](../specs/design/controller/spec-controller-overview.md#1-what-the-controller-is),
+[§2](../specs/design/controller/spec-controller-architecture.md#2-the-tick-pipeline)).
 
 **Why:** The controller is a fixed-tick real-time loop where timing predictability and correctness
 matter most. Rust has no garbage collector, so there are no GC pauses to perturb the tick; its
 ownership model gives memory safety without a runtime; and its trait system expresses the HAL
 actuator interface cleanly — including the forward-looking constraint that an actuator produces a
 *set* of effects on climate variables rather than a one-to-one mapping
-([P1 §3](../specs/design/spec-climate-controller.md#3-hal--simulation-model),
+([P1 §3](../specs/design/controller/spec-controller-hal-simulation.md),
 [RFC-006](./request-for-comments.md#rfc-006-phase-4-seam-strategy)). It compiles to a small static
 binary, so each greenhouse runs as a lightweight container
-([P1 §13](../specs/design/spec-climate-controller.md#13-deployment)).
+([P1 §13](../specs/design/controller/spec-controller-architecture.md#8-deployment)).
 
 **Alternatives considered:** *C / C++* — comparable real-time determinism and control over timing,
 but manual memory management reintroduces the safety class Rust eliminates at compile time. *Go* — fast

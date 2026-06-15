@@ -12,7 +12,7 @@ combustion-aware device selection. This spec describes the **software** at both 
 physical system whose dynamics it adds to — the combustion burner and the weather it reacts to — see
 [`physical-system-single.md`](./physical-system-single.md) and
 [`physical-system-multi.md`](./physical-system-multi.md); for the controller it extends, see
-[`spec-climate-controller.md`](./spec-climate-controller.md); for the optimizer it builds on, see
+[`spec-controller-overview.md`](./controller/spec-controller-overview.md); for the optimizer it builds on, see
 [`spec-climate-optimizer.md`](./spec-climate-optimizer.md).
 
 > Scope note: this is an architectural spec (components, responsibilities, behavior, configuration).
@@ -41,7 +41,7 @@ With two ways to add heat (electric vs. burner) and two ways to add CO₂ (clean
 the system can no longer run independent loops — it must **choose the device**. That choice is a
 control-layer concern that runs on the live system, so it is added to the **Phase 1 controller** as
 an actuator-selection coordination layer above the existing PIDs
-([P1 §12](./spec-climate-controller.md#12-scope--deferred-controller-capabilities)).
+([P1 §12](./controller/spec-controller-constraints.md#9-scope--deferred-controller-capabilities)).
 
 **The deterministic-disturbance assumption.** The Phase 3 optimizer anticipates only **clock-known**
 disturbances — the diurnal solar/temperature curve and the day/night schedule — which need no
@@ -120,7 +120,7 @@ the burner raises **three** variables from one device:
 |---|---|
 | Combustion heater (burner) | temperature ↑, CO₂ ↑, humidity ↑ |
 
-This extends the HAL **coupling matrix** ([P1 §3](./spec-climate-controller.md#3-hal--simulation-model))
+This extends the HAL **coupling matrix** ([P1 §3](./controller/spec-controller-hal-simulation.md))
 with the entry the core product explicitly held back — the burner row foreshadowed by the CO₂
 injector note ("a combustion variant would also add heat + humidity"). Because Phase 1's HAL actuator
 interface was deliberately shaped to model a *set* of effects rather than a one-to-one
@@ -150,9 +150,9 @@ Adding the burner gives the controller **redundant means** to two ends:
 Independent PID/hysteresis loops cannot resolve this — a temperature loop and a CO₂ loop each
 choosing a device in isolation can double-heat, double-enrich, or fight each other. Phase 4 therefore
 inserts an **actuator-selection coordination** stage **above the individual control loops**
-([P1 §6](./spec-climate-controller.md#6-control-loops)), the capability the controller spec names as
+([P1 §6](./controller/spec-controller-control-loops.md)), the capability the controller spec names as
 the prerequisite for a combustion heater
-([P1 §12](./spec-climate-controller.md#12-scope--deferred-controller-capabilities)).
+([P1 §12](./controller/spec-controller-constraints.md#9-scope--deferred-controller-capabilities)).
 
 Its job is to map the loops' *demands* (how much heat, how much CO₂) onto the *cheapest
 non-conflicting combination of devices* that satisfies them — e.g. preferring the burner when both
@@ -164,14 +164,14 @@ Where this sits in the pipeline:
 - It runs **downstream of the control loops** (which still compute desired heat/CO₂ demand) and
   **upstream of safety interlocks and actuator constraints** — selection decides *which* actuators
   carry the demand; interlocks and slew/min-cycle limits still shape the result
-  ([P1 §7](./spec-climate-controller.md#7-safety-interlocks),
-  [P1 §9](./spec-climate-controller.md#9-actuator-constraints)).
+  ([P1 §7](./controller/spec-controller-safety-and-constraints.md#2-safety-interlocks),
+  [P1 §9](./controller/spec-controller-safety-and-constraints.md#4-actuator-constraints)).
 - It is **deterministic and real-time**, part of the controller's fixed tick — not an LLM or a
   planner. The optimizer *informs* selection over the horizon ([§7](#7-combustion-aware-planning))
   by refining setpoints and preferences, but the live, per-tick device choice is controller-owned and
   runs whether or not the optimizer is connected.
 - **Manual override and safety still win.** An operator override forces a specific actuator state
-  ahead of selection ([P1 §10](./spec-climate-controller.md#10-manual-override)); safety interlocks
+  ahead of selection ([P1 §10](./controller/spec-controller-architecture.md#6-manual-override)); safety interlocks
   override everything ([§8](#8-constraints--safety)).
 
 This is what lifts the cap that kept Phase 1 at 6/10: the controller now coordinates *which* device
@@ -267,7 +267,7 @@ Phase 4 preserves the **layered safety model**, and the controller remains final
 ([P3 §5](./spec-climate-optimizer.md#5-constraint-engine--safety)).
 
 - **Controller interlocks remain unconditional and controller-owned.** The existing critical-temp,
-  CO₂-ceiling, and irrigation-fault interlocks ([P1 §7](./spec-climate-controller.md#7-safety-interlocks))
+  CO₂-ceiling, and irrigation-fault interlocks ([P1 §7](./controller/spec-controller-safety-and-constraints.md#2-safety-interlocks))
   still run every tick and take priority over the control loops, actuator-selection coordination, and
   manual override. The burner is bound by them like any other actuator — most directly, the existing
   **CO₂ safety ceiling** caps burner use whenever combustion would over-enrich (open vents, disable
@@ -281,7 +281,7 @@ Phase 4 preserves the **layered safety model**, and the controller remains final
 - **Actuator-selection respects safety, not the reverse.** Selection chooses among devices, but
   whatever it chooses is still subject to interlocks and to actuator constraints (burner min on/off
   time, anti short-cycle), exactly as for the electric heater and injector
-  ([P1 §9](./spec-climate-controller.md#9-actuator-constraints)).
+  ([P1 §9](./controller/spec-controller-safety-and-constraints.md#4-actuator-constraints)).
 - **The optimizer's constraint engine is unchanged and still advisory.** It validates weather-reactive,
   combustion-aware plans against crop-safe bounds and physical limits **before** they are applied, but
   it does not — and cannot — override the controller's interlocks. Because the optimizer still writes
@@ -317,7 +317,7 @@ Phase 4 extends the existing configuration surfaces rather than introducing a ne
 settings follow the Phase 3 convention (environment variables / the Compose file
 [P3 §9](./spec-climate-optimizer.md#9-configuration)); the burner and its HAL gains follow the Phase 1
 convention (per-greenhouse TOML loaded at startup
-[P1 §4](./spec-climate-controller.md#4-configuration--setpoints)).
+[P1 §4](./controller/spec-controller-config-and-parameters.md)).
 
 Optimizer layer (extends the Phase 3 service config):
 

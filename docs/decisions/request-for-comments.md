@@ -495,7 +495,7 @@ pre-building coordination logic in Phase 2 adds Phase 4 complexity to a layer th
   4 complexity into the Phase 1 rule engine or PID wiring, or is it genuinely limited to the trait
   definition?~~ **Resolved: genuinely limited to the trait definition.** The coupling between an
   actuator and the climate variables it affects already lives in the HAL simulation's coupling matrix
-  ([P1 §3](../specs/design/spec-climate-controller.md#3-hal--simulation-model)), not in the control
+  ([P1 §3](../specs/design/controller/spec-controller-hal-simulation.md)), not in the control
   loops. The PIDs target *variables*, not actuators, so the actuator→variable cardinality never
   reaches the rule engine or PID wiring. Deciding *which* coupled actuator to use when several affect
   one variable is the Phase 4 actuator-selection layer — explicitly deferred, and additive above the
@@ -532,7 +532,7 @@ telemetry only** — it is not a command/setpoint channel (setpoints flow over R
 ### Problem
 
 Every design doc explicitly defers wire formats to `contracts/` — the controller spec
-([§11](../specs/design/spec-climate-controller.md#11-interfaces)), the platform spec
+([§11](../specs/design/controller/spec-controller-interfaces.md)), the platform spec
 ([§16](../specs/design/spec-climate-platform.md)), the optimizer spec, and the Phase 4 spec all say
 "topic names, payload schemas, REST shapes … live in `contracts/`." But `contracts/` is the single
 source of truth that **all three phases conform to**, and no RFC has settled its shape. RFCs 001–006
@@ -554,7 +554,7 @@ Three decisions block writing the first schema:
 
 A standing inconsistency also needs resolving: post-RFC-005 the controller is setpoint-only and
 setpoints arrive via REST, yet `contracts/README.md`, [high-level-idea.md](../specs/design/high-level-idea.md)
-and [spec-climate-controller.md §11](../specs/design/spec-climate-controller.md#11-interfaces) still
+and [spec-controller-interfaces.md](../specs/design/controller/spec-controller-interfaces.md) still
 describe MQTT actuator-command/plan topics. This RFC fixes the docs to match the decision.
 
 ### Proposal
@@ -829,8 +829,8 @@ The platform's authorization model is specified for **humans** but not for **ser
 
 Separately, the **controller's** REST API is unauthenticated:
 
-- [spec-climate-controller.md §11](../specs/design/spec-climate-controller.md#11-interfaces) describes
-  the REST config/override API with no auth. Standalone ([P1 §13](../specs/design/spec-climate-controller.md#13-deployment))
+- [spec-controller-interfaces.md](../specs/design/controller/spec-controller-interfaces.md) describes
+  the REST config/override API with no auth. Standalone ([P1 §13](../specs/design/controller/spec-controller-architecture.md#8-deployment))
   that is fine — it is a local dev binary. But in **managed mode** the platform pushes setpoints to it
   over the Docker network ([P2 §13](../specs/design/spec-climate-platform.md#13-interfaces--integration-with-phase-1)),
   and that REST surface is the **only inbound write path into the greenhouse** — currently anyone on
@@ -860,7 +860,7 @@ anonymous call. The client secret is supplied via environment variable / Compose
 **2. Platform → controller REST: per-controller bearer token.**
 
 Each controller is provisioned with a **pre-shared bearer token** in its TOML
-([P1 §4](../specs/design/spec-climate-controller.md#4-configuration--setpoints)); the controller
+([P1 §4](../specs/design/controller/spec-controller-config-and-parameters.md)); the controller
 requires it on the REST config/override/health-write endpoints and rejects unauthenticated calls. The
 platform stores the matching token in the **registry's controller-endpoint record**
 ([P2 §6](../specs/design/spec-climate-platform.md#6-fleet-management--operator-control)) and presents
@@ -868,7 +868,7 @@ it on every downward REST call. This authenticates the *only* inbound write path
 without putting an OIDC client in the lightweight Rust process — Keycloak/OIDC in the controller would
 be disproportionate for a single trusted caller (the platform). Standalone Phase 1 leaves the token
 unset and the check disabled, preserving the zero-friction local-dev binary
-([P1 §13](../specs/design/spec-climate-controller.md#13-deployment)).
+([P1 §13](../specs/design/controller/spec-controller-architecture.md#8-deployment)).
 
 **3. Optimizer → Phase 2 DB:** the read-only `optimizer_ro` role from
 [RFC-008](#rfc-008-phase-3-telemetry-read-path). No additional mechanism here; listed so the three
@@ -939,7 +939,7 @@ per-controller pre-shared bearer token) are **not** adopted. The committed postu
 |---|---|---|
 | Human operator → Phase 2 API/SPA | write + read | **Keycloak OIDC** — unchanged from [P2 §9](../specs/design/spec-climate-platform.md#9-authentication--authorization). The only authenticated boundary. |
 | Optimizer → Phase 2 API | write (setpoints) | **None** — trusted on the internal Docker network; the Phase 2 write endpoints accept the internal call without a service token. |
-| Platform → controller REST | write (setpoints/override) | **None** — Docker network isolation alone; the controller REST API stays unauthenticated in managed mode exactly as in standalone ([P1 §11](../specs/design/spec-climate-controller.md#11-interfaces), [§13](../specs/design/spec-climate-controller.md#13-deployment)). |
+| Platform → controller REST | write (setpoints/override) | **None** — Docker network isolation alone; the controller REST API stays unauthenticated in managed mode exactly as in standalone ([P1 §11](../specs/design/controller/spec-controller-interfaces.md), [§13](../specs/design/controller/spec-controller-architecture.md#8-deployment)). |
 | Optimizer → Phase 2 DB | read (history) | Read-only `optimizer_ro` role ([RFC-008](#rfc-008-phase-3-telemetry-read-path)) — a least-privilege **database** credential, not service authn; unchanged. |
 | Any → MQTT broker | telemetry only | Anonymous on the local network ([RFC-001](#rfc-001-mqtt-broker-selection)) — unchanged. |
 
@@ -957,7 +957,7 @@ published port in dev) can call the controller REST API or the Phase 2 setpoint 
 open inbound write path the Proposal's bearer token was meant to close, and it is accepted here as
 within the local threat model. Setpoint provenance (`source = optimizer`, [RFC-005](#rfc-005-setpoint-authority-and-delivery-chain))
 is still recorded by the application but is **self-asserted** by the caller rather than backed by a
-verified token identity. The controller's REST API ([P1 §11](../specs/design/spec-climate-controller.md#11-interfaces))
+verified token identity. The controller's REST API ([P1 §11](../specs/design/controller/spec-controller-interfaces.md))
 and the registry's controller-endpoint record ([P2 §6](../specs/design/spec-climate-platform.md#6-fleet-management--operator-control))
 remain the natural seams to add a per-controller token, and the optimizer the natural place to add a
 service account, **if** the system ever leaves the single-host local model. The Proposal's open
