@@ -26,7 +26,9 @@ What is being sensed and actuated (the physical inventory) lives in
 
 ## 2. Architecture
 
-The controller is a pipeline that runs on a fixed tick:
+The controller is a pipeline that runs on a fixed tick. The committed tick rate, jitter bound, and
+per-tick compute budget are `P1-PERF-1`…`P1-PERF-3` in
+[`non-functional-requirements.md`](../artifacts/non-functional-requirements.md):
 
 ```
 HAL (simulated sensors)
@@ -267,7 +269,9 @@ excess solar heat/light. Lights also extend photoperiod for day-length-sensitive
 ## 7. Safety Interlocks
 
 Always active. They take **unconditional priority** over all control loops **and** over manual
-override — an operator cannot suppress a safety response.
+override — an operator cannot suppress a safety response. The committed response-latency target — a
+detected condition is acted on within one tick — is `P1-REL-1` in
+[`non-functional-requirements.md`](../artifacts/non-functional-requirements.md).
 
 | Condition | Response |
 |---|---|
@@ -377,3 +381,5 @@ The controller never runs on a physical device — the HAL ([§3](#3-hal--simula
 In both cases configuration is the same TOML described in [§4](#4-configuration--setpoints): the controller's unique `controller_id` (its greenhouse identity when registering with the platform), all setpoints, HAL simulation parameters (time constants, coupling gains, disturbance profiles), and zone definitions. Whether native or containerized, each controller instance is one independent greenhouse with no shared state.
 
 Structural changes (adding/removing zones, changing HAL parameters) require a config file edit and a restart, consistent with the startup-vs-runtime boundary in [§4](#4-configuration--setpoints).
+
+The committed resource-footprint, availability, and portability targets for these deployment modes are `P1-PERF-4`, `P1-AVAIL-1`, and `P1-PORT-1` in [`non-functional-requirements.md`](../artifacts/non-functional-requirements.md).

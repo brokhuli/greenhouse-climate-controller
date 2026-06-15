@@ -177,6 +177,10 @@ Where this sits in the pipeline:
 This is what lifts the cap that kept Phase 1 at 6/10: the controller now coordinates *which* device
 acts, not merely *how hard* each independent device runs.
 
+Device-selection decisions (which heat/CO₂ source ran, and why) are published in telemetry for
+after-the-fact analysis — `P4-OBS-1` in
+[`non-functional-requirements.md`](../artifacts/non-functional-requirements.md).
+
 ---
 
 ## 5. Weather Feed & Forecast Ingestion (Optimizer Layer)
@@ -199,6 +203,10 @@ Ingestion normalizes the provider's payload (units, cadence, horizon) into the t
 twin consumes, aligned to the planning horizon. A forecast is, in effect, **advance notice of the
 disturbance** the greenhouses will have to fight — a cold night to hold off, a sunny afternoon's heat
 to shed, a humid front to pre-empt.
+
+The committed fetch behavior — a forecast fetch completes quickly and is cached, a failed fetch falls
+back to the last-known forecast, and ingestion never blocks the control tick — is `P4-PERF-1` in
+[`non-functional-requirements.md`](../artifacts/non-functional-requirements.md).
 
 ---
 
@@ -268,7 +276,8 @@ Phase 4 preserves the **layered safety model**, and the controller remains final
 - **Combustion-specific interlocks** are added at the controller layer for the failure modes a burner
   introduces (e.g. burner-fault detection — heat/CO₂ commanded but no response — and fail-safe
   shutoff). These are controller-owned and unconditional, consistent with the existing interlock
-  table.
+  table. The committed fallback-to-electric-heater latency on a combustion fault is `P4-REL-1` in
+  [`non-functional-requirements.md`](../artifacts/non-functional-requirements.md).
 - **Actuator-selection respects safety, not the reverse.** Selection chooses among devices, but
   whatever it chooses is still subject to interlocks and to actuator constraints (burner min on/off
   time, anti short-cycle), exactly as for the electric heater and injector
