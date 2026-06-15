@@ -1,0 +1,145 @@
+# Frontend — Purpose & Views
+
+> **Purpose:** State *why* the dashboard exists and enumerate the *views* it must
+> provide to fulfil that purpose. Other frontend specs derive from this one —
+> [`spec-frontend-components.md`](./spec-frontend-components.md) builds the UI for
+> these views, [`spec-frontend-data-model.md`](./spec-frontend-data-model.md)
+> defines the data behind them, and
+> [`spec-frontend-architecture.md`](./spec-frontend-architecture.md) routes
+> between them. Capability detail is owned by
+> [platform §8](../spec-climate-platform.md#8-dashboard-frontend); this file
+> defers to it rather than restating it.
+
+---
+
+## Purpose
+
+The dashboard makes a fleet of independent greenhouses **legible and operable
+from one screen**. The site is
+[homogeneous in hardware but heterogeneous in crop](../spec-climate-platform.md#1-overview):
+every greenhouse runs an identical, [crop-agnostic controller](../spec-climate-controller.md#4-configuration--setpoints)
+but grows a different crop at a different stage, so each is held at different
+targets. The operator needs to see, at a glance, whether every greenhouse is
+healthy and tracking its targets — and to act on any one of them without leaving
+the page.
+
+Because the controllers are [headless](../spec-climate-controller.md#11-interfaces),
+this SPA is the **only** window into the system and the **only** operator surface
+for the platform's downward control. Its job is therefore two-sided:
+
+- **Observe (up):** render live and historical telemetry, fleet health, and
+  events, fed by the API's WebSocket stream and range queries.
+- **Act (down):** let an operator change what a greenhouse is held at — ad-hoc
+  setpoint edits in 2a, crop-profile assignment in 2b — always through the
+  platform API, which remains the [single setpoint authority](../spec-climate-platform.md#5-crop-profiles--setpoint-resolution).
+
+It serves **one or more** greenhouses; a single greenhouse is the fleet-of-one
+case, not a separate layout.
+
+---
+
+## Audience & roles
+
+| Audience | What they do here | Role (2b) |
+|---|---|---|
+| Operator on shift | Watches fleet health, drills into a greenhouse, edits setpoints, assigns profiles | **Operator** |
+| Grower / manager reviewing | Reads telemetry, history, and status; no changes | **Viewer** |
+
+Until auth lands (**2b**, [platform §9](../spec-climate-platform.md#9-authentication--authorization),
+`P2-SEC-1`) the UI is open on the trusted local network and shows all actions. In
+2b the **viewer** role sees a read-only dashboard; every write affordance
+(setpoint edit, profile assign/apply) is gated to the **operator** role — see
+[role-gating in components](./spec-frontend-components.md) and the
+[login flow in interactions](./spec-frontend-interactions.md).
+
+---
+
+## What it must surface — the views
+
+The dashboard is composed of the views below. Each maps to a capability in
+[platform §8](../spec-climate-platform.md#8-dashboard-frontend); the slice tag
+matches that section. For each: **purpose**, **what it shows**, **primary
+actions**, **role**.
+
+### 1. Fleet overview *(2a)*
+
+- **Purpose:** the landing view — the whole site at a glance.
+- **Shows:** every greenhouse as a card/row with its crop, connectivity status
+  (online / degraded / offline; **drift** added in 2b), and a compact
+  current-climate-vs-target readout. Site-wide rollup of how many greenhouses are
+  healthy vs need attention.
+- **Primary actions:** open a greenhouse; (2a) register / retire a greenhouse.
+- **Role:** Viewer (read) / Operator (registration).
+
+### 2. Per-greenhouse detail *(2a)*
+
+- **Purpose:** the deep view of one greenhouse.
+- **Shows:** real-time charts of readings vs setpoints (temperature, humidity,
+  CO₂, PAR, per-zone soil moisture), current actuator states, and the event
+  history — fed live by the WebSocket stream and backfilled by range queries over
+  history. Active faults and interlock activations are raised prominently.
+- **Primary actions:** edit setpoints (see view 4); change the historical time
+  range; (2b) view/assign the crop profile.
+- **Role:** Viewer (read) / Operator (edits).
+
+### 3. Control — setpoint edits *(2a relay → sticky in 2b)*
+
+- **Purpose:** the operator's manual control surface for one greenhouse.
+- **Shows:** the editable setpoint fields (mirroring the controller's
+  runtime-adjustable [`[setpoints]`](../spec-climate-platform.md#3-data-model)),
+  current values, and the pending/confirmed state of an in-flight edit.
+- **Primary actions:** submit a setpoint change. In 2a this is a thin relay to the
+  controller's REST API; in 2b the same edit becomes a **sticky** part of the
+  greenhouse's intended state and follows reconciliation
+  ([platform §6](../spec-climate-platform.md#6-fleet-management--operator-control)).
+  **Actuator-level forcing is not offered** — it stays a controller-local action
+  ([platform §14](../spec-climate-platform.md#14-scope--deferred--out-of-scope)).
+- **Role:** Operator only (2b).
+
+### 4. Crop-profile management *(2b)*
+
+- **Purpose:** manage the library that turns "lettuce, fruiting" into setpoints.
+- **Shows:** the crop-profile library (named, stage-aware target bundles) and,
+  per greenhouse, its current profile + growth-stage assignment.
+- **Primary actions:** browse/edit profiles; assign a profile + stage to a
+  greenhouse and apply it (triggering platform resolution + reconciliation,
+  [platform §5](../spec-climate-platform.md#5-crop-profiles--setpoint-resolution)).
+- **Role:** Operator only.
+
+### 5. Health & activity surfacing *(2a; drift in 2b)*
+
+- **Purpose:** never let a problem go unseen.
+- **Shows:** faults, offline controllers, and interlock activations raised
+  prominently across fleet and detail views; an activity/audit feed of downward
+  writes (who/what/when, [platform §6](../spec-climate-platform.md#6-fleet-management--operator-control)).
+  **Drift** (intended vs reported setpoints) is surfaced once reconciliation
+  exists (2b).
+- **Primary actions:** acknowledge/inspect; jump to the affected greenhouse.
+- **Role:** Viewer (read).
+
+---
+
+## What it is **not**
+
+These belong elsewhere and are out of scope for the dashboard — see
+[`spec-frontend-constraints.md`](./spec-frontend-constraints.md):
+
+- **Not the controller's UI.** It edits *targets*, never forces actuators; safety
+  interlocks stay [controller-owned](../spec-climate-controller.md#7-safety-interlocks).
+- **Not a zone-topology editor.** Adding/removing zones is a controller config +
+  restart change ([P1 §4](../spec-climate-controller.md#4-configuration--setpoints)),
+  not in the platform's write path, so not in the UI.
+- **Not platform observability.** Prometheus/Grafana cover *platform* health
+  ([platform §11](../spec-climate-platform.md#11-observability)); this dashboard
+  is about *greenhouse* climate.
+- **Not multi-site.** It manages a single site.
+
+---
+
+## Cross-references
+
+- Capabilities & slicing: [platform §8](../spec-climate-platform.md#8-dashboard-frontend)
+- The components that render these views: [`spec-frontend-components.md`](./spec-frontend-components.md)
+- The data behind each view: [`spec-frontend-data-model.md`](./spec-frontend-data-model.md)
+- Routing between views: [`spec-frontend-architecture.md`](./spec-frontend-architecture.md#3-route-tree)
+- Usability targets `P2-USE-1` / `P2-TEST-2`: [NFR doc](../../artifacts/non-functional-requirements.md)
