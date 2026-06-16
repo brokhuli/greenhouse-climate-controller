@@ -29,13 +29,13 @@
     }
   ],
   "actuators": [
-    { "actuator": "heater", "state": { "on": false, "level_pct": 0.0 }, "overridden": false },
-    { "actuator": "fans", "state": { "on": true, "level_pct": 30.0 }, "overridden": false },
-    { "actuator": "roof_vents", "state": { "on": true, "level_pct": 45.0 }, "overridden": false },
-    { "actuator": "misters", "state": { "on": false, "level_pct": null }, "overridden": false },
-    { "actuator": "co2_injector", "state": { "on": true, "level_pct": null }, "overridden": false },
-    { "actuator": "grow_lights", "state": { "on": true, "level_pct": 80.0 }, "overridden": false },
-    { "actuator": "shade_screen", "state": { "on": false, "level_pct": 0.0 }, "overridden": false }
+    { "actuator": "heater", "commanded": { "on": false, "level_pct": 0.0 }, "observed": { "on": false, "level_pct": 0.0 }, "health": "ok", "overridden": false },
+    { "actuator": "fans", "commanded": { "on": true, "level_pct": 30.0 }, "observed": { "on": true, "level_pct": 30.0 }, "health": "ok", "overridden": false },
+    { "actuator": "roof_vents", "commanded": { "on": true, "level_pct": 45.0 }, "observed": { "on": true, "level_pct": 45.0 }, "health": "ok", "overridden": false },
+    { "actuator": "misters", "commanded": { "on": false, "level_pct": null }, "observed": { "on": false, "level_pct": null }, "health": "ok", "overridden": false },
+    { "actuator": "co2_injector", "commanded": { "on": true, "level_pct": null }, "observed": { "on": true, "level_pct": null }, "health": "ok", "overridden": false },
+    { "actuator": "grow_lights", "commanded": { "on": true, "level_pct": 80.0 }, "observed": { "on": true, "level_pct": 80.0 }, "health": "ok", "overridden": false },
+    { "actuator": "shade_screen", "commanded": { "on": false, "level_pct": 0.0 }, "observed": { "on": false, "level_pct": 0.0 }, "health": "ok", "overridden": false }
   ],
   "faults": [],
   "overrides": [

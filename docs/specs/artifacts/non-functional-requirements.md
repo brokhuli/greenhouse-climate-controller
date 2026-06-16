@@ -100,6 +100,10 @@ HAL time constants ([HAL §2](../design/controller/spec-controller-hal-simulatio
   voting. *([sensing §2](../design/controller/spec-controller-sensing.md#2-redundant-temperature-fusion-tmr).)*
 - **P1-REL-3** — Stuck and out-of-range sensor faults are detected within a **configurable window
   (default 5 ticks)**. *([sensing §4](../design/controller/spec-controller-sensing.md#4-fault-detection-non-temperature-sensors).)*
+- **P1-REL-4** — Actuator **stuck** (observed state diverges from commanded) and **no-response** (a
+  commanded change produces no movement in the variable it drives) faults are detected within a
+  **configurable window (default 5 ticks)**, and the affected actuator/zone is failed safe.
+  *([safety §5](../design/controller/spec-controller-safety-and-constraints.md#5-actuator-health-monitoring) — the actuator analogue of P1-REL-3.)*
 
 **Resilience**
 
@@ -108,6 +112,11 @@ HAL time constants ([HAL §2](../design/controller/spec-controller-hal-simulatio
   *([sensing §2](../design/controller/spec-controller-sensing.md#2-redundant-temperature-fusion-tmr), [safety §2](../design/controller/spec-controller-safety-and-constraints.md#2-safety-interlocks).)*
 - **P1-RESIL-2** — A manual override **auto-expires after a configurable timeout** so a forgotten
   override cannot strand the greenhouse. *([architecture §6](../design/controller/spec-controller-architecture.md#6-manual-override).)*
+- **P1-RESIL-3** — Telemetry publishing **never blocks the control tick**: it runs on a decoupled
+  task, so a slow or **disconnected MQTT broker cannot stall control**. On reconnect, publishing
+  resumes and the retained `gh/{id}/state` snapshot re-primes subscribers; telemetry lost while
+  disconnected is a **recoverable data gap, not a control failure**.
+  *([interfaces §7](../design/controller/spec-controller-interfaces.md#7-mqtt-connection-resilience).)*
 
 **Testability**
 

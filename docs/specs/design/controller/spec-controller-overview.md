@@ -129,8 +129,8 @@ not change between them. Detail is in
   fact owned by [`physical-system-single.md`](../physical-system-single.md), a
   quality target owned by the NFR doc, or a decision owned by an RFC is *linked*,
   never restated.
-- **NFR IDs** are cited by their stable ID (`P1-PERF-1`, `P1-REL-1`, `P1-RESIL-1`,
-  `P1-OBS-1`, `P1-MOD-1`, `P1-TEST-2`, …) from the
+- **NFR IDs** are cited by their stable ID (`P1-PERF-1`, `P1-REL-1`, `P1-REL-4`,
+  `P1-RESIL-1`, `P1-RESIL-3`, `P1-OBS-1`, `P1-MOD-1`, `P1-TEST-2`, …) from the
   [NFR doc](../../artifacts/non-functional-requirements.md).
 - **Relative links** resolve from `docs/specs/design/controller/`: sibling design
   specs and the physical-system docs at `../`, artifacts at `../../artifacts/`,
@@ -150,12 +150,12 @@ How this set divides the work, and where each concern is detailed:
 |---|---|---|
 | What the controller is; system context; this index | this file | [physical-system](../physical-system-single.md) |
 | Tick pipeline, real-time/scheduling model, state topology, manual override, failure modes, deployment | [`spec-controller-architecture.md`](./spec-controller-architecture.md) | `P1-PERF-*`, `P1-REL-1`, `P1-RESIL-*`, `P1-PORT-1` |
-| HAL lag model, coupling matrix, disturbances, determinism, the Phase 4 seam | [`spec-controller-hal-simulation.md`](./spec-controller-hal-simulation.md) | [physical-system](../physical-system-single.md), [RFC-006](../../../decisions/request-for-comments.md#rfc-006-phase-4-seam-strategy) |
+| HAL lag model, coupling matrix, disturbances, determinism, observed actuator state + fault injection, the Phase 4 seam | [`spec-controller-hal-simulation.md`](./spec-controller-hal-simulation.md) | [physical-system](../physical-system-single.md), [RFC-006](../../../decisions/request-for-comments.md#rfc-006-phase-4-seam-strategy) |
 | Sensor fusion, VPD derivation, fault detection, degradation ladder | [`spec-controller-sensing.md`](./spec-controller-sensing.md) | `P1-REL-2`, `P1-REL-3`, `P1-RESIL-1` |
-| Control-loop hierarchy, per-loop algorithms, setpoint resolution, dynamics | [`spec-controller-control-loops.md`](./spec-controller-control-loops.md) | — |
-| Safety interlocks, priority ordering, actuator constraints | [`spec-controller-safety-and-constraints.md`](./spec-controller-safety-and-constraints.md) | `P1-REL-1` |
+| Control-loop hierarchy, per-loop algorithms, setpoint resolution, dynamics, saturation | [`spec-controller-control-loops.md`](./spec-controller-control-loops.md) | — |
+| Safety interlocks, priority ordering, actuator constraints, actuator health monitoring | [`spec-controller-safety-and-constraints.md`](./spec-controller-safety-and-constraints.md) | `P1-REL-1`, `P1-REL-4` |
 | TOML config, scheduling, startup-vs-runtime, default parameters | [`spec-controller-config-and-parameters.md`](./spec-controller-config-and-parameters.md) | [RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain) |
-| MQTT + REST surfaces and their contract binding | [`spec-controller-interfaces.md`](./spec-controller-interfaces.md) | [`contracts/`](../../../../contracts/), [`spec-contracts.md`](../spec-contracts.md) |
+| MQTT + REST surfaces, contract binding, connection resilience | [`spec-controller-interfaces.md`](./spec-controller-interfaces.md) | [`contracts/`](../../../../contracts/), [`spec-contracts.md`](../spec-contracts.md), `P1-RESIL-3` |
 | Per-dependency choices + rejected alternatives | [`spec-controller-tech-stack.md`](./spec-controller-tech-stack.md) | [tech-stack-decisions.md](../tech-stack-decisions.md#phase-1--deterministic-greenhouse-controller) |
 | Non-negotiable rules; scope / deferred capabilities | [`spec-controller-constraints.md`](./spec-controller-constraints.md) | [constraints artifact](../../artifacts/constraints.md), [NFR doc](../../artifacts/non-functional-requirements.md) |
 | Quality targets (tick rate, jitter, coverage, availability) | [NFR doc](../../artifacts/non-functional-requirements.md) | — (single source) |

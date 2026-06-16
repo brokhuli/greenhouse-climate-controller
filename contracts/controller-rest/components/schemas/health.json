@@ -49,9 +49,12 @@
           "temperature_unavailable",
           "critical_temperature",
           "co2_ceiling",
-          "irrigation_no_response"
+          "irrigation_no_response",
+          "actuator_stuck",
+          "actuator_no_response",
+          "setpoint_unreachable"
         ],
-        "description": "Closed set of fault conditions; kept in sync with the MQTT fault-event contract (controller spec §5, §7, §8)."
+        "description": "Closed set of fault conditions; kept in sync with the MQTT fault-event contract. Includes the actuator-health faults actuator_stuck / actuator_no_response / setpoint_unreachable (controller safety spec §5)."
       },
       "severity": {
         "type": "string",

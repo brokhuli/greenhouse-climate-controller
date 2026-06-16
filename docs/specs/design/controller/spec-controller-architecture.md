@@ -92,6 +92,14 @@ HAL (simulated actuators) ──▶ publish post-tick snapshot over MQTT
 | ⑤ Safety interlocks | Unconditionally override outputs on dangerous conditions | [safety](./spec-controller-safety-and-constraints.md#2-safety-interlocks) |
 | ⑥ Actuator constraints | Enforce hardware limits (slew, min on/off) on the resolved output | [safety](./spec-controller-safety-and-constraints.md#4-actuator-constraints) |
 
+Fault detection in the tick has an **output-side** half as well as the sensor half. With
+stage ①, an [actuator-health check](./spec-controller-safety-and-constraints.md#5-actuator-health-monitoring)
+compares the **previous** tick's commanded outputs against this tick's **observed**
+actuator readback ([HAL §8](./spec-controller-hal-simulation.md#8-observed-actuator-state-and-fault-injection))
+and the trusted readings, raising actuator-fault flags that the loops consume (stage ③
+suspends a faulted actuator) and the interlocks act on (stage ⑤ disables it). It is the
+only cross-tick comparison in the pipeline; everything else within a tick is forward-only.
+
 The **ordering is the design** — see the
 [priority model](./spec-controller-safety-and-constraints.md#3-priority--ordering-model):
 control loops propose, manual override can replace, safety interlocks have
@@ -136,7 +144,7 @@ what lets each tick be reconstructed and each stage stay testable in isolation
 |---|---|---|---|
 | **Raw readings** | HAL read | one tick | per-probe temperatures, RH, CO₂, PAR, per-zone VWC |
 | **Trusted state** | fusion + fault detection | one tick | fused temperature, validated readings, derived VPD |
-| **Fault flags** | fault detection | sticky until cleared | per-sensor stuck/out-of-range/disagreement, alarms |
+| **Fault flags** | fault detection | sticky until cleared | per-sensor stuck/out-of-range/disagreement; per-actuator stuck/no-response/saturation; alarms |
 | **Resolved setpoints** | setpoint resolution | one tick (from config) | active temperature setpoint, humidity band, CO₂ target |
 | **Loop state** | control loops | across ticks | PID integrator/derivative terms, hysteresis on/off latch, DLI accumulator, per-zone drain timers |
 | **Override state** | manual override | until cleared / expiry | per-actuator force flag, forced value, expiry deadline |
@@ -214,7 +222,9 @@ go wrong, how it's detected, and how the pipeline behaves:
 | Down to one trustworthy probe | fusion | Continue controlling on it; raise loss-of-redundancy alarm (`P1-RESIL-1`) |
 | Temperature probes in total disagreement | fusion | Treat temperature as unavailable; safety interlock holds a safe state ([safety](./spec-controller-safety-and-constraints.md#2-safety-interlocks)) |
 | Non-temperature sensor stuck / out-of-range | fault detection (per-tick) | Apply that sensor's fail-safe (e.g. disable misters, fail-closed injector); flag + alarm (`P1-REL-3`); [sensing](./spec-controller-sensing.md) |
-| Actuator has no effect (e.g. valve opens, no moisture change) | per-zone effect check | Disable the affected zone; raise alarm ([safety](./spec-controller-safety-and-constraints.md#2-safety-interlocks)) |
+| Actuator no-response (commanded change, no climate effect) | actuator-health effect check (`P1-REL-4`) | Disable the actuator — the zone, for irrigation; raise alarm ([safety §5](./spec-controller-safety-and-constraints.md#5-actuator-health-monitoring)) |
+| Actuator stuck / jammed (observed diverges from commanded) | actuator-health feedback check (`P1-REL-4`) | Disable the actuator; raise alarm ([safety §5](./spec-controller-safety-and-constraints.md#5-actuator-health-monitoring)) |
+| Actuator saturated (pinned at its limit, setpoint unreachable) | loop saturation check | Keep controlling at the limit; raise alarm — never disable ([control-loops](./spec-controller-control-loops.md#saturation--setpoint-unreachable)) |
 | Dangerous climate condition | safety interlocks (per-tick) | Unconditional override of all loops + override; act within one tick (`P1-REL-1`) |
 | Forgotten manual override | override expiry timer | Auto-clear after timeout; control resumes (`P1-RESIL-2`) |
 
@@ -324,7 +334,7 @@ one dev machine, which is the basis for the Phase 2 scalability target
 |---|---|---|
 | Per-stage sensor conditioning | composed | [`spec-controller-sensing.md`](./spec-controller-sensing.md) |
 | Per-loop algorithms + dynamics | composed | [`spec-controller-control-loops.md`](./spec-controller-control-loops.md) |
-| Interlock priority + actuator constraints | composed | [`spec-controller-safety-and-constraints.md`](./spec-controller-safety-and-constraints.md) |
+| Interlock priority + actuator constraints + actuator health | composed | [`spec-controller-safety-and-constraints.md`](./spec-controller-safety-and-constraints.md) |
 | Simulation behind the HAL trait | bounded by | [`spec-controller-hal-simulation.md`](./spec-controller-hal-simulation.md) |
 | Config + runtime-vs-restart boundary | consumes | [`spec-controller-config-and-parameters.md`](./spec-controller-config-and-parameters.md) |
 | MQTT/REST surfaces | exposes via | [`spec-controller-interfaces.md`](./spec-controller-interfaces.md) |

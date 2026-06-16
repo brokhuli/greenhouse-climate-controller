@@ -4,9 +4,14 @@
   "zone_id": null,
   "ts": "2026-06-07T14:03:00.000Z",
   "actuator": "misters",
-  "state": {
+  "commanded": {
     "on": false,
     "level_pct": null
   },
+  "observed": {
+    "on": false,
+    "level_pct": null
+  },
+  "health": "ok",
   "overridden": false
 }

@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "greenhouse_id": "gh-a",
+  "zone_id": null,
+  "ts": "2026-06-07T14:03:00.000Z",
+  "component": "roof_vents",
+  "fault_type": "actuator_stuck",
+  "severity": "alarm",
+  "message": "roof_vents commanded to 80% but observed position held at 45% for 6 ticks",
+  "response": "disabled roof_vents; cooling redistributed to fans"
+}

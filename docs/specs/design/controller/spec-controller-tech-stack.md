@@ -56,7 +56,10 @@
 - **How:** Publishes the post-tick snapshot and fault events
   ([interfaces §2](./spec-controller-interfaces.md#2-mqtt--telemetry-out)); subscribes
   to nothing (telemetry-only). Topic taxonomy and envelope are owned by
-  [`contracts/mqtt/`](../../../../contracts/mqtt/).
+  [`contracts/mqtt/`](../../../../contracts/mqtt/). The client runs on its **own task**
+  with a **bounded** outbound queue and `rumqttc`'s built-in **auto-reconnect**, so a slow
+  or disconnected broker applies backpressure to the publisher — never to the control tick
+  ([interfaces §7](./spec-controller-interfaces.md#7-mqtt-connection-resilience), `P1-RESIL-3`).
 
 ---
 
@@ -89,7 +92,11 @@
   [RFC-006](../../../decisions/request-for-comments.md#rfc-006-phase-4-seam-strategy)).
 - **How:** The pipeline depends on the trait; the
   [simulated backend](./spec-controller-hal-simulation.md) is one implementation,
-  seeded for determinism (`P1-TEST-2`).
+  seeded for determinism (`P1-TEST-2`). The trait returns, per actuator, both the
+  **commanded** value and an **observed** readback
+  ([HAL §8](./spec-controller-hal-simulation.md#8-observed-actuator-state-and-fault-injection))
+  so the [actuator-health monitor](./spec-controller-safety-and-constraints.md#5-actuator-health-monitoring)
+  can detect stuck/no-response faults the same way against any backend (`P1-REL-4`).
 
 ---
 

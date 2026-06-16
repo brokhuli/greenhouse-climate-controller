@@ -4,9 +4,14 @@
   "zone_id": null,
   "ts": "2026-06-07T14:03:00.000Z",
   "actuator": "roof_vents",
-  "state": {
+  "commanded": {
     "on": true,
     "level_pct": 45.0
   },
+  "observed": {
+    "on": true,
+    "level_pct": 45.0
+  },
+  "health": "ok",
   "overridden": false
 }

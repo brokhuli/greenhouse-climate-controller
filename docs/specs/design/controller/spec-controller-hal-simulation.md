@@ -166,12 +166,47 @@ an entire run is replayable from (seed, config, command log).
 
 ---
 
-## 8. Cross-spec map
+## 8. Observed actuator state and fault injection
+
+Sensor readings are not the only thing the HAL returns. For every actuator the trait
+exposes **two** values: the **commanded** input the pipeline writes, and an **observed**
+readback of the actuator's actual state. In the fault-free case the two agree (the
+observed value is the commanded one after any modeled device dynamics). The gap between
+them is what makes a *stuck* or *jammed* actuator detectable — without a readback, the
+controller could only ever assume its commands took effect.
+
+- **Why a separate channel.** A real-hardware HAL would source `observed` from device
+  feedback (limit switches, position encoders, current sensing); the simulated HAL
+  synthesizes it. Either way the control side compares commanded against observed
+  identically — the [actuator health monitor](./spec-controller-safety-and-constraints.md#5-actuator-health-monitoring)
+  lives above the trait and never knows which backend produced the readback, preserving
+  the clean control/plant split ([§1](#1-the-hal-boundary), `P1-MOD-1`).
+- **Injectable actuator faults.** The simulated backend can inject actuator faults under
+  the seed, the counterpart to the sensor faults the sensing stage already handles:
+  - **Stuck-on / stuck-off** — `observed` freezes at a state and ignores subsequent
+    commands (the climate effect follows the frozen state, not the command).
+  - **No-effect** — `observed` tracks the command normally, but the actuator's
+    [coupling-matrix effect](#3-coupling-matrix) is suppressed, so the variable it should
+    drive doesn't move. This is the case position feedback alone can't catch, which is why
+    the monitor also checks for a climate response.
+- **Deterministic, like everything else.** Injection timing and selection are driven by the
+  seeded PRNG ([§7](#7-determinism--seeding)), never wall-clock — so an actuator-fault
+  scenario replays identically and the
+  [health-detection assertions](./spec-controller-safety-and-constraints.md#5-actuator-health-monitoring)
+  are stable (`P1-TEST-2`).
+
+This stays within [bounded fidelity](#6-bounded-fidelity): a fault is a flag that gates the
+existing lag/coupling model, not a new physics path.
+
+---
+
+## 9. Cross-spec map
 
 | Concern | This spec | Detailed in |
 |---|---|---|
 | What the loops do with the readings | feeds | [`spec-controller-control-loops.md`](./spec-controller-control-loops.md) |
 | How readings are conditioned before loops | feeds | [`spec-controller-sensing.md`](./spec-controller-sensing.md) |
+| Commanded-vs-observed actuator-health detection | feeds | [`spec-controller-safety-and-constraints.md`](./spec-controller-safety-and-constraints.md#5-actuator-health-monitoring) |
 | Where the HAL sits in the tick | composed by | [`spec-controller-architecture.md`](./spec-controller-architecture.md#2-the-tick-pipeline) |
 | τ / coupling-gain / disturbance defaults | consolidated in | [`spec-controller-config-and-parameters.md`](./spec-controller-config-and-parameters.md#default-parameters-reference) |
 | Physical inventory + real-world coupling | mirrors | [`physical-system-single.md`](../physical-system-single.md) |

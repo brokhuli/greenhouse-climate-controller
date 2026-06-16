@@ -146,6 +146,36 @@ How the loops behave over time — the controller analogue of interaction behavi
 
 ---
 
+## Saturation / setpoint-unreachable
+
+A loop can be working perfectly and still fail to reach its setpoint — the actuator is
+simply **out of authority**. The heater runs at 100% but the night is colder than the
+equipment was sized for; fog is continuously on but ambient is too dry; an outdoor heat
+load exceeds full cooling. The control math already handles the *internal* hazard here —
+the PID integral is [clamped (anti-windup)](#fast-loops--reactive) so a long saturated
+excursion never accumulates an unrecoverable correction. What the loops add is surfacing
+the *operational* condition so it isn't silent.
+
+- **Detection.** A loop is saturated when its output is pinned at its min or max limit
+  (PID rail, or an on/off actuator held continuously committed) **and** the setpoint error
+  persists beyond a configurable window. The window distinguishes a normal transient — a
+  step setpoint change the loop is still driving through over a few τ — from a genuine
+  inability to reach the target.
+- **Condition raised.** Sustained saturation raises `setpoint_unreachable` (a **warning**
+  that escalates to **alarm** if it persists), surfaced like every other fault over MQTT
+  and REST `/health` ([interfaces](./spec-controller-interfaces.md#5-published-shapes--health)).
+- **Response: keep controlling.** The loop continues driving at the saturated output — a
+  saturated heater is the crop's only heat source and must stay on. This is deliberately the
+  **opposite** of the [no-response / stuck](./spec-controller-safety-and-constraints.md#5-actuator-health-monitoring)
+  response, which disables the actuator: a saturated actuator is doing everything it can, so
+  the safe action is to alarm and ride the limit, never to cut it out. Safety owns that
+  not-disable rule; this section owns detecting the condition from the loop's own state.
+
+The saturation-duration default is in the
+[default-parameters reference](./spec-controller-config-and-parameters.md#default-parameters-reference).
+
+---
+
 ## Tuning
 
 Gains and bands (PID `Kp/Ki/Kd`, hysteresis widths, thresholds) are
@@ -166,5 +196,6 @@ code carries the highest test coverage in the system (`P1-TEST-1`).
 | Plant dynamics the loops act against | acts on | [`spec-controller-hal-simulation.md`](./spec-controller-hal-simulation.md) |
 | Where stage ③ sits + override injection | composed by | [`spec-controller-architecture.md`](./spec-controller-architecture.md#2-the-tick-pipeline) |
 | Unconditional protection over loop output | overruled by | [`spec-controller-safety-and-constraints.md`](./spec-controller-safety-and-constraints.md) |
-| Setpoint values + gains/bands | configured by | [`spec-controller-config-and-parameters.md`](./spec-controller-config-and-parameters.md) |
+| Saturation response (alarm, never disable); stuck/no-response | owned by | [`spec-controller-safety-and-constraints.md`](./spec-controller-safety-and-constraints.md#5-actuator-health-monitoring) |
+| Setpoint values + gains/bands + saturation window | configured by | [`spec-controller-config-and-parameters.md`](./spec-controller-config-and-parameters.md) |
 | `P1-TEST-1` (loop/interlock coverage) | cited | [NFR doc](../../artifacts/non-functional-requirements.md) |

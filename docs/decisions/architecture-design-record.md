@@ -8,6 +8,53 @@ alternatives and tradeoffs.
 
 ---
 
+## 2026-06-16 — Actuator-health monitoring, observed actuator channel, and MQTT connection-resilience model
+
+**Decision:** Close four controller failure gaps surfaced by
+[`research/failures-controller.md`](../../research/failures-controller.md) — actuator no-effect,
+stuck actuator, actuator saturation, and MQTT publish-lag/disconnect — that the controller spec set
+previously handled only for irrigation or left unspecified.
+
+1. **Actuator-health monitoring** becomes a first-class concern, the output-side counterpart to
+   sensor fault detection, owned by
+   [safety §5](../specs/design/controller/spec-controller-safety-and-constraints.md#5-actuator-health-monitoring).
+   It distinguishes three conditions with deliberately different responses: **stuck**
+   (`observed ≠ commanded` → disable + alarm), **no-response** (obeys but no climate effect →
+   disable + alarm), and **saturation** (working but pinned at its limit → **alarm, keep
+   controlling, never disable**). Saturation / `setpoint_unreachable` detection is owned by the
+   [loops](../specs/design/controller/spec-controller-control-loops.md#saturation--setpoint-unreachable).
+2. **The HAL gains an `observed` actuator readback** distinct from the commanded value, plus
+   **seeded actuator-fault injection** (stuck/no-effect), so the monitor is testable deterministically
+   ([HAL §8](../specs/design/controller/spec-controller-hal-simulation.md#8-observed-actuator-state-and-fault-injection)).
+3. **MQTT connection resilience** is specified
+   ([interfaces §7](../specs/design/controller/spec-controller-interfaces.md#7-mqtt-connection-resilience)):
+   publishing is decoupled from control and never blocks the tick; a bounded outbound queue drops
+   rather than accumulates under backpressure; reconnect re-primes subscribers from the retained
+   state snapshot; telemetry lost while disconnected is a recoverable data gap.
+4. **Two NFRs** are added — **P1-REL-4** (actuator stuck/no-response detection within a configurable
+   window) and **P1-RESIL-3** (publish never blocks control) — keeping the new behavior traceable.
+
+**Contract changes (breaking):** the MQTT `fault-event` and REST `FaultSummary` enums gain
+`actuator_stuck` / `actuator_no_response` / `setpoint_unreachable`; `actuator-state` (and the
+`system-state` actuator entries) replace the single `state` with `commanded` + `observed` + a
+`health` enum. Because Phase 1 is not yet implemented and **no consumer is deployed**, the schemas are
+edited **in place at major `schema_version` 1** rather than retained side-by-side; once a controller or
+platform consumes these, the same change would instead bump the major per
+[`contracts/README.md`](../../contracts/README.md). Example fixtures (including the `bad-level`
+counter-example) are updated to the new shape and a `fault-event.actuator-stuck` fixture is added.
+
+**Why:** Sensing had a full fault/fusion/degradation ladder while actuators were rigorously handled
+only for irrigation — a controller commanding a dead, jammed, or undersized actuator would push
+harder against a plant that never responds, with no detection or alarm. The observed-vs-commanded
+channel is the minimal mechanism that makes stuck/jammed faults detectable and finally backs the
+interfaces spec's long-standing "commanded + observed" wording. Decoupling telemetry from the tick
+ensures a broker outage degrades observability, never control.
+
+**Basis:** Operator-directed gap closure from `research/failures-controller.md` (gaps 1, 2, 3, 6).
+Gaps 4 (interlock debounce) and 5 (min-cycle vs safety) are intentionally deferred.
+
+---
+
 ## 2026-06-11 — Phase 1 local dashboard and WebSocket interface eliminated; Phase 2 frontend is the sole UI
 
 **Decision:** Remove the Phase 1 controller's **local dashboard** and the controller-side

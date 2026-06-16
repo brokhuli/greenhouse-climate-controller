@@ -15,7 +15,7 @@
   },
   "ActuatorOutputState": {
     "type": "object",
-    "description": "Unified actuator output shape (mirrors the MQTT actuator-state `state`): `level_pct` is null for pure on/off devices (misters, co2_injector, irrigation_valve) and 0–100 for variable/modulating ones (fans, roof_vents, grow_lights, shade_screen, modulating heater).",
+    "description": "Unified actuator output shape (mirrors the MQTT actuator-state output `$defs/state`, used there for both commanded and observed): `level_pct` is null for pure on/off devices (misters, co2_injector, irrigation_valve) and 0–100 for variable/modulating ones (fans, roof_vents, grow_lights, shade_screen, modulating heater).",
     "properties": {
       "on": {
         "type": "boolean",

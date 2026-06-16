@@ -15,9 +15,12 @@
         "temperature_unavailable",
         "critical_temperature",
         "co2_ceiling",
-        "irrigation_no_response"
+        "irrigation_no_response",
+        "actuator_stuck",
+        "actuator_no_response",
+        "setpoint_unreachable"
       ],
-      "description": "Closed set of fault conditions. stuck/out_of_range are generic sensor faults (§8); sensor_disagreement/redundancy_degraded/temperature_unavailable are temperature-fusion faults (§5); critical_temperature/co2_ceiling/irrigation_no_response are safety-interlock triggers (§7)."
+      "description": "Closed set of fault conditions. stuck/out_of_range are generic sensor faults; sensor_disagreement/redundancy_degraded/temperature_unavailable are temperature-fusion faults; critical_temperature/co2_ceiling/irrigation_no_response are safety-interlock triggers. actuator_stuck (observed diverges from commanded), actuator_no_response (commanded change with no climate effect), and setpoint_unreachable (sustained actuator saturation) are actuator-health faults (controller safety spec §5 actuator health monitoring); irrigation_no_response is the pre-existing zone-scoped instance of actuator_no_response."
     },
     "severity": {
       "type": "string",

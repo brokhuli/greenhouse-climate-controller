@@ -92,10 +92,12 @@
       "type": "object",
       "properties": {
         "actuator": { "$ref": "https://greenhouse.local/contracts/mqtt/actuator-state.schema.json#/$defs/name" },
-        "state": { "$ref": "https://greenhouse.local/contracts/mqtt/actuator-state.schema.json#/$defs/state" },
+        "commanded": { "$ref": "https://greenhouse.local/contracts/mqtt/actuator-state.schema.json#/$defs/state" },
+        "observed": { "$ref": "https://greenhouse.local/contracts/mqtt/actuator-state.schema.json#/$defs/state" },
+        "health": { "$ref": "https://greenhouse.local/contracts/mqtt/actuator-state.schema.json#/$defs/health" },
         "overridden": { "$ref": "https://greenhouse.local/contracts/mqtt/actuator-state.schema.json#/$defs/overridden" }
       },
-      "required": ["actuator", "state", "overridden"],
+      "required": ["actuator", "commanded", "observed", "health", "overridden"],
       "additionalProperties": false
     },
     "fault_summary": {

@@ -37,9 +37,12 @@ subscribes to **no** command topics.
 
 Every tick, the controller publishes a consistent post-tick snapshot
 ([architecture §3](./spec-controller-architecture.md#3-real-time--scheduling-model)):
-sensor readings, actuator states (commanded + observed), and the consolidated
-system state (active setpoints, overrides, sensor health). Fault and interlock
-events are published as they occur.
+sensor readings, actuator states (both the **commanded** value and the **observed**
+readback from the [HAL](./spec-controller-hal-simulation.md#8-observed-actuator-state-and-fault-injection)),
+and the consolidated system state (active setpoints, overrides, sensor and actuator
+health). Fault and interlock events are published as they occur — including the
+[actuator-health faults](./spec-controller-safety-and-constraints.md#5-actuator-health-monitoring)
+(`actuator_stuck`, `actuator_no_response`, `setpoint_unreachable`).
 
 - **Cadence.** Telemetry is published **every tick** (`P1-OBS-1`), giving observers
   a 1 Hz stream aligned to the control clock.
@@ -47,6 +50,9 @@ events are published as they occur.
   to subscribe to ([spec-contracts §3](../spec-contracts.md#3-not-system-contracts)).
 - **Consumers.** The platform ingests it (Phase 2); the optimizer reads the
   resulting history (Phase 3). Both are downstream of the same published surface.
+- **Decoupled from control.** Publishing runs on its own task and never blocks the
+  tick; broker disconnect/reconnect behavior is [§7](#7-mqtt-connection-resilience)
+  (`P1-RESIL-3`).
 
 Topic taxonomy, the payload envelope (`greenhouse_id` identity, timestamp,
 `schema_version`), QoS, and retained-message policy are owned by
@@ -107,13 +113,15 @@ control is setpoint-only and does not proxy actuator overrides
 What the controller publishes (the shapes the
 [frontend data model](../frontend/spec-frontend-data-model.md) ultimately consumes,
 via the platform): per-metric readings (temperature, humidity, CO₂, PAR, per-zone
-soil moisture), actuator states (commanded vs observed), fault/interlock events, and
-the consolidated system state.
+soil moisture), actuator states (commanded vs observed, plus a per-actuator health
+flag), fault/interlock events, and the consolidated system state.
 
 The REST **`/health`** endpoint reflects **every active fault and alarm**
-(`P1-OBS-2`) — the same faults raised by [sensing](./spec-controller-sensing.md#6-fault-surfacing)
-and [safety](./spec-controller-safety-and-constraints.md#2-safety-interlocks). A
-fault is therefore observable through both surfaces and never silent.
+(`P1-OBS-2`) — the same faults raised by [sensing](./spec-controller-sensing.md#6-fault-surfacing),
+[safety interlocks](./spec-controller-safety-and-constraints.md#2-safety-interlocks),
+and [actuator-health monitoring](./spec-controller-safety-and-constraints.md#5-actuator-health-monitoring)
+(stuck / no-response / setpoint-unreachable). A fault is therefore observable through
+both surfaces and never silent.
 
 ---
 
@@ -134,13 +142,49 @@ contracts (including the platform/optimizer ones downstream of this surface) is
 
 ---
 
-## 7. Cross-spec map
+## 7. MQTT connection resilience
+
+Telemetry is the only window into a headless controller, but it must never become a way
+to *stop* one. The split that guarantees that: **publishing is decoupled from control**.
+The MQTT publisher is a separate task that reads the latched post-tick snapshot
+([architecture §3](./spec-controller-architecture.md#3-real-time--scheduling-model)); the
+control tick hands off a snapshot and moves on. So a slow, blocked, or **disconnected
+broker cannot stall the tick** — the controller keeps sensing, deciding, and actuating at
+1 Hz regardless of broker state (`P1-RESIL-3`, and the `P1-PERF-*` budgets stay
+broker-independent).
+
+- **Bounded outbound buffer.** If the broker stalls, the publisher's outgoing queue is
+  **bounded**, not unbounded — under sustained backpressure the oldest per-tick frames are
+  dropped rather than accumulated. This is safe because each tick fully supersedes the last:
+  the **retained** consolidated state always carries the latest snapshot, so a dropped
+  intermediate frame costs history resolution, never current truth.
+- **Disconnect is a data gap, not a control failure.** Telemetry produced while the broker
+  is unreachable is lost to subscribers but does not affect control; it is a **recoverable
+  data gap** (the Phase 2 platform treats the same gap as recoverable, `P2-RESIL-1`).
+- **Reconnect re-primes subscribers.** The client auto-reconnects
+  ([tech stack](./spec-controller-tech-stack.md#messaging)); on reconnect the **retained**
+  `gh/{id}/state` snapshot ([contracts/mqtt](../../../../contracts/mqtt/)) gives any
+  (re)connecting subscriber current state immediately, and the per-tick streams resume.
+- **Staleness is observable.** Every message carries the envelope `ts`
+  ([RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)),
+  so a consumer can tell a live 1 Hz stream from a stale last-known retained snapshot by its
+  timestamp — the controller need not signal liveness separately.
+
+The broker itself (Mosquitto) and the QoS / retained-message policy are owned by
+[RFC-001](../../../decisions/request-for-comments.md#rfc-001-mqtt-broker-selection) and
+[`contracts/mqtt/`](../../../../contracts/mqtt/); this section owns only how the controller
+*behaves* across a broker outage.
+
+---
+
+## 8. Cross-spec map
 
 | Concern | This spec | Detailed in |
 |---|---|---|
 | Override pipeline behavior (vs this REST surface) | managed via | [`spec-controller-architecture.md`](./spec-controller-architecture.md#6-manual-override) |
-| What faults are surfaced | reports | [`spec-controller-sensing.md`](./spec-controller-sensing.md#6-fault-surfacing) |
+| What faults are surfaced (sensor) | reports | [`spec-controller-sensing.md`](./spec-controller-sensing.md#6-fault-surfacing) |
+| Actuator-health faults + observed actuator state | surfaces | [`spec-controller-safety-and-constraints.md`](./spec-controller-safety-and-constraints.md#5-actuator-health-monitoring) |
 | Runtime-mutable config the REST API edits | edits | [`spec-controller-config-and-parameters.md`](./spec-controller-config-and-parameters.md#startup-vs-runtime) |
 | Wire formats (topics, payloads, status codes) | binds to | [`contracts/`](../../../../contracts/), [`spec-contracts.md`](../spec-contracts.md) |
 | Who consumes the telemetry | consumed by | [platform ingestion](../platform/spec-platform-ingestion.md), [frontend data model](../frontend/spec-frontend-data-model.md) |
-| `P1-OBS-1` (per-tick publish), `P1-OBS-2` (health) | cited | [NFR doc](../../artifacts/non-functional-requirements.md) |
+| `P1-OBS-1` (per-tick publish), `P1-OBS-2` (health), `P1-RESIL-3` (publish never blocks control) | cited | [NFR doc](../../artifacts/non-functional-requirements.md) |

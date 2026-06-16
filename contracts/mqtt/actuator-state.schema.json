@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://greenhouse.local/contracts/mqtt/actuator-state.schema.json",
   "title": "Actuator State",
-  "description": "Current state of a single actuator, published on gh/{greenhouse_id}/actuator/{actuator}/state. One unified shape covers on/off, variable-position, and modulating actuators: `level_pct` is null for pure on/off devices and 0–100 for variable/modulating ones.",
+  "description": "Current state of a single actuator, published on gh/{greenhouse_id}/actuator/{actuator}/state. Carries both the controller's `commanded` output and the `observed` readback from the HAL; the two agree in the fault-free case and diverge when the actuator is stuck/jammed. One unified shape covers on/off, variable-position, and modulating actuators: `level_pct` is null for pure on/off devices and 0–100 for variable/modulating ones. `health` reports the actuator-health monitor verdict (controller safety spec §5).",
   "type": "object",
   "$defs": {
     "name": {
@@ -13,6 +13,7 @@
     "state": {
       "type": "object",
       "title": "Actuator output state",
+      "description": "The {on, level_pct} output shape, reused for both the commanded value and the observed readback.",
       "properties": {
         "on": {
           "type": "boolean",
@@ -28,6 +29,11 @@
       "required": ["on", "level_pct"],
       "additionalProperties": false
     },
+    "health": {
+      "type": "string",
+      "enum": ["ok", "stuck", "no_response"],
+      "description": "Actuator-health monitor verdict (controller safety spec §5). ok = observed tracks commanded and the climate effect is present; stuck = observed diverges from commanded; no_response = observed tracks commanded but the variable it drives shows no effect. Sustained saturation is reported separately as a setpoint_unreachable fault event, not here."
+    },
     "overridden": {
       "type": "boolean",
       "description": "True when a manual override is forcing this actuator's state, bypassing its control loop (controller spec §10)."
@@ -38,10 +44,12 @@
     {
       "properties": {
         "actuator": { "$ref": "#/$defs/name" },
-        "state": { "$ref": "#/$defs/state" },
+        "commanded": { "$ref": "#/$defs/state" },
+        "observed": { "$ref": "#/$defs/state" },
+        "health": { "$ref": "#/$defs/health" },
         "overridden": { "$ref": "#/$defs/overridden" }
       },
-      "required": ["actuator", "state", "overridden"]
+      "required": ["actuator", "commanded", "observed", "health", "overridden"]
     }
   ],
   "unevaluatedProperties": false

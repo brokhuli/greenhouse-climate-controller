@@ -7,6 +7,12 @@
       "zone_id": null,
       "fault_type": "stuck",
       "severity": "warning"
+    },
+    {
+      "component": "roof_vents",
+      "zone_id": null,
+      "fault_type": "actuator_stuck",
+      "severity": "alarm"
     }
   ],
   "ts": "2026-06-07T14:03:00.000Z"

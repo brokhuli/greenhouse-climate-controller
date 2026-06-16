@@ -124,6 +124,11 @@ and the per-stage view in
 Recovery is automatic: when a reading returns to plausibility (or probes re-agree),
 the fault flag clears and the affected loop resumes.
 
+This ladder is for the controller's *inputs*. Its *outputs* have a sibling ladder —
+[actuator health monitoring](./spec-controller-safety-and-constraints.md#5-actuator-health-monitoring),
+owned by safety — that fails an actuator safe when its commands stop taking effect, with the
+same sticky-flag / automatic-recovery behavior.
+
 ---
 
 ## 6. Fault surfacing

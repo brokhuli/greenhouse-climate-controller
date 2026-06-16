@@ -162,6 +162,19 @@ the [deterministic simulation](./spec-controller-hal-simulation.md#7-determinism
 | Valve minimum open time | configurable | s | Meaningful delivery |
 | Manual-override timeout | configurable | s | Auto-expiry (`P1-RESIL-2`) |
 
+### Actuator health ([safety §5](./spec-controller-safety-and-constraints.md#5-actuator-health-monitoring))
+
+| Parameter | Default | Unit | Role |
+|---|---|---|---|
+| Commanded-vs-observed tolerance | configurable | % / state | Stuck detection (`P1-REL-4`) |
+| No-response detection window | 5 | ticks | No-response detection (`P1-REL-4`) |
+| Saturation / `setpoint_unreachable` window | configurable | s | Sustained-saturation alarm |
+
+The per-actuator **fail-safe response** (disable + alarm for stuck/no-response; alarm-only,
+keep-controlling for saturation) is owned by
+[safety §5](./spec-controller-safety-and-constraints.md#5-actuator-health-monitoring), not a
+tunable — these parameters set only *when* each condition fires, not *what* it does.
+
 ---
 
 ## Cross-spec map
