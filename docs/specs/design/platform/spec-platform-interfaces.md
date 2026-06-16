@@ -1,12 +1,15 @@
-# Platform — Interfaces & Integration with Phase 1
+# Platform — Interfaces & API Surface
 
-> **Purpose:** Define the three cross-component interfaces the platform sits across —
-> MQTT up from the controllers, controller REST down to them, and WebSockets out to
-> the frontend — and bind them to the contracts that own their wire formats. This file
-> lists *which interface does what*; topic maps, REST shapes, and message schemas are
-> owned by [`contracts/`](../../../../contracts/) and the
-> [controller interfaces](../controller/spec-controller-interfaces.md) spec, under the
-> conventions in
+> **Purpose:** Define the platform's interface boundaries on both sides. First, the
+> three cross-component interfaces the platform sits across — MQTT up from the
+> controllers, controller REST down to them, and WebSockets out to the frontend.
+> Then, the **responsibilities** of the Go API's own outward surface — REST for
+> request/response and WebSockets for live push — and which delivery slice each lands
+> in. This file lists *which interface does what* and *what the surface does*, not its
+> wire shapes: topic maps, REST shapes, and message schemas are owned by
+> [`contracts/`](../../../../contracts/) and the
+> [controller interfaces](../controller/spec-controller-interfaces.md) spec, catalogued
+> in [`spec-contracts.md`](../spec-contracts.md), under the conventions in
 > [RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format).
 
 ---
@@ -22,7 +25,8 @@
 Each maps to one of the platform's [data flows](./spec-platform-architecture.md#3-three-data-flows):
 MQTT is the **up** flow ([ingestion](./spec-platform-ingestion.md)), controller REST is
 the **down** flow ([crop profiles](./spec-platform-crop-profiles.md)), and WebSockets is
-the **dashboard** flow ([API surface](./spec-platform-api-surface.md)).
+the **dashboard** flow. The platform's own served API — the REST surface plus that
+WebSocket fan-out — is detailed in [§3 below](#3-api-surface-inventory).
 
 ---
 
@@ -44,24 +48,76 @@ and the platform remains the sole party speaking the controller REST API.
 
 ---
 
-## 3. Contract ownership
+## 3. API surface inventory
+
+The platform's outward-facing API is the [hub](./spec-platform-architecture.md#2-the-go-api-is-the-hub);
+every surface here is a facet of one of its responsibilities. Concrete routes,
+payloads, and status codes are deferred to [`contracts/`](../../../../contracts/) and
+catalogued in [`spec-contracts.md`](../spec-contracts.md); this lists *what the surface
+does*, not its wire shapes.
+
+| Surface | Role | Slice |
+|---|---|---|
+| **REST — greenhouses** | Register/retire greenhouses; read fleet + per-greenhouse status | 2a |
+| **REST — telemetry** | Range queries over historical readings/actuator states/events | 2a |
+| **REST — analytics** | Aggregations and derived series for dashboards | 2a |
+| **REST — setpoint edits** | Ad-hoc setpoint edits, relayed to controllers (sticky intended state once reconciliation exists) | 2a |
+| **WebSockets** | Live fan-out of telemetry, status changes, drift, and events to the dashboard | 2a |
+| **REST — crop profiles** | CRUD on the profile library and their stage-aware target bundles | 2b |
+| **REST — assignments** | Assign a profile/stage to a greenhouse; trigger apply/reconcile | 2b |
+| **REST — setpoints (`POST`)** | Single-authority setpoint submission (the optimizer's RFC-005 write path) + provenance | 2b |
+
+Each surface maps to a concern documented elsewhere: telemetry queries read what
+[ingestion](./spec-platform-ingestion.md) stored; profiles/assignments/setpoints drive
+[crop profiles & reconciliation](./spec-platform-crop-profiles.md); the WebSocket
+channel is consumed by the [dashboard](./spec-platform-dashboard.md).
+
+---
+
+## 4. Request/response vs live push
+
+- **REST** is the request/response surface: reads (fleet, telemetry ranges, analytics)
+  and writes (registration, setpoint edits, profiles, assignments).
+- **WebSockets** is the live-push surface: a single fan-out of telemetry, status
+  changes, drift, and events so the dashboard reflects the fleet in real time without
+  polling. The proxy passes the WebSocket upgrade through
+  ([architecture §4](./spec-platform-architecture.md#4-reverse-proxy--the-edge)).
+
+---
+
+## 5. Authorization
+
+Write endpoints require the **operator** role once auth lands
+([security](./spec-platform-security.md), **2b**); in the unauthenticated 2a MVP the
+setpoint-edit and registration endpoints are open on the trusted local network
+([RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)).
+The per-surface capability split (viewer reads; operator reads + writes) is owned by
+[security](./spec-platform-security.md#4-capability-matrix).
+
+---
+
+## 6. Contract ownership
 
 The MQTT topic map and the controller REST shapes the platform depends on are owned by
 [`contracts/`](../../../../contracts/) and the
 [controller interfaces](../controller/spec-controller-interfaces.md) spec; this file
-**consumes** those contracts rather than defining them. The full catalog of system
-contracts — every cross-component boundary, including the platform's own API surface —
-is [`spec-contracts.md`](../spec-contracts.md).
+**consumes** those contracts rather than defining them. Likewise the concrete routes,
+payloads, and status codes of the platform's own served API are deferred to
+`contracts/`. The full catalog of system contracts — every cross-component boundary,
+including the platform's own API surface — is [`spec-contracts.md`](../spec-contracts.md).
 
 ---
 
-## 4. Cross-spec map
+## 7. Cross-spec map
 
 | Concern | This spec | Detailed in |
 |---|---|---|
 | MQTT-up flow behavior | frames | [`spec-platform-ingestion.md`](./spec-platform-ingestion.md) |
 | Controller-REST-down flow behavior | frames | [`spec-platform-crop-profiles.md`](./spec-platform-crop-profiles.md) |
-| WebSocket fan-out to the frontend | frames | [`spec-platform-api-surface.md`](./spec-platform-api-surface.md) |
+| What the telemetry queries read | reads | [`spec-platform-ingestion.md`](./spec-platform-ingestion.md), [`spec-platform-data-model.md`](./spec-platform-data-model.md) |
+| What profiles/assignments/setpoints drive | drives | [`spec-platform-crop-profiles.md`](./spec-platform-crop-profiles.md) |
+| Who consumes the WebSocket stream | served to | [`spec-platform-dashboard.md`](./spec-platform-dashboard.md), [frontend data model](../frontend/spec-frontend-data-model.md) |
 | The controller surfaces being integrated | integrates | [controller interfaces](../controller/spec-controller-interfaces.md) |
-| Wire formats (topics, REST shapes, schemas) | defers to | [`contracts/`](../../../../contracts/), [`spec-contracts.md`](../spec-contracts.md) |
+| Which role may call what | gated by | [`spec-platform-security.md`](./spec-platform-security.md) |
+| Wire formats (topics, REST shapes, schemas, status codes) | defers to | [`contracts/`](../../../../contracts/), [`spec-contracts.md`](../spec-contracts.md) |
 | Topic/identity/envelope conventions; setpoint-delivery chain | defers to | [RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format), [RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain) |

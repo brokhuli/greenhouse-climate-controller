@@ -142,7 +142,7 @@ How this set divides the work, and where each concern is detailed:
 | Why the dashboard exists; the view inventory | [`spec-frontend-purpose-and-views.md`](./spec-frontend-purpose-and-views.md) | [platform dashboard](../platform/spec-platform-dashboard.md) |
 | App structure, route tree, runtime data flow, failure modes | [`spec-frontend-architecture.md`](./spec-frontend-architecture.md) | [platform architecture](../platform/spec-platform-architecture.md), [reverse proxy](../platform/spec-platform-architecture.md#4-reverse-proxy--the-edge) |
 | Per-dependency choices + rejected alternatives | [`spec-frontend-tech-stack.md`](./spec-frontend-tech-stack.md) | [tech-stack-decisions.md](../tech-stack-decisions.md#phase-2--local-paas-platform-docker-only) |
-| Client data model + API/WS binding | [`spec-frontend-data-model.md`](./spec-frontend-data-model.md) | [platform API surface](../platform/spec-platform-api-surface.md), [`contracts/`](../../../../contracts/) |
+| Client data model + API/WS binding | [`spec-frontend-data-model.md`](./spec-frontend-data-model.md) | [platform API surface](../platform/spec-platform-interfaces.md#3-api-surface-inventory), [`contracts/`](../../../../contracts/) |
 | Component inventory, props, states, role-gating | [`spec-frontend-components.md`](./spec-frontend-components.md) | — |
 | Color, type, spacing, motion, chart tokens, themes | [`spec-frontend-design-tokens.md`](./spec-frontend-design-tokens.md) | — |
 | Hover/focus/keyboard/motion + real-time interaction | [`spec-frontend-interactions.md`](./spec-frontend-interactions.md) | — |

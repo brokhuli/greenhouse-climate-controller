@@ -87,7 +87,7 @@ Three flows cross this topology; each is owned by a dedicated document:
   controller's REST API ([crop profiles](./spec-platform-crop-profiles.md)). The API
   writes only *targets* — never actuator commands.
 - **Dashboard:** frontend ↔ API over HTTP + WebSockets, through the proxy, gated by
-  auth in 2b ([API surface](./spec-platform-api-surface.md),
+  auth in 2b ([API surface](./spec-platform-interfaces.md#3-api-surface-inventory),
   [security](./spec-platform-security.md)).
 
 The flows are directional and never mixed: MQTT is telemetry-only (up), all control
@@ -143,7 +143,7 @@ fronting it with HTTPS is a deployment-environment concern, not a platform-desig
 | What state flows through the hub | routes to | [`spec-platform-data-model.md`](./spec-platform-data-model.md) |
 | Telemetry-up flow | frames | [`spec-platform-ingestion.md`](./spec-platform-ingestion.md) |
 | Control-down flow | frames | [`spec-platform-crop-profiles.md`](./spec-platform-crop-profiles.md) |
-| API + WebSocket responsibilities | frames | [`spec-platform-api-surface.md`](./spec-platform-api-surface.md) |
+| API + WebSocket responsibilities | frames | [`spec-platform-interfaces.md`](./spec-platform-interfaces.md#3-api-surface-inventory) |
 | Auth at the proxy edge | sets up | [`spec-platform-security.md`](./spec-platform-security.md) |
 | How the containers are deployed | sets up | [`spec-platform-operations.md`](./spec-platform-operations.md#2-deployment) |
 | Ingress technology choice | defers to | [RFC-003](../../../decisions/request-for-comments.md#rfc-003-phase-2-platform-ingress) |

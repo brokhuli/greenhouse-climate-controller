@@ -78,7 +78,7 @@ Crucially, the optimizer is **not** a second setpoint authority. The platform is
 **single authority for controller setpoints**
 ([RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain)):
 when Phase 3 lands, the optimizer submits refined targets through this same setpoint
-write path (a setpoint-submission endpoint, [API surface](./spec-platform-api-surface.md)),
+write path (a setpoint-submission endpoint, [API surface](./spec-platform-interfaces.md#3-api-surface-inventory)),
 and the platform enforces the crop-safe bounds, records the write with its source
 (`optimizer`), and remains the sole delivery path to the controller — exactly as it
 does for a crop-profile assignment or an operator override. The optimizer never writes
@@ -131,7 +131,7 @@ above and so lands in **2b**.
 |---|---|---|
 | Where profiles, assignments, and intended state are stored | reads/writes | [`spec-platform-data-model.md`](./spec-platform-data-model.md) |
 | The status / liveness reconciliation reacts to | consumes | [`spec-platform-ingestion.md`](./spec-platform-ingestion.md) |
-| The REST endpoints that expose profiles, assignments, setpoints | exposed by | [`spec-platform-api-surface.md`](./spec-platform-api-surface.md) |
+| The REST endpoints that expose profiles, assignments, setpoints | exposed by | [`spec-platform-interfaces.md`](./spec-platform-interfaces.md#3-api-surface-inventory) |
 | The controller config API setpoints are pushed to | writes to | [controller config](../controller/spec-controller-config-and-parameters.md), [controller interfaces](../controller/spec-controller-interfaces.md) |
 | Setpoint authority + delivery chain | defers to | [RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain) |
 | Why safety is not the platform's to own | defers to | [`spec-platform-constraints.md`](./spec-platform-constraints.md) |

@@ -72,7 +72,7 @@ Finer-grained RBAC and multi-tenant identity are out of scope
 
 ## 4. Capability matrix
 
-How the two roles line up against the [API surface](./spec-platform-api-surface.md):
+How the two roles line up against the [API surface](./spec-platform-interfaces.md#3-api-surface-inventory):
 
 | Surface | Viewer | Operator |
 |---|---|---|
@@ -108,7 +108,7 @@ absent in 2a and added in 2b ([frontend tech stack](../frontend/spec-frontend-te
 |---|---|---|
 | Where users / roles are stored | defines | [`spec-platform-data-model.md`](./spec-platform-data-model.md) |
 | The `/auth` route + the proxy edge | gated at | [`spec-platform-architecture.md`](./spec-platform-architecture.md#4-reverse-proxy--the-edge) |
-| The surfaces these roles gate | gates | [`spec-platform-api-surface.md`](./spec-platform-api-surface.md) |
+| The surfaces these roles gate | gates | [`spec-platform-interfaces.md`](./spec-platform-interfaces.md#3-api-surface-inventory) |
 | The browser-side OIDC client | paired with | [frontend tech stack](../frontend/spec-frontend-tech-stack.md) |
 | Internal trust boundary; 2a no-auth | defers to | [RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries) |
 | `P2-SEC-1` | cited | [NFR doc](../../artifacts/non-functional-requirements.md) |

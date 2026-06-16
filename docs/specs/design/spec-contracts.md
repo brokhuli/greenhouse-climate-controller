@@ -39,8 +39,8 @@ is versioned and accompanied by an ADR, per [`contracts/README.md`](../../../con
 | 1 | MQTT telemetry schemas | Controller → platform, optimizer | JSON Schema (Draft 2020-12) | 1 | [RFC-007](../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format), [RFC-001](../../decisions/request-for-comments.md#rfc-001-mqtt-broker-selection) |
 | 2 | Controller REST API | Controller → platform | OpenAPI 3.1 | 1 | [RFC-005](../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain), [RFC-009](../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries) |
 | 3 | Phase 2 Setpoint API | Optimizer (+ Phase 4) → platform | REST (OpenAPI-style) | 2b / 3 | [RFC-005](../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain) |
-| 4 | Phase 2 operator/fleet REST API | SPA / operator → platform | REST (OpenAPI-style) | 2a (telemetry/registration/edits) / 2b (profiles/assignments) | [P2 API surface](./platform/spec-platform-api-surface.md) |
-| 5 | Phase 2 WebSocket fan-out | Platform → SPA | WebSocket message schema | 2a | [P2 API surface](./platform/spec-platform-api-surface.md) |
+| 4 | Phase 2 operator/fleet REST API | SPA / operator → platform | REST (OpenAPI-style) | 2a (telemetry/registration/edits) / 2b (profiles/assignments) | [P2 API surface](./platform/spec-platform-interfaces.md#3-api-surface-inventory) |
+| 5 | Phase 2 WebSocket fan-out | Platform → SPA | WebSocket message schema | 2a | [P2 API surface](./platform/spec-platform-interfaces.md#3-api-surface-inventory) |
 | 6 | Optimizer plan schema | Planner → constraint engine / applier | Structured schema (JSON Schema) | 3 | [RFC-004](../../decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface) |
 | 7 | Telemetry read-surface views | Platform → optimizer | Versioned SQL views | 2b / 3 | [RFC-008](../../decisions/request-for-comments.md#rfc-008-phase-3-telemetry-read-path) |
 
@@ -88,7 +88,7 @@ is versioned and accompanied by an ADR, per [`contracts/README.md`](../../../con
 | **Parties / direction** | SPA / operator tooling → platform |
 | **Format** | REST request/response (OpenAPI-style description recommended) |
 | **Phase introduced** | Phase 2 — registration/telemetry/edits in 2a, profiles/assignments in 2b |
-| **Governing decision** | [P2 API surface](./platform/spec-platform-api-surface.md) |
+| **Governing decision** | [P2 API surface](./platform/spec-platform-interfaces.md#3-api-surface-inventory) |
 | **Location** | To be created |
 | **Status** | To author |
 
@@ -100,7 +100,7 @@ is versioned and accompanied by an ADR, per [`contracts/README.md`](../../../con
 | **Parties / direction** | Platform → SPA |
 | **Format** | WebSocket message schema (shares the RFC-007 identity / timestamp envelope) |
 | **Phase introduced** | Phase 2a |
-| **Governing decision** | [P2 API surface](./platform/spec-platform-api-surface.md) |
+| **Governing decision** | [P2 API surface](./platform/spec-platform-interfaces.md#3-api-surface-inventory) |
 | **Location** | To be created |
 | **Status** | To author |
 

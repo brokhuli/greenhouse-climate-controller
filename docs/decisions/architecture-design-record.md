@@ -545,7 +545,7 @@ nginx and talking to the Go API over HTTP + WebSockets
 
 **Why:** The dashboard is a live, interactive client: real-time charts of readings vs setpoints and a
 streaming event feed driven by the API's WebSocket fan-out
-([P2 API surface](../specs/design/platform/spec-platform-api-surface.md)). React's mature ecosystem
+([P2 API surface](../specs/design/platform/spec-platform-interfaces.md#3-api-surface-inventory)). React's mature ecosystem
 (component model, charting libraries, WebSocket integration) fits that directly, and a built static
 bundle drops straight into the single-nginx entry point from
 [RFC-003](./request-for-comments.md#rfc-003-phase-2-platform-ingress) with no extra serving component.
@@ -581,7 +581,7 @@ REST calls to many controllers, and live WebSocket fan-out to dashboard clients.
 handles that many-connection concurrency cleanly, compiles to a single static binary that
 containerizes trivially, and has mature Postgres, MQTT, and HTTP/WebSocket libraries. Echo is a
 lightweight router/middleware layer over `net/http` with first-class WebSocket-upgrade support, which
-is what the API surface ([P2 API surface](../specs/design/platform/spec-platform-api-surface.md)) needs
+is what the API surface ([P2 API surface](../specs/design/platform/spec-platform-interfaces.md#3-api-surface-inventory)) needs
 without a heavier framework.
 
 **Alternatives considered:** *Node.js / TypeScript* — strong async I/O and shares a language with the

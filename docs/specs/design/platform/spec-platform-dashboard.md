@@ -9,7 +9,7 @@
 
 A React single-page app, served through the
 [reverse proxy](./spec-platform-architecture.md#4-reverse-proxy--the-edge), talking to
-the API over HTTP + WebSockets ([API surface](./spec-platform-api-surface.md)). It is
+the API over HTTP + WebSockets ([API surface](./spec-platform-interfaces.md#3-api-surface-inventory)). It is
 the **only frontend in the system** and serves **one or more** greenhouses — a single
 greenhouse is the fleet-of-one case. Its monitoring and setpoint-edit core ships in
 **2a**; profile management follows in **2b**.
@@ -63,7 +63,7 @@ and the `P2-USE-1` / `P2-TEST-2` targets in
 | Concern | This spec | Detailed in |
 |---|---|---|
 | How the SPA is built (views, components, tokens, interactions) | defers to | [frontend set](../frontend/spec-frontend-overview.md) |
-| The API + WebSocket surface it consumes | consumes | [`spec-platform-api-surface.md`](./spec-platform-api-surface.md) |
+| The API + WebSocket surface it consumes | consumes | [`spec-platform-interfaces.md`](./spec-platform-interfaces.md#3-api-surface-inventory) |
 | The profile/assignment actions it drives | drives | [`spec-platform-crop-profiles.md`](./spec-platform-crop-profiles.md) |
 | Role-gating of write actions | gated by | [`spec-platform-security.md`](./spec-platform-security.md) |
 | Load / latency / a11y / test targets | defers to | [NFR doc](../../artifacts/non-functional-requirements.md) |

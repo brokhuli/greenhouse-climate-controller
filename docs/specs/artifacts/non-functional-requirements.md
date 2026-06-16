@@ -79,7 +79,7 @@ aspirations — a change validates against them.
 
 ### Phase 1 — Rust controller, real-time control loop, simulated HAL
 
-HAL time constants (spec §3): temperature τ = 120 s, humidity τ = 60 s, CO₂ τ = 30 s.
+HAL time constants ([HAL §2](../design/controller/spec-controller-hal-simulation.md#2-coupled-first-order-lag)): temperature τ = 120 s, humidity τ = 60 s, CO₂ τ = 30 s.
 
 **Performance**
 
@@ -89,59 +89,62 @@ HAL time constants (spec §3): temperature τ = 120 s, humidity τ = 60 s, CO₂
 - **P1-PERF-3** — Full-pipeline compute per tick (fusion → actuators) stays **≤ 100 ms** on one core.
   *(Committed default.)*
 - **P1-PERF-4** — Resident memory **≤ 50 MB** and steady-state CPU **≤ 5%** of one core. *(Committed
-  default; consistent with running 20–50 controllers concurrently on one dev machine.)*
+  default; consistent with running 20–50 controllers concurrently on one dev machine;
+  [architecture §9](../design/controller/spec-controller-architecture.md#9-availability-restart--resource-footprint).)*
 
 **Reliability**
 
 - **P1-REL-1** — A safety interlock condition is acted on **within one tick (≤ 1 s)** of detection.
-  *(Hard requirement; spec §7 — interlocks are always active with unconditional priority.)*
+  *(Hard requirement; [safety §2](../design/controller/spec-controller-safety-and-constraints.md#2-safety-interlocks) — interlocks are always active with unconditional priority.)*
 - **P1-REL-2** — Temperature tolerates **one faulty probe with no degradation** via 3-probe TMR median
-  voting. *(Spec §5.)*
+  voting. *([sensing §2](../design/controller/spec-controller-sensing.md#2-redundant-temperature-fusion-tmr).)*
 - **P1-REL-3** — Stuck and out-of-range sensor faults are detected within a **configurable window
-  (default 5 ticks)**. *(Spec §8.)*
+  (default 5 ticks)**. *([sensing §4](../design/controller/spec-controller-sensing.md#4-fault-detection-non-temperature-sensors).)*
 
 **Resilience**
 
 - **P1-RESIL-1** — On loss of a temperature probe, control continues on the remaining two (degraded);
   on total disagreement, the controller holds a safe state — **zero unhandled-fault crashes**.
-  *(Spec §5, §7.)*
+  *([sensing §2](../design/controller/spec-controller-sensing.md#2-redundant-temperature-fusion-tmr), [safety §2](../design/controller/spec-controller-safety-and-constraints.md#2-safety-interlocks).)*
 - **P1-RESIL-2** — A manual override **auto-expires after a configurable timeout** so a forgotten
-  override cannot strand the greenhouse. *(Spec §10.)*
+  override cannot strand the greenhouse. *([architecture §6](../design/controller/spec-controller-architecture.md#6-manual-override).)*
 
 **Testability**
 
 - **P1-TEST-1** — **≥ 90% line coverage** on the control-loop and safety-interlock modules. *(Committed
   default; CLAUDE.md "avoid untested logic".)*
 - **P1-TEST-2** — The HAL simulation is **deterministic under a fixed seed** for reproducible tests.
-  *(Spec §3.)*
+  *([HAL §7](../design/controller/spec-controller-hal-simulation.md#7-determinism--seeding).)*
 
 **Observability**
 
 - **P1-OBS-1** — Telemetry (readings, actuator states, system state) is published **every tick at
-  1 Hz**; fault events are published **within one tick** of detection. *(Spec §11.)*
-- **P1-OBS-2** — The REST `/health` endpoint reflects **every active fault and alarm**. *(Spec §8, §11.)*
+  1 Hz**; fault events are published **within one tick** of detection. *([interfaces §2](../design/controller/spec-controller-interfaces.md#2-mqtt--telemetry-out).)*
+- **P1-OBS-2** — The REST `/health` endpoint reflects **every active fault and alarm**. *([sensing §6](../design/controller/spec-controller-sensing.md#6-fault-surfacing), [interfaces §5](../design/controller/spec-controller-interfaces.md#5-published-shapes--health).)*
 
 **Modifiability**
 
 - **P1-MOD-1** — A new actuator (e.g. the Phase 4 combustion heater) is added as a **new HAL backend
-  implementing the same trait, with zero changes to the control loops**. *(Spec §3 interface
-  constraint; RFC-006.)*
+  implementing the same trait, with zero changes to the control loops**. *([HAL §4](../design/controller/spec-controller-hal-simulation.md#4-the-actuator-effect-set-invariant)
+  interface constraint; RFC-006.)*
 
 **Maintainability**
 
 - **P1-MAINT-1** — Each pipeline stage (fusion, setpoint resolution, control loops, interlocks,
-  constraints) is a **separately testable module behind an explicit interface**. *(Spec §2;
+  constraints) is a **separately testable module behind an explicit interface**.
+  *([architecture §5](../design/controller/spec-controller-architecture.md#5-module-composition-rules);
   CLAUDE.md architecture.)*
 
 **Availability**
 
 - **P1-AVAIL-1** — **≥ 99.9% availability** over a continuous run; restart to first control tick is
-  **< 5 s**. *(Committed default; the controller models a real production system.)*
+  **< 5 s**. *(Committed default; the controller models a real production system;
+  [architecture §9](../design/controller/spec-controller-architecture.md#9-availability-restart--resource-footprint).)*
 
 **Portability**
 
 - **P1-PORT-1** — The **same binary runs native on Windows and as a Docker container** with no code
-  change (configuration via TOML). *(Spec §13.)*
+  change (configuration via TOML). *([architecture §8](../design/controller/spec-controller-architecture.md#8-deployment).)*
 
 ### Phase 2 — Platform, fleet management, dashboard, TimescaleDB
 
@@ -165,9 +168,9 @@ HAL time constants (spec §3): temperature τ = 120 s, humidity τ = 60 s, CO₂
 
 - **P2-OBS-1** — The Go API exposes `/metrics`; Prometheus scrapes on a **15 s interval**; Grafana
   dashboards cover ingestion rate, API latency/errors, reconciliation actions, and per-controller
-  connectivity. *(Spec §11; 2b.)*
+  connectivity. *([operations §1](../design/platform/spec-platform-operations.md#1-observability); 2b.)*
 - **P2-OBS-2** — Every setpoint write emits a **structured (`slog`) audit log entry with provenance**.
-  *(Spec §5, §11.)*
+  *([operations §1](../design/platform/spec-platform-operations.md#1-observability), [crop profiles §5](../design/platform/spec-platform-crop-profiles.md#5-fleet-management--operator-control).)*
 
 **Usability**
 
@@ -178,22 +181,22 @@ HAL time constants (spec §3): temperature τ = 120 s, humidity τ = 60 s, CO₂
 **Availability**
 
 - **P2-AVAIL-1** — Platform **≥ 99.5% availability**; a platform restart **never interrupts controller
-  control loops** (controllers are independent failure domains). *(Spec §1.)*
+  control loops** (controllers are independent failure domains). *([overview §1](../design/platform/spec-platform-overview.md#1-what-the-platform-is).)*
 
 **Reliability**
 
 - **P2-REL-1** — Setpoint reconciliation **re-asserts intended state on controller reconnect within
-  one reconciliation cycle**. *(Spec §5; 2b.)*
+  one reconciliation cycle**. *([crop profiles §3](../design/platform/spec-platform-crop-profiles.md#3-reconciliation--the-platform-is-the-source-of-truth); 2b.)*
 
 **Resilience**
 
 - **P2-RESIL-1** — Telemetry lost during platform downtime is a **recoverable data gap, not a control
-  failure**; ingestion resumes automatically on restart. *(Spec §1.)*
+  failure**; ingestion resumes automatically on restart. *([overview §1](../design/platform/spec-platform-overview.md#1-what-the-platform-is), [ingestion §1](../design/platform/spec-platform-ingestion.md#1-subscribe-and-store).)*
 
 **Testability**
 
 - **P2-TEST-1** — An integration test covers the **full up/down path** (MQTT ingest → store; profile
-  resolve → controller REST). *(Spec §2.)*
+  resolve → controller REST). *([architecture §3](../design/platform/spec-platform-architecture.md#3-three-data-flows).)*
 - **P2-TEST-2** — The React dashboard is validated with **Playwright** (E2E flows + live-update latency
   over the WebSocket stream — the ≥ 1 Hz half of P2-USE-1) and **Lighthouse CI** (initial-load
   performance + accessibility), both run against the **production build**, not the dev server.
@@ -202,17 +205,17 @@ HAL time constants (spec §3): temperature τ = 120 s, humidity τ = 60 s, CO₂
 **Modifiability**
 
 - **P2-MOD-1** — The Phase 3 optimizer integrates via the **existing `POST /setpoints` path with zero
-  breaking interface changes**. *(Spec §5; RFC-005.)*
+  breaking interface changes**. *([crop profiles §4](../design/platform/spec-platform-crop-profiles.md#4-boundary-with-phase-3--single-setpoint-authority), [interfaces §3](../design/platform/spec-platform-interfaces.md#3-api-surface-inventory); RFC-005.)*
 
 **Security**
 
 - **P2-SEC-1** — 2b: **Keycloak OIDC with viewer/operator roles**; every write path requires the
-  operator role. *(Spec §9; 2b.)*
+  operator role. *([security §3](../design/platform/spec-platform-security.md#3-roles-and-role-mapping), [§4](../design/platform/spec-platform-security.md#4-capability-matrix); 2b.)*
 
 **Portability**
 
 - **P2-PORT-1** — The whole stack stands up with **one `docker compose up`**, no cloud account.
-  *(Spec §12.)*
+  *([operations §2](../design/platform/spec-platform-operations.md#2-deployment).)*
 
 ### Phase 3 — Python optimizer, LLM-assisted planning, digital twin simulation
 

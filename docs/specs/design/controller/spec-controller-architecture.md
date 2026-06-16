@@ -250,15 +250,75 @@ independent greenhouse with no shared state. Structural changes (zones, HAL
 parameters) require a config edit + restart, consistent with the
 [startup-vs-runtime boundary](./spec-controller-config-and-parameters.md#startup-vs-runtime).
 
-The committed resource-footprint, availability, and portability targets are
-`P1-PERF-4` (≤ 50 MB resident, ≤ 5% of one core steady-state), `P1-AVAIL-1`
-(≥ 99.9% over a continuous run; bounded restart-to-first-tick), and `P1-PORT-1`
-(same binary native + container), in the
+The portability target `P1-PORT-1` (same binary native + container) is satisfied
+by this single-binary, config-only deployment model; the availability and
+resource-footprint targets (`P1-AVAIL-1`, `P1-PERF-4`) are covered in
+[§9](#9-availability-restart--resource-footprint). All are owned by the
 [NFR doc](../../artifacts/non-functional-requirements.md).
 
 ---
 
-## 9. Cross-spec map
+## 9. Availability, restart & resource footprint
+
+Two runtime-quality targets are owned by the
+[NFR doc](../../artifacts/non-functional-requirements.md) and made achievable by
+choices made elsewhere in this set; this section names the mechanisms so each
+target traces to a design rather than being asserted on its own.
+
+### Availability & restart (`P1-AVAIL-1`)
+
+Target: **≥ 99.9% availability** over a continuous run, **restart-to-first-tick
+< 5 s**.
+
+The controller stays available by **degrading rather than stopping**
+([§7](#7-failure-modes--degradation)): sensor and actuator faults move it down the
+degradation ladder but never terminate the process, so the common failure classes
+cost no availability. The cases that *do* end the process — a panic, or an
+operator/OS/Docker restart — are all handled by one fast cold-start path:
+
+- **No persistent state to recover.** All across-tick state
+  ([§4](#4-state-topology)) — loop integrators, fault flags, override deadlines —
+  is in-memory and reconstructable. A restart reloads the TOML
+  [config](./spec-controller-config-and-parameters.md), re-initializes the HAL,
+  opens the MQTT and REST tasks, and begins ticking; there is no database to replay
+  and no snapshot to restore. That absence is what keeps restart-to-first-tick
+  inside the 5 s bound.
+- **Faults re-derive themselves.** Because fault detection runs every tick over
+  live readings ([§7](#7-failure-modes--degradation),
+  [sensing §4](./spec-controller-sensing.md#4-fault-detection-non-temperature-sensors)),
+  a fault that was active before a restart is re-detected within its detection
+  window rather than needing to survive the restart.
+- **Restart is external, not self-managed.** The process does not supervise itself:
+  in standalone mode the OS/service manager restarts it, in managed mode Docker's
+  restart policy does ([§8](#8-deployment)). The controller's only responsibility is
+  to come up fast and idempotently from its config — the same input in both modes.
+
+### Resource footprint (`P1-PERF-4`)
+
+Target: **≤ 50 MB resident**, **≤ 5% of one core** steady-state.
+
+The footprint follows from the runtime model rather than from tuning:
+
+- **Bounded per-tick work.** The pipeline runs to completion once per second within
+  the `P1-PERF-3` compute budget ([§3](#3-real-time--scheduling-model)) and then
+  idles until the next tick, so steady-state CPU is one short burst per second —
+  comfortably under 5% of a core.
+- **Small, fixed state.** The [state topology](#4-state-topology) is a small,
+  well-bounded set with no unbounded growth; the simulated HAL holds a handful of
+  scalar variables per zone, not a physics mesh
+  ([HAL §6](./spec-controller-hal-simulation.md#6-bounded-fidelity)).
+- **No GC, modest concurrency.** Rust's no-GC model
+  ([tech stack](./spec-controller-tech-stack.md)) removes heap-churn headroom, and
+  the process is one tick task plus the MQTT and REST tasks — not a
+  thread-per-connection server.
+
+Together these keep a single controller light enough that 20–50 run concurrently on
+one dev machine, which is the basis for the Phase 2 scalability target
+(`P2-SCAL-1`).
+
+---
+
+## 10. Cross-spec map
 
 | Concern | This spec | Detailed in |
 |---|---|---|
@@ -270,4 +330,4 @@ The committed resource-footprint, availability, and portability targets are
 | MQTT/REST surfaces | exposes via | [`spec-controller-interfaces.md`](./spec-controller-interfaces.md) |
 | Dependency choices (runtime, scheduler, frameworks) | referenced | [`spec-controller-tech-stack.md`](./spec-controller-tech-stack.md) |
 | Hard rules (determinism, headless, no hardware) | constrained by | [`spec-controller-constraints.md`](./spec-controller-constraints.md) |
-| Quality targets (`P1-PERF-*`, `P1-REL-1`, `P1-RESIL-*`, `P1-PORT-1`) | cited | [NFR doc](../../artifacts/non-functional-requirements.md) |
+| Quality targets (`P1-PERF-*`, `P1-REL-1`, `P1-RESIL-*`, `P1-AVAIL-1`, `P1-PORT-1`) | cited | [NFR doc](../../artifacts/non-functional-requirements.md) |

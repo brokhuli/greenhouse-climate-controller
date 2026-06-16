@@ -3,7 +3,7 @@
 > **Purpose:** Define the shapes the SPA consumes and how they bind to the
 > backend. This is the dashboard's analogue of a content schema — except the SPA
 > **authors no content**; every shape originates from the Go API
-> ([platform API surface](../platform/spec-platform-api-surface.md)) over REST and
+> ([platform API surface](../platform/spec-platform-interfaces.md#3-api-surface-inventory)) over REST and
 > WebSockets. This file defines the client-side TypeScript/Zod types, the
 > query-key scheme, the cache + live-merge strategy, runtime validation, the
 > WebSocket message taxonomy, and the view-model derivations the UI renders.
@@ -11,7 +11,7 @@
 > **Source of truth & a documented gap.** The wire contracts are owned by
 > [`contracts/`](../../../../contracts/) under the conventions in
 > [RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format),
-> and the API *surface* by [platform API surface](../platform/spec-platform-api-surface.md).
+> and the API *surface* by [platform API surface](../platform/spec-platform-interfaces.md#3-api-surface-inventory).
 > Today `contracts/` formalizes only `mqtt/` (telemetry, platform-internal) and
 > `controller-rest/` (platform→controller). **The Go-API ↔ SPA REST/WS contract is
 > not yet formalized in `contracts/`.** Until it is, the schemas here bind to
@@ -270,7 +270,7 @@ derivations are testable in isolation (`P2-TEST-2`-adjacent unit coverage).
 
 ## 9. Cross-references
 
-- API surface (routes + responsibilities): [platform API surface](../platform/spec-platform-api-surface.md)
+- API surface (routes + responsibilities): [platform API surface](../platform/spec-platform-interfaces.md#3-api-surface-inventory)
 - Wire conventions (envelope, identity, versioning): [RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)
 - Platform data model the shapes mirror: [platform data model](../platform/spec-platform-data-model.md)
 - How the cache is fed and patched: [architecture §4](./spec-frontend-architecture.md#4-runtime-data-flow)

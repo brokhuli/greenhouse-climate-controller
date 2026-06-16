@@ -819,7 +819,7 @@ bearer token** (no OIDC in the controller); MQTT stays anonymous on the local ne
 
 The platform's authorization model is specified for **humans** but not for **services**:
 
-- [spec-platform-api-surface.md](../specs/design/platform/spec-platform-api-surface.md) and
+- [spec-platform-interfaces.md](../specs/design/platform/spec-platform-interfaces.md#5-authorization) and
   [authentication](../specs/design/platform/spec-platform-security.md): write-path actions
   (assignments, setpoint edits) "require the **operator** role," carried in a Keycloak **OIDC token**.
 - But [spec-climate-optimizer.md §6](../specs/design/spec-climate-optimizer.md#6-setpoint-refinement--application)

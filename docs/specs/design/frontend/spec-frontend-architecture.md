@@ -11,7 +11,7 @@
 > **Scope note.** The platform-level topology (services behind the proxy) is owned
 > by [platform architecture](../platform/spec-platform-architecture.md) and
 > [reverse proxy](../platform/spec-platform-architecture.md#4-reverse-proxy--the-edge); the API surface by
-> [platform API surface](../platform/spec-platform-api-surface.md). This file describes the
+> [platform API surface](../platform/spec-platform-interfaces.md#3-api-surface-inventory). This file describes the
 > **client** that consumes them. Concrete library choices are in
 > [`spec-frontend-tech-stack.md`](./spec-frontend-tech-stack.md).
 
@@ -336,4 +336,4 @@ app.** Cached data and the shell stay on screen while the SPA recovers.
 | Behavior, motion, real-time UX | referenced | [`spec-frontend-interactions.md`](./spec-frontend-interactions.md) |
 | Hard rules (hosting, auth, safety, perf) | constrained by | [`spec-frontend-constraints.md`](./spec-frontend-constraints.md) |
 | Views being connected | composed from | [`spec-frontend-purpose-and-views.md`](./spec-frontend-purpose-and-views.md) |
-| Platform topology & API surface | consumes | [platform architecture](../platform/spec-platform-architecture.md), [API surface](../platform/spec-platform-api-surface.md) |
+| Platform topology & API surface | consumes | [platform architecture](../platform/spec-platform-architecture.md), [API surface](../platform/spec-platform-interfaces.md#3-api-surface-inventory) |
