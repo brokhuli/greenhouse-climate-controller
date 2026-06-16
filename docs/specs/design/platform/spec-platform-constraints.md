@@ -93,6 +93,6 @@ Platform capabilities intentionally **not** in Phase 2:
 | The setpoint-only / single-authority write path these rules bound | constrains | [`spec-platform-crop-profiles.md`](./spec-platform-crop-profiles.md) |
 | The telemetry-only / control-REST split | constrains | [`spec-platform-interfaces.md`](./spec-platform-interfaces.md) |
 | Setpoint authority + delivery chain | defers to | [RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain) |
-| Internal trust boundary | defers to | [RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries) |
+| Internal trust boundary; the accepted residual risk it leaves | defers to | [RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries), [security §5](./spec-platform-security.md#5-the-2a-unauthenticated-stance) |
 | System-wide constraint inventory | mirrors | [constraints artifact](../../artifacts/constraints.md) |
 | Quality targets (not constraints) | separate from | [NFR doc](../../artifacts/non-functional-requirements.md) |

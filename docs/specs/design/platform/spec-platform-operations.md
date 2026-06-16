@@ -109,6 +109,34 @@ produces N identical containers. Each controller needs a unique `controller_id` 
 registers as a distinct greenhouse) and independent simulation parameters — `--scale`
 cannot supply per-replica configuration.
 
+### Resource isolation & recovery
+
+The whole stack and 20–50 controllers share **one host**
+([constraints — deployment & scale](../../artifacts/constraints.md#deployment--scale)),
+so "independent failure domain" has to hold at the *compute* level, not just in physics
+([constraints §6](./spec-platform-constraints.md#6-manages-does-not-couple-physics)).
+The Compose definition makes that explicit:
+
+- **Per-service CPU/memory limits.** Each service — platform and controller alike —
+  declares CPU and memory limits so a runaway or wedged container cannot starve the
+  others on the shared host. The controller limits are sized to its footprint budget
+  (`P1-PERF-4`: ≤ 50 MB resident, ≤ 5% of a core), which is what makes 20–50 of them
+  co-resident with the platform predictable rather than a contention gamble.
+- **Restart policies + healthchecks.** Services run with a restart policy
+  (`restart: unless-stopped`) and a per-service healthcheck, so a crashed or
+  unresponsive container is restarted automatically — the local stand-in for an
+  orchestrator's self-healing, in service of `P2-AVAIL-1`. A platform restart never
+  interrupts the controllers' own loops.
+- **Bounded platform logs.** The API's structured `slog` / audit stream
+  ([§1](#1-observability)) is rotated/size-capped so it cannot fill the disk — the
+  log-side sibling of the telemetry **retention** policy
+  ([ingestion §5](./spec-platform-ingestion.md#5-retention--downsampling)).
+- **Migration-on-startup is the startup gate.** Schema migrations run on `api` startup
+  ([tech stack](./spec-platform-tech-stack.md)); a failed migration blocks the API from
+  coming up. This is reversible — migrations are versioned
+  `golang-migrate` files — but it is the one place a bad change halts the platform rather
+  than degrading it, so migrations are reviewed as carefully as code.
+
 ### Performance testing
 
 Varying N in the generation script is the primary mechanism for **performance testing**
@@ -127,4 +155,5 @@ observe and target controller counts (`P2-SCAL-1`) — see
 | The auth service (Keycloak) stood up in 2b | runs | [`spec-platform-security.md`](./spec-platform-security.md) |
 | The greenhouse telemetry (not platform metrics) | distinct from | [`spec-platform-data-model.md`](./spec-platform-data-model.md), [`spec-platform-dashboard.md`](./spec-platform-dashboard.md) |
 | The controllers being generated/run | manages | [controller deployment](../controller/spec-controller-architecture.md#8-deployment) |
+| The shared-host resource envelope the per-service limits enforce | defers to | [constraints — deployment & scale](../../artifacts/constraints.md#deployment--scale) |
 | Target controller counts, latencies (`P2-SCAL-1`, `P2-PERF-3`) | defers to | [NFR doc](../../artifacts/non-functional-requirements.md) |

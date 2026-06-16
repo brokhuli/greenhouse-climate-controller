@@ -71,7 +71,33 @@ features are the intended mechanism ([data model](./spec-platform-data-model.md)
 
 ---
 
-## 6. Read-only with respect to the greenhouse
+## 6. Ingest backpressure & load-shedding
+
+Ingestion is decoupled from the database write the same way the controller decouples
+publishing from its control tick
+([controller interfaces §7](../controller/spec-controller-interfaces.md#7-mqtt-connection-resilience))
+— here in the **up** direction:
+
+- **Bounded buffer.** A buffer sits between MQTT receipt and the time-series write; it
+  is **bounded**, not unbounded. The store keeping up is the normal case (`P2-PERF-1`:
+  ≥ 50 msg/s with no backlog growth; `P2-PERF-4`: < 1 s write latency).
+- **Shed oldest under sustained backpressure.** If the write path slows enough that the
+  buffer fills, the ingester **drops the oldest frames per greenhouse** rather than
+  accumulating until it exhausts memory. Load-shedding is bounded and local — never an
+  OOM that takes the hub down.
+- **Why dropping is safe.** Each reading fully supersedes the last, and the retained
+  consolidated `state` topic always carries current truth, so a shed intermediate frame
+  costs **history resolution, not current state or control**. This is the same
+  *recoverable data gap, not a control failure* that `P2-RESIL-1` already sanctions for
+  platform downtime — backpressure shedding is that gap under live load.
+- **Shedding is observable.** A filling buffer shows up as the ingestion **lag/backlog**
+  metric ([operations §1](./spec-platform-operations.md#1-observability)); sustained
+  shedding is the signal that the store is the bottleneck, surfaced before any loss is
+  silent.
+
+---
+
+## 7. Read-only with respect to the greenhouse
 
 Ingestion **never changes a controller**. All downward writes go through the control
 path in [crop profiles](./spec-platform-crop-profiles.md). This one-way property is
@@ -80,11 +106,12 @@ side effect on a greenhouse.
 
 ---
 
-## 7. Cross-spec map
+## 8. Cross-spec map
 
 | Concern | This spec | Detailed in |
 |---|---|---|
 | Where ingested telemetry is stored | writes to | [`spec-platform-data-model.md`](./spec-platform-data-model.md) |
 | How derived status feeds the fleet view + reconciliation | feeds | [`spec-platform-crop-profiles.md`](./spec-platform-crop-profiles.md) |
+| The lag/backlog metric that surfaces shedding | surfaced by | [operations §1](./spec-platform-operations.md#1-observability) |
 | The published surface being ingested | consumes | [controller interfaces](../controller/spec-controller-interfaces.md) |
 | Topic taxonomy, envelope, QoS, retained policy | defers to | [`contracts/mqtt`](../../../../contracts/mqtt/), [RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format) |

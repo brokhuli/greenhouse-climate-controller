@@ -75,6 +75,19 @@ or the controller REST API, and a controller never speaks SQL. Everything funnel
 through the API, which is the only component that holds the platform's identity map
 (which `greenhouse_id` lives at which MQTT topic root and REST base URL).
 
+The cost of the hub shape is that ingestion, persistence, WebSocket fan-out, REST-down
+control, and reconciliation share **one process** — so they are **one failure domain**,
+and a stall in one (a slow DB stalling the write path) could in principle starve the
+others. The platform keeps that blast radius contained by **isolating the concerns
+inside the process**: they run as separate goroutines communicating over **bounded
+channels**, so a backlog sheds load **locally** (ingestion drops oldest frames —
+[ingestion §6](./spec-platform-ingestion.md#6-ingest-backpressure--load-shedding))
+rather than blocking REST serving or the reconciliation loop. The single-process shape
+stays acceptable at this scale because the failure is bounded the other way too:
+**controllers are independent failure domains** (`P2-AVAIL-1`) that keep regulating
+through a platform restart, and the telemetry missed across that restart is a
+**recoverable data gap, not a control failure** (`P2-RESIL-1`).
+
 ---
 
 ## 3. Three data flows

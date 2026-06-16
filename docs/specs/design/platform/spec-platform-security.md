@@ -100,6 +100,28 @@ setpoint relay, and adding Keycloak in 2b changes **no committed interface** (th
 write endpoints simply become operator-gated). The frontend's relying-party client is
 absent in 2a and added in 2b ([frontend tech stack](../frontend/spec-frontend-tech-stack.md)).
 
+### Known residual risk — the service-to-service plane stays unauthenticated
+
+The authenticated boundary is **human → API/SPA only** (Keycloak, 2b). The
+service-to-service plane is unauthenticated *by decision* — and stays that way in 2b,
+not only 2a: the controller REST API is unauthenticated and MQTT is anonymous on the
+local network
+([RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries),
+ADR 2026-06-08). The accepted consequence:
+
+- Any process that can reach the Docker network can **spoof a registered
+  `greenhouse_id`** — publish false telemetry over MQTT — or call the **controller REST
+  setpoint path** / the platform's **`POST /setpoints`** directly.
+- Setpoint **provenance** (`source = optimizer`, [RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain))
+  is therefore **self-asserted by the caller**, not backed by a verified token identity.
+
+This is **accepted within the single-host local threat model**: `P2-SEC-1` commits
+*human* authentication only, because service-credential machinery (per-controller tokens,
+an optimizer service account) is operational surface disproportionate to a one-host
+deployment. The **revisit trigger** is explicit — the controller-endpoint registry
+record and the optimizer are the natural seams to add per-service tokens **if the system
+ever leaves the single-host local model**.
+
 ---
 
 ## 6. Cross-spec map

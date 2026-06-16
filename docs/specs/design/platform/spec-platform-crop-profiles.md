@@ -65,6 +65,24 @@ controller matching it:
   surfaced as **drift** in the fleet view and may be auto-corrected by re-applying.
   This catches out-of-band local edits.
 
+Under stress these behaviors are **damped** so they converge rather than storm — the
+reconciliation analogue of the controller's bounded-buffer discipline
+([controller interfaces §7](../controller/spec-controller-interfaces.md#7-mqtt-connection-resilience)):
+
+- **Re-assert is idempotent.** The controller's REST `PATCH` is a merge latched to the
+  next tick ([controller config](../controller/spec-controller-config-and-parameters.md)),
+  so a repeated re-assert simply re-converges — correctness never depends on a write
+  landing exactly once, only on the last one landing.
+- **Fleet re-assert is staggered.** When many controllers reconnect at once after a
+  shared outage (a platform or broker restart), re-asserts are spread with **jittered
+  backoff** rather than fired simultaneously, so the controllers' REST APIs are not
+  thundering-herded. Staggering stays within `P2-REL-1` — each greenhouse is still
+  re-asserted within one reconciliation cycle of its own reconnect.
+- **Drift auto-correction is rate-limited.** Auto-re-apply backs off on repeated
+  failure and does not tight-loop against a persistent out-of-band local edit; drift
+  that keeps recurring is **surfaced in the fleet view** rather than fought
+  indefinitely, leaving the operator to resolve the conflict.
+
 ---
 
 ## 4. Boundary with Phase 3 — single setpoint authority
