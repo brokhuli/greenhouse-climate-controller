@@ -21,7 +21,7 @@ decision, which remains the source of truth.
 
 | Constraint | Source |
 |---|---|
-| **Fully local, zero cloud.** The entire stack runs under Docker Compose on one machine; no cloud account or external managed service is required. | [high-level-idea.md](../design/high-level-idea.md), [spec-climate-platform.md §12](../design/spec-climate-platform.md#12-deployment) |
+| **Fully local, zero cloud.** The entire stack runs under Docker Compose on one machine; no cloud account or external managed service is required. | [high-level-idea.md](../design/high-level-idea.md), [spec-platform-operations.md](../design/platform/spec-platform-operations.md#2-deployment) |
 | One developer machine must host the **whole stack plus 20–50 simulated controllers** concurrently. This is the resource envelope all performance targets assume. | [Non-Functional Requirements](./non-functional-requirements.md) |
 | **No real hardware.** The HAL is pure simulation; the controller never runs on a physical device, so there is no embedded/real-time-OS target. | [spec-controller-architecture.md](../design/controller/spec-controller-architecture.md#8-deployment) |
 

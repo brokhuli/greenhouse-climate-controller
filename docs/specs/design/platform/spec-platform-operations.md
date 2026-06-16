@@ -1,0 +1,130 @@
+# Platform — Operations (Observability & Deployment)
+
+> **Purpose:** Define how the platform is **observed** and how it is **deployed** —
+> the two operational concerns of running the stack. Observability is about *platform
+> health* (the services), distinct from the greenhouse telemetry the platform ingests.
+> Deployment is the local Docker Compose model for the platform plus the N controllers
+> it manages. Quality targets (target controller counts, latencies) live in the
+> [NFR doc](../../artifacts/non-functional-requirements.md).
+
+---
+
+## 1. Observability
+
+> **Phase 2b.** Prometheus + Grafana are a 2b addition; the 2a MVP runs without them
+> (the Go API's structured logs are still available).
+
+The platform instruments **itself**, distinct from the greenhouse telemetry it
+ingests ([ingestion](./spec-platform-ingestion.md)).
+
+### Platform health, not crop climate
+
+This distinction is load-bearing. Greenhouse readings (temperature, humidity, soil
+moisture, …) live in the time-series store and the dashboard
+([data model](./spec-platform-data-model.md),
+[dashboard](./spec-platform-dashboard.md)). Observability here is about the **service**
+— is ingestion keeping up, is the API healthy, are controllers connected — never about
+the crops.
+
+### Metrics
+
+The Go API exposes **`/metrics`**; **Prometheus** scrapes it; **Grafana** renders
+platform dashboards. The metric catalog covers, at minimum:
+
+| Metric area | What it shows |
+|---|---|
+| Ingestion rate | Messages/sec ingested per stream and fleet-wide; lag/backlog |
+| API latency & errors | Request latency distribution (toward `P2-PERF-3` p95 < 200 ms) and error rate |
+| Reconciliation actions | Profile applies, re-asserts on reconnect, drift detections/corrections |
+| Per-controller connectivity | Online/degraded/offline transitions per greenhouse |
+| Datastore | Connection-pool usage, query latency, retention/aggregate job health |
+
+The proxy exposes nothing extra for metrics; Prometheus scrapes the API directly over
+the internal network.
+
+### Structured logs & audit
+
+The API emits **structured logs** (Go `slog`) for operational events and the audit
+trail. Every downward write recorded as a change-attribution event
+([crop profiles](./spec-platform-crop-profiles.md#5-fleet-management--operator-control))
+appears in the log stream with who/what/when, so the audit trail and the operational
+log share one structured pipeline.
+
+---
+
+## 2. Deployment
+
+The whole stack — platform services and controllers — runs locally under **Docker
+Compose**, no cloud account.
+
+### Platform services
+
+The **2a** MVP stands up only the telemetry-pipeline + frontend services; **2b** adds
+authentication and observability.
+
+| Service | Implementation | Slice |
+|---|---|---|
+| `api` | Go + Echo | 2a |
+| `db` | TimescaleDB (PostgreSQL + extension) | 2a |
+| `mqtt` | Mosquitto | 2a |
+| `proxy` | nginx (single entry point; also serves the SPA) | 2a |
+| `frontend` | Built React app served by the `proxy` nginx | 2a |
+| `auth` | Keycloak — self-hosted OIDC identity provider ([security](./spec-platform-security.md)) | 2b |
+| `prometheus` | Prometheus — scrapes the API's `/metrics` ([§1](#1-observability)) | 2b |
+| `grafana` | Grafana — platform dashboards ([§1](#1-observability)) | 2b |
+
+The platform's own service configuration — database DSN, MQTT broker address, Keycloak
+client credentials (2b), proxy routing — is supplied via **environment variables / the
+Compose file**, not a per-greenhouse config (contrast the controller's TOML).
+Per-greenhouse data lives in the registry and assignments
+([data model](./spec-platform-data-model.md)).
+
+### Controller services
+
+Phase 1 controllers run as **Docker containers on the same local machine**, not on
+physical devices. Because the controller HAL is pure simulation
+([controller HAL](../controller/spec-controller-hal-simulation.md)), there is no
+hardware dependency — each controller is a lightweight Rust process that connects to
+the platform over the local Docker network.
+
+Controllers are defined as **named services in a generated
+`docker-compose.override.yml`** — one named service per greenhouse, each mounting its
+own TOML config file. The TOML supplies the controller's unique `controller_id` and all
+per-greenhouse parameters (setpoints, HAL simulation params, zone config).
+`docker compose up -d` reconciles the full stack in one command.
+
+A generation script takes N (the desired greenhouse count) as input and produces the
+override file:
+
+```
+scripts/gen-controllers.sh N   →   docker-compose.override.yml (N named controller services)
+docker compose up -d           →   brings up platform + N controllers
+```
+
+`--scale` is not used because each controller requires a distinct identity and its own
+TOML — named services with per-service config mounts are required.
+
+**Why named services over `--scale`:** `docker compose up --scale controller=N`
+produces N identical containers. Each controller needs a unique `controller_id` (so it
+registers as a distinct greenhouse) and independent simulation parameters — `--scale`
+cannot supply per-replica configuration.
+
+### Performance testing
+
+Varying N in the generation script is the primary mechanism for **performance testing**
+the platform under different greenhouse counts. Because the HAL is simulation, many
+controllers can run concurrently on a developer machine. The NFR doc captures what to
+observe and target controller counts (`P2-SCAL-1`) — see
+[`non-functional-requirements.md`](../../artifacts/non-functional-requirements.md).
+
+---
+
+## 3. Cross-spec map
+
+| Concern | This spec | Detailed in |
+|---|---|---|
+| The container topology being deployed | deploys | [`spec-platform-architecture.md`](./spec-platform-architecture.md) |
+| The auth service (Keycloak) stood up in 2b | runs | [`spec-platform-security.md`](./spec-platform-security.md) |
+| The greenhouse telemetry (not platform metrics) | distinct from | [`spec-platform-data-model.md`](./spec-platform-data-model.md), [`spec-platform-dashboard.md`](./spec-platform-dashboard.md) |
+| The controllers being generated/run | manages | [controller deployment](../controller/spec-controller-architecture.md#8-deployment) |
+| Target controller counts, latencies (`P2-SCAL-1`, `P2-PERF-3`) | defers to | [NFR doc](../../artifacts/non-functional-requirements.md) |

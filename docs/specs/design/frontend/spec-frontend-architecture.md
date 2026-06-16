@@ -9,9 +9,9 @@
 > (per-dependency). Read this to understand *how the pieces connect*.
 
 > **Scope note.** The platform-level topology (services behind the proxy) is owned
-> by [platform §2](../spec-climate-platform.md#2-architecture) and
-> [§10](../spec-climate-platform.md#10-reverse-proxy--routing); the API surface by
-> [platform §7](../spec-climate-platform.md#7-api-surface). This file describes the
+> by [platform architecture](../platform/spec-platform-architecture.md) and
+> [reverse proxy](../platform/spec-platform-architecture.md#4-reverse-proxy--the-edge); the API surface by
+> [platform API surface](../platform/spec-platform-api-surface.md). This file describes the
 > **client** that consumes them. Concrete library choices are in
 > [`spec-frontend-tech-stack.md`](./spec-frontend-tech-stack.md).
 
@@ -46,8 +46,8 @@
 The SPA's **only** runtime dependency is the Go API (and, in 2b, Keycloak for the
 login redirect). It has **no** knowledge of MQTT, TimescaleDB, or the controller
 REST API — those are platform-internal
-([platform §4](../spec-climate-platform.md#4-telemetry-ingestion),
-[§13](../spec-climate-platform.md#13-interfaces--integration-with-phase-1)). This
+([platform ingestion](../platform/spec-platform-ingestion.md),
+[interfaces](../platform/spec-platform-interfaces.md)). This
 boundary is load-bearing and is restated as a hard rule in
 [`spec-frontend-constraints.md`](./spec-frontend-constraints.md).
 
@@ -80,7 +80,7 @@ frontend/
 │   ├── lib/                    ← pure helpers (formatting, derivations, time)
 │   ├── types/                  ← shared TS types (inferred from Zod where possible)
 │   └── styles/
-│       ├── tokens.css          ← CSS vars (per design-tokens.md)
+│       ├── tokens.css          ← CSS vars (per spec-frontend-design-tokens.md)
 │       └── global.css          ← Tailwind entry + base
 ├── tests/
 │   ├── unit/                   ← Vitest + React Testing Library
@@ -110,7 +110,7 @@ Three boundaries are load-bearing:
 
 Client-side routes (React Router). nginx serves `index.html` for any unmatched
 path so deep links resolve (SPA fallback,
-[platform §10](../spec-climate-platform.md#10-reverse-proxy--routing)).
+[platform reverse proxy](../platform/spec-platform-architecture.md#4-reverse-proxy--the-edge)).
 
 | Route | View | Slice | Notes |
 |---|---|---|---|
@@ -232,7 +232,7 @@ npm run build
 
 A multi-stage `Dockerfile` builds `dist/` then copies it into the `frontend`
 nginx image that the platform's `proxy` serves
-([platform §12](../spec-climate-platform.md#12-deployment)). The SPA is **static
+([platform deployment](../platform/spec-platform-operations.md#2-deployment)). The SPA is **static
 assets**; there is no Node runtime at request time.
 
 ### CI
@@ -297,7 +297,7 @@ Tailwind (CSS-first) reads var(--color-*) → utilities resolve per theme
 An inline script in `index.html` sets `data-theme` from `localStorage` (or
 `prefers-color-scheme`) before first paint to avoid a flash. Charts, status
 colors, and surfaces all read the same tokens and re-theme with one attribute
-swap. Token definitions are owned by [`design-tokens.md`](./design-tokens.md).
+swap. Token definitions are owned by [`spec-frontend-design-tokens.md`](./spec-frontend-design-tokens.md).
 
 ---
 
@@ -332,8 +332,8 @@ app.** Cached data and the shell stay on screen while the SPA recovers.
 | Why each dependency exists | referenced | [`spec-frontend-tech-stack.md`](./spec-frontend-tech-stack.md) |
 | Data shapes, query keys, WS taxonomy | referenced | [`spec-frontend-data-model.md`](./spec-frontend-data-model.md) |
 | Per-component contracts | referenced | [`spec-frontend-components.md`](./spec-frontend-components.md) |
-| Visual tokens & theming values | referenced | [`design-tokens.md`](./design-tokens.md) |
+| Visual tokens & theming values | referenced | [`spec-frontend-design-tokens.md`](./spec-frontend-design-tokens.md) |
 | Behavior, motion, real-time UX | referenced | [`spec-frontend-interactions.md`](./spec-frontend-interactions.md) |
 | Hard rules (hosting, auth, safety, perf) | constrained by | [`spec-frontend-constraints.md`](./spec-frontend-constraints.md) |
 | Views being connected | composed from | [`spec-frontend-purpose-and-views.md`](./spec-frontend-purpose-and-views.md) |
-| Platform topology & API surface | consumes | [platform §2](../spec-climate-platform.md#2-architecture), [§7](../spec-climate-platform.md#7-api-surface) |
+| Platform topology & API surface | consumes | [platform architecture](../platform/spec-platform-architecture.md), [API surface](../platform/spec-platform-api-surface.md) |

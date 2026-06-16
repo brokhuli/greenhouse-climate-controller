@@ -163,7 +163,7 @@ stack — Traefik is not used.
 ### Problem
 
 Phase 2 runs several services that a browser or CLI client needs to reach: the Go API, Keycloak
-(OIDC), and the React SPA. The design docs ([spec-climate-platform.md §10](../specs/design/spec-climate-platform.md#10-reverse-proxy--routing))
+(OIDC), and the React SPA. The design docs ([spec-platform-architecture.md](../specs/design/platform/spec-platform-architecture.md#4-reverse-proxy--the-edge))
 call for a single reverse proxy as the platform's one entry point but list "Traefik or nginx"
 without deciding which.
 
@@ -184,7 +184,7 @@ but the SPA and OIDC flows go through the single nginx entry point.
 
 **Why nginx fits here specifically:** the routing map is static — services are named, config-driven
 Compose services (the controllers are generated as named services, not `docker compose --scale`
-replicas, per [spec-climate-platform.md §12](../specs/design/spec-climate-platform.md#12-deployment)).
+replicas, per [spec-platform-operations.md](../specs/design/platform/spec-platform-operations.md#2-deployment)).
 nginx already serves the SPA regardless, so folding the `/api` and `/auth` proxy rules into that same
 container adds one config file and no new component. Static `proxy_pass` upstreams are exactly nginx's
 strength when the service map does not churn at runtime.
@@ -533,7 +533,7 @@ telemetry only** — it is not a command/setpoint channel (setpoints flow over R
 
 Every design doc explicitly defers wire formats to `contracts/` — the controller spec
 ([§11](../specs/design/controller/spec-controller-interfaces.md)), the platform spec
-([§16](../specs/design/spec-climate-platform.md)), the optimizer spec, and the Phase 4 spec all say
+([overview](../specs/design/platform/spec-platform-overview.md)), the optimizer spec, and the Phase 4 spec all say
 "topic names, payload schemas, REST shapes … live in `contracts/`." But `contracts/` is the single
 source of truth that **all three phases conform to**, and no RFC has settled its shape. RFCs 001–006
 each picked a *component* (broker, store, ingress, LLM backend, setpoint authority, Phase 4 seam);
@@ -542,7 +542,7 @@ since changing it later means editing Rust, Go, and Python at once.
 
 Three decisions block writing the first schema:
 
-1. **Topic taxonomy & identity.** [spec-climate-platform.md §6](../specs/design/spec-climate-platform.md#L150)
+1. **Topic taxonomy & identity.** [spec-platform-ingestion.md](../specs/design/platform/spec-platform-ingestion.md#2-per-greenhouse-routing)
    already assumes "each controller publishes under its own topic root … maps topic → greenhouse via
    the registry," but the root structure and the ID format are undecided. The same identity has to key
    MQTT topics, REST paths (`/greenhouses/{id}/setpoints`, RFC-005), and the registry/telemetry rows
@@ -819,8 +819,8 @@ bearer token** (no OIDC in the controller); MQTT stays anonymous on the local ne
 
 The platform's authorization model is specified for **humans** but not for **services**:
 
-- [spec-climate-platform.md §7](../specs/design/spec-climate-platform.md#7-api-surface) and
-  [§9](../specs/design/spec-climate-platform.md#9-authentication--authorization): write-path actions
+- [spec-platform-api-surface.md](../specs/design/platform/spec-platform-api-surface.md) and
+  [authentication](../specs/design/platform/spec-platform-security.md): write-path actions
   (assignments, setpoint edits) "require the **operator** role," carried in a Keycloak **OIDC token**.
 - But [spec-climate-optimizer.md §6](../specs/design/spec-climate-optimizer.md#6-setpoint-refinement--application)
   makes the optimizer a write-path client — `POST /greenhouses/{id}/setpoints` — with **no statement
@@ -832,7 +832,7 @@ Separately, the **controller's** REST API is unauthenticated:
 - [spec-controller-interfaces.md](../specs/design/controller/spec-controller-interfaces.md) describes
   the REST config/override API with no auth. Standalone ([P1 §13](../specs/design/controller/spec-controller-architecture.md#8-deployment))
   that is fine — it is a local dev binary. But in **managed mode** the platform pushes setpoints to it
-  over the Docker network ([P2 §13](../specs/design/spec-climate-platform.md#13-interfaces--integration-with-phase-1)),
+  over the Docker network ([P2 interfaces](../specs/design/platform/spec-platform-interfaces.md)),
   and that REST surface is the **only inbound write path into the greenhouse** — currently anyone on
   the Compose network can drive it. Whether that boundary is authenticated, and how, is an unstated
   decision with real (if local) blast radius: it touches the controller (Rust), the platform's
@@ -850,7 +850,7 @@ Register the optimizer as a **confidential OAuth2 client** in Keycloak (client i
 **client-credentials** grant — the standard machine-to-machine flow, no browser, no human. Keycloak
 issues an access token carrying a client role that the API maps onto the platform **operator** role,
 so the optimizer authenticates and authorizes through the *same* token-validation path RFC-005 and
-[§9](../specs/design/spec-climate-platform.md#9-authentication--authorization) already define for human
+[authentication](../specs/design/platform/spec-platform-security.md) already define for human
 operators — no second authz mechanism. Provenance is unaffected: the setpoint write is still recorded
 with source `optimizer` (RFC-005), now backed by a verifiable client identity rather than an
 anonymous call. The client secret is supplied via environment variable / Compose secret
@@ -863,7 +863,7 @@ Each controller is provisioned with a **pre-shared bearer token** in its TOML
 ([P1 §4](../specs/design/controller/spec-controller-config-and-parameters.md)); the controller
 requires it on the REST config/override/health-write endpoints and rejects unauthenticated calls. The
 platform stores the matching token in the **registry's controller-endpoint record**
-([P2 §6](../specs/design/spec-climate-platform.md#6-fleet-management--operator-control)) and presents
+([P2 fleet management](../specs/design/platform/spec-platform-crop-profiles.md#5-fleet-management--operator-control)) and presents
 it on every downward REST call. This authenticates the *only* inbound write path into a controller
 without putting an OIDC client in the lightweight Rust process — Keycloak/OIDC in the controller would
 be disproportionate for a single trusted caller (the platform). Standalone Phase 1 leaves the token
@@ -918,7 +918,7 @@ system ever leaves the single-host local model.
 
 - Token rotation for the per-controller bearer token: static-for-the-lifetime-of-the-deployment is
   almost certainly fine locally, but the generation script
-  ([P2 §12](../specs/design/spec-climate-platform.md#12-deployment)) is the natural place to mint one
+  ([P2 deployment](../specs/design/platform/spec-platform-operations.md#2-deployment)) is the natural place to mint one
   per controller if rotation is ever wanted. Default: static, set at provisioning.
 - Whether the optimizer's Keycloak client role should be the full **operator** role or a narrower
   **service** role scoped to just `POST /setpoints` (operator can also assign profiles, which the
@@ -937,7 +937,7 @@ per-controller pre-shared bearer token) are **not** adopted. The committed postu
 
 | Boundary | Direction | Mechanism (accepted) |
 |---|---|---|
-| Human operator → Phase 2 API/SPA | write + read | **Keycloak OIDC** — unchanged from [P2 §9](../specs/design/spec-climate-platform.md#9-authentication--authorization). The only authenticated boundary. |
+| Human operator → Phase 2 API/SPA | write + read | **Keycloak OIDC** — unchanged from [P2 authentication](../specs/design/platform/spec-platform-security.md). The only authenticated boundary. |
 | Optimizer → Phase 2 API | write (setpoints) | **None** — trusted on the internal Docker network; the Phase 2 write endpoints accept the internal call without a service token. |
 | Platform → controller REST | write (setpoints/override) | **None** — Docker network isolation alone; the controller REST API stays unauthenticated in managed mode exactly as in standalone ([P1 §11](../specs/design/controller/spec-controller-interfaces.md), [§13](../specs/design/controller/spec-controller-architecture.md#8-deployment)). |
 | Optimizer → Phase 2 DB | read (history) | Read-only `optimizer_ro` role ([RFC-008](#rfc-008-phase-3-telemetry-read-path)) — a least-privilege **database** credential, not service authn; unchanged. |
@@ -958,7 +958,7 @@ open inbound write path the Proposal's bearer token was meant to close, and it i
 within the local threat model. Setpoint provenance (`source = optimizer`, [RFC-005](#rfc-005-setpoint-authority-and-delivery-chain))
 is still recorded by the application but is **self-asserted** by the caller rather than backed by a
 verified token identity. The controller's REST API ([P1 §11](../specs/design/controller/spec-controller-interfaces.md))
-and the registry's controller-endpoint record ([P2 §6](../specs/design/spec-climate-platform.md#6-fleet-management--operator-control))
+and the registry's controller-endpoint record ([P2 fleet management](../specs/design/platform/spec-platform-crop-profiles.md#5-fleet-management--operator-control))
 remain the natural seams to add a per-controller token, and the optimizer the natural place to add a
 service account, **if** the system ever leaves the single-host local model. The Proposal's open
 questions (token rotation, narrow service role vs. operator, auth on read endpoints) are moot under

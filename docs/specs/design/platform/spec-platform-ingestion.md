@@ -1,0 +1,90 @@
+# Platform — Telemetry Ingestion
+
+> **Purpose:** Define how the platform takes telemetry **up** from the controllers —
+> the MQTT subscription, per-greenhouse routing, the streams it stores, liveness
+> derivation, and the retention policy that keeps an append-only store bounded.
+> Wire formats (topic taxonomy, payload envelope, QoS, retained policy) are owned by
+> [`contracts/mqtt`](../../../../contracts/mqtt/) under
+> [RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format);
+> this file lists *responsibilities*, not schemas.
+
+This is the **telemetry-up** half of the platform's bidirectional model
+([overview §1](./spec-platform-overview.md#1-what-the-platform-is)); the
+**control-down** half is [crop profiles](./spec-platform-crop-profiles.md).
+
+---
+
+## 1. Subscribe and store
+
+The API subscribes to the controllers' MQTT topics (topic map defined in
+[`contracts/mqtt`](../../../../contracts/mqtt/), following the taxonomy and envelope
+fixed by RFC-007) and writes what it receives into the time-series store
+([data model](./spec-platform-data-model.md)). Ingestion is the platform's only
+inbound path from the greenhouses.
+
+---
+
+## 2. Per-greenhouse routing
+
+Each controller publishes under its own `gh/{greenhouse_id}/...` topic root (RFC-007);
+the ingester wildcard-subscribes and maps topic → greenhouse via the registry's
+controller-endpoint record, keyed by the same `greenhouse_id`. The registry
+([fleet management](./spec-platform-crop-profiles.md#5-fleet-management--operator-control))
+is the bootstrap that routing keys off — an unregistered `greenhouse_id` has nowhere
+to land and is rejected/logged rather than silently stored.
+
+---
+
+## 3. Streams ingested
+
+The same surface the controller publishes
+([controller interfaces](../controller/spec-controller-interfaces.md)):
+
+- **Sensor readings** — fused/raw per-metric values (temperature, humidity, CO₂, PAR,
+  per-zone soil moisture).
+- **Actuator states** — commanded and observed positions.
+- **Fault / state events** — faults, safety-interlock activations, and the
+  consolidated system state.
+
+---
+
+## 4. QoS, retained & liveness
+
+- **QoS & retained** — readings use the QoS the contract specifies; retained
+  system-state / last-will messages let the platform recover a controller's current
+  state on (re)connect without waiting for the next sample.
+- **Liveness / health** — absence of expected messages (or an MQTT last-will) marks a
+  greenhouse **offline**; ingested fault events mark it **degraded**. Per-greenhouse
+  status is derived *here* and surfaced to the fleet view and reconciliation
+  ([crop profiles](./spec-platform-crop-profiles.md)). Liveness is therefore a product
+  of ingestion, not a separate poll.
+
+---
+
+## 5. Retention & downsampling
+
+Telemetry is append-only and grows without bound, so the time-series store needs a
+**retention policy** (and optionally continuous aggregates / downsampling for
+long-range dashboard queries). The specific horizon is an implementation/config
+choice, not fixed by this spec; TimescaleDB's retention + continuous-aggregate
+features are the intended mechanism ([data model](./spec-platform-data-model.md)).
+
+---
+
+## 6. Read-only with respect to the greenhouse
+
+Ingestion **never changes a controller**. All downward writes go through the control
+path in [crop profiles](./spec-platform-crop-profiles.md). This one-way property is
+what lets ingestion wildcard-subscribe to the whole fleet without any risk of a
+side effect on a greenhouse.
+
+---
+
+## 7. Cross-spec map
+
+| Concern | This spec | Detailed in |
+|---|---|---|
+| Where ingested telemetry is stored | writes to | [`spec-platform-data-model.md`](./spec-platform-data-model.md) |
+| How derived status feeds the fleet view + reconciliation | feeds | [`spec-platform-crop-profiles.md`](./spec-platform-crop-profiles.md) |
+| The published surface being ingested | consumes | [controller interfaces](../controller/spec-controller-interfaces.md) |
+| Topic taxonomy, envelope, QoS, retained policy | defers to | [`contracts/mqtt`](../../../../contracts/mqtt/), [RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format) |

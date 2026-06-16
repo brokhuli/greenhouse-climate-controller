@@ -98,7 +98,7 @@ here:
 
 Forcing an actuator is a **controller-local** action — the platform's downward
 control is setpoint-only and does not proxy actuator overrides
-([platform §14](../spec-climate-platform.md#14-scope--deferred--out-of-scope)).
+([platform constraints](../platform/spec-platform-constraints.md#7-scope--deferred--out-of-scope)).
 
 ---
 
@@ -142,5 +142,5 @@ contracts (including the platform/optimizer ones downstream of this surface) is
 | What faults are surfaced | reports | [`spec-controller-sensing.md`](./spec-controller-sensing.md#6-fault-surfacing) |
 | Runtime-mutable config the REST API edits | edits | [`spec-controller-config-and-parameters.md`](./spec-controller-config-and-parameters.md#startup-vs-runtime) |
 | Wire formats (topics, payloads, status codes) | binds to | [`contracts/`](../../../../contracts/), [`spec-contracts.md`](../spec-contracts.md) |
-| Who consumes the telemetry | consumed by | [platform §4](../spec-climate-platform.md#4-telemetry-ingestion), [frontend data model](../frontend/spec-frontend-data-model.md) |
+| Who consumes the telemetry | consumed by | [platform ingestion](../platform/spec-platform-ingestion.md), [frontend data model](../frontend/spec-frontend-data-model.md) |
 | `P1-OBS-1` (per-tick publish), `P1-OBS-2` (health) | cited | [NFR doc](../../artifacts/non-functional-requirements.md) |

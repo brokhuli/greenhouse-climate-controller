@@ -240,7 +240,7 @@ delivery differ.
 - **Phase 2 (managed):** the same controller as a **Docker container**, configured
   by a **TOML file mounted at startup**, one container per greenhouse, connecting
   to the platform over the local Docker network. See
-  [platform §12](../spec-climate-platform.md#12-deployment) for the
+  [platform deployment](../platform/spec-platform-operations.md#2-deployment) for the
   named-service / variable-N model.
 
 In both modes the configuration is the same TOML: the controller's unique

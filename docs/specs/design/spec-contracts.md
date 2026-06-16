@@ -6,7 +6,7 @@ the Phase 4 extensions interoperate. Each phase spec defers its wire formats to
 [`contracts/`](../../../contracts/), "the single source of truth all phases conform to"; this catalog
 is the map of *what* contracts exist, who produces and consumes each, and in what format. For the
 components on either side of these boundaries, see [`spec-controller-overview.md`](./controller/spec-controller-overview.md),
-[`spec-climate-platform.md`](./spec-climate-platform.md), [`spec-climate-optimizer.md`](./spec-climate-optimizer.md),
+[`spec-platform-overview.md`](./platform/spec-platform-overview.md), [`spec-climate-optimizer.md`](./spec-climate-optimizer.md),
 and [`spec-phase4.md`](./spec-phase4.md).
 
 > Scope note: this is a **catalog**, not a schema. It lists each contract and its purpose, parties,
@@ -39,8 +39,8 @@ is versioned and accompanied by an ADR, per [`contracts/README.md`](../../../con
 | 1 | MQTT telemetry schemas | Controller → platform, optimizer | JSON Schema (Draft 2020-12) | 1 | [RFC-007](../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format), [RFC-001](../../decisions/request-for-comments.md#rfc-001-mqtt-broker-selection) |
 | 2 | Controller REST API | Controller → platform | OpenAPI 3.1 | 1 | [RFC-005](../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain), [RFC-009](../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries) |
 | 3 | Phase 2 Setpoint API | Optimizer (+ Phase 4) → platform | REST (OpenAPI-style) | 2b / 3 | [RFC-005](../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain) |
-| 4 | Phase 2 operator/fleet REST API | SPA / operator → platform | REST (OpenAPI-style) | 2a (telemetry/registration/edits) / 2b (profiles/assignments) | [P2 §7](./spec-climate-platform.md#7-api-surface) |
-| 5 | Phase 2 WebSocket fan-out | Platform → SPA | WebSocket message schema | 2a | [P2 §7](./spec-climate-platform.md#7-api-surface) |
+| 4 | Phase 2 operator/fleet REST API | SPA / operator → platform | REST (OpenAPI-style) | 2a (telemetry/registration/edits) / 2b (profiles/assignments) | [P2 API surface](./platform/spec-platform-api-surface.md) |
+| 5 | Phase 2 WebSocket fan-out | Platform → SPA | WebSocket message schema | 2a | [P2 API surface](./platform/spec-platform-api-surface.md) |
 | 6 | Optimizer plan schema | Planner → constraint engine / applier | Structured schema (JSON Schema) | 3 | [RFC-004](../../decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface) |
 | 7 | Telemetry read-surface views | Platform → optimizer | Versioned SQL views | 2b / 3 | [RFC-008](../../decisions/request-for-comments.md#rfc-008-phase-3-telemetry-read-path) |
 
@@ -88,7 +88,7 @@ is versioned and accompanied by an ADR, per [`contracts/README.md`](../../../con
 | **Parties / direction** | SPA / operator tooling → platform |
 | **Format** | REST request/response (OpenAPI-style description recommended) |
 | **Phase introduced** | Phase 2 — registration/telemetry/edits in 2a, profiles/assignments in 2b |
-| **Governing decision** | [P2 §7](./spec-climate-platform.md#7-api-surface) |
+| **Governing decision** | [P2 API surface](./platform/spec-platform-api-surface.md) |
 | **Location** | To be created |
 | **Status** | To author |
 
@@ -100,7 +100,7 @@ is versioned and accompanied by an ADR, per [`contracts/README.md`](../../../con
 | **Parties / direction** | Platform → SPA |
 | **Format** | WebSocket message schema (shares the RFC-007 identity / timestamp envelope) |
 | **Phase introduced** | Phase 2a |
-| **Governing decision** | [P2 §7](./spec-climate-platform.md#7-api-surface) |
+| **Governing decision** | [P2 API surface](./platform/spec-platform-api-surface.md) |
 | **Location** | To be created |
 | **Status** | To author |
 

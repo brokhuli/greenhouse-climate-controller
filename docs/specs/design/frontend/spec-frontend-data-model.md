@@ -3,7 +3,7 @@
 > **Purpose:** Define the shapes the SPA consumes and how they bind to the
 > backend. This is the dashboard's analogue of a content schema — except the SPA
 > **authors no content**; every shape originates from the Go API
-> ([platform §7](../spec-climate-platform.md#7-api-surface)) over REST and
+> ([platform API surface](../platform/spec-platform-api-surface.md)) over REST and
 > WebSockets. This file defines the client-side TypeScript/Zod types, the
 > query-key scheme, the cache + live-merge strategy, runtime validation, the
 > WebSocket message taxonomy, and the view-model derivations the UI renders.
@@ -11,14 +11,14 @@
 > **Source of truth & a documented gap.** The wire contracts are owned by
 > [`contracts/`](../../../../contracts/) under the conventions in
 > [RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format),
-> and the API *surface* by [platform §7](../spec-climate-platform.md#7-api-surface).
+> and the API *surface* by [platform API surface](../platform/spec-platform-api-surface.md).
 > Today `contracts/` formalizes only `mqtt/` (telemetry, platform-internal) and
 > `controller-rest/` (platform→controller). **The Go-API ↔ SPA REST/WS contract is
 > not yet formalized in `contracts/`.** Until it is, the schemas here bind to
 > platform §7 and are the *client's working contract*; when the API contract is
 > formalized, these Zod schemas must be regenerated/validated against it, and this
 > file points at it. The shapes below mirror the platform's
-> [data model (§3)](../spec-climate-platform.md#3-data-model) so the mapping stays
+> [data model](../platform/spec-platform-data-model.md) so the mapping stays
 > thin.
 
 > All schema snippets are **illustrative** — they show intent and field origin, not
@@ -73,7 +73,7 @@ Identity, the envelope, and versioning follow
 ## 3. Relational shapes (config & metadata)
 
 Mirror the platform's relational model
-([§3](../spec-climate-platform.md#3-data-model)). Low-volume, fetched by REST.
+([data model](../platform/spec-platform-data-model.md)). Low-volume, fetched by REST.
 
 ### Fleet & greenhouse (2a)
 
@@ -97,7 +97,7 @@ export const fleet = z.array(greenhouseSummary);
 ### Setpoints / target bundle
 
 Mirrors the controller's runtime-adjustable
-[`[setpoints]`](../spec-climate-platform.md#3-data-model) plus per-zone irrigation,
+[`[setpoints]`](../platform/spec-platform-data-model.md) plus per-zone irrigation,
 so a profile resolves by direct mapping:
 
 ```ts
@@ -143,7 +143,7 @@ export const assignment = z.object({
 > (climate setpoints + per-zone irrigation). **Zone *topology*** — adding/removing
 > zones — is a controller config + restart change and is **not** in the platform's
 > write path, so the SPA never edits it
-> ([platform §3 boundary](../spec-climate-platform.md#3-data-model)).
+> ([platform data model boundary](../platform/spec-platform-data-model.md)).
 
 ---
 
@@ -270,9 +270,9 @@ derivations are testable in isolation (`P2-TEST-2`-adjacent unit coverage).
 
 ## 9. Cross-references
 
-- API surface (routes + responsibilities): [platform §7](../spec-climate-platform.md#7-api-surface)
+- API surface (routes + responsibilities): [platform API surface](../platform/spec-platform-api-surface.md)
 - Wire conventions (envelope, identity, versioning): [RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)
-- Platform data model the shapes mirror: [platform §3](../spec-climate-platform.md#3-data-model)
+- Platform data model the shapes mirror: [platform data model](../platform/spec-platform-data-model.md)
 - How the cache is fed and patched: [architecture §4](./spec-frontend-architecture.md#4-runtime-data-flow)
 - Forms reusing these schemas: [tech-stack — forms](./spec-frontend-tech-stack.md)
 - Contracts catalog (index of all contracts): [`spec-contracts.md`](../spec-contracts.md)

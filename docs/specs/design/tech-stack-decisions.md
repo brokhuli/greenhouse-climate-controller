@@ -48,7 +48,7 @@
 > relay, unauthenticated on the local network. **2b** adds **Keycloak** (auth) and
 > **Prometheus/Grafana** (observability) alongside crop profiles, resolution, and reconciliation. The
 > stack table below is the full Phase 2 set; the Compose service split (2a vs 2b) is in
-> [spec-climate-platform.md §12](./spec-climate-platform.md#12-deployment).
+> [spec-platform-operations.md](./platform/spec-platform-operations.md#2-deployment).
 
 ### Recommended Stack
 

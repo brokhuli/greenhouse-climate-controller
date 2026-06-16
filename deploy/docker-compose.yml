@@ -3,7 +3,7 @@
 # Phase 1: the only LIVE service is `mqtt` (Mosquitto). The Phase 1 controller runs as a
 # native Windows binary (controller spec §13), not a container, and connects to the broker
 # at localhost:1883. The Phase 2 platform services below are commented-out placeholders —
-# the full topology is documented in spec-climate-platform.md §12; they are activated when
+# the full topology is documented in spec-platform-operations.md (§2 Deployment); they are activated when
 # Phase 2 begins (api/frontend need source + Dockerfiles that do not exist yet, and the rest
 # is Phase 2/2b infrastructure with nothing to serve until then).
 #
@@ -29,7 +29,7 @@ services:
       retries: 3
       start_period: 5s
 
-  # --- Phase 2 platform services (placeholders — see spec-climate-platform.md §12) ---
+  # --- Phase 2 platform services (placeholders — see spec-platform-operations.md §2 Deployment) ---
   # Uncomment and complete as each lands. Slice tags: (2a) MVP pipeline, (2b) auth + observability.
   #
   # db:          # (2a) TimescaleDB — relational registry + crop profiles + time-series telemetry

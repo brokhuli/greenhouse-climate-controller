@@ -173,5 +173,5 @@ the [deterministic simulation](./spec-controller-hal-simulation.md#7-determinism
 | What gains/bands/targets mean | values for | [`spec-controller-control-loops.md`](./spec-controller-control-loops.md) |
 | What limits/ceilings mean | values for | [`spec-controller-safety-and-constraints.md`](./spec-controller-safety-and-constraints.md) |
 | The REST surface that edits config at runtime | edited via | [`spec-controller-interfaces.md`](./spec-controller-interfaces.md) |
-| Crop→setpoint resolution above the controller | defers to | [RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain), [platform §5](../spec-climate-platform.md#5-crop-profiles--setpoint-resolution) |
+| Crop→setpoint resolution above the controller | defers to | [RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain), [platform crop profiles](../platform/spec-platform-crop-profiles.md) |
 | `P1-PERF-*`, `P1-REL-*`, `P1-RESIL-2`, `P1-TEST-2` | cited | [NFR doc](../../artifacts/non-functional-requirements.md) |

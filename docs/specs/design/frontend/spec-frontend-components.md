@@ -6,7 +6,7 @@
 > Grouped outermost (shell) inward (primitives). Each entry covers **purpose**,
 > **props**, **data dependency** (which query/subscription it reads), **interaction**,
 > **states** (loading / empty / error / offline), **a11y**, and **role-gating** (2b)
-> where relevant. Visual values come from [`design-tokens.md`](./design-tokens.md);
+> where relevant. Visual values come from [`spec-frontend-design-tokens.md`](./spec-frontend-design-tokens.md);
 > behavior from [`spec-frontend-interactions.md`](./spec-frontend-interactions.md).
 
 Composition follows the one-way rule from
@@ -113,7 +113,7 @@ route in [architecture §3](./spec-frontend-architecture.md#3-route-tree).
 - **Data:** `useProfile(id)`; `react-hook-form` + the `setpoints` Zod schema.
 - **Renders:** a stage selector and a `SetpointFields` group per stage.
 - **Interaction:** validate against crop-safe ranges; save → mutation; assign+apply
-  triggers platform resolution/reconciliation ([platform §5](../spec-climate-platform.md#5-crop-profiles--setpoint-resolution)).
+  triggers platform resolution/reconciliation ([platform crop profiles](../platform/spec-platform-crop-profiles.md)).
 - **States:** dirty/unsaved guard; save pending/confirmed/failed.
 
 ### `ActivityFeed` *(2a; drift entries 2b)*

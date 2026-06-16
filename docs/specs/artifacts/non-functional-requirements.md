@@ -322,7 +322,7 @@ the fleet view simultaneously.
 ### Test method
 
 Controllers run as Docker containers on the local development machine (see
-[Phase 2 spec §12](../design/spec-climate-platform.md#12-deployment)). A generation script produces a
+[platform deployment](../design/platform/spec-platform-operations.md#2-deployment)). A generation script produces a
 `docker-compose.override.yml` with N named controller services; `docker compose up -d` brings the
 full stack up. To vary N, regenerate and redeploy.
 

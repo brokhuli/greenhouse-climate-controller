@@ -6,7 +6,7 @@ from crop profiles. This describes the **software service**. For the physical sy
 it simulates — the sensors, actuators, and the coupling between climate variables — see
 [`physical-system-single.md`](./physical-system-single.md); for the controller it ultimately steers,
 see [`spec-controller-overview.md`](./controller/spec-controller-overview.md); for the platform it integrates
-with, see [`spec-climate-platform.md`](./spec-climate-platform.md).
+with, see [`spec-platform-overview.md`](./platform/spec-platform-overview.md).
 
 > Scope note: this is an architectural spec (components, responsibilities, behavior, configuration).
 > Concrete code/module/class design is deferred until implementation. Wire formats (MQTT topics,
@@ -84,7 +84,7 @@ Phase 1 Controller
 
 The optimizer is a **client** of Phase 2, not a peer of Phase 1: it reads from Phase 2's history and
 writes through Phase 2's setpoint API exactly as an operator edit would, layered on the crop-profile
-baseline ([P2 §5](./spec-climate-platform.md#5-crop-profiles--setpoint-resolution)).
+baseline ([P2 crop profiles](./platform/spec-platform-crop-profiles.md)).
 
 ---
 
@@ -175,7 +175,7 @@ It **writes targets only**; it never commands actuators and never edits the crop
 
 **Delivery is through Phase 2.** The optimizer applies a refined setpoint bundle via the **Phase 2
 REST API**, layered on the crop-profile baseline exactly as a sticky operator setpoint edit is
-([P2 §5 — Resolution and the write path](./spec-climate-platform.md#5-crop-profiles--setpoint-resolution)).
+([P2 crop profiles — Resolution and the write path](./platform/spec-platform-crop-profiles.md)).
 Phase 2 is the **single authority for controller setpoints**
 ([RFC-005](../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain)):
 it enforces crop-safe bounds, records provenance (source `optimizer`, with an `optimizer_run_id` for
@@ -223,8 +223,8 @@ the crop-safe bounds enforced in [§5](#5-constraint-engine--safety).
 | **Service API (FastAPI)** | Operator/tools → optimizer | Trigger planning cycles, inspect proposed plans, review and act on escalations |
 
 The optimizer **consumes** the contracts owned by [`contracts/`](../../../contracts/) and the Phase 2
-interfaces ([P2 §5](./spec-climate-platform.md#5-crop-profiles--setpoint-resolution),
-[P2 §13](./spec-climate-platform.md#13-interfaces--integration-with-phase-1)) rather than defining new
+interfaces ([P2 crop profiles](./platform/spec-platform-crop-profiles.md),
+[P2 interfaces](./platform/spec-platform-interfaces.md)) rather than defining new
 ones. It does **not** open its own channel to the Phase 1 controller — all downward influence flows
 through Phase 2, preserving the platform's authority over intended state.
 
@@ -276,7 +276,7 @@ Optimizer capabilities intentionally **not** in Phase 3:
 | Weather / forecast-reactive control | Reacting to a live + forecast outdoor feed (cold fronts, clouds) needs a weather source and stochastic planning — **Phase 4** ([spec-phase4.md](./spec-phase4.md)). Phase 3 anticipates only clock-known disturbances ([§3](#3-digital-twin--simulation-engine)) |
 | Combustion-heater coordination | A single actuator coupling temperature + CO₂ + humidity breaks the independence the control loops assume and needs dedicated multi-variable coordination — **Phase 4** ([P1 §12](./controller/spec-controller-constraints.md#9-scope--deferred-controller-capabilities)) |
 | Site-wide orchestration | Coordinated behavior across greenhouses (staggering loads, sharing constrained resources) needs a shared-infrastructure model that is out of scope; Phase 3 plans **one greenhouse at a time** ([§1](#1-overview)) |
-| Introducing the crop → targets mapping | The static "this crop, this stage → these targets" mapping is **owned by Phase 2** ([P2 §5](./spec-climate-platform.md#5-crop-profiles--setpoint-resolution)); Phase 3 only **refines** within its crop-safe bounds |
+| Introducing the crop → targets mapping | The static "this crop, this stage → these targets" mapping is **owned by Phase 2** ([P2 crop profiles](./platform/spec-platform-crop-profiles.md)); Phase 3 only **refines** within its crop-safe bounds |
 | Direct actuator commanding | Driving individual actuators is **controller-owned** ([P1 spec](./controller/spec-controller-architecture.md#2-the-tick-pipeline)); Phase 3's downward influence is **setpoint-only**, through Phase 2 |
 | Safety authority | Safety interlocks remain **controller-owned** and unconditional; the optimizer's constraint engine is an advisory pre-filter and never overrides them ([§5](#5-constraint-engine--safety)) |
 | Writing directly to controllers | Phase 2 is the single authority on intended state; the optimizer writes refined setpoints **through the Phase 2 API**, never straight to a controller ([§6](#6-setpoint-refinement--application)) |

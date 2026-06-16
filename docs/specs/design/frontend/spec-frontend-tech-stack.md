@@ -106,7 +106,7 @@
   exactly this (dense, live time series) and is small.
 - **How:** Wrapped once in a `TimeSeriesChart` primitive
   ([components](./spec-frontend-components.md)) that takes a `series` array and
-  reads colors from chart tokens ([design-tokens §chart](./design-tokens.md)). The
+  reads colors from chart tokens ([design-tokens §chart](./spec-frontend-design-tokens.md)). The
   live ring buffer feeds it directly.
 - **⚑ Alternatives & trip-wire:** **Recharts** (ergonomic, but SVG — drops frames
   with many live points), **ECharts** (capable but ~1 MB, heavier than the whole
@@ -128,7 +128,7 @@
   variables make the dark/light swap a one-attribute change
   ([architecture §8](./spec-frontend-architecture.md#8-theming-architecture)).
 - **How:** Tokens in `src/styles/tokens.css` (owned by
-  [`design-tokens.md`](./design-tokens.md)); Tailwind theme reads `var(--…)`;
+  [`spec-frontend-design-tokens.md`](./spec-frontend-design-tokens.md)); Tailwind theme reads `var(--…)`;
   components write semantic utility classes, never raw hex.
 - **⚑ Alternative:** **CSS Modules** (more isolation, more boilerplate) or a
   component kit like **shadcn/ui** (faster to assemble, but ships opinionated
@@ -165,7 +165,7 @@
 
 - **What:** OIDC relying-party client for the browser (Authorization Code + PKCE).
 - **Why:** 2b delegates identity to **Keycloak**
-  ([platform §9](../spec-climate-platform.md#9-authentication--authorization),
+  ([platform authentication](../platform/spec-platform-security.md),
   `P2-SEC-1`); the SPA only needs to perform the login redirect, hold tokens, and
   expose the role. These libraries do exactly that with no custom crypto.
 - **How:** `AuthProvider` wraps the app; `/auth/callback` consumes the code; the
@@ -219,7 +219,7 @@ Recorded so the choice isn't re-litigated:
 
 - **Next.js / Remix** — SSR/server runtime is pointless behind a static nginx
   mount on a local Docker network; adds a Node server the deployment model
-  ([platform §12](../spec-climate-platform.md#12-deployment)) doesn't want.
+  ([platform deployment](../platform/spec-platform-operations.md#2-deployment)) doesn't want.
 - **Redux Toolkit** — server state belongs in Query; the residual UI state doesn't
   justify a global store and its boilerplate. Zustand is the fallback if needed.
 - **socket.io** — needs a matching server; the Go API speaks plain WebSockets.
