@@ -36,7 +36,7 @@ Each entry: the constraint, **why** it exists, and **what it forces or forbids**
 ## 3. Safety authority stays in the controller
 
 - **Why:** The controller's interlocks hold unconditional priority over any setpoint
-  ([controller safety](../controller/spec-controller-safety-and-constraints.md#2-safety-interlocks)).
+  ([controller safety](../controller/06-spec-controller-safety-and-constraints.md#2-safety-interlocks)).
 - **Forces:** The platform to **observe and report** interlock activations.
 - **Forbids:** The platform overriding, disabling, or out-prioritizing a controller
   interlock.
@@ -81,7 +81,7 @@ Platform capabilities intentionally **not** in Phase 2:
 | Site-wide orchestration | Coordinated behavior across greenhouses (e.g. staggering loads) needs the shared-infrastructure / resource-contention model that is [out of scope for the site](../physical-system-multi.md#common-inputs--out-of-scope). Phase 2 aggregates and manages; it does not couple physics |
 | Multi-site / multi-tenant | The platform manages a **single site**; multiple sites or tenants are not modeled |
 | Advanced RBAC | Two roles (viewer/operator) only; fine-grained permissions and org hierarchies are out of scope ([security](./spec-platform-security.md)) |
-| Manual actuator override | Forcing individual actuators is a **controller-local** action ([controller architecture](../controller/spec-controller-architecture.md#6-manual-override)); the platform's downward control is **setpoint-only** and does not proxy actuator overrides |
+| Manual actuator override | Forcing individual actuators is a **controller-local** action ([controller architecture](../controller/02-spec-controller-architecture.md#6-manual-override)); the platform's downward control is **setpoint-only** and does not proxy actuator overrides |
 | Safety authority | Safety interlocks remain **controller-owned** ([§3](#3-safety-authority-stays-in-the-controller)); the platform never overrides them |
 
 ---

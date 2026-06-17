@@ -83,7 +83,7 @@ Per-greenhouse data lives in the registry and assignments
 
 Phase 1 controllers run as **Docker containers on the same local machine**, not on
 physical devices. Because the controller HAL is pure simulation
-([controller HAL](../controller/spec-controller-hal-simulation.md)), there is no
+([controller HAL](../controller/03-spec-controller-hal-simulation.md)), there is no
 hardware dependency — each controller is a lightweight Rust process that connects to
 the platform over the local Docker network.
 
@@ -154,6 +154,6 @@ observe and target controller counts (`P2-SCAL-1`) — see
 | The container topology being deployed | deploys | [`spec-platform-architecture.md`](./spec-platform-architecture.md) |
 | The auth service (Keycloak) stood up in 2b | runs | [`spec-platform-security.md`](./spec-platform-security.md) |
 | The greenhouse telemetry (not platform metrics) | distinct from | [`spec-platform-data-model.md`](./spec-platform-data-model.md), [`spec-platform-dashboard.md`](./spec-platform-dashboard.md) |
-| The controllers being generated/run | manages | [controller deployment](../controller/spec-controller-architecture.md#8-deployment) |
+| The controllers being generated/run | manages | [controller deployment](../controller/02-spec-controller-architecture.md#8-deployment) |
 | The shared-host resource envelope the per-service limits enforce | defers to | [constraints — deployment & scale](../../artifacts/constraints.md#deployment--scale) |
 | Target controller counts, latencies (`P2-SCAL-1`, `P2-PERF-3`) | defers to | [NFR doc](../../artifacts/non-functional-requirements.md) |

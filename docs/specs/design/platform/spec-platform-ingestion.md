@@ -38,7 +38,7 @@ to land and is rejected/logged rather than silently stored.
 ## 3. Streams ingested
 
 The same surface the controller publishes
-([controller interfaces](../controller/spec-controller-interfaces.md)):
+([controller interfaces](../controller/08-spec-controller-interfaces.md)):
 
 - **Sensor readings** — fused/raw per-metric values (temperature, humidity, CO₂, PAR,
   per-zone soil moisture).
@@ -75,7 +75,7 @@ features are the intended mechanism ([data model](./spec-platform-data-model.md)
 
 Ingestion is decoupled from the database write the same way the controller decouples
 publishing from its control tick
-([controller interfaces §7](../controller/spec-controller-interfaces.md#7-mqtt-connection-resilience))
+([controller interfaces §7](../controller/08-spec-controller-interfaces.md#7-mqtt-connection-resilience))
 — here in the **up** direction:
 
 - **Bounded buffer.** A buffer sits between MQTT receipt and the time-series write; it
@@ -113,5 +113,5 @@ side effect on a greenhouse.
 | Where ingested telemetry is stored | writes to | [`spec-platform-data-model.md`](./spec-platform-data-model.md) |
 | How derived status feeds the fleet view + reconciliation | feeds | [`spec-platform-crop-profiles.md`](./spec-platform-crop-profiles.md) |
 | The lag/backlog metric that surfaces shedding | surfaced by | [operations §1](./spec-platform-operations.md#1-observability) |
-| The published surface being ingested | consumes | [controller interfaces](../controller/spec-controller-interfaces.md) |
+| The published surface being ingested | consumes | [controller interfaces](../controller/08-spec-controller-interfaces.md) |
 | Topic taxonomy, envelope, QoS, retained policy | defers to | [`contracts/mqtt`](../../../../contracts/mqtt/), [RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format) |

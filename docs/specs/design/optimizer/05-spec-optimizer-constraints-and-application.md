@@ -28,7 +28,7 @@ Safety is **layered and the controller is final**. The optimizer's constraint en
 pre-filter on intended targets; it does **not** replace or override the Phase 1 controller's safety
 interlocks, which remain controller-owned, run unconditionally on the live system, and are never
 reachable by Phase 3
-([P1 spec](../controller/spec-controller-architecture.md#2-the-tick-pipeline)). Because the optimizer
+([P1 spec](../controller/02-spec-controller-architecture.md#2-the-tick-pipeline)). Because the optimizer
 writes only setpoints — never actuator commands — the controller's interlocks and actuator
 constraints still bound everything that actually happens in the greenhouse.
 

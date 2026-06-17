@@ -10,14 +10,14 @@ This set is the **top-level design spec for Phase 3**: the **intelligence layer*
 that sits above each greenhouse's deterministic Phase 1 controller and refines the
 climate targets Phase 2 resolves from crop profiles. It describes the **software
 service**. It sits alongside the
-[controller](../controller/spec-controller-overview.md),
+[controller](../controller/01-spec-controller-overview.md),
 [platform](../platform/spec-platform-overview.md), and [Phase 4](../spec-phase4.md)
 specs, one altitude **above** the wire contracts in
 [`contracts/`](../../../../contracts/). For the physical system whose dynamics it
 simulates — the sensors, actuators, and the coupling between climate variables — see
 [`physical-system-single.md`](../physical-system-single.md); for the controller it
 ultimately steers, see
-[`spec-controller-overview.md`](../controller/spec-controller-overview.md); for the
+[`01-spec-controller-overview.md`](../controller/01-spec-controller-overview.md); for the
 platform it integrates with, see
 [`spec-platform-overview.md`](../platform/spec-platform-overview.md).
 

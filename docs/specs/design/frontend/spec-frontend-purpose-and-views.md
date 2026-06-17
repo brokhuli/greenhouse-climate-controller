@@ -17,13 +17,13 @@
 The dashboard makes a fleet of independent greenhouses **legible and operable
 from one screen**. The site is
 [homogeneous in hardware but heterogeneous in crop](../platform/spec-platform-overview.md):
-every greenhouse runs an identical, [crop-agnostic controller](../controller/spec-controller-config-and-parameters.md)
+every greenhouse runs an identical, [crop-agnostic controller](../controller/07-spec-controller-config-and-parameters.md)
 but grows a different crop at a different stage, so each is held at different
 targets. The operator needs to see, at a glance, whether every greenhouse is
 healthy and tracking its targets — and to act on any one of them without leaving
 the page.
 
-Because the controllers are [headless](../controller/spec-controller-interfaces.md),
+Because the controllers are [headless](../controller/08-spec-controller-interfaces.md),
 this SPA is the **only** window into the system and the **only** operator surface
 for the platform's downward control. Its job is therefore two-sided:
 
@@ -125,9 +125,9 @@ These belong elsewhere and are out of scope for the dashboard — see
 [`spec-frontend-constraints.md`](./spec-frontend-constraints.md):
 
 - **Not the controller's UI.** It edits *targets*, never forces actuators; safety
-  interlocks stay [controller-owned](../controller/spec-controller-safety-and-constraints.md#2-safety-interlocks).
+  interlocks stay [controller-owned](../controller/06-spec-controller-safety-and-constraints.md#2-safety-interlocks).
 - **Not a zone-topology editor.** Adding/removing zones is a controller config +
-  restart change ([P1 §4](../controller/spec-controller-config-and-parameters.md)),
+  restart change ([P1 §4](../controller/07-spec-controller-config-and-parameters.md)),
   not in the platform's write path, so not in the UI.
 - **Not platform observability.** Prometheus/Grafana cover *platform* health
   ([platform observability](../platform/spec-platform-operations.md#1-observability)); this dashboard

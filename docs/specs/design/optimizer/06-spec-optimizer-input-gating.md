@@ -31,7 +31,7 @@ The gate checks three things:
 
 **When the gate fails, the optimizer degrades rather than plans on bad data** — mirroring the
 controller's own
-[degradation ladder](../controller/spec-controller-sensing.md#5-the-degradation-ladder) ("down a
+[degradation ladder](../controller/04-spec-controller-sensing.md#5-the-degradation-ladder) ("down a
 ladder, never off a cliff"). It does **not** invoke the LLM; it **extends the last accepted plan** —
 the same fallback the state-change gate already uses
 ([planning](./04-spec-optimizer-planning.md#1-llm-driven-planning)) — and raises an **escalation**

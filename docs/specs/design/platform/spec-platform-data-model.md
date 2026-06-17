@@ -5,7 +5,7 @@
 > telemetry, both in one Postgres instance. This is an architectural data model
 > (entities and their purpose); concrete schema/DDL is deferred to implementation.
 > The profile target bundle deliberately **mirrors** the controller's
-> runtime-adjustable config ([controller config](../controller/spec-controller-config-and-parameters.md))
+> runtime-adjustable config ([controller config](../controller/07-spec-controller-config-and-parameters.md))
 > so resolution is a mapping, not a translation.
 
 ---
@@ -53,7 +53,7 @@ is a direct mapping, not a translation — keeping the contract between platform
 controller thin and the data model honest about where authority lives.
 
 The time-series streams are exactly the surface the controller publishes over MQTT
-([controller interfaces](../controller/spec-controller-interfaces.md)); the platform
+([controller interfaces](../controller/08-spec-controller-interfaces.md)); the platform
 stores what it ingests ([ingestion](./spec-platform-ingestion.md)) without reshaping
 it. Retention and downsampling of those streams are owned by
 [ingestion](./spec-platform-ingestion.md#5-retention--downsampling).
@@ -65,7 +65,7 @@ it. Retention and downsampling of those streams are owned by
 The bundle covers only what the controller exposes at *runtime*: climate setpoints and
 per-zone irrigation thresholds/schedule. Zone **structure** — adding or removing
 [zones](../physical-system-single.md#zones) — is a config-file + restart change on the
-controller ([controller config](../controller/spec-controller-config-and-parameters.md))
+controller ([controller config](../controller/07-spec-controller-config-and-parameters.md))
 and is **not** in the platform's write path. The platform records a greenhouse's zone
 topology as registry metadata it *reads*, never as something it *writes* down to a
 controller.
@@ -78,6 +78,6 @@ controller.
 |---|---|---|
 | How telemetry gets into the time-series store | stores output of | [`spec-platform-ingestion.md`](./spec-platform-ingestion.md) |
 | How profiles resolve into controller setpoints | holds inputs for | [`spec-platform-crop-profiles.md`](./spec-platform-crop-profiles.md) |
-| The runtime-adjustable config the bundle mirrors | mirrors | [controller config](../controller/spec-controller-config-and-parameters.md) |
+| The runtime-adjustable config the bundle mirrors | mirrors | [controller config](../controller/07-spec-controller-config-and-parameters.md) |
 | Users / roles | defines storage for | [`spec-platform-security.md`](./spec-platform-security.md) |
 | Wire shapes of the ingested streams | conforms to | [`contracts/`](../../../../contracts/) |

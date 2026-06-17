@@ -6,10 +6,10 @@
 > reference**, the one place that consolidates every numeric default scattered
 > across the other specs (τ, gains, bands, thresholds, bounds, limits, timeouts).
 > This is the controller's analogue of a token sheet: the
-> [HAL](./spec-controller-hal-simulation.md),
-> [sensing](./spec-controller-sensing.md),
-> [control loops](./spec-controller-control-loops.md), and
-> [safety](./spec-controller-safety-and-constraints.md) specs describe *what* each
+> [HAL](./03-spec-controller-hal-simulation.md),
+> [sensing](./04-spec-controller-sensing.md),
+> [control loops](./05-spec-controller-control-loops.md), and
+> [safety](./06-spec-controller-safety-and-constraints.md) specs describe *what* each
 > parameter does; this file pins the *values*. The TOML file is the runtime source
 > of truth; values here are committed defaults.
 
@@ -18,10 +18,10 @@
 ## Configuration model
 
 Configuration is a **TOML file loaded at startup**. Setpoints and thresholds are
-adjustable at runtime via the [REST API](./spec-controller-interfaces.md);
+adjustable at runtime via the [REST API](./08-spec-controller-interfaces.md);
 structural changes (adding/removing zones, HAL parameters) require a restart
 ([startup vs runtime](#startup-vs-runtime)). The same file shape serves both
-[deployment modes](./spec-controller-architecture.md#8-deployment).
+[deployment modes](./02-spec-controller-architecture.md#8-deployment).
 
 > **The controller is crop-agnostic.** It knows only numeric setpoints, never a
 > crop. The mapping from a crop (and its growth stage) to target values is owned
@@ -31,7 +31,7 @@ structural changes (adding/removing zones, HAL parameters) require a restart
 > running standalone, the values come from this TOML file plus direct REST edits.
 > Either way the controller just regulates to the numbers it is given. This is
 > restated as a hard rule in
-> [constraints](./spec-controller-constraints.md#3-crop-agnostic).
+> [constraints](./10-spec-controller-constraints.md#3-crop-agnostic).
 
 ---
 
@@ -51,22 +51,22 @@ vpd_target_kpa = 1.0
 dli_target_mol = 20.0
 ```
 
-These are the values the [control loops](./spec-controller-control-loops.md)
+These are the values the [control loops](./05-spec-controller-control-loops.md)
 regulate to. `temperature_day_c` / `temperature_night_c` are selected by
-[setpoint resolution](./spec-controller-control-loops.md#setpoint-resolution); the
+[setpoint resolution](./05-spec-controller-control-loops.md#setpoint-resolution); the
 rest are constant in Phase 1.
 
 ## Day/night scheduling
 
 The temperature setpoint switches between day and night values on the
 `day_start` / `day_end` window — a time-of-day lookup evaluated each tick against an
-[injected clock](./spec-controller-control-loops.md#setpoint-resolution) (so the flip
+[injected clock](./05-spec-controller-control-loops.md#setpoint-resolution) (so the flip
 is reproducible under a seed). It is **not** weather-predictive (Phase 3). The
 mechanism is built to extend to other setpoints later; see
-[setpoint resolution](./spec-controller-control-loops.md#setpoint-resolution).
+[setpoint resolution](./05-spec-controller-control-loops.md#setpoint-resolution).
 
 The window is **validated at config load**, through the same `serde` + `toml` boundary
-that validates every other parameter ([tech stack](./spec-controller-tech-stack.md#configuration)):
+that validates every other parameter ([tech stack](./09-spec-controller-tech-stack.md#configuration)):
 `day_start` and `day_end` must be valid `HH:MM` and satisfy `day_start < day_end`. A
 malformed or inverted window is rejected at startup — naming the violated bound, the
 same way an out-of-range REST edit is rejected — rather than silently selecting the
@@ -76,7 +76,7 @@ load, not mid-tick."
 ## Zone configuration
 
 Each irrigation [zone](../physical-system-single.md#zones) is a TOML entry; the
-[irrigation scheduler](./spec-controller-control-loops.md#medium-loops--scheduled--adaptive)
+[irrigation scheduler](./05-spec-controller-control-loops.md#medium-loops--scheduled--adaptive)
 runs one independent loop per zone.
 
 ```toml
@@ -105,11 +105,11 @@ schedule = "07:00,13:00,18:00"
 | Adding/removing zones; τ and coupling params | Config file + restart |
 
 The boundary is load-bearing: runtime-mutable state can be edited mid-run without
-disturbing the tick ([architecture §3](./spec-controller-architecture.md#3-real-time--scheduling-model)),
+disturbing the tick ([architecture §3](./02-spec-controller-architecture.md#3-real-time--scheduling-model)),
 while structural change requires a clean restart so the pipeline is rebuilt against
 a consistent topology. It is mirrored as a constraint in the
 [constraints artifact](../../artifacts/constraints.md) and
-[constraints §8](./spec-controller-constraints.md#8-structural-changes-require-a-restart).
+[constraints §8](./10-spec-controller-constraints.md#8-structural-changes-require-a-restart).
 
 ---
 
@@ -117,20 +117,20 @@ a consistent topology. It is mirrored as a constraint in the
 
 Every committed numeric default in one place. These are starting points, all
 TOML-configurable; the spec that *uses* each is linked. Tuning is evaluated against
-the [deterministic simulation](./spec-controller-hal-simulation.md#7-determinism--seeding).
+the [deterministic simulation](./03-spec-controller-hal-simulation.md#7-determinism--seeding).
 
-### HAL simulation ([HAL](./spec-controller-hal-simulation.md))
+### HAL simulation ([HAL](./03-spec-controller-hal-simulation.md))
 
 | Parameter | Default | Unit | Role |
 |---|---|---|---|
 | `tau_temperature` | 120 | s | Temperature lag time constant |
 | `tau_humidity` | 60 | s | Humidity lag time constant |
 | `tau_co2` | 30 | s | CO₂ lag time constant |
-| Coupling gains | per-effect | — | Strength of each [coupling-matrix](./spec-controller-hal-simulation.md#3-coupling-matrix) effect |
+| Coupling gains | per-effect | — | Strength of each [coupling-matrix](./03-spec-controller-hal-simulation.md#3-coupling-matrix) effect |
 | Disturbance profiles | per-disturbance | — | Outdoor temp, solar/PAR cycle, CO₂ uptake, soil drying, humidity drift |
 | Simulation seed | fixed | — | Reproducibility (`P1-TEST-2`) |
 
-### Real-time ([architecture](./spec-controller-architecture.md#3-real-time--scheduling-model))
+### Real-time ([architecture](./02-spec-controller-architecture.md#3-real-time--scheduling-model))
 
 | Parameter | Default | Unit | NFR |
 |---|---|---|---|
@@ -138,7 +138,7 @@ the [deterministic simulation](./spec-controller-hal-simulation.md#7-determinism
 | Jitter bound | ≤ 50 | ms | `P1-PERF-2` |
 | Per-tick compute budget | ≤ 100 | ms | `P1-PERF-3` |
 
-### Sensing & fusion ([sensing](./spec-controller-sensing.md))
+### Sensing & fusion ([sensing](./04-spec-controller-sensing.md))
 
 | Parameter | Default | Unit | Role |
 |---|---|---|---|
@@ -149,7 +149,7 @@ the [deterministic simulation](./spec-controller-hal-simulation.md#7-determinism
 | CO₂ plausibility bound | ~200–5000 | ppm | Out-of-range |
 | Soil moisture bound | 0–1 | VWC | Out-of-range |
 
-### Control loops ([control loops](./spec-controller-control-loops.md))
+### Control loops ([control loops](./05-spec-controller-control-loops.md))
 
 | Parameter | Default | Unit | Role |
 |---|---|---|---|
@@ -159,21 +159,21 @@ the [deterministic simulation](./spec-controller-hal-simulation.md#7-determinism
 | VPD / DLI targets | `vpd_target_kpa` / `dli_target_mol` | kPa / mol·m⁻²·d⁻¹ | Joint + accumulated targets |
 | Zone thresholds / drain | per zone | VWC / s | Irrigation gating |
 
-### Safety & actuator constraints ([safety](./spec-controller-safety-and-constraints.md))
+### Safety & actuator constraints ([safety](./06-spec-controller-safety-and-constraints.md))
 
 | Parameter | Default | Unit | Role |
 |---|---|---|---|
 | Critical-temperature max | configurable | °C | Interlock trigger (`P1-REL-1`) |
 | CO₂ safety ceiling | configurable | ppm | Interlock trigger |
-| `interlock_rearm_hysteresis` | configurable | °C / ppm | Margin a reading must recover past before an interlock clears ([safety §2](./spec-controller-safety-and-constraints.md#assert-and-clear-re-arm-hysteresis)) |
-| `interlock_min_hold` | configurable | s | Minimum dwell an interlock stays asserted before it may clear ([safety §2](./spec-controller-safety-and-constraints.md#assert-and-clear-re-arm-hysteresis)) |
+| `interlock_rearm_hysteresis` | configurable | °C / ppm | Margin a reading must recover past before an interlock clears ([safety §2](./06-spec-controller-safety-and-constraints.md#assert-and-clear-re-arm-hysteresis)) |
+| `interlock_min_hold` | configurable | s | Minimum dwell an interlock stays asserted before it may clear ([safety §2](./06-spec-controller-safety-and-constraints.md#assert-and-clear-re-arm-hysteresis)) |
 | Vent / shade slew rate | configurable | %/s | Motor limit |
 | Heater / injector min on/off | configurable | s | Anti short-cycle |
 | Fan ramp-rate | configurable | %/s | Gradual speed change |
 | Valve minimum open time | configurable | s | Meaningful delivery |
 | Manual-override timeout | configurable | s | Auto-expiry (`P1-RESIL-2`) |
 
-### Actuator health ([safety §5](./spec-controller-safety-and-constraints.md#5-actuator-health-monitoring))
+### Actuator health ([safety §5](./06-spec-controller-safety-and-constraints.md#5-actuator-health-monitoring))
 
 | Parameter | Default | Unit | Role |
 |---|---|---|---|
@@ -183,7 +183,7 @@ the [deterministic simulation](./spec-controller-hal-simulation.md#7-determinism
 
 The per-actuator **fail-safe response** (disable + alarm for stuck/no-response; alarm-only,
 keep-controlling for saturation) is owned by
-[safety §5](./spec-controller-safety-and-constraints.md#5-actuator-health-monitoring), not a
+[safety §5](./06-spec-controller-safety-and-constraints.md#5-actuator-health-monitoring), not a
 tunable — these parameters set only *when* each condition fires, not *what* it does.
 
 ---
@@ -192,10 +192,10 @@ tunable — these parameters set only *when* each condition fires, not *what* it
 
 | Concern | This spec | Detailed in |
 |---|---|---|
-| What τ / coupling / disturbances mean | values for | [`spec-controller-hal-simulation.md`](./spec-controller-hal-simulation.md) |
-| What thresholds/bounds mean | values for | [`spec-controller-sensing.md`](./spec-controller-sensing.md) |
-| What gains/bands/targets mean | values for | [`spec-controller-control-loops.md`](./spec-controller-control-loops.md) |
-| What limits/ceilings mean | values for | [`spec-controller-safety-and-constraints.md`](./spec-controller-safety-and-constraints.md) |
-| The REST surface that edits config at runtime | edited via | [`spec-controller-interfaces.md`](./spec-controller-interfaces.md) |
+| What τ / coupling / disturbances mean | values for | [`03-spec-controller-hal-simulation.md`](./03-spec-controller-hal-simulation.md) |
+| What thresholds/bounds mean | values for | [`04-spec-controller-sensing.md`](./04-spec-controller-sensing.md) |
+| What gains/bands/targets mean | values for | [`05-spec-controller-control-loops.md`](./05-spec-controller-control-loops.md) |
+| What limits/ceilings mean | values for | [`06-spec-controller-safety-and-constraints.md`](./06-spec-controller-safety-and-constraints.md) |
+| The REST surface that edits config at runtime | edited via | [`08-spec-controller-interfaces.md`](./08-spec-controller-interfaces.md) |
 | Crop→setpoint resolution above the controller | defers to | [RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain), [platform crop profiles](../platform/spec-platform-crop-profiles.md) |
 | `P1-PERF-*`, `P1-REL-*`, `P1-RESIL-2`, `P1-TEST-2` | cited | [NFR doc](../../artifacts/non-functional-requirements.md) |

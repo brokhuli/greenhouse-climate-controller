@@ -7,7 +7,7 @@
 > owns which concern. Read this file first; read the others for detail.
 
 This set is the **top-level design spec for Phase 2**. It sits alongside the
-[controller](../controller/spec-controller-overview.md),
+[controller](../controller/01-spec-controller-overview.md),
 [optimizer](../optimizer/01-spec-optimizer-overview.md), and [Phase 4](../spec-phase4.md) specs,
 one altitude **above** the wire contracts in
 [`contracts/`](../../../../contracts/), and one altitude **above** the
@@ -37,7 +37,7 @@ identical hardware in every house, but a different [crop](../physical-system-mul
 — and so a different ideal climate — growing in each. That heterogeneity is what
 makes a management platform worthwhile, and it is why the platform **owns crop
 profiles**: it turns "this is a lettuce house, fruiting stage" into the numeric
-setpoints the [crop-agnostic controller](../controller/spec-controller-config-and-parameters.md)
+setpoints the [crop-agnostic controller](../controller/07-spec-controller-config-and-parameters.md)
 regulates to.
 
 The platform is **bidirectional**:
@@ -57,7 +57,7 @@ air mass, shared sensing, or [site-wide orchestration](../physical-system-multi.
 intelligence (optimization, weather) belongs to later phases — see
 [constraints](./spec-platform-constraints.md).
 
-Because Phase 1 controllers are [headless](../controller/spec-controller-interfaces.md),
+Because Phase 1 controllers are [headless](../controller/08-spec-controller-interfaces.md),
 this platform's frontend is the **only UI in the system** — it monitors **one or
 more** controllers, a single greenhouse being the fleet-of-one case.
 
@@ -188,7 +188,7 @@ How this set divides the work, and where each concern is detailed:
 | Dashboard capabilities (not how it's built) | [`spec-platform-dashboard.md`](./spec-platform-dashboard.md) | [frontend set](../frontend/spec-frontend-overview.md) |
 | Identity, roles, the auth edge | [`spec-platform-security.md`](./spec-platform-security.md) | [RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries) |
 | Observability + deployment (Compose, controller generation, resource limits, perf testing) | [`spec-platform-operations.md`](./spec-platform-operations.md) | [NFR doc](../../artifacts/non-functional-requirements.md) |
-| The three Phase 1 integration interfaces + REST/WebSocket API responsibilities | [`spec-platform-interfaces.md`](./spec-platform-interfaces.md) | [`contracts/`](../../../../contracts/), [`spec-contracts.md`](../spec-contracts.md), [controller interfaces](../controller/spec-controller-interfaces.md) |
+| The three Phase 1 integration interfaces + REST/WebSocket API responsibilities | [`spec-platform-interfaces.md`](./spec-platform-interfaces.md) | [`contracts/`](../../../../contracts/), [`spec-contracts.md`](../spec-contracts.md), [controller interfaces](../controller/08-spec-controller-interfaces.md) |
 | Per-dependency choices + rejected alternatives | [`spec-platform-tech-stack.md`](./spec-platform-tech-stack.md) | [tech-stack-decisions.md](../tech-stack-decisions.md#phase-2--local-paas-platform-docker-only) |
 | Non-negotiable rules; scope / deferred capabilities | [`spec-platform-constraints.md`](./spec-platform-constraints.md) | [constraints artifact](../../artifacts/constraints.md), [NFR doc](../../artifacts/non-functional-requirements.md) |
 | Quality targets (load, latency, scale, test) | [NFR doc](../../artifacts/non-functional-requirements.md) | — (single source) |

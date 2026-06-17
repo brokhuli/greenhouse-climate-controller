@@ -4,14 +4,14 @@
 > that binds them: **safety interlocks** (stage ⑤) that unconditionally protect the
 > crop, and **actuator constraints** (stage ⑥) that shape every output to what real
 > hardware can do. Together they are the back half of the
-> [tick pipeline](./spec-controller-architecture.md#2-the-tick-pipeline) — they act
-> on whatever the [control loops](./spec-controller-control-loops.md) and
-> [manual override](./spec-controller-architecture.md#6-manual-override) produced.
+> [tick pipeline](./02-spec-controller-architecture.md#2-the-tick-pipeline) — they act
+> on whatever the [control loops](./05-spec-controller-control-loops.md) and
+> [manual override](./02-spec-controller-architecture.md#6-manual-override) produced.
 > This file also owns **actuator health monitoring** ([§5](#5-actuator-health-monitoring)) —
 > the output-side counterpart to sensor fault detection, which fails an actuator safe
 > when its commands stop taking effect. Numeric limits (slew rates, min on/off times,
 > critical thresholds, actuator-health windows) are consolidated in the
-> [default-parameters reference](./spec-controller-config-and-parameters.md#default-parameters-reference).
+> [default-parameters reference](./07-spec-controller-config-and-parameters.md#default-parameters-reference).
 
 ---
 
@@ -29,7 +29,7 @@ they fire.
 ## 2. Safety interlocks
 
 Always active. They take **unconditional priority** over all control loops **and**
-over [manual override](./spec-controller-architecture.md#6-manual-override) — an
+over [manual override](./02-spec-controller-architecture.md#6-manual-override) — an
 operator cannot suppress a safety response. A detected condition is acted on
 **within one tick** (`P1-REL-1`); because fault detection and interlocks both run
 every tick, this latency bound is structural, not best-effort.
@@ -42,9 +42,9 @@ every tick, this latency bound is structural, not best-effort.
 | Irrigation fault (no moisture change after valve opens) | Disable zone; raise alarm |
 
 These are crop/hardware-protection interlocks, distinct from the loop-level
-[CO₂/vent interlock](./spec-controller-control-loops.md#fast-loops--reactive)
+[CO₂/vent interlock](./05-spec-controller-control-loops.md#fast-loops--reactive)
 (a control optimization). The temperature-unavailable row is the bottom rung of the
-[sensing degradation ladder](./spec-controller-sensing.md#5-the-degradation-ladder):
+[sensing degradation ladder](./04-spec-controller-sensing.md#5-the-degradation-ladder):
 when fusion can no longer trust temperature, safety — not a loop — holds the state.
 
 The irrigation row is the zone-scoped instance of a general rule: an actuator whose
@@ -67,17 +67,17 @@ off every tick:
   critical threshold, not merely back to it) **and** a configurable
   **`interlock_min_hold`** dwell has elapsed since it fired. This is the same
   deadband-against-cycling idea the
-  [humidity hysteresis band](./spec-controller-control-loops.md#fast-loops--reactive)
+  [humidity hysteresis band](./05-spec-controller-control-loops.md#fast-loops--reactive)
   uses for normal control, applied here to the safety edge.
 
 A single *physically impossible* spike never reaches the interlock — it is rejected
-upstream as [out-of-range](./spec-controller-sensing.md#4-fault-detection-non-temperature-sensors)
+upstream as [out-of-range](./04-spec-controller-sensing.md#4-fault-detection-non-temperature-sensors)
 by sensor fault detection. A spike that is *in range* but spurious still asserts (a
 deliberate bias toward safety: better an unnecessary cool-down than a missed
 over-temp), and the hysteretic clear then prevents it from oscillating. This is why a
 single-sensor interlock such as the CO₂ ceiling is acceptable without the redundant
 fusion that temperature gets. Both thresholds are consolidated in the
-[default-parameters reference](./spec-controller-config-and-parameters.md#default-parameters-reference).
+[default-parameters reference](./07-spec-controller-config-and-parameters.md#default-parameters-reference).
 
 ---
 
@@ -102,7 +102,7 @@ Two consequences fall out of this order:
 
 - **Override cannot defeat safety.** Because override is upstream of interlocks, a
   forced actuator value is still overridden by a critical-temperature or
-  CO₂-ceiling response ([architecture §6](./spec-controller-architecture.md#6-manual-override)).
+  CO₂-ceiling response ([architecture §6](./02-spec-controller-architecture.md#6-manual-override)).
 - **Even a safety response respects the hardware — but is never *delayed* by it.**
   Because constraints are the last stage, an interlock that says "open vents fully" is
   still shaped by the vent slew rate ([§4](#4-actuator-constraints)) — vents open at
@@ -148,15 +148,15 @@ safety response but never *block or delay* it.
 ## 5. Actuator health monitoring
 
 Sensing has a full fault ladder for the *inputs*
-([sensing](./spec-controller-sensing.md)); this section is its counterpart for the
+([sensing](./04-spec-controller-sensing.md)); this section is its counterpart for the
 *outputs*. A loop that commands a dead, jammed, or undersized actuator will keep
 pushing harder against a plant that never responds — so the controller watches whether
 its commands actually take effect and fails the actuator safe when they don't. The
 monitor runs **every tick** from three inputs: the previous tick's **commanded**
 outputs, this tick's **observed** actuator state read back from the
-[HAL](./spec-controller-hal-simulation.md#1-the-hal-boundary), and this tick's
-[trusted readings](./spec-controller-sensing.md). It is the actuator analogue of
-[sensor fault detection](./spec-controller-sensing.md#4-fault-detection-non-temperature-sensors)
+[HAL](./03-spec-controller-hal-simulation.md#1-the-hal-boundary), and this tick's
+[trusted readings](./04-spec-controller-sensing.md). It is the actuator analogue of
+[sensor fault detection](./04-spec-controller-sensing.md#4-fault-detection-non-temperature-sensors)
 (`P1-REL-4`).
 
 Three distinct conditions, each with its **own** response — the response is the design,
@@ -173,15 +173,15 @@ Both look like "persistent error," but the safe action is opposite: a no-respons
 should be cut out (it is doing nothing useful and the fault must surface), whereas a
 *saturated* heater is the crop's only heat source and must keep running — disabling it
 would be the harmful action. So saturation never disables; it alarms and rides the limit
-while [anti-windup](./spec-controller-control-loops.md#fast-loops--reactive) keeps the
+while [anti-windup](./05-spec-controller-control-loops.md#fast-loops--reactive) keeps the
 integral from accumulating an unrecoverable correction. Saturation detection and the
 `setpoint_unreachable` condition are owned by the loops
-([control-loops — saturation](./spec-controller-control-loops.md#saturation--setpoint-unreachable));
+([control-loops — saturation](./05-spec-controller-control-loops.md#saturation--setpoint-unreachable));
 this section owns only its safety response (alarm, never disable).
 
 - **Stuck / no-response need a feedback channel.** Detection compares commanded against
   *observed* actuator state — a separate readback the
-  [HAL exposes](./spec-controller-hal-simulation.md#8-observed-actuator-state-and-fault-injection)
+  [HAL exposes](./03-spec-controller-hal-simulation.md#8-observed-actuator-state-and-fault-injection)
   and that can diverge from the command. In the fault-free case observed equals commanded.
   The effect half (no-response) additionally needs a sensed variable to move; an actuator
   whose effect is currently **masked** (a shade screen commanded at night, a heater already
@@ -189,16 +189,16 @@ this section owns only its safety response (alarm, never disable).
   change *should* produce a measurable response and none arrives.
 - **Recovery is automatic.** Like sensor faults, actuator-health flags are **sticky** and
   clear when the actuator tracks its command again (or the masked effect reappears); the
-  affected loop then resumes ([architecture §7](./spec-controller-architecture.md#7-failure-modes--degradation)).
+  affected loop then resumes ([architecture §7](./02-spec-controller-architecture.md#7-failure-modes--degradation)).
 - **Surfaced, never silent.** Each condition publishes an MQTT
-  [fault event](./spec-controller-interfaces.md#2-mqtt--telemetry-out)
+  [fault event](./08-spec-controller-interfaces.md#2-mqtt--telemetry-out)
   (`actuator_stuck`, `actuator_no_response`, `setpoint_unreachable`) and is reflected in the
-  REST [`/health`](./spec-controller-interfaces.md#5-published-shapes--health) surface
+  REST [`/health`](./08-spec-controller-interfaces.md#5-published-shapes--health) surface
   (`P1-OBS-1`, `P1-OBS-2`).
 
 Detection windows, the commanded-vs-observed tolerance, and the saturation duration are
 consolidated in the
-[default-parameters reference](./spec-controller-config-and-parameters.md#default-parameters-reference).
+[default-parameters reference](./07-spec-controller-config-and-parameters.md#default-parameters-reference).
 
 ---
 
@@ -206,11 +206,11 @@ consolidated in the
 
 | Concern | This spec | Detailed in |
 |---|---|---|
-| The desired outputs being guarded | guards | [`spec-controller-control-loops.md`](./spec-controller-control-loops.md) |
-| Where override sits relative to safety | ordered by | [`spec-controller-architecture.md`](./spec-controller-architecture.md#6-manual-override) |
-| Temperature-unavailable handoff from sensing | receives | [`spec-controller-sensing.md`](./spec-controller-sensing.md#5-the-degradation-ladder) |
-| Observed actuator state + injected actuator faults | reads from | [`spec-controller-hal-simulation.md`](./spec-controller-hal-simulation.md#8-observed-actuator-state-and-fault-injection) |
-| Saturation / `setpoint_unreachable` detection | shares with | [`spec-controller-control-loops.md`](./spec-controller-control-loops.md#saturation--setpoint-unreachable) |
-| Critical thresholds, slew rates, min on/off, actuator-health windows | consolidated in | [`spec-controller-config-and-parameters.md`](./spec-controller-config-and-parameters.md#default-parameters-reference) |
-| Interlocks + actuator-health faults surfaced as faults/alarms | published via | [`spec-controller-interfaces.md`](./spec-controller-interfaces.md) |
+| The desired outputs being guarded | guards | [`05-spec-controller-control-loops.md`](./05-spec-controller-control-loops.md) |
+| Where override sits relative to safety | ordered by | [`02-spec-controller-architecture.md`](./02-spec-controller-architecture.md#6-manual-override) |
+| Temperature-unavailable handoff from sensing | receives | [`04-spec-controller-sensing.md`](./04-spec-controller-sensing.md#5-the-degradation-ladder) |
+| Observed actuator state + injected actuator faults | reads from | [`03-spec-controller-hal-simulation.md`](./03-spec-controller-hal-simulation.md#8-observed-actuator-state-and-fault-injection) |
+| Saturation / `setpoint_unreachable` detection | shares with | [`05-spec-controller-control-loops.md`](./05-spec-controller-control-loops.md#saturation--setpoint-unreachable) |
+| Critical thresholds, slew rates, min on/off, actuator-health windows | consolidated in | [`07-spec-controller-config-and-parameters.md`](./07-spec-controller-config-and-parameters.md#default-parameters-reference) |
+| Interlocks + actuator-health faults surfaced as faults/alarms | published via | [`08-spec-controller-interfaces.md`](./08-spec-controller-interfaces.md) |
 | `P1-REL-1` (interlock latency), `P1-REL-4` (actuator-health detection) | cited | [NFR doc](../../artifacts/non-functional-requirements.md) |

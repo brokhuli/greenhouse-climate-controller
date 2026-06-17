@@ -1,10 +1,10 @@
 # Controller — Sensing, Fusion & Fault Detection
 
 > **Purpose:** Define how raw HAL readings become the **trusted state** the
-> [control loops](./spec-controller-control-loops.md) consume — redundant
+> [control loops](./05-spec-controller-control-loops.md) consume — redundant
 > temperature fusion with voting, the derived VPD quantity, per-sensor fault
 > detection, the degradation ladder, and how faults are surfaced. This is **stage
-> ①** of the [tick pipeline](./spec-controller-architecture.md#2-the-tick-pipeline):
+> ①** of the [tick pipeline](./02-spec-controller-architecture.md#2-the-tick-pipeline):
 > everything downstream sees only what this stage trusts. The physical sensor
 > inventory is owned by
 > [`physical-system-single.md`](../physical-system-single.md#inputs--sensors); this
@@ -28,7 +28,7 @@ they are **not** the same thing:
 
 Advanced cross-quantity estimation (Kalman/complementary) is explicitly **not** here
 — it needs the physics model and is
-[deferred to Phase 3](./spec-controller-constraints.md#9-scope--deferred-controller-capabilities).
+[deferred to Phase 3](./10-spec-controller-constraints.md#9-scope--deferred-controller-capabilities).
 
 ---
 
@@ -53,7 +53,7 @@ sensor fault.
   (`P1-RESIL-1`).
 - **Total disagreement.** If no two probes agree, treat temperature as
   **unavailable** and hand off to the
-  [safety interlock](./spec-controller-safety-and-constraints.md#2-safety-interlocks)
+  [safety interlock](./06-spec-controller-safety-and-constraints.md#2-safety-interlocks)
   rather than act on an untrusted value.
 
 This is single-location, fault-tolerant sensing — distinct from sensing a spatial
@@ -68,7 +68,7 @@ gradient across the greenhouse, which is
 computed from fused temperature + relative humidity. It is the climate variable
 that most directly reflects the moisture stress a plant experiences, which is why
 the humidity and temperature loops
-[jointly serve a VPD target](./spec-controller-control-loops.md#fast-loops--reactive)
+[jointly serve a VPD target](./05-spec-controller-control-loops.md#fast-loops--reactive)
 rather than chasing RH alone. The physiology (why too-high and too-low both hurt) is
 owned by
 [`physical-system-single.md`](../physical-system-single.md#derived-value-vpd).
@@ -102,7 +102,7 @@ over MQTT, and reflects it in the REST `/health` surface
 | Soil moisture (per zone) | 0–1 VWC | Disable that zone's irrigation (fail-closed — never water blind); alarm |
 
 The numeric bounds and the stuck-window default are consolidated in the
-[default-parameters reference](./spec-controller-config-and-parameters.md#default-parameters-reference).
+[default-parameters reference](./07-spec-controller-config-and-parameters.md#default-parameters-reference).
 
 ---
 
@@ -118,14 +118,14 @@ full trust ──▶ degraded (probe/sensor excluded, fail-safe applied, alarm)
 ```
 
 The rungs are owned across specs: exclusion/fail-safe here, the unavailable→safe
-transition by [safety](./spec-controller-safety-and-constraints.md#2-safety-interlocks),
+transition by [safety](./06-spec-controller-safety-and-constraints.md#2-safety-interlocks),
 and the per-stage view in
-[architecture §7](./spec-controller-architecture.md#7-failure-modes--degradation).
+[architecture §7](./02-spec-controller-architecture.md#7-failure-modes--degradation).
 Recovery is automatic: when a reading returns to plausibility (or probes re-agree),
 the fault flag clears and the affected loop resumes.
 
 This ladder is for the controller's *inputs*. Its *outputs* have a sibling ladder —
-[actuator health monitoring](./spec-controller-safety-and-constraints.md#5-actuator-health-monitoring),
+[actuator health monitoring](./06-spec-controller-safety-and-constraints.md#5-actuator-health-monitoring),
 owned by safety — that fails an actuator safe when its commands stop taking effect, with the
 same sticky-flag / automatic-recovery behavior.
 
@@ -139,7 +139,7 @@ is never silent (`P1-OBS-1`, `P1-OBS-2`):
 - **MQTT** — a fault event is published, and the consolidated system-state snapshot
   carries current sensor health.
 - **REST `/health`** — reflects every active fault and alarm
-  ([interfaces](./spec-controller-interfaces.md)).
+  ([interfaces](./08-spec-controller-interfaces.md)).
 
 Wire formats for both are owned by [`contracts/`](../../../../contracts/); this
 file owns *what* is reported, not its schema.
@@ -150,10 +150,10 @@ file owns *what* is reported, not its schema.
 
 | Concern | This spec | Detailed in |
 |---|---|---|
-| Raw readings + probe behavior | consumes | [`spec-controller-hal-simulation.md`](./spec-controller-hal-simulation.md) |
-| What the loops do with trusted state | feeds | [`spec-controller-control-loops.md`](./spec-controller-control-loops.md) |
-| Unavailable-quantity → safe-state handoff | hands to | [`spec-controller-safety-and-constraints.md`](./spec-controller-safety-and-constraints.md#2-safety-interlocks) |
-| Where stage ① sits in the tick | composed by | [`spec-controller-architecture.md`](./spec-controller-architecture.md#2-the-tick-pipeline) |
-| Disagreement threshold, plausibility bounds, stuck window | consolidated in | [`spec-controller-config-and-parameters.md`](./spec-controller-config-and-parameters.md#default-parameters-reference) |
+| Raw readings + probe behavior | consumes | [`03-spec-controller-hal-simulation.md`](./03-spec-controller-hal-simulation.md) |
+| What the loops do with trusted state | feeds | [`05-spec-controller-control-loops.md`](./05-spec-controller-control-loops.md) |
+| Unavailable-quantity → safe-state handoff | hands to | [`06-spec-controller-safety-and-constraints.md`](./06-spec-controller-safety-and-constraints.md#2-safety-interlocks) |
+| Where stage ① sits in the tick | composed by | [`02-spec-controller-architecture.md`](./02-spec-controller-architecture.md#2-the-tick-pipeline) |
+| Disagreement threshold, plausibility bounds, stuck window | consolidated in | [`07-spec-controller-config-and-parameters.md`](./07-spec-controller-config-and-parameters.md#default-parameters-reference) |
 | Physical sensor inventory + VPD physiology | mirrors | [`physical-system-single.md`](../physical-system-single.md#inputs--sensors) |
 | `P1-REL-2`, `P1-REL-3`, `P1-RESIL-1`, `P1-OBS-2` | cited | [NFR doc](../../artifacts/non-functional-requirements.md) |

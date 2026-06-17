@@ -63,7 +63,7 @@ All paths are greenhouse-scoped under `/greenhouses/{greenhouse_id}`.
 
 Only the runtime-mutable surfaces accept writes. Adding or removing a zone, and changing HAL
 parameters, is a config-file edit plus restart (controller spec
-[§4](../../docs/specs/design/controller/spec-controller-config-and-parameters.md)) — there is
+[§4](../../docs/specs/design/controller/07-spec-controller-config-and-parameters.md)) — there is
 deliberately no `POST`/`DELETE` for zones.
 
 ## Identity

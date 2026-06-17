@@ -1,18 +1,18 @@
 # Controller — Control Loops & Dynamics
 
 > **Purpose:** Define the controller's decision layer — **stage ③** of the
-> [tick pipeline](./spec-controller-architecture.md#2-the-tick-pipeline). This is
+> [tick pipeline](./02-spec-controller-architecture.md#2-the-tick-pipeline). This is
 > the inventory of control loops (what each one reads, the algorithm it runs, the
 > actuators it drives), how the active setpoints are resolved each tick, how the
-> loops avoid fighting the [coupling](./spec-controller-hal-simulation.md#3-coupling-matrix),
+> loops avoid fighting the [coupling](./03-spec-controller-hal-simulation.md#3-coupling-matrix),
 > and the **dynamics** they produce over time. All loops consume **trusted**
-> readings ([sensing](./spec-controller-sensing.md)) and the resolved setpoints;
-> their outputs are *desired* actuator states, which [manual override](./spec-controller-architecture.md#6-manual-override),
-> [safety interlocks](./spec-controller-safety-and-constraints.md#2-safety-interlocks),
-> and [actuator constraints](./spec-controller-safety-and-constraints.md#4-actuator-constraints)
+> readings ([sensing](./04-spec-controller-sensing.md)) and the resolved setpoints;
+> their outputs are *desired* actuator states, which [manual override](./02-spec-controller-architecture.md#6-manual-override),
+> [safety interlocks](./06-spec-controller-safety-and-constraints.md#2-safety-interlocks),
+> and [actuator constraints](./06-spec-controller-safety-and-constraints.md#4-actuator-constraints)
 > may still modify before they reach the HAL. Numeric defaults (gains, bands) are
 > consolidated in the
-> [default-parameters reference](./spec-controller-config-and-parameters.md#default-parameters-reference).
+> [default-parameters reference](./07-spec-controller-config-and-parameters.md#default-parameters-reference).
 
 ---
 
@@ -29,7 +29,7 @@ timescale is what keeps a fast actuator (a heater) from being driven by slow log
 
 Every loop runs every tick (the cadence is how fast its *effect* matters, not how
 often it is evaluated). An actuator under an active
-[manual override](./spec-controller-architecture.md#6-manual-override) still has its
+[manual override](./02-spec-controller-architecture.md#6-manual-override) still has its
 loop evaluated, but the loop's output for that actuator is discarded downstream.
 
 ---
@@ -44,21 +44,21 @@ time-of-day lookup, evaluated each tick. This is **not** weather-predictive (tha
 [Phase 3](../optimizer/05-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application)). Other
 setpoints (humidity, CO₂) are constant in Phase 1; the scheduling mechanism is built
 to extend to them later. The setpoint values themselves come from
-[config](./spec-controller-config-and-parameters.md#global-climate-setpoints) (TOML
+[config](./07-spec-controller-config-and-parameters.md#global-climate-setpoints) (TOML
 at startup, runtime edits over REST).
 
 **Clock source.** The time-of-day the window is compared against comes from a single
 **injected clock** — a monotonic wall-clock in production, the
-[deterministic/virtual clock](./spec-controller-hal-simulation.md#7-determinism--seeding)
+[deterministic/virtual clock](./03-spec-controller-hal-simulation.md#7-determinism--seeding)
 under a seeded run — never a raw call to system time scattered through the loop. This
 keeps day/night resolution **reproducible**: a fixed-seed run flips at the same tick
 every time, just like the rest of the pipeline under the
-[latched-write model](./spec-controller-architecture.md#3-real-time--scheduling-model),
+[latched-write model](./02-spec-controller-architecture.md#3-real-time--scheduling-model),
 so a scheduling regression shows up as a diff rather than as flake. The `day_start` /
 `day_end` window is validated **at config load** (valid `HH:MM`, `day_start < day_end`),
 so a malformed window is rejected before the first tick rather than silently flipping
 the setpoint — see
-[config — day/night scheduling](./spec-controller-config-and-parameters.md#daynight-scheduling).
+[config — day/night scheduling](./07-spec-controller-config-and-parameters.md#daynight-scheduling).
 If the clock is ever unreadable at runtime, resolution falls back to the **cooler
 `temperature_night_c`** setpoint — the bias least likely to harm the crop — rather than
 acting on an ambiguous time.
@@ -73,7 +73,7 @@ Reads the fused air temperature, computes a PID output, and drives the **heater*
 (heating mode) or **fans + vents** (cooling mode) proportionally. PID gives a
 smooth, proportional response rather than bang-bang switching, which reduces
 actuator wear and overshoot against the lagged plant
-([HAL §2](./spec-controller-hal-simulation.md#2-coupled-first-order-lag)). The sign
+([HAL §2](./03-spec-controller-hal-simulation.md#2-coupled-first-order-lag)). The sign
 of the error selects the mode; the integral term is clamped (anti-windup) so a long
 excursion (e.g. while degraded) does not accumulate an unrecoverable correction.
 
@@ -83,7 +83,7 @@ Fog **on** when RH drops below `humidity_low_pct`; fog **off** when RH rises abo
 `humidity_high_pct`. The deadband prevents rapid on/off cycling. On/off solenoids
 can only do hysteresis — PID requires a variable-output actuator. Humidity and
 temperature loops **jointly serve the VPD target**: VPD is computed from fused
-temperature + RH ([sensing §3](./spec-controller-sensing.md#3-derived-sensing--vpd)),
+temperature + RH ([sensing §3](./04-spec-controller-sensing.md#3-derived-sensing--vpd)),
 so neither loop chases its own reading in isolation.
 
 ### CO₂ on/off with vent interlock
@@ -92,7 +92,7 @@ The injector opens when CO₂ drops below `co2_target_ppm` and closes when it is
 reached. A **hard interlock** disables the injector whenever vent position exceeds
 `co2_vent_interlock_threshold_pct` — enriching while venting wastes CO₂ immediately.
 This is a loop-level interlock (a control optimization), distinct from the
-[safety interlocks](./spec-controller-safety-and-constraints.md#2-safety-interlocks)
+[safety interlocks](./06-spec-controller-safety-and-constraints.md#2-safety-interlocks)
 that protect the crop unconditionally.
 
 ---
@@ -101,7 +101,7 @@ that protect the crop unconditionally.
 
 ### Irrigation scheduler (per zone)
 
-One independent scheduler instance per [zone](./spec-controller-config-and-parameters.md#zone-configuration).
+One independent scheduler instance per [zone](./07-spec-controller-config-and-parameters.md#zone-configuration).
 A cycle is triggered by **two** conditions together: the zone's time-of-day
 `schedule` **and** soil moisture below `moisture_low_threshold`. It irrigates until
 `moisture_high_threshold`, then a `drain_period_secs` gap must elapse before another
@@ -121,7 +121,7 @@ the day, the loop is adaptive: a bright morning reduces the afternoon supplement
 ## Coupling-aware behavior
 
 The loops are written to respect the
-[coupling](./spec-controller-hal-simulation.md#3-coupling-matrix) rather than fight
+[coupling](./03-spec-controller-hal-simulation.md#3-coupling-matrix) rather than fight
 it. Three patterns do the work:
 
 - **Shared cooling actuators, one arbiter.** Fans and vents serve the temperature
@@ -134,7 +134,7 @@ it. Three patterns do the work:
   classic self-defeating loop (inject while exhausting).
 
 Targeting *variables* rather than actuators
-([architecture §5](./spec-controller-architecture.md#5-module-composition-rules))
+([architecture §5](./02-spec-controller-architecture.md#5-module-composition-rules))
 is what lets these patterns live in the loops while the coupling itself stays in the
 HAL.
 
@@ -145,7 +145,7 @@ HAL.
 How the loops behave over time — the controller analogue of interaction behavior:
 
 - **Disturbance response.** A step disturbance (outdoor temperature drop, a vent
-  opening) moves the plant along its [τ lag](./spec-controller-hal-simulation.md#2-coupled-first-order-lag);
+  opening) moves the plant along its [τ lag](./03-spec-controller-hal-simulation.md#2-coupled-first-order-lag);
   the PID corrects smoothly, trading a small steady-state settling time for low
   overshoot. Bang-bang loops (humidity, CO₂) ride their deadband.
 - **Mode transitions.** Heating ↔ cooling is a sign change on the temperature
@@ -153,10 +153,10 @@ How the loops behave over time — the controller analogue of interaction behavi
   crossover. Day↔night setpoint changes are step changes the PID absorbs over a few
   τ.
 - **Degraded operation.** When a sensor is excluded or a quantity is unavailable
-  ([sensing §5](./spec-controller-sensing.md#5-the-degradation-ladder)), the
+  ([sensing §5](./04-spec-controller-sensing.md#5-the-degradation-ladder)), the
   affected loop suspends or falls back (e.g. lighting → time-based) rather than
   acting on bad data; other loops continue.
-- **Override and recovery.** While [overridden](./spec-controller-architecture.md#6-manual-override),
+- **Override and recovery.** While [overridden](./02-spec-controller-architecture.md#6-manual-override),
   a loop's actuator is held; on override expiry the loop resumes from current
   state, with anti-windup ensuring no accumulated correction is dumped.
 
@@ -179,16 +179,16 @@ the *operational* condition so it isn't silent.
   inability to reach the target.
 - **Condition raised.** Sustained saturation raises `setpoint_unreachable` (a **warning**
   that escalates to **alarm** if it persists), surfaced like every other fault over MQTT
-  and REST `/health` ([interfaces](./spec-controller-interfaces.md#5-published-shapes--health)).
+  and REST `/health` ([interfaces](./08-spec-controller-interfaces.md#5-published-shapes--health)).
 - **Response: keep controlling.** The loop continues driving at the saturated output — a
   saturated heater is the crop's only heat source and must stay on. This is deliberately the
-  **opposite** of the [no-response / stuck](./spec-controller-safety-and-constraints.md#5-actuator-health-monitoring)
+  **opposite** of the [no-response / stuck](./06-spec-controller-safety-and-constraints.md#5-actuator-health-monitoring)
   response, which disables the actuator: a saturated actuator is doing everything it can, so
   the safe action is to alarm and ride the limit, never to cut it out. Safety owns that
   not-disable rule; this section owns detecting the condition from the loop's own state.
 
 The saturation-duration default is in the
-[default-parameters reference](./spec-controller-config-and-parameters.md#default-parameters-reference).
+[default-parameters reference](./07-spec-controller-config-and-parameters.md#default-parameters-reference).
 
 ---
 
@@ -196,8 +196,8 @@ The saturation-duration default is in the
 
 Gains and bands (PID `Kp/Ki/Kd`, hysteresis widths, thresholds) are
 TOML-configurable and live in the
-[default-parameters reference](./spec-controller-config-and-parameters.md#default-parameters-reference).
-Because the [simulation is deterministic under a seed](./spec-controller-hal-simulation.md#7-determinism--seeding),
+[default-parameters reference](./07-spec-controller-config-and-parameters.md#default-parameters-reference).
+Because the [simulation is deterministic under a seed](./03-spec-controller-hal-simulation.md#7-determinism--seeding),
 a tuning change is evaluated against a reproducible plant response, and a regression
 appears as a diff in a fixed-seed run — not as flake. Control-loop and interlock
 code carries the highest test coverage in the system (`P1-TEST-1`).
@@ -208,10 +208,10 @@ code carries the highest test coverage in the system (`P1-TEST-1`).
 
 | Concern | This spec | Detailed in |
 |---|---|---|
-| Trusted readings + VPD the loops consume | consumes | [`spec-controller-sensing.md`](./spec-controller-sensing.md) |
-| Plant dynamics the loops act against | acts on | [`spec-controller-hal-simulation.md`](./spec-controller-hal-simulation.md) |
-| Where stage ③ sits + override injection | composed by | [`spec-controller-architecture.md`](./spec-controller-architecture.md#2-the-tick-pipeline) |
-| Unconditional protection over loop output | overruled by | [`spec-controller-safety-and-constraints.md`](./spec-controller-safety-and-constraints.md) |
-| Saturation response (alarm, never disable); stuck/no-response | owned by | [`spec-controller-safety-and-constraints.md`](./spec-controller-safety-and-constraints.md#5-actuator-health-monitoring) |
-| Setpoint values + gains/bands + saturation window | configured by | [`spec-controller-config-and-parameters.md`](./spec-controller-config-and-parameters.md) |
+| Trusted readings + VPD the loops consume | consumes | [`04-spec-controller-sensing.md`](./04-spec-controller-sensing.md) |
+| Plant dynamics the loops act against | acts on | [`03-spec-controller-hal-simulation.md`](./03-spec-controller-hal-simulation.md) |
+| Where stage ③ sits + override injection | composed by | [`02-spec-controller-architecture.md`](./02-spec-controller-architecture.md#2-the-tick-pipeline) |
+| Unconditional protection over loop output | overruled by | [`06-spec-controller-safety-and-constraints.md`](./06-spec-controller-safety-and-constraints.md) |
+| Saturation response (alarm, never disable); stuck/no-response | owned by | [`06-spec-controller-safety-and-constraints.md`](./06-spec-controller-safety-and-constraints.md#5-actuator-health-monitoring) |
+| Setpoint values + gains/bands + saturation window | configured by | [`07-spec-controller-config-and-parameters.md`](./07-spec-controller-config-and-parameters.md) |
 | `P1-TEST-1` (loop/interlock coverage) | cited | [NFR doc](../../artifacts/non-functional-requirements.md) |

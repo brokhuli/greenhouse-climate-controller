@@ -20,7 +20,7 @@ The optimizer is a long-running FastAPI service ([architecture](./02-spec-optimi
 [write-path concurrency](./05-spec-optimizer-constraints-and-application.md#3-write-path-concurrency--reconciliation)
 keep individual *cycles* safe; this section keeps the *service* recoverable and its operator-facing
 surfaces honest under failure — mirroring the controller's restart treatment
-([spec-controller-architecture.md §9](../controller/spec-controller-architecture.md#9-availability-restart--resource-footprint))
+([02-spec-controller-architecture.md §9](../controller/02-spec-controller-architecture.md#9-availability-restart--resource-footprint))
 and the platform's operational resilience
 ([spec-platform-operations.md](../platform/spec-platform-operations.md)).
 

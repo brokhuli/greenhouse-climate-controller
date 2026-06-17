@@ -79,7 +79,7 @@ aspirations — a change validates against them.
 
 ### Phase 1 — Rust controller, real-time control loop, simulated HAL
 
-HAL time constants ([HAL §2](../design/controller/spec-controller-hal-simulation.md#2-coupled-first-order-lag)): temperature τ = 120 s, humidity τ = 60 s, CO₂ τ = 30 s.
+HAL time constants ([HAL §2](../design/controller/03-spec-controller-hal-simulation.md#2-coupled-first-order-lag)): temperature τ = 120 s, humidity τ = 60 s, CO₂ τ = 30 s.
 
 **Performance**
 
@@ -90,74 +90,74 @@ HAL time constants ([HAL §2](../design/controller/spec-controller-hal-simulatio
   *(Committed default.)*
 - **P1-PERF-4** — Resident memory **≤ 50 MB** and steady-state CPU **≤ 5%** of one core. *(Committed
   default; consistent with running 20–50 controllers concurrently on one dev machine;
-  [architecture §9](../design/controller/spec-controller-architecture.md#9-availability-restart--resource-footprint).)*
+  [architecture §9](../design/controller/02-spec-controller-architecture.md#9-availability-restart--resource-footprint).)*
 
 **Reliability**
 
 - **P1-REL-1** — A safety interlock condition is acted on **within one tick (≤ 1 s)** of detection.
-  *(Hard requirement; [safety §2](../design/controller/spec-controller-safety-and-constraints.md#2-safety-interlocks) — interlocks are always active with unconditional priority. The
+  *(Hard requirement; [safety §2](../design/controller/06-spec-controller-safety-and-constraints.md#2-safety-interlocks) — interlocks are always active with unconditional priority. The
   re-arm hysteresis added in safety §2 governs **clearing only**; assertion latency is
   unchanged.)*
 - **P1-REL-2** — Temperature tolerates **one faulty probe with no degradation** via 3-probe TMR median
-  voting. *([sensing §2](../design/controller/spec-controller-sensing.md#2-redundant-temperature-fusion-tmr).)*
+  voting. *([sensing §2](../design/controller/04-spec-controller-sensing.md#2-redundant-temperature-fusion-tmr).)*
 - **P1-REL-3** — Stuck and out-of-range sensor faults are detected within a **configurable window
-  (default 5 ticks)**. *([sensing §4](../design/controller/spec-controller-sensing.md#4-fault-detection-non-temperature-sensors).)*
+  (default 5 ticks)**. *([sensing §4](../design/controller/04-spec-controller-sensing.md#4-fault-detection-non-temperature-sensors).)*
 - **P1-REL-4** — Actuator **stuck** (observed state diverges from commanded) and **no-response** (a
   commanded change produces no movement in the variable it drives) faults are detected within a
   **configurable window (default 5 ticks)**, and the affected actuator/zone is failed safe.
-  *([safety §5](../design/controller/spec-controller-safety-and-constraints.md#5-actuator-health-monitoring) — the actuator analogue of P1-REL-3.)*
+  *([safety §5](../design/controller/06-spec-controller-safety-and-constraints.md#5-actuator-health-monitoring) — the actuator analogue of P1-REL-3.)*
 
 **Resilience**
 
 - **P1-RESIL-1** — On loss of a temperature probe, control continues on the remaining two (degraded);
   on total disagreement, the controller holds a safe state — **zero unhandled-fault crashes**.
-  *([sensing §2](../design/controller/spec-controller-sensing.md#2-redundant-temperature-fusion-tmr), [safety §2](../design/controller/spec-controller-safety-and-constraints.md#2-safety-interlocks).)*
+  *([sensing §2](../design/controller/04-spec-controller-sensing.md#2-redundant-temperature-fusion-tmr), [safety §2](../design/controller/06-spec-controller-safety-and-constraints.md#2-safety-interlocks).)*
 - **P1-RESIL-2** — A manual override **auto-expires after a configurable timeout** so a forgotten
-  override cannot strand the greenhouse. *([architecture §6](../design/controller/spec-controller-architecture.md#6-manual-override).)*
+  override cannot strand the greenhouse. *([architecture §6](../design/controller/02-spec-controller-architecture.md#6-manual-override).)*
 - **P1-RESIL-3** — Telemetry publishing **never blocks the control tick**: it runs on a decoupled
   task, so a slow or **disconnected MQTT broker cannot stall control**. On reconnect, publishing
   resumes and the retained `gh/{id}/state` snapshot re-primes subscribers; telemetry lost while
   disconnected is a **recoverable data gap, not a control failure**.
-  *([interfaces §7](../design/controller/spec-controller-interfaces.md#7-mqtt-connection-resilience).)*
+  *([interfaces §7](../design/controller/08-spec-controller-interfaces.md#7-mqtt-connection-resilience).)*
 
 **Testability**
 
 - **P1-TEST-1** — **≥ 90% line coverage** on the control-loop and safety-interlock modules. *(Committed
   default; CLAUDE.md "avoid untested logic".)*
 - **P1-TEST-2** — The HAL simulation is **deterministic under a fixed seed** for reproducible tests.
-  *([HAL §7](../design/controller/spec-controller-hal-simulation.md#7-determinism--seeding).)*
+  *([HAL §7](../design/controller/03-spec-controller-hal-simulation.md#7-determinism--seeding).)*
 
 **Observability**
 
 - **P1-OBS-1** — Telemetry (readings, actuator states, system state) is published **every tick at
-  1 Hz**; fault events are published **within one tick** of detection. *([interfaces §2](../design/controller/spec-controller-interfaces.md#2-mqtt--telemetry-out).)*
-- **P1-OBS-2** — The REST `/health` endpoint reflects **every active fault and alarm**. *([sensing §6](../design/controller/spec-controller-sensing.md#6-fault-surfacing), [interfaces §5](../design/controller/spec-controller-interfaces.md#5-published-shapes--health).)*
+  1 Hz**; fault events are published **within one tick** of detection. *([interfaces §2](../design/controller/08-spec-controller-interfaces.md#2-mqtt--telemetry-out).)*
+- **P1-OBS-2** — The REST `/health` endpoint reflects **every active fault and alarm**. *([sensing §6](../design/controller/04-spec-controller-sensing.md#6-fault-surfacing), [interfaces §5](../design/controller/08-spec-controller-interfaces.md#5-published-shapes--health).)*
 
 **Modifiability**
 
 - **P1-MOD-1** — A new actuator (e.g. the Phase 4 combustion heater) is added as a **new HAL backend
-  implementing the same trait, with zero changes to the control loops**. *([HAL §4](../design/controller/spec-controller-hal-simulation.md#4-the-actuator-effect-set-invariant)
+  implementing the same trait, with zero changes to the control loops**. *([HAL §4](../design/controller/03-spec-controller-hal-simulation.md#4-the-actuator-effect-set-invariant)
   interface constraint; RFC-006.)*
 
 **Maintainability**
 
 - **P1-MAINT-1** — Each pipeline stage (fusion, setpoint resolution, control loops, interlocks,
   constraints) is a **separately testable module behind an explicit interface**.
-  *([architecture §5](../design/controller/spec-controller-architecture.md#5-module-composition-rules);
+  *([architecture §5](../design/controller/02-spec-controller-architecture.md#5-module-composition-rules);
   CLAUDE.md architecture.)*
 
 **Availability**
 
 - **P1-AVAIL-1** — **≥ 99.9% availability** over a continuous run; restart to first control tick is
   **< 5 s**. *(Committed default; the controller models a real production system;
-  [architecture §9](../design/controller/spec-controller-architecture.md#9-availability-restart--resource-footprint).
+  [architecture §9](../design/controller/02-spec-controller-architecture.md#9-availability-restart--resource-footprint).
   Precondition: an external supervisor — Docker `restart:` in managed mode, a Windows
   service wrapper in standalone — since the controller does not self-supervise.)*
 
 **Portability**
 
 - **P1-PORT-1** — The **same binary runs native on Windows and as a Docker container** with no code
-  change (configuration via TOML). *([architecture §8](../design/controller/spec-controller-architecture.md#8-deployment).)*
+  change (configuration via TOML). *([architecture §8](../design/controller/02-spec-controller-architecture.md#8-deployment).)*
 
 ### Phase 2 — Platform, fleet management, dashboard, TimescaleDB
 

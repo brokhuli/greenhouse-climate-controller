@@ -17,17 +17,17 @@ previously handled only for irrigation or left unspecified.
 
 1. **Actuator-health monitoring** becomes a first-class concern, the output-side counterpart to
    sensor fault detection, owned by
-   [safety §5](../specs/design/controller/spec-controller-safety-and-constraints.md#5-actuator-health-monitoring).
+   [safety §5](../specs/design/controller/06-spec-controller-safety-and-constraints.md#5-actuator-health-monitoring).
    It distinguishes three conditions with deliberately different responses: **stuck**
    (`observed ≠ commanded` → disable + alarm), **no-response** (obeys but no climate effect →
    disable + alarm), and **saturation** (working but pinned at its limit → **alarm, keep
    controlling, never disable**). Saturation / `setpoint_unreachable` detection is owned by the
-   [loops](../specs/design/controller/spec-controller-control-loops.md#saturation--setpoint-unreachable).
+   [loops](../specs/design/controller/05-spec-controller-control-loops.md#saturation--setpoint-unreachable).
 2. **The HAL gains an `observed` actuator readback** distinct from the commanded value, plus
    **seeded actuator-fault injection** (stuck/no-effect), so the monitor is testable deterministically
-   ([HAL §8](../specs/design/controller/spec-controller-hal-simulation.md#8-observed-actuator-state-and-fault-injection)).
+   ([HAL §8](../specs/design/controller/03-spec-controller-hal-simulation.md#8-observed-actuator-state-and-fault-injection)).
 3. **MQTT connection resilience** is specified
-   ([interfaces §7](../specs/design/controller/spec-controller-interfaces.md#7-mqtt-connection-resilience)):
+   ([interfaces §7](../specs/design/controller/08-spec-controller-interfaces.md#7-mqtt-connection-resilience)):
    publishing is decoupled from control and never blocks the tick; a bounded outbound queue drops
    rather than accumulates under backpressure; reconnect re-primes subscribers from the retained
    state snapshot; telemetry lost while disconnected is a recoverable data gap.
@@ -652,8 +652,8 @@ operational simplicity (one static binary) dominate for this service, and Echo s
 
 **Decision:** Run the Rust controller on the **Tokio** async runtime. Tokio drives the controller's
 concurrent I/O surfaces — MQTT telemetry publishing and the REST config/override server
-([P1 §11](../specs/design/controller/spec-controller-interfaces.md)) — around the fixed-tick control
-loop ([P1 §2](../specs/design/controller/spec-controller-architecture.md#2-the-tick-pipeline)).
+([P1 §11](../specs/design/controller/08-spec-controller-interfaces.md)) — around the fixed-tick control
+loop ([P1 §2](../specs/design/controller/02-spec-controller-architecture.md#2-the-tick-pipeline)).
 
 **Why:** The controller services several concurrent I/O channels alongside its periodic control tick,
 and Tokio is the de-facto async runtime in the Rust ecosystem — the mature MQTT and HTTP crates are
@@ -680,18 +680,18 @@ target, and the alternative is hand-managing concurrency for several long-lived 
 **Decision:** Implement the Phase 1 controller in **Rust** — the deterministic, real-time control
 loop that reads simulated sensors, runs the control hierarchy against setpoints, enforces safety
 interlocks, and drives simulated actuators behind the HAL
-([P1 §1](../specs/design/controller/spec-controller-overview.md#1-what-the-controller-is),
-[§2](../specs/design/controller/spec-controller-architecture.md#2-the-tick-pipeline)).
+([P1 §1](../specs/design/controller/01-spec-controller-overview.md#1-what-the-controller-is),
+[§2](../specs/design/controller/02-spec-controller-architecture.md#2-the-tick-pipeline)).
 
 **Why:** The controller is a fixed-tick real-time loop where timing predictability and correctness
 matter most. Rust has no garbage collector, so there are no GC pauses to perturb the tick; its
 ownership model gives memory safety without a runtime; and its trait system expresses the HAL
 actuator interface cleanly — including the forward-looking constraint that an actuator produces a
 *set* of effects on climate variables rather than a one-to-one mapping
-([P1 §3](../specs/design/controller/spec-controller-hal-simulation.md),
+([P1 §3](../specs/design/controller/03-spec-controller-hal-simulation.md),
 [RFC-006](./request-for-comments.md#rfc-006-phase-4-seam-strategy)). It compiles to a small static
 binary, so each greenhouse runs as a lightweight container
-([P1 §13](../specs/design/controller/spec-controller-architecture.md#8-deployment)).
+([P1 §13](../specs/design/controller/02-spec-controller-architecture.md#8-deployment)).
 
 **Alternatives considered:** *C / C++* — comparable real-time determinism and control over timing,
 but manual memory management reintroduces the safety class Rust eliminates at compile time. *Go* — fast

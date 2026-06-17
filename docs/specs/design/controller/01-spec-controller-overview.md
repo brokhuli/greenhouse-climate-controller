@@ -34,16 +34,16 @@ Three properties define it and recur throughout this set:
 - **Headless.** The controller has no UI of its own. It exposes state over MQTT
   (telemetry out) and accepts configuration/control over a REST API (the sole
   write path). Visualization is the [Phase 2 frontend](../frontend/spec-frontend-overview.md)'s
-  job. See [interfaces](./spec-controller-interfaces.md).
+  job. See [interfaces](./08-spec-controller-interfaces.md).
 - **Crop-agnostic.** It knows only numeric setpoints, never a crop. The mapping
   from a crop + growth stage to target values is owned *above* it (the platform,
   or a TOML file when standalone). See
-  [config](./spec-controller-config-and-parameters.md) and
+  [config](./07-spec-controller-config-and-parameters.md) and
   [RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain).
 - **Simulated, not embedded.** The HAL is pure software; there is no real-hardware
   path and nothing runs on a device. Bounded first-order-lag dynamics — not full
   physics — make the control problem non-trivial. See
-  [HAL simulation](./spec-controller-hal-simulation.md).
+  [HAL simulation](./03-spec-controller-hal-simulation.md).
 
 What is sensed and actuated (the physical inventory and the coupling between
 climate variables) lives in
@@ -80,8 +80,8 @@ override, health). It subscribes to **no** command topics —
 never MQTT. The HAL boundary below is load-bearing: the controller sees only
 sensor readings, never simulation internals, which is what keeps the HAL swappable
 for real hardware later. Both surfaces are detailed in
-[interfaces](./spec-controller-interfaces.md); the internal pipeline in
-[architecture](./spec-controller-architecture.md).
+[interfaces](./08-spec-controller-interfaces.md); the internal pipeline in
+[architecture](./02-spec-controller-architecture.md).
 
 ---
 
@@ -89,7 +89,7 @@ for real hardware later. Both surfaces are detailed in
 
 The same binary serves two deployment modes (`P1-PORT-1`); the control logic does
 not change between them. Detail is in
-[architecture — deployment](./spec-controller-architecture.md#8-deployment).
+[architecture — deployment](./02-spec-controller-architecture.md#8-deployment).
 
 | Mode | Shape | Configured by |
 |---|---|---|
@@ -101,24 +101,24 @@ not change between them. Detail is in
 ## 4. Reading order
 
 1. **This file** — orientation + cross-spec map.
-2. [`spec-controller-architecture.md`](./spec-controller-architecture.md) — *how
+2. [`02-spec-controller-architecture.md`](./02-spec-controller-architecture.md) — *how
    the pieces connect*: the tick pipeline, real-time model, override, failure
    modes, deployment.
-3. [`spec-controller-hal-simulation.md`](./spec-controller-hal-simulation.md) —
+3. [`03-spec-controller-hal-simulation.md`](./03-spec-controller-hal-simulation.md) —
    *the world being controlled*: lag model, coupling, disturbances, determinism.
-4. [`spec-controller-sensing.md`](./spec-controller-sensing.md) — *turning
+4. [`04-spec-controller-sensing.md`](./04-spec-controller-sensing.md) — *turning
    readings into trusted values*: fusion, VPD, fault detection.
-5. [`spec-controller-control-loops.md`](./spec-controller-control-loops.md) —
+5. [`05-spec-controller-control-loops.md`](./05-spec-controller-control-loops.md) —
    *the decisions*: the loop hierarchy, algorithms, and dynamics.
-6. [`spec-controller-safety-and-constraints.md`](./spec-controller-safety-and-constraints.md) —
+6. [`06-spec-controller-safety-and-constraints.md`](./06-spec-controller-safety-and-constraints.md) —
    *the guardrails*: interlocks, priority ordering, actuator constraints.
-7. [`spec-controller-config-and-parameters.md`](./spec-controller-config-and-parameters.md) —
+7. [`07-spec-controller-config-and-parameters.md`](./07-spec-controller-config-and-parameters.md) —
    *the knobs*: TOML schema, scheduling, and the default-parameters reference.
-8. [`spec-controller-interfaces.md`](./spec-controller-interfaces.md) — *the
+8. [`08-spec-controller-interfaces.md`](./08-spec-controller-interfaces.md) — *the
    outward surfaces*: MQTT + REST and their contract binding.
-9. [`spec-controller-tech-stack.md`](./spec-controller-tech-stack.md) — *what
+9. [`09-spec-controller-tech-stack.md`](./09-spec-controller-tech-stack.md) — *what
    each dependency is and why*.
-10. [`spec-controller-constraints.md`](./spec-controller-constraints.md) — *the
+10. [`10-spec-controller-constraints.md`](./10-spec-controller-constraints.md) — *the
     non-negotiable rules* and what is out of scope.
 
 ---
@@ -137,7 +137,7 @@ not change between them. Detail is in
   decisions at `../../../decisions/`, repo-root contracts at `../../../../contracts/`.
 - **Defaults are illustrative.** Numeric defaults shown inline (time constants,
   gains, thresholds) are consolidated and owned by the
-  [default-parameters reference](./spec-controller-config-and-parameters.md#default-parameters-reference);
+  [default-parameters reference](./07-spec-controller-config-and-parameters.md#default-parameters-reference);
   the TOML file is the runtime source of truth.
 
 ---
@@ -149,15 +149,15 @@ How this set divides the work, and where each concern is detailed:
 | Concern | Owned by | Defers to |
 |---|---|---|
 | What the controller is; system context; this index | this file | [physical-system](../physical-system-single.md) |
-| Tick pipeline, real-time/scheduling model, state topology, manual override, failure modes, deployment | [`spec-controller-architecture.md`](./spec-controller-architecture.md) | `P1-PERF-*`, `P1-REL-1`, `P1-RESIL-*`, `P1-PORT-1` |
-| HAL lag model, coupling matrix, disturbances, determinism, observed actuator state + fault injection, the Phase 4 seam | [`spec-controller-hal-simulation.md`](./spec-controller-hal-simulation.md) | [physical-system](../physical-system-single.md), [RFC-006](../../../decisions/request-for-comments.md#rfc-006-phase-4-seam-strategy) |
-| Sensor fusion, VPD derivation, fault detection, degradation ladder | [`spec-controller-sensing.md`](./spec-controller-sensing.md) | `P1-REL-2`, `P1-REL-3`, `P1-RESIL-1` |
-| Control-loop hierarchy, per-loop algorithms, setpoint resolution, dynamics, saturation | [`spec-controller-control-loops.md`](./spec-controller-control-loops.md) | — |
-| Safety interlocks, priority ordering, actuator constraints, actuator health monitoring | [`spec-controller-safety-and-constraints.md`](./spec-controller-safety-and-constraints.md) | `P1-REL-1`, `P1-REL-4` |
-| TOML config, scheduling, startup-vs-runtime, default parameters | [`spec-controller-config-and-parameters.md`](./spec-controller-config-and-parameters.md) | [RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain) |
-| MQTT + REST surfaces, contract binding, connection resilience | [`spec-controller-interfaces.md`](./spec-controller-interfaces.md) | [`contracts/`](../../../../contracts/), [`spec-contracts.md`](../spec-contracts.md), `P1-RESIL-3` |
-| Per-dependency choices + rejected alternatives | [`spec-controller-tech-stack.md`](./spec-controller-tech-stack.md) | [tech-stack-decisions.md](../tech-stack-decisions.md#phase-1--deterministic-greenhouse-controller) |
-| Non-negotiable rules; scope / deferred capabilities | [`spec-controller-constraints.md`](./spec-controller-constraints.md) | [constraints artifact](../../artifacts/constraints.md), [NFR doc](../../artifacts/non-functional-requirements.md) |
+| Tick pipeline, real-time/scheduling model, state topology, manual override, failure modes, deployment | [`02-spec-controller-architecture.md`](./02-spec-controller-architecture.md) | `P1-PERF-*`, `P1-REL-1`, `P1-RESIL-*`, `P1-PORT-1` |
+| HAL lag model, coupling matrix, disturbances, determinism, observed actuator state + fault injection, the Phase 4 seam | [`03-spec-controller-hal-simulation.md`](./03-spec-controller-hal-simulation.md) | [physical-system](../physical-system-single.md), [RFC-006](../../../decisions/request-for-comments.md#rfc-006-phase-4-seam-strategy) |
+| Sensor fusion, VPD derivation, fault detection, degradation ladder | [`04-spec-controller-sensing.md`](./04-spec-controller-sensing.md) | `P1-REL-2`, `P1-REL-3`, `P1-RESIL-1` |
+| Control-loop hierarchy, per-loop algorithms, setpoint resolution, dynamics, saturation | [`05-spec-controller-control-loops.md`](./05-spec-controller-control-loops.md) | — |
+| Safety interlocks, priority ordering, actuator constraints, actuator health monitoring | [`06-spec-controller-safety-and-constraints.md`](./06-spec-controller-safety-and-constraints.md) | `P1-REL-1`, `P1-REL-4` |
+| TOML config, scheduling, startup-vs-runtime, default parameters | [`07-spec-controller-config-and-parameters.md`](./07-spec-controller-config-and-parameters.md) | [RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain) |
+| MQTT + REST surfaces, contract binding, connection resilience | [`08-spec-controller-interfaces.md`](./08-spec-controller-interfaces.md) | [`contracts/`](../../../../contracts/), [`spec-contracts.md`](../spec-contracts.md), `P1-RESIL-3` |
+| Per-dependency choices + rejected alternatives | [`09-spec-controller-tech-stack.md`](./09-spec-controller-tech-stack.md) | [tech-stack-decisions.md](../tech-stack-decisions.md#phase-1--deterministic-greenhouse-controller) |
+| Non-negotiable rules; scope / deferred capabilities | [`10-spec-controller-constraints.md`](./10-spec-controller-constraints.md) | [constraints artifact](../../artifacts/constraints.md), [NFR doc](../../artifacts/non-functional-requirements.md) |
 | Quality targets (tick rate, jitter, coverage, availability) | [NFR doc](../../artifacts/non-functional-requirements.md) | — (single source) |
 
 If a controller change can't be traced to one of these documents — or to the

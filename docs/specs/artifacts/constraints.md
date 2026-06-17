@@ -23,7 +23,7 @@ decision, which remains the source of truth.
 |---|---|
 | **Fully local, zero cloud.** The entire stack runs under Docker Compose on one machine; no cloud account or external managed service is required. | [high-level-idea.md](../design/high-level-idea.md), [spec-platform-operations.md](../design/platform/spec-platform-operations.md#2-deployment) |
 | One developer machine must host the **whole stack plus 20–50 simulated controllers** concurrently. This is the resource envelope all performance targets assume. | [Non-Functional Requirements](./non-functional-requirements.md) |
-| **No real hardware.** The HAL is pure simulation; the controller never runs on a physical device, so there is no embedded/real-time-OS target. | [spec-controller-architecture.md](../design/controller/spec-controller-architecture.md#8-deployment) |
+| **No real hardware.** The HAL is pure simulation; the controller never runs on a physical device, so there is no embedded/real-time-OS target. | [02-spec-controller-architecture.md](../design/controller/02-spec-controller-architecture.md#8-deployment) |
 
 ## Structure & project
 
@@ -40,5 +40,5 @@ decision, which remains the source of truth.
 | **Fixed language per phase:** Rust (Phase 1), Go (Phase 2), Python (Phase 3). | [tech-stack-decisions.md](../design/tech-stack-decisions.md) |
 | **`contracts/` is the single source of truth** for every cross-component wire format; all phases conform to it rather than redefining schemas. | [spec-contracts.md](../design/spec-contracts.md), RFC-007 |
 | **Phase 2 is the sole setpoint authority**, and a controller's **REST API is its sole inbound write path** — MQTT is telemetry-only; the controller subscribes to no command topics. | [RFC-005](../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain) |
-| **Sequential phasing:** Phase 1 → 2 → 3. Phase 4 is a stretch goal taken on only after the core product, and the core carries **no Phase 4 accommodation** except the HAL actuator-as-a-set-of-effects seam. | [RFC-006](../../decisions/request-for-comments.md#rfc-006-phase-4-seam-strategy), [spec-controller-hal-simulation.md](../design/controller/spec-controller-hal-simulation.md) |
-| **Structural config requires a restart**; only setpoints/thresholds/overrides change at runtime (over REST). Adding/removing zones and changing HAL τ/coupling parameters are config-file + restart. | [spec-controller-config-and-parameters.md](../design/controller/spec-controller-config-and-parameters.md) |
+| **Sequential phasing:** Phase 1 → 2 → 3. Phase 4 is a stretch goal taken on only after the core product, and the core carries **no Phase 4 accommodation** except the HAL actuator-as-a-set-of-effects seam. | [RFC-006](../../decisions/request-for-comments.md#rfc-006-phase-4-seam-strategy), [03-spec-controller-hal-simulation.md](../design/controller/03-spec-controller-hal-simulation.md) |
+| **Structural config requires a restart**; only setpoints/thresholds/overrides change at runtime (over REST). Adding/removing zones and changing HAL τ/coupling parameters are config-file + restart. | [07-spec-controller-config-and-parameters.md](../design/controller/07-spec-controller-config-and-parameters.md) |

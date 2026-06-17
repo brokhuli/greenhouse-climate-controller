@@ -21,7 +21,7 @@ three.
 ## 1. What the dashboard is
 
 The dashboard is the Phase 2 platform's **React single-page app** — and, because
-Phase 1 controllers are [headless](../controller/spec-controller-interfaces.md),
+Phase 1 controllers are [headless](../controller/08-spec-controller-interfaces.md),
 the **only UI in the entire system**. It is the operator's single pane of glass
 over a [site](../platform/spec-platform-overview.md) of independent
 greenhouses: it visualizes live and historical telemetry, surfaces fleet health,

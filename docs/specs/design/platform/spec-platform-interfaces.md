@@ -8,7 +8,7 @@
 > in. This file lists *which interface does what* and *what the surface does*, not its
 > wire shapes: topic maps, REST shapes, and message schemas are owned by
 > [`contracts/`](../../../../contracts/) and the
-> [controller interfaces](../controller/spec-controller-interfaces.md) spec, catalogued
+> [controller interfaces](../controller/08-spec-controller-interfaces.md) spec, catalogued
 > in [`spec-contracts.md`](../spec-contracts.md), under the conventions in
 > [RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format).
 
@@ -39,7 +39,7 @@ setpoint writes go over the controller REST API
 ([RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain)).
 This keeps the two directions on separate transports with separate trust and delivery
 semantics, and mirrors the controller's own
-[headless contract](../controller/spec-controller-interfaces.md#1-the-headless-principle).
+[headless contract](../controller/08-spec-controller-interfaces.md#1-the-headless-principle).
 
 When Phase 3 lands, the optimizer does **not** add a fourth interface to the
 controller: it submits refined targets through the platform's own setpoint write path
@@ -100,7 +100,7 @@ The per-surface capability split (viewer reads; operator reads + writes) is owne
 
 The MQTT topic map and the controller REST shapes the platform depends on are owned by
 [`contracts/`](../../../../contracts/) and the
-[controller interfaces](../controller/spec-controller-interfaces.md) spec; this file
+[controller interfaces](../controller/08-spec-controller-interfaces.md) spec; this file
 **consumes** those contracts rather than defining them. Likewise the concrete routes,
 payloads, and status codes of the platform's own served API are deferred to
 `contracts/`. The full catalog of system contracts — every cross-component boundary,
@@ -117,7 +117,7 @@ including the platform's own API surface — is [`spec-contracts.md`](../spec-co
 | What the telemetry queries read | reads | [`spec-platform-ingestion.md`](./spec-platform-ingestion.md), [`spec-platform-data-model.md`](./spec-platform-data-model.md) |
 | What profiles/assignments/setpoints drive | drives | [`spec-platform-crop-profiles.md`](./spec-platform-crop-profiles.md) |
 | Who consumes the WebSocket stream | served to | [`spec-platform-dashboard.md`](./spec-platform-dashboard.md), [frontend data model](../frontend/spec-frontend-data-model.md) |
-| The controller surfaces being integrated | integrates | [controller interfaces](../controller/spec-controller-interfaces.md) |
+| The controller surfaces being integrated | integrates | [controller interfaces](../controller/08-spec-controller-interfaces.md) |
 | Which role may call what | gated by | [`spec-platform-security.md`](./spec-platform-security.md) |
 | Wire formats (topics, REST shapes, schemas, status codes) | defers to | [`contracts/`](../../../../contracts/), [`spec-contracts.md`](../spec-contracts.md) |
 | Topic/identity/envelope conventions; setpoint-delivery chain | defers to | [RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format), [RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain) |

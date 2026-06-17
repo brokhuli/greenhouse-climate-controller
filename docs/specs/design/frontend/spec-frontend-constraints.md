@@ -70,7 +70,7 @@ frontend terms.
 - **Why:** The platform's downward control is
   [setpoint-only](../platform/spec-platform-crop-profiles.md#5-fleet-management--operator-control);
   manual actuator forcing is a
-  [controller-local action](../controller/spec-controller-architecture.md#6-manual-override).
+  [controller-local action](../controller/02-spec-controller-architecture.md#6-manual-override).
 - **Forces:** Write UIs expose only setpoints / target bundles.
 - **Forbids:** Any UI that commands an actuator directly or proxies an actuator
   override.
@@ -78,7 +78,7 @@ frontend terms.
 ### Safety stays in the controller — the UI only observes it
 
 - **Why:** Critical-temp and CO₂-ceiling
-  [interlocks](../controller/spec-controller-safety-and-constraints.md#2-safety-interlocks) hold unconditional
+  [interlocks](../controller/06-spec-controller-safety-and-constraints.md#2-safety-interlocks) hold unconditional
   priority **inside** the controller
   ([platform fleet management](../platform/spec-platform-crop-profiles.md#5-fleet-management--operator-control)).
 - **Forces:** The dashboard *displays* interlock activations prominently and treats
@@ -162,7 +162,7 @@ Mirrors [platform constraints](../platform/spec-platform-constraints.md#7-scope-
 
 - **Not the controller UI** — no actuator forcing; safety stays controller-owned.
 - **Not a zone-topology editor** — adding/removing zones is a controller config +
-  restart change ([P1 §4](../controller/spec-controller-config-and-parameters.md)),
+  restart change ([P1 §4](../controller/07-spec-controller-config-and-parameters.md)),
   outside the platform write path.
 - **Not platform observability** — Prometheus/Grafana cover platform health
   ([platform observability](../platform/spec-platform-operations.md#1-observability)); this is greenhouse

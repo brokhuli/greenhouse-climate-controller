@@ -15,7 +15,7 @@
 > status aggregation, and the relay are **2a**; the **sticky / reconciled** behavior
 > of an edit is **2b**.
 
-A controller is [crop-agnostic](../controller/spec-controller-config-and-parameters.md)
+A controller is [crop-agnostic](../controller/07-spec-controller-config-and-parameters.md)
 — it regulates to whatever numbers it is given. The platform owns the layer above:
 turning a crop (and its growth stage) into those numbers, and keeping the controller
 faithful to them.
@@ -40,7 +40,7 @@ faithful to them.
 Applying an assignment **resolves** the profile's target bundle into the controller's
 setpoints and pushes them down via the controller's REST config API — the runtime
 `PATCH` path described in
-[controller config](../controller/spec-controller-config-and-parameters.md). Because
+[controller config](../controller/07-spec-controller-config-and-parameters.md). Because
 the target bundle mirrors the controller's `[setpoints]` schema
 ([data model](./spec-platform-data-model.md)), resolution is a direct mapping.
 
@@ -67,10 +67,10 @@ controller matching it:
 
 Under stress these behaviors are **damped** so they converge rather than storm — the
 reconciliation analogue of the controller's bounded-buffer discipline
-([controller interfaces §7](../controller/spec-controller-interfaces.md#7-mqtt-connection-resilience)):
+([controller interfaces §7](../controller/08-spec-controller-interfaces.md#7-mqtt-connection-resilience)):
 
 - **Re-assert is idempotent.** The controller's REST `PATCH` is a merge latched to the
-  next tick ([controller config](../controller/spec-controller-config-and-parameters.md)),
+  next tick ([controller config](../controller/07-spec-controller-config-and-parameters.md)),
   so a repeated re-assert simply re-converges — correctness never depends on a write
   landing exactly once, only on the last one landing.
 - **Fleet re-assert is staggered.** When many controllers reconnect at once after a
@@ -136,7 +136,7 @@ above and so lands in **2b**.
 > **Safety stays in the controller.** The platform only ever sets *targets* (profile
 > or ad-hoc setpoints) — it never commands actuators directly, so it has no imperative
 > path that could drive an unsafe state. The controller's critical-temp and CO₂-ceiling
-> [interlocks](../controller/spec-controller-safety-and-constraints.md#2-safety-interlocks)
+> [interlocks](../controller/06-spec-controller-safety-and-constraints.md#2-safety-interlocks)
 > keep unconditional priority **inside the controller** and bound actual actuation
 > regardless of which setpoints the platform pushes. The platform observes and reports
 > interlock activations; it never overrides them.
@@ -150,6 +150,6 @@ above and so lands in **2b**.
 | Where profiles, assignments, and intended state are stored | reads/writes | [`spec-platform-data-model.md`](./spec-platform-data-model.md) |
 | The status / liveness reconciliation reacts to | consumes | [`spec-platform-ingestion.md`](./spec-platform-ingestion.md) |
 | The REST endpoints that expose profiles, assignments, setpoints | exposed by | [`spec-platform-interfaces.md`](./spec-platform-interfaces.md#3-api-surface-inventory) |
-| The controller config API setpoints are pushed to | writes to | [controller config](../controller/spec-controller-config-and-parameters.md), [controller interfaces](../controller/spec-controller-interfaces.md) |
+| The controller config API setpoints are pushed to | writes to | [controller config](../controller/07-spec-controller-config-and-parameters.md), [controller interfaces](../controller/08-spec-controller-interfaces.md) |
 | Setpoint authority + delivery chain | defers to | [RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain) |
 | Why safety is not the platform's to own | defers to | [`spec-platform-constraints.md`](./spec-platform-constraints.md) |

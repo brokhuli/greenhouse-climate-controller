@@ -5,7 +5,7 @@
 > first-order-lag** dynamics, the actuator **coupling matrix**, the
 > actuator-as-a-set-of-effects interface invariant (the one Phase 4 seam), the
 > hidden-disturbance model, and the determinism guarantee. This is the *plant* the
-> [control loops](./spec-controller-control-loops.md) fight; the loops never see
+> [control loops](./05-spec-controller-control-loops.md) fight; the loops never see
 > inside it. Physical inventory (what sensors/actuators exist, the real-world
 > coupling) is owned by [`physical-system-single.md`](../physical-system-single.md);
 > this file owns the *software model* of it.
@@ -58,7 +58,7 @@ instantly — which is exactly what makes the control loops non-trivial to tune 
 naive controller overshoots a lagged plant).
 
 Example default time constants (the canonical table is the
-[default-parameters reference](./spec-controller-config-and-parameters.md#default-parameters-reference);
+[default-parameters reference](./07-spec-controller-config-and-parameters.md#default-parameters-reference);
 all are TOML-configurable):
 
 | Variable | τ (default) | Rationale |
@@ -105,13 +105,13 @@ This is the **one** forward-looking accommodation in the core product for Phase 
 combustion heater — a single device that raises temperature, CO₂, and humidity at
 once. Because the interface already speaks in effect-sets, the burner lands in
 Phase 4 as a *new HAL backend implementing the same trait*, not a HAL rewrite. The
-coupling lives here in the HAL; the [control loops](./spec-controller-control-loops.md)
+coupling lives here in the HAL; the [control loops](./05-spec-controller-control-loops.md)
 target *variables*, not actuators, so this costs nothing above the HAL. See
 [RFC-006](../../../decisions/request-for-comments.md#rfc-006-phase-4-seam-strategy)
 and [Phase 4 §3](../spec-phase4.md#3-combustion-heater--the-coupled-actuator).
 
 This invariant is restated as a hard rule in
-[constraints](./spec-controller-constraints.md#7-actuator-as-a-set-of-effects-invariant).
+[constraints](./10-spec-controller-constraints.md#7-actuator-as-a-set-of-effects-invariant).
 
 ---
 
@@ -144,7 +144,7 @@ physically exact. The rich heat/humidity/CO₂ dynamics that need greenhouse vol
 and crop physiology belong to the
 [Phase 3 digital twin](../optimizer/03-spec-optimizer-digital-twin.md#1-the-forward-model);
 the deferred-capability list is in
-[constraints](./spec-controller-constraints.md#9-scope--deferred-controller-capabilities),
+[constraints](./10-spec-controller-constraints.md#9-scope--deferred-controller-capabilities),
 and the un-modeled *physical* elements in
 [`physical-system-single.md`](../physical-system-single.md#out-of-scope-for-this-physical-model).
 
@@ -158,10 +158,10 @@ the same sequence of readings, tick for tick. Any stochastic element (sensor noi
 disturbance jitter) is driven by a seeded PRNG, never by wall-clock or OS entropy.
 
 This is a prerequisite for the test strategy
-([tech stack — testing](./spec-controller-tech-stack.md#testing)): control-loop and
+([tech stack — testing](./09-spec-controller-tech-stack.md#testing)): control-loop and
 interlock behavior can be asserted against reproducible plant responses, and a tuning
 regression shows up as a diff in a fixed-seed run rather than as flake. Combined with
-the latched-write model ([architecture §3](./spec-controller-architecture.md#3-real-time--scheduling-model)),
+the latched-write model ([architecture §3](./02-spec-controller-architecture.md#3-real-time--scheduling-model)),
 an entire run is replayable from (seed, config, command log).
 
 ---
@@ -178,7 +178,7 @@ controller could only ever assume its commands took effect.
 - **Why a separate channel.** A real-hardware HAL would source `observed` from device
   feedback (limit switches, position encoders, current sensing); the simulated HAL
   synthesizes it. Either way the control side compares commanded against observed
-  identically — the [actuator health monitor](./spec-controller-safety-and-constraints.md#5-actuator-health-monitoring)
+  identically — the [actuator health monitor](./06-spec-controller-safety-and-constraints.md#5-actuator-health-monitoring)
   lives above the trait and never knows which backend produced the readback, preserving
   the clean control/plant split ([§1](#1-the-hal-boundary), `P1-MOD-1`).
 - **Injectable actuator faults.** The simulated backend can inject actuator faults under
@@ -192,7 +192,7 @@ controller could only ever assume its commands took effect.
 - **Deterministic, like everything else.** Injection timing and selection are driven by the
   seeded PRNG ([§7](#7-determinism--seeding)), never wall-clock — so an actuator-fault
   scenario replays identically and the
-  [health-detection assertions](./spec-controller-safety-and-constraints.md#5-actuator-health-monitoring)
+  [health-detection assertions](./06-spec-controller-safety-and-constraints.md#5-actuator-health-monitoring)
   are stable (`P1-TEST-2`).
 
 This stays within [bounded fidelity](#6-bounded-fidelity): a fault is a flag that gates the
@@ -204,11 +204,11 @@ existing lag/coupling model, not a new physics path.
 
 | Concern | This spec | Detailed in |
 |---|---|---|
-| What the loops do with the readings | feeds | [`spec-controller-control-loops.md`](./spec-controller-control-loops.md) |
-| How readings are conditioned before loops | feeds | [`spec-controller-sensing.md`](./spec-controller-sensing.md) |
-| Commanded-vs-observed actuator-health detection | feeds | [`spec-controller-safety-and-constraints.md`](./spec-controller-safety-and-constraints.md#5-actuator-health-monitoring) |
-| Where the HAL sits in the tick | composed by | [`spec-controller-architecture.md`](./spec-controller-architecture.md#2-the-tick-pipeline) |
-| τ / coupling-gain / disturbance defaults | consolidated in | [`spec-controller-config-and-parameters.md`](./spec-controller-config-and-parameters.md#default-parameters-reference) |
+| What the loops do with the readings | feeds | [`05-spec-controller-control-loops.md`](./05-spec-controller-control-loops.md) |
+| How readings are conditioned before loops | feeds | [`04-spec-controller-sensing.md`](./04-spec-controller-sensing.md) |
+| Commanded-vs-observed actuator-health detection | feeds | [`06-spec-controller-safety-and-constraints.md`](./06-spec-controller-safety-and-constraints.md#5-actuator-health-monitoring) |
+| Where the HAL sits in the tick | composed by | [`02-spec-controller-architecture.md`](./02-spec-controller-architecture.md#2-the-tick-pipeline) |
+| τ / coupling-gain / disturbance defaults | consolidated in | [`07-spec-controller-config-and-parameters.md`](./07-spec-controller-config-and-parameters.md#default-parameters-reference) |
 | Physical inventory + real-world coupling | mirrors | [`physical-system-single.md`](../physical-system-single.md) |
 | The Phase 4 combustion-heater backend | seam for | [RFC-006](../../../decisions/request-for-comments.md#rfc-006-phase-4-seam-strategy), [Phase 4 §3](../spec-phase4.md#3-combustion-heater--the-coupled-actuator) |
 | Determinism target `P1-TEST-2`, modularity `P1-MOD-1` | cited | [NFR doc](../../artifacts/non-functional-requirements.md) |

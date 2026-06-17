@@ -5,7 +5,7 @@ agreements that let the controller (Phase 1), the platform (Phase 2), the optimi
 the Phase 4 extensions interoperate. Each phase spec defers its wire formats to
 [`contracts/`](../../../contracts/), "the single source of truth all phases conform to"; this catalog
 is the map of *what* contracts exist, who produces and consumes each, and in what format. For the
-components on either side of these boundaries, see [`spec-controller-overview.md`](./controller/spec-controller-overview.md),
+components on either side of these boundaries, see [`01-spec-controller-overview.md`](./controller/01-spec-controller-overview.md),
 [`spec-platform-overview.md`](./platform/spec-platform-overview.md), [`01-spec-optimizer-overview.md`](./optimizer/01-spec-optimizer-overview.md),
 and [`spec-phase4.md`](./spec-phase4.md).
 
@@ -64,7 +64,7 @@ is versioned and accompanied by an ADR, per [`contracts/README.md`](../../../con
 | **Parties / direction** | Controller (producer) → platform (the sole consumer). The Phase 2 frontend reaches the controller **through** the Go API, not directly; there is no controller-local frontend. |
 | **Format** | OpenAPI 3.1 (uses the JSON Schema 2020-12 dialect); greenhouse-scoped paths; 422 names the violated bound |
 | **Phase introduced** | Phase 1 (consumed by the platform from Phase 2 — the ad-hoc setpoint relay in 2a, the full resolution path in 2b) |
-| **Governing decision** | [RFC-005](../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain) (controller is setpoint-only), [RFC-009](../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries) (unauthenticated — Docker network is the trust boundary), [P1 §11](./controller/spec-controller-interfaces.md) |
+| **Governing decision** | [RFC-005](../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain) (controller is setpoint-only), [RFC-009](../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries) (unauthenticated — Docker network is the trust boundary), [P1 §11](./controller/08-spec-controller-interfaces.md) |
 | **Location** | [`contracts/controller-rest/`](../../../contracts/controller-rest/) |
 | **Status** | Authored — `openapi.json` + README + example fixtures exist under [`contracts/controller-rest/`](../../../contracts/controller-rest/) |
 

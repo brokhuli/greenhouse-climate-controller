@@ -17,7 +17,7 @@ simulates sensors and actuators in software. The control logic is real; the hard
 
 > This document describes the **physical system** — the world being controlled. For how the Phase 1
 > controller senses, decides, and acts on it (control loops, sensor fusion, configuration, fault
-> handling), see [`spec-controller-overview.md`](./controller/spec-controller-overview.md).
+> handling), see [`01-spec-controller-overview.md`](./controller/01-spec-controller-overview.md).
 
 ---
 

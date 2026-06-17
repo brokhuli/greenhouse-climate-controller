@@ -176,7 +176,7 @@ export const eventEntry = z.object({
 ```
 
 Metrics covered (matching the controller's published surface,
-[P1 §11](../controller/spec-controller-interfaces.md)): temperature, humidity, CO₂,
+[P1 §11](../controller/08-spec-controller-interfaces.md)): temperature, humidity, CO₂,
 PAR, per-zone soil moisture, actuator positions.
 
 ---

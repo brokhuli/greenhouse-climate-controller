@@ -18,7 +18,7 @@ The simulation engine is a **forward model** of a single greenhouse's climate, b
 Given an observed state and a candidate setpoint trajectory, it predicts how temperature, humidity,
 CO₂, **VPD**, and accumulated **DLI** evolve over a planning horizon — the physics the Phase 1
 controller deliberately approximates with first-order lag and the platform does not model at all
-([P1 §12](../controller/spec-controller-constraints.md#9-scope--deferred-controller-capabilities)).
+([P1 §12](../controller/10-spec-controller-constraints.md#9-scope--deferred-controller-capabilities)).
 
 It models the **coupling** between climate variables and the **lag** between an actuator change and
 its effect (see the coupling problem in
