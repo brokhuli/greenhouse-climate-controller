@@ -9,12 +9,11 @@
 This set sits **one altitude below** [`06-spec-platform-dashboard.md`](../platform/06-spec-platform-dashboard.md),
 which owns the dashboard's *capabilities*. These documents own *how the SPA is
 built*: views, client architecture, data binding, components, tokens,
-interactions, and hard constraints. The discipline throughout: **reference, do
-not redefine.** Wire formats live in [`contracts/`](../../../../contracts/);
-capabilities and platform behavior live in the
-[platform spec](../platform/01-spec-platform-overview.md); quality targets live in the
-[NFR doc](../../artifacts/non-functional-requirements.md). This set consumes all
-three.
+interactions, and hard constraints. The discipline throughout: **reference, don't
+redefine** — see [spec conventions](../spec-conventions.md) for the shared sources of
+truth; additionally, dashboard *capabilities* and platform behavior are owned by the
+[platform spec](../platform/01-spec-platform-overview.md), which this set defers
+upward to.
 
 ---
 
@@ -121,9 +120,10 @@ knowledge of MQTT topics or the controller REST API — those are platform-inter
 ## 5. Conventions used across the set
 
 - **2a/2b tags** on every slice-specific section.
-- **Reference, don't redefine.** A capability owned by platform §8, a wire format
-  owned by `contracts/`, or a quality target owned by the NFR doc is *linked*,
-  never restated.
+- **Reference, don't redefine** — the shared rule and its sources of truth live in
+  [spec conventions](../spec-conventions.md); additionally, dashboard *capabilities*
+  are owned by the [platform dashboard spec](../platform/06-spec-platform-dashboard.md)
+  and linked, never restated.
 - **NFR IDs** are cited by their stable ID (`P2-USE-1`, `P2-PERF-2`, `P2-PERF-3`,
   `P2-SEC-1`, `P2-TEST-2`) from the
   [NFR doc](../../artifacts/non-functional-requirements.md).

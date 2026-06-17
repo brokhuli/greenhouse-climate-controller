@@ -13,13 +13,9 @@ one altitude **above** the wire contracts in
 [`contracts/`](../../../../contracts/), and one altitude **above** the
 [frontend spec set](../frontend/01-spec-frontend-overview.md), which owns *how the
 dashboard SPA is built*. The discipline throughout mirrors those sibling sets:
-**reference, do not redefine.** Wire formats live in
-[`contracts/`](../../../../contracts/); the physical world being managed lives in
-[`physical-system-multi.md`](../physical-system-multi.md); quality targets live in
-the [NFR doc](../../artifacts/non-functional-requirements.md); cross-cutting
-decisions live in the [RFCs](../../../decisions/request-for-comments.md) and
-[ADRs](../../../decisions/architecture-design-record.md). This set consumes all of
-them.
+**reference, don't redefine** — see [spec conventions](../spec-conventions.md) for
+the shared sources of truth this set consumes (contracts, the physical-system docs,
+the NFR doc, the RFCs/ADRs).
 
 ---
 
@@ -161,9 +157,8 @@ Three data flows cross this topology (detail in
 ## 5. Conventions used across the set
 
 - **2a/2b tags** on every slice-specific section.
-- **Reference, don't redefine.** A wire format owned by `contracts/`, a physical fact
-  owned by [`physical-system-multi.md`](../physical-system-multi.md), a quality target
-  owned by the NFR doc, or a decision owned by an RFC/ADR is *linked*, never restated.
+- **Reference, don't redefine** — the shared rule and its sources of truth live in
+  [spec conventions](../spec-conventions.md).
 - **NFR IDs** are cited by their stable ID (`P2-USE-1`, `P2-PERF-2`, `P2-PERF-3`,
   `P2-SEC-1`, `P2-SCAL-1`, `P2-TEST-2`, …) from the
   [NFR doc](../../artifacts/non-functional-requirements.md).

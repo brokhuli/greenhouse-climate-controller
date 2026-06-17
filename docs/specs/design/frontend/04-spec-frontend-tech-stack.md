@@ -2,9 +2,8 @@
 
 > **Purpose:** The recommended frontend dependency set, going one level deeper than
 > [tech-stack-decisions.md](../tech-stack-decisions.md#phase-2--local-paas-platform-docker-only),
-> which fixes only the load-bearing choices (React, Playwright, Lighthouse CI,
-> nginx-served). Each entry states **what** it is, **why** it's chosen over
-> alternatives, and **how** it's used here. Choices are constrained by the
+> which fixes only the load-bearing choices. Each entry states **what** it is,
+> **why** it's chosen over alternatives, and **how** it's used here. Choices are constrained by the
 > [NFR doc](../../artifacts/non-functional-requirements.md) (`P2-USE-1` load < 2 s
 > + ≥ 1 Hz live; `P2-PERF-2` WS lag < 1 s; `P2-PERF-3` API p95 < 200 ms;
 > `P2-TEST-2` Playwright + Lighthouse) and the
@@ -230,23 +229,3 @@ Recorded so the choice isn't re-litigated:
   costs more than composing primitives over tokens.
 - **A WebSocket/state framework combo (e.g. RTK Query + socket middleware)** — more
   machinery than the small message taxonomy needs.
-
----
-
-## Summary table
-
-| Layer | Choice | Rationale (one line) |
-|---|---|---|
-| Framework | React 18 + TypeScript (strict) | Fixed by tech-stack-decisions; typed end-to-end |
-| Build | Vite | Fast dev; static `dist/` for nginx; code splitting |
-| Routing | React Router | Small stable route set; lazy modules |
-| Server state | TanStack Query | Cache + retry + the target WS patches into |
-| Live channel | native WebSocket wrapper | One socket, small taxonomy; no server counterpart needed |
-| UI state | local; **Zustand** fallback | Little global state; smallest viable footprint |
-| Charts ⚑ | uPlot | Canvas; holds ≥ 1 Hz live at 50-controller scale |
-| Styling ⚑ | Tailwind v4 + CSS-var tokens | Dense UI; one-attribute theme swap |
-| Icons | lucide-react | Tree-shaken SVG, one family |
-| Forms/validation | react-hook-form + Zod | Real forms; one schema for form + API |
-| Auth (2b) | react-oidc-context | Keycloak relying party; no custom crypto |
-| Tests | Vitest + RTL, Playwright, Lighthouse CI | `P2-TEST-2` / `P2-USE-1` |
-| Lint/format | ESLint + Prettier | CI-enforced consistency |

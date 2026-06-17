@@ -2,8 +2,7 @@
 
 > **Purpose:** The recommended controller dependency set, going one level deeper
 > than [tech-stack-decisions.md](../tech-stack-decisions.md#phase-1--deterministic-greenhouse-controller),
-> which fixes the load-bearing choices (Rust, Tokio, MQTT via `rumqttc`, REST via
-> `axum`, HAL traits + simulated backend, headless). Each entry states **what** it
+> which fixes the load-bearing choices. Each entry states **what** it
 > is, **why** it's chosen over alternatives, and **how** it's used here. Choices are
 > constrained by the [NFR doc](../../artifacts/non-functional-requirements.md)
 > (`P1-PERF-*` real-time budget, `P1-TEST-1/2` coverage + determinism, `P1-PORT-1`
@@ -178,20 +177,3 @@ Recorded so the choice isn't re-litigated:
 - **MQTT as a command channel** — telemetry-only; setpoints arrive over REST
   ([RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain)).
 - **A heavyweight PID/control crate as default** — see Control math ⚑.
-
----
-
-## Summary table
-
-| Layer | Choice | Rationale (one line) |
-|---|---|---|
-| Language | Rust | Fixed upstream; no-GC determinism for the real-time budget |
-| Runtime | Tokio | Fixed upstream; shared by the MQTT + REST tasks |
-| Messaging | `rumqttc` (Mosquitto broker) | Tokio-native MQTT; QoS + retained suit per-tick telemetry |
-| REST | `axum` | Same runtime; small API surface |
-| HAL | traits + simulated backend | Swappable seam (`P1-MOD-1`, RFC-006) |
-| Config | `serde` + `toml` | Typed config; fail-at-load |
-| Control math ⚑ | hand-rolled PID | Auditable, dependency-free, most-tested code |
-| Scheduling ⚑ | `tokio` interval | Meets + measures the 1 Hz / jitter budget |
-| Tests | `cargo test` + seeded harness | `P1-TEST-1/2` |
-| Tooling | rustfmt + clippy, pinned toolchain | CI-enforced, reproducible builds |

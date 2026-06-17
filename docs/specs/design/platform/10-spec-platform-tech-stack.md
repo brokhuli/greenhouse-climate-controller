@@ -2,8 +2,7 @@
 
 > **Purpose:** The recommended platform dependency set, going one level deeper than
 > [tech-stack-decisions.md](../tech-stack-decisions.md#phase-2--local-paas-platform-docker-only),
-> which fixes only the load-bearing choices (Go + Echo, TimescaleDB, Mosquitto, nginx,
-> Keycloak, Docker Compose, REST + WebSockets). Each entry states **what** it is,
+> which fixes only the load-bearing choices. Each entry states **what** it is,
 > **why** it's chosen over alternatives, and **how** it's used here. Choices are
 > constrained by the [NFR doc](../../artifacts/non-functional-requirements.md)
 > (`P2-PERF-3` API p95 < 200 ms; `P2-SCAL-1` ~50 controllers; `P2-USE-1` ≥ 1 Hz live)
@@ -185,20 +184,3 @@ Recorded so the choice isn't re-litigated:
   locally.
 - **Traefik for ingress** — the service map is static; nginx is simpler
   ([RFC-003](../../../decisions/request-for-comments.md#rfc-003-phase-2-platform-ingress)).
-
----
-
-## Summary table
-
-| Layer | Choice | Rationale (one line) |
-|---|---|---|
-| Language / framework | Go + Echo | Static binary, cheap concurrency, thin router |
-| Database ⚑ | TimescaleDB | One store: relational registry + time-series telemetry (RFC-002) |
-| DB access ⚑ | pgx + sqlc + golang-migrate | Explicit, type-safe SQL; versioned schema |
-| MQTT client ⚑ | paho.mqtt.golang | De-facto Go client; reconnect/QoS/last-will |
-| MQTT broker | Mosquitto | Lightweight, containerized (RFC-001) |
-| Live channel | coder/gorilla websocket | Plain WS hub; matches the frontend |
-| Reverse proxy | nginx | Static map; SPA + `/api` + `/auth` (RFC-003) |
-| Auth (2b) | Keycloak + go-oidc/golang-jwt | Local OIDC; API validates JWTs, no credentials |
-| Observability (2b) | client_golang + Prometheus + Grafana + slog | Platform-health metrics + structured audit |
-| Tooling | golangci-lint, gofmt, go test, Compose | CI-enforced consistency; one-command stack |

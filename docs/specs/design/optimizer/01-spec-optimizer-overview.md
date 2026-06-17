@@ -21,14 +21,10 @@ ultimately steers, see
 platform it integrates with, see
 [`01-spec-platform-overview.md`](../platform/01-spec-platform-overview.md).
 
-> Scope note: this is an architectural spec (components, responsibilities, behavior, configuration).
-> Concrete code/module/class design is deferred until implementation. Wire formats (MQTT topics,
-> payload schemas, REST shapes) are **referenced**, not redefined here — they live in
-> [`contracts/`](../../../../contracts/), the single source of truth all three phases conform to. The
-> conventions those contracts follow (topic taxonomy, `greenhouse_id` / `zone_id` identity, payload
-> envelope, JSON Schema format + versioning) are fixed by
-> [RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format).
-> The full set of system contracts — every cross-component boundary — is catalogued in
+> Scope note: this is an architectural spec (components, responsibilities, behavior,
+> configuration). Concrete code/module/class design is deferred until implementation.
+> Wire formats, identity, and payload conventions are **referenced, not redefined** —
+> see [spec conventions](../spec-conventions.md) and the full contract catalog in
 > [`spec-contracts.md`](../spec-contracts.md).
 
 ---
@@ -87,10 +83,8 @@ coordination are out of scope (see [scope](./11-spec-optimizer-scope.md)).
 
 ## 3. Conventions used across the set
 
-- **Reference, don't redefine.** A wire format owned by `contracts/`, a physical
-  fact owned by [`physical-system-single.md`](../physical-system-single.md), a
-  quality target owned by the NFR doc, or a decision owned by an RFC/ADR is *linked*,
-  never restated.
+- **Reference, don't redefine** — the shared rule and its sources of truth live in
+  [spec conventions](../spec-conventions.md).
 - **NFR IDs** are cited by their stable ID (`P3-MOD-1`, `P3-OBS-1`, `P3-PERF-2`,
   `P3-SCAL-1`, `P3-RESIL-1`, `P3-REL-1`, `P3-TEST-1`, `P3-AVAIL-1`, …) from the
   [NFR doc](../../artifacts/non-functional-requirements.md).

@@ -11,12 +11,9 @@ This set is the **top-level design spec for Phase 1**. It sits alongside the
 and [Phase 4](../spec-phase4.md) specs, and one altitude **above** the wire
 contracts in [`contracts/`](../../../../contracts/). The discipline throughout
 mirrors the [frontend spec set](../frontend/01-spec-frontend-overview.md):
-**reference, do not redefine.** Wire formats live in
-[`contracts/`](../../../../contracts/); the physical inventory being controlled
-lives in [`physical-system-single.md`](../physical-system-single.md); quality
-targets live in the [NFR doc](../../artifacts/non-functional-requirements.md);
-cross-cutting decisions live in the
-[RFCs](../../../decisions/request-for-comments.md). This set consumes all of them.
+**reference, don't redefine** — see [spec conventions](../spec-conventions.md) for
+the shared sources of truth this set consumes (contracts, the physical-system docs,
+the NFR doc, the RFCs/ADRs).
 
 ---
 
@@ -29,20 +26,18 @@ setpoints, runs a hierarchy of control loops, enforces unconditional safety
 interlocks, shapes the result through actuator constraints, and drives simulated
 actuators — all behind a Hardware Abstraction Layer (HAL).
 
-Three properties define it and recur throughout this set:
+Three properties define it and recur throughout this set; each is owned in full by
+the spec it links to:
 
-- **Headless.** The controller has no UI of its own. It exposes state over MQTT
-  (telemetry out) and accepts configuration/control over a REST API (the sole
-  write path). Visualization is the [Phase 2 frontend](../frontend/01-spec-frontend-overview.md)'s
-  job. See [interfaces](./08-spec-controller-interfaces.md).
-- **Crop-agnostic.** It knows only numeric setpoints, never a crop. The mapping
-  from a crop + growth stage to target values is owned *above* it (the platform,
-  or a TOML file when standalone). See
-  [config](./07-spec-controller-config-and-parameters.md) and
+- **Headless.** No UI of its own — observed over MQTT, controlled over REST;
+  visualization is the [Phase 2 frontend](../frontend/01-spec-frontend-overview.md)'s
+  job. See [interfaces §1](./08-spec-controller-interfaces.md#1-the-headless-principle).
+- **Crop-agnostic.** It regulates to numeric setpoints; the crop → setpoint mapping
+  is owned *above* it. See
+  [config](./07-spec-controller-config-and-parameters.md#configuration-model) and
   [RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain).
-- **Simulated, not embedded.** The HAL is pure software; there is no real-hardware
-  path and nothing runs on a device. Bounded first-order-lag dynamics — not full
-  physics — make the control problem non-trivial. See
+- **Simulated, not embedded.** The HAL is pure software with bounded first-order-lag
+  dynamics — nothing runs on a device. See
   [HAL simulation](./03-spec-controller-hal-simulation.md).
 
 What is sensed and actuated (the physical inventory and the coupling between
@@ -125,10 +120,8 @@ not change between them. Detail is in
 
 ## 5. Conventions used across the set
 
-- **Reference, don't redefine.** A wire format owned by `contracts/`, a physical
-  fact owned by [`physical-system-single.md`](../physical-system-single.md), a
-  quality target owned by the NFR doc, or a decision owned by an RFC is *linked*,
-  never restated.
+- **Reference, don't redefine** — the shared rule and its sources of truth live in
+  [spec conventions](../spec-conventions.md).
 - **NFR IDs** are cited by their stable ID (`P1-PERF-1`, `P1-REL-1`, `P1-REL-4`,
   `P1-RESIL-1`, `P1-RESIL-3`, `P1-OBS-1`, `P1-MOD-1`, `P1-TEST-2`, …) from the
   [NFR doc](../../artifacts/non-functional-requirements.md).
