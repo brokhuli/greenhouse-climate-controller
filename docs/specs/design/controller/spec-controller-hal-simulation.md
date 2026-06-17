@@ -35,7 +35,7 @@ This boundary buys two things:
 
 The simulation's fidelity is deliberately bounded: **coupled first-order lag**, not
 a full heat/mass-balance model. Rich physics is reserved for the
-[Phase 3 digital twin](../spec-climate-optimizer.md#3-digital-twin--simulation-engine)
+[Phase 3 digital twin](../optimizer/03-spec-optimizer-digital-twin.md#1-the-forward-model)
 (see [§6](#6-bounded-fidelity)).
 
 ---
@@ -142,7 +142,7 @@ intentionally **out of scope** for Phase 1. The simulation is a coupled
 first-order-lag approximation tuned to make control *interesting*, not to be
 physically exact. The rich heat/humidity/CO₂ dynamics that need greenhouse volume
 and crop physiology belong to the
-[Phase 3 digital twin](../spec-climate-optimizer.md#3-digital-twin--simulation-engine);
+[Phase 3 digital twin](../optimizer/03-spec-optimizer-digital-twin.md#1-the-forward-model);
 the deferred-capability list is in
 [constraints](./spec-controller-constraints.md#9-scope--deferred-controller-capabilities),
 and the un-modeled *physical* elements in

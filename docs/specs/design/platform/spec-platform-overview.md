@@ -8,7 +8,7 @@
 
 This set is the **top-level design spec for Phase 2**. It sits alongside the
 [controller](../controller/spec-controller-overview.md),
-[optimizer](../spec-climate-optimizer.md), and [Phase 4](../spec-phase4.md) specs,
+[optimizer](../optimizer/01-spec-optimizer-overview.md), and [Phase 4](../spec-phase4.md) specs,
 one altitude **above** the wire contracts in
 [`contracts/`](../../../../contracts/), and one altitude **above** the
 [frontend spec set](../frontend/spec-frontend-overview.md), which owns *how the

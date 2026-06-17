@@ -689,9 +689,9 @@ applies to the wire contract, applied here to the read schema.
 through the Phase 2 API, never around it — so that bounds enforcement and provenance live in one
 place. The optimizer's **read** path does the opposite, and no RFC has examined it:
 
-- [spec-climate-optimizer.md §8](../specs/design/spec-climate-optimizer.md#8-interfaces--integration)
+- [09-spec-optimizer-interfaces.md](../specs/design/optimizer/09-spec-optimizer-interfaces.md)
   lists "TimescaleDB | Phase 2 store → optimizer | Read-only historical telemetry."
-- [spec-climate-optimizer.md §9](../specs/design/spec-climate-optimizer.md#9-configuration) configures
+- [10-spec-optimizer-configuration.md](../specs/design/optimizer/10-spec-optimizer-configuration.md) configures
   it as a raw DSN: `postgres_dsn = "postgresql://optimizer:***@platform-db:5432/greenhouse"  # read-only`.
 
 So Phase 3 reaches **into Phase 2's database directly** rather than through Phase 2's API. This is the
@@ -822,7 +822,7 @@ The platform's authorization model is specified for **humans** but not for **ser
 - [spec-platform-interfaces.md](../specs/design/platform/spec-platform-interfaces.md#5-authorization) and
   [authentication](../specs/design/platform/spec-platform-security.md): write-path actions
   (assignments, setpoint edits) "require the **operator** role," carried in a Keycloak **OIDC token**.
-- But [spec-climate-optimizer.md §6](../specs/design/spec-climate-optimizer.md#6-setpoint-refinement--application)
+- But [05-spec-optimizer-constraints-and-application.md §2](../specs/design/optimizer/05-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application)
   makes the optimizer a write-path client — `POST /greenhouses/{id}/setpoints` — with **no statement
   of how a headless service obtains an operator token**. Keycloak's interactive login flow assumes a
   human at a browser; the optimizer has neither.
@@ -855,7 +855,7 @@ operators — no second authz mechanism. Provenance is unaffected: the setpoint 
 with source `optimizer` (RFC-005), now backed by a verifiable client identity rather than an
 anonymous call. The client secret is supplied via environment variable / Compose secret
 (`PLANNER_*`-style), never in a committed file, consistent with
-[spec-climate-optimizer.md §9](../specs/design/spec-climate-optimizer.md#9-configuration).
+[10-spec-optimizer-configuration.md](../specs/design/optimizer/10-spec-optimizer-configuration.md).
 
 **2. Platform → controller REST: per-controller bearer token.**
 

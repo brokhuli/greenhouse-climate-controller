@@ -6,7 +6,7 @@ the Phase 4 extensions interoperate. Each phase spec defers its wire formats to
 [`contracts/`](../../../contracts/), "the single source of truth all phases conform to"; this catalog
 is the map of *what* contracts exist, who produces and consumes each, and in what format. For the
 components on either side of these boundaries, see [`spec-controller-overview.md`](./controller/spec-controller-overview.md),
-[`spec-platform-overview.md`](./platform/spec-platform-overview.md), [`spec-climate-optimizer.md`](./spec-climate-optimizer.md),
+[`spec-platform-overview.md`](./platform/spec-platform-overview.md), [`01-spec-optimizer-overview.md`](./optimizer/01-spec-optimizer-overview.md),
 and [`spec-phase4.md`](./spec-phase4.md).
 
 > Scope note: this is a **catalog**, not a schema. It lists each contract and its purpose, parties,

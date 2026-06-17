@@ -68,7 +68,7 @@ Each entry: the constraint, **why** it exists, and **what it forces or forbids**
 ## 6. No physics model (bounded fidelity)
 
 - **Why:** Full heat/mass-balance physics needs greenhouse volume + crop physiology
-  and belongs to the [Phase 3 digital twin](../spec-climate-optimizer.md#3-digital-twin--simulation-engine).
+  and belongs to the [Phase 3 digital twin](../optimizer/03-spec-optimizer-digital-twin.md#1-the-forward-model).
 - **Forces:** Phase 1 uses coupled first-order lag
   ([HAL §2](./spec-controller-hal-simulation.md#2-coupled-first-order-lag)) — enough
   to make control non-trivial, no more.
@@ -104,8 +104,8 @@ instead.
 
 | Deferred capability | Why / where it belongs |
 |---|---|
-| Predictive / weather-based control | Needs external forecast feeds + planning — [Phase 3](../spec-climate-optimizer.md) (weather-reactive itself is [Phase 4](../spec-phase4.md)) |
-| Energy-cost optimization | Needs price data + a planning horizon — [Phase 3](../spec-climate-optimizer.md) |
+| Predictive / weather-based control | Needs external forecast feeds + planning — [Phase 3](../optimizer/01-spec-optimizer-overview.md) (weather-reactive itself is [Phase 4](../spec-phase4.md)) |
+| Energy-cost optimization | Needs price data + a planning horizon — [Phase 3](../optimizer/01-spec-optimizer-overview.md) |
 | Advanced sensor fusion (Kalman / complementary, cross-quantity) | Estimation-theory methods need the physics model — Phase 3. Phase 1 includes only redundant-temperature median voting ([sensing §2](./spec-controller-sensing.md#2-redundant-temperature-fusion-tmr)) |
 | Full heat/mass-balance HAL physics | Reserved for the Phase 3 digital twin; Phase 1 uses coupled first-order lag ([HAL §2](./spec-controller-hal-simulation.md#2-coupled-first-order-lag)) |
 | Combustion heater | Multi-variable actuator (heat + CO₂ + humidity) that breaks the independence assumption of the current control loops; needs actuator-selection coordination above the individual loops — [Phase 4](../spec-phase4.md#3-combustion-heater--the-coupled-actuator). The only accommodation now is the HAL [effect-set invariant](#7-actuator-as-a-set-of-effects-invariant) ([RFC-006](../../../decisions/request-for-comments.md#rfc-006-phase-4-seam-strategy)) |

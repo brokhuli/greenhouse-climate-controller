@@ -444,7 +444,7 @@ pure MQTT, so swapping to EMQX later is a Compose and config change, not a code 
 **Decision:** Build the Phase 3 digital twin — the forward model that rolls temperature, humidity,
 CO₂, VPD, and DLI over the planning horizon — on **NumPy and SciPy**. The coupled first-order lag
 dynamics, the actuator coupling matrix, and trajectory integration are expressed as NumPy arrays and
-SciPy numerical routines ([P3 §3](../specs/design/spec-climate-optimizer.md#3-digital-twin--simulation-engine)).
+SciPy numerical routines ([P3 §3](../specs/design/optimizer/03-spec-optimizer-digital-twin.md#1-the-forward-model)).
 
 **Why:** The twin is small-dimensional numerical integration over a coupling matrix — exactly the
 vectorized, C-backed linear-algebra and ODE work NumPy/SciPy are built for. They are the de-facto
@@ -456,7 +456,7 @@ the Python host.
 slow for repeated horizon rollouts. *PyTorch / JAX* — fast and differentiable, but autodiff and GPU
 tensors are unneeded for first-order lag and add heavyweight dependencies. *A physics engine /
 Modelica-class simulator* — far more fidelity than the deliberately bounded first-order-lag model
-calls for ([P3 §3](../specs/design/spec-climate-optimizer.md#3-digital-twin--simulation-engine)).
+calls for ([P3 §3](../specs/design/optimizer/03-spec-optimizer-digital-twin.md#1-the-forward-model)).
 
 **Tradeoffs accepted:** NumPy/SciPy are non-trivial dependencies and not as fast as a fully compiled
 model — acceptable because the planning cadence is minutes-scale (default 30 min,
@@ -471,14 +471,14 @@ core comfortably covers a single greenhouse's rollout.
 
 **Decision:** Expose the optimizer's service surface — trigger planning cycles, inspect proposed
 plans, review escalations, report health — with **FastAPI**
-([P3 §2](../specs/design/spec-climate-optimizer.md#2-architecture),
-[§8](../specs/design/spec-climate-optimizer.md#8-interfaces--integration)).
+([P3 §2](../specs/design/optimizer/02-spec-optimizer-architecture.md),
+[§8](../specs/design/optimizer/09-spec-optimizer-interfaces.md)).
 
 **Why:** FastAPI's Pydantic models give declarative request/response validation that lines up
 directly with the JSON-Schema-first contract discipline of
 [RFC-007](./request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format),
 and they are the same models used to validate the structured plan the LLM emits
-([P3 §4](../specs/design/spec-climate-optimizer.md#4-llm-driven-planning)) — one validation tool for
+([P3 §4](../specs/design/optimizer/04-spec-optimizer-planning.md#1-llm-driven-planning)) — one validation tool for
 both the API boundary and the planner output. Async I/O suits a service that calls hosted LLM and
 Phase 2 REST endpoints, and the auto-generated OpenAPI docs are useful for an operator/tooling
 surface.
@@ -499,7 +499,7 @@ less universally known than Flask — outweighed by the Pydantic/contract alignm
 
 **Decision:** Implement the Phase 3 optimizer — the intelligence layer that simulates each
 greenhouse forward, plans with an LLM, validates, and writes refined setpoints — in **Python**
-([P3 §1](../specs/design/spec-climate-optimizer.md#1-overview)).
+([P3 §1](../specs/design/optimizer/01-spec-optimizer-overview.md)).
 
 **Why:** Phase 3's two demanding dependencies — scientific computing (the digital twin) and LLM
 integration — both have their richest, best-maintained ecosystems in Python: NumPy/SciPy for the

@@ -41,7 +41,7 @@ Before the loops run, **stage ②** resolves which setpoints are active this tic
 The **temperature** setpoint switches between `temperature_day_c` and
 `temperature_night_c` based on the `day_start` / `day_end` window — a simple
 time-of-day lookup, evaluated each tick. This is **not** weather-predictive (that is
-[Phase 3](../spec-climate-optimizer.md#6-setpoint-refinement--application)). Other
+[Phase 3](../optimizer/05-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application)). Other
 setpoints (humidity, CO₂) are constant in Phase 1; the scheduling mechanism is built
 to extend to them later. The setpoint values themselves come from
 [config](./spec-controller-config-and-parameters.md#global-climate-setpoints) (TOML
