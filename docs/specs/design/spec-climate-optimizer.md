@@ -38,7 +38,7 @@ is Phase 2's) and it does not command actuators directly (that is Phase 1's).
 The optimizer is the intelligence layer above **each** greenhouse's controller. It operates on **one
 greenhouse at a time** — N independent planning problems, mirroring the N independent control loops
 of Phase 1. Site-wide orchestration across greenhouses, weather-reactive control, and combustion-heater
-coordination are out of scope (see [§12](#12-scope--deferred--out-of-scope)).
+coordination are out of scope (see [§15](#15-scope--deferred--out-of-scope)).
 
 ---
 
@@ -262,8 +262,9 @@ through Phase 2, preserving the platform's authority over intended state.
 ## 9. Configuration
 
 The optimizer's service configuration — data-store DSN, Phase 2 API endpoint, LLM provider/endpoint,
-sampling parameters, objective weights, the input data-quality thresholds, and the application-gate
-thresholds — is supplied via **environment variables / the Compose file**, mirroring the Phase 2
+sampling parameters, objective weights, the input data-quality thresholds, the twin-robustness and
+service-resilience thresholds, and the application-gate thresholds — is supplied via **environment
+variables / the Compose file**, mirroring the Phase 2
 convention rather than a per-greenhouse TOML (contrast the controller's config). Per-greenhouse inputs
 (which house to plan, its crop-safe bounds) are read from Phase 2 at cycle time, not configured here.
 
@@ -300,6 +301,14 @@ confidence_threshold = 0.8            # below → escalate to operator
 max_telemetry_age_minutes = 35        # latest reading per required metric must be newer; else gate fails → §10
 required_metrics = ["temperature", "humidity", "co2", "par"]   # VPD / DLI are derived from these
 min_history_coverage = 0.8            # fraction of expected samples in the window; large gaps fail the gate
+
+[twin]
+solver_max_step_minutes = 5           # integrator step ceiling; non-finite / non-converging step = sim divergence → §12
+divergence_threshold = 0.15           # one-step predicted-vs-observed residual fraction; sustained breach = fidelity fault → §12
+
+[service]
+cycle_timeout_seconds = 60            # a cycle exceeding this is abandoned and the last plan extended; aligns with P3-PERF-2
+escalation_dedup_window_minutes = 60  # recurring escalations for one greenhouse collapse into one standing entry → §14
 ```
 
 ---
@@ -321,6 +330,7 @@ The gate checks three things:
 | **Freshness** | The latest reading for each required metric is no older than `max_telemetry_age_minutes` ([§9](#9-configuration)). Age is computed from the reading's `ts`. |
 | **Completeness** | All `required_metrics` are present, and the history window contains at least `min_history_coverage` of its expected samples — a window pocked with large gaps is not a basis for simulation. |
 | **Sensor / actuator health** | Inputs are untrusted if a metric the plan depends on is faulted or the controller is degraded — read from the signals the controller already publishes: the `system-state` snapshot's active-fault array and controller `mode` (normal / degraded / interlock), per-sensor fault events (`stuck`, `out_of_range`, `sensor_disagreement`, `temperature_unavailable`), and actuator-state `health` (`ok` / `stuck` / `no_response`). |
+| **Identity consistency** | Every row Data Access reads carries the `greenhouse_id` it queried for, zone-scoped rows carry a non-null `zone_id` valid for that greenhouse, and every payload's `schema_version` is one the optimizer understands ([RFC-007 identity & envelope](../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)). A view returning another greenhouse's rows, a `zone_id` polarity violation, or an unknown `schema_version` means the read surface or a contract has **drifted** — the window is not a trustworthy basis for planning. |
 
 **When the gate fails, the optimizer degrades rather than plans on bad data** — mirroring the
 controller's own
@@ -328,7 +338,11 @@ controller's own
 ladder, never off a cliff"). It does **not** invoke the LLM; it **extends the last accepted plan** —
 the same fallback the state-change gate already uses ([§4](#4-llm-driven-planning)) — and raises an
 **escalation** surfaced for operator review, traced by `optimizer_run_id`
-([P3-OBS-1](../artifacts/non-functional-requirements.md)). Because the Phase 2 static crop-profile
+([P3-OBS-1](../artifacts/non-functional-requirements.md)). The escalation carries a **reason code**,
+because the three checks fail for different reasons: a freshness or completeness miss is **transient**
+— it may clear on the next cycle once readings return — but an **identity-consistency** failure is a
+deployment or contract fault that **will not self-heal**, so it is tagged as contract drift for the
+operator to fix rather than a "wait for sensors" hold. Because the Phase 2 static crop-profile
 baseline stays in force regardless ([P3-RESIL-1](../artifacts/non-functional-requirements.md)), a held
 cycle never destabilizes control — it only forgoes refinement until trusted inputs return.
 
@@ -362,7 +376,10 @@ scope note in [§1](#1-overview).)
    ([P1-TEST-2](../artifacts/non-functional-requirements.md): deterministic under a fixed seed).
    Scenarios deliberately reach past the happy path: diurnal ramp, steady state, a transient
    disturbance, **sensor dropout / stale input** (which must trip the [§10](#10-input-data-quality--freshness-gating)
-   gate, not produce a plan), contradictory objectives, and the near-day-boundary horizon extension.
+   gate, not produce a plan), a **twin divergence / parameter-drift** case (which must trip the
+   [§12](#12-digital-twin-robustness--fidelity) path — extend and escalate, or attenuate confidence —
+   not yield a confident plan over a bad trajectory), contradictory objectives, and the
+   near-day-boundary horizon extension.
    Each scenario fixes observed state, history, and bounds, then asserts the resulting plan stays within
    crop-safe and physical bounds and moves the objectives ([§7](#7-optimization-objectives)) in the
    intended direction.
@@ -380,7 +397,131 @@ applier — against the deterministic twin, asserting the application gate
 
 ---
 
-## 12. Scope — Deferred / Out of Scope
+## 12. Digital-Twin Robustness & Fidelity
+
+[§3](#3-digital-twin--simulation-engine) describes what the twin computes, and
+[§10](#10-input-data-quality--freshness-gating) gates its **inputs** — but nothing yet guards the
+twin's own **numerical behavior** or whether its **parameters still match the real greenhouse**. A
+forward model can diverge (stiff dynamics, a bad step) or silently de-calibrate (thermal mass,
+leakage, or a failing vent seal change over weeks) — and either failure yields a confident trajectory
+the planner then optimizes against. The output gates ([§5](#5-constraint-engine--safety),
+[§6](#6-setpoint-refinement--application)) cannot catch it, because the resulting *plan* looks
+perfectly valid; the error is upstream, in the future the plan was built on.
+
+### Numerical stability
+
+The integrator runs with a bounded step (`twin.solver_max_step_minutes`, [§9](#9-configuration)) and
+checks every step for **non-finite** state (NaN / Inf), states outside **physically plausible**
+envelopes (temperature past sensor range, negative humidity or CO₂), and **non-convergence** within
+a step budget. A diverged simulation is treated exactly like a failed input precondition
+([§10](#10-input-data-quality--freshness-gating)): the optimizer does **not** hand a garbage
+trajectory to the planner — it extends the last accepted plan and raises an escalation, traced by
+`optimizer_run_id` ([P3-OBS-1](../artifacts/non-functional-requirements.md)). The solver is
+fixed-step / seeded so a scenario reproduces, making the twin the deterministic forward model
+[§11](#11-evaluation--regression-testing) already relies on — the optimizer-side analog of the
+controller's seeded HAL ([P1-TEST-2](../artifacts/non-functional-requirements.md)).
+
+### Parameter fidelity & drift
+
+The twin is parameterized per greenhouse (thermal mass, leakage, actuator gains and lag) — physical
+constants that drift seasonally and as equipment ages. Each cycle the optimizer computes a
+**one-step-ahead residual**: the previous cycle's predicted trajectory against the now-observed
+telemetry. A residual that stays beyond `twin.divergence_threshold` ([§9](#9-configuration)) is a
+**fidelity fault** — the model no longer matches the greenhouse. The response is **graded, not
+binary**: the twin keeps running (a degraded prediction still beats none), but plan **confidence is
+attenuated** so a low-fidelity model's plans fall below the [§6](#6-setpoint-refinement--application)
+threshold and **escalate rather than auto-apply**, and persistent divergence is surfaced for
+recalibration. Refitting the parameters from history is **deferred**
+([§15](#15-scope--deferred--out-of-scope)) — Phase 3 *detects and flags* drift; it does not auto-tune.
+
+The crop-safe constraint engine ([§5](#5-constraint-engine--safety)) and the controller's interlocks
+remain the hard backstop regardless of twin quality, so a drifted or diverged twin **degrades
+optimization, never safety** — the same principle as everywhere else in this spec: the deterministic
+gates, not the model, are what keep the greenhouse safe.
+
+---
+
+## 13. Write-Path Concurrency & Reconciliation
+
+[§6](#6-setpoint-refinement--application) describes the happy write path (`202` / `422`); it does not
+say how the optimizer behaves as **one of several writers** to a greenhouse's intended state —
+alongside operators and its own successive cycles — nor what it does when a write is rejected. Phase 2
+already provides the hard guarantees (single authority, idempotent last-write-wins, drift detection;
+[crop-profiles §3](./platform/spec-platform-crop-profiles.md#3-reconciliation--the-platform-is-the-source-of-truth)).
+This section states how the optimizer **cooperates** with them rather than re-implementing them.
+
+| Rule | Behavior |
+|---|---|
+| **Single-flight per greenhouse** | At most one cycle is in flight per greenhouse. The fixed cadence ([§4](#4-llm-driven-planning)) plus a per-greenhouse in-flight guard means a slow cycle (LLM latency near the [P3-PERF-2](../artifacts/non-functional-requirements.md) 60 s bound) finishes or times out **before** the next begins — there is never an optimizer-vs-optimizer race on the write path. N greenhouses still plan independently ([P3-SCAL-1](../artifacts/non-functional-requirements.md)); single-flight is **per greenhouse, not global**. |
+| **The operator wins; the optimizer observes** | At each cycle's start, Data Access reads current setpoints **and their provenance** ([§2](#2-architecture)). If the live setpoints carry a non-`optimizer` source (a `manual_override`) newer than the optimizer's last applied plan, the optimizer adopts that as its **baseline** and plans from it — it never re-asserts its own prior plan over an operator edit. A refinement is a suggestion layered on the baseline, never a claim of ownership — the optimizer-layer analog of the platform's "drift is surfaced, not fought indefinitely" ([crop-profiles §3](./platform/spec-platform-crop-profiles.md#3-reconciliation--the-platform-is-the-source-of-truth)). |
+| **A `422` is a contract signal, not a retry** | Because the constraint engine ([§5](#5-constraint-engine--safety)) validates against the same crop-safe bounds Phase 2 enforces, a `202` is expected; a `422` means the optimizer's view of the bounds **disagrees** with Phase 2's — the crop profile changed mid-cycle, or the bounds contract drifted. A `422` is therefore **never retried in a loop**: it is escalated as a bounds-mismatch fault (`optimizer_run_id`, [P3-OBS-1](../artifacts/non-functional-requirements.md)) and the cycle abandoned, leaving the Phase 2 baseline in force ([P3-RESIL-1](../artifacts/non-functional-requirements.md)). |
+
+Each applied bundle carries its `optimizer_run_id` as provenance
+([RFC-005](../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain),
+[RFC-007](../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)),
+and Phase 2's setpoint `PATCH` is an idempotent merge
+([crop-profiles §3](./platform/spec-platform-crop-profiles.md#3-reconciliation--the-platform-is-the-source-of-truth)),
+so a re-assert or a duplicate delivery **re-converges to the same intended state** rather than
+stacking — correctness depends only on the last write landing, never on a write landing exactly once.
+
+---
+
+## 14. Service Resilience & Recovery
+
+The optimizer is a long-running FastAPI service ([§2](#2-architecture),
+[§8](#8-interfaces--integration)). [§10](#10-input-data-quality--freshness-gating),
+[§12](#12-digital-twin-robustness--fidelity), and [§13](#13-write-path-concurrency--reconciliation)
+keep individual *cycles* safe; this section keeps the *service* recoverable and its operator-facing
+surfaces honest under failure — mirroring the controller's restart treatment
+([spec-controller-architecture.md §9](./controller/spec-controller-architecture.md#9-availability-restart--resource-footprint))
+and the platform's operational resilience
+([spec-platform-operations.md](./platform/spec-platform-operations.md)).
+
+- **Stateless restart.** The optimizer holds no authoritative persistent state. Intended state lives
+  in Phase 2; the optimizer's only across-cycle memory — the last accepted plan and its trajectory,
+  used by the state-change gate ([§4](#4-llm-driven-planning)) and the degrade fallbacks
+  ([§10](#10-input-data-quality--freshness-gating), [§12](#12-digital-twin-robustness--fidelity)) — is
+  **reconstructable** by reading current setpoints and recent telemetry from Phase 2 on startup. A
+  restart re-reads config, reconnects the `optimizer_ro` role
+  ([RFC-008](../../decisions/request-for-comments.md#rfc-008-phase-3-telemetry-read-path)) and the
+  Phase 2 API, and resumes on the next cadence tick; there is nothing to replay. While the optimizer
+  is down, the Phase 2 baseline continues unchanged
+  ([P3-RESIL-1](../artifacts/non-functional-requirements.md)) and the controller holds its last
+  accepted setpoints ([P3-REL-1](../artifacts/non-functional-requirements.md)) — a restart costs a
+  cycle of refinement, not control. Auto-restart has the **same precondition as the controller's**:
+  an external supervisor (a Docker `restart:` policy plus a healthcheck), a deployment
+  responsibility, not self-supervision ([P3-AVAIL-1](../artifacts/non-functional-requirements.md)).
+- **Fail-fast configuration validation.** Config ([§9](#9-configuration)) is validated **on startup**;
+  an invalid config **blocks the service from coming up** rather than letting it run on silent
+  defaults — the same startup-gate discipline the platform applies to schema migrations
+  ([spec-platform-operations.md](./platform/spec-platform-operations.md)). Validation covers presence
+  and ranges (thresholds in `[0, 1]`, positive intervals and horizons, a reachable DSN and Phase 2
+  endpoint, a known LLM provider with credentials, and a **pinned model id matching the
+  [§11](#11-evaluation--regression-testing) evaluation baseline**). Because the active model id pins
+  the regression baselines ([§4](#4-llm-driven-planning)), a config that changes it without the
+  corresponding ADR entry and baseline recapture is a reviewable event, not silent drift.
+- **Escalation backpressure.** Escalations are the optimizer's only operator-facing output for held
+  cycles ([§6](#6-setpoint-refinement--application), [§10](#10-input-data-quality--freshness-gating),
+  [§12](#12-digital-twin-robustness--fidelity),
+  [§13](#13-write-path-concurrency--reconciliation)). A persistent fault — a stuck sensor failing the
+  [§10](#10-input-data-quality--freshness-gating) gate every cadence, say — is **rate-limited and
+  deduplicated** within `service.escalation_dedup_window_minutes` ([§9](#9-configuration)) into a
+  single **standing** escalation with a recurrence count and last-seen time, rather than one fresh
+  escalation per cycle. This is the same damping the platform uses for recurring drift
+  ([crop-profiles §3](./platform/spec-platform-crop-profiles.md#3-reconciliation--the-platform-is-the-source-of-truth)):
+  it bounds operator load — the escalation-backlog failure mode — without dropping signal.
+- **Health & cadence watchdog.** The FastAPI surface ([§8](#8-interfaces--integration)) exposes a
+  health endpoint reporting DB and Phase 2 reachability, the last-successful-cycle time, and the
+  current escalation backlog, so a supervisor can restart an unresponsive container and an operator
+  can see a stalled loop. A cycle that overruns its cadence — LLM latency past the
+  [P3-PERF-2](../artifacts/non-functional-requirements.md) bound, or a hung read — is **timed out**
+  (`service.cycle_timeout_seconds`, [§9](#9-configuration)) and the current plan extended
+  ([P3-PERF-2](../artifacts/non-functional-requirements.md)): the cadence is a ceiling, not a
+  best-effort target, and the loop self-heals to the next tick rather than wedging.
+
+---
+
+## 15. Scope — Deferred / Out of Scope
 
 Optimizer capabilities intentionally **not** in Phase 3:
 
@@ -393,3 +534,5 @@ Optimizer capabilities intentionally **not** in Phase 3:
 | Direct actuator commanding | Driving individual actuators is **controller-owned** ([P1 spec](./controller/spec-controller-architecture.md#2-the-tick-pipeline)); Phase 3's downward influence is **setpoint-only**, through Phase 2 |
 | Safety authority | Safety interlocks remain **controller-owned** and unconditional; the optimizer's constraint engine is an advisory pre-filter and never overrides them ([§5](#5-constraint-engine--safety)) |
 | Writing directly to controllers | Phase 2 is the single authority on intended state; the optimizer writes refined setpoints **through the Phase 2 API**, never straight to a controller ([§6](#6-setpoint-refinement--application)) |
+| Twin auto-recalibration / parameter auto-tuning | Phase 3 **detects and flags** parameter drift ([§12](#12-digital-twin-robustness--fidelity)) and attenuates confidence; refitting the twin's physical parameters from history needs a calibration / system-identification loop that is out of scope here |
+| Service-token auth on the write path | The optimizer → Phase 2 write path is unauthenticated by decision ([RFC-009](../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries) local trust model); provenance is **self-asserted**, not token-backed — hardening this boundary is deferred |
