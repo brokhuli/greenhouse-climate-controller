@@ -107,14 +107,14 @@ These are distinct and must not be conflated:
   charts show last-known data + a gap, and its **edit affordances disable** with the
   reason "controller offline — change will apply on reconnect" (offline edits are
   held by the platform in 2b,
-  [platform crop profiles](../platform/spec-platform-crop-profiles.md)).
+  [platform crop profiles](../platform/05-spec-platform-crop-profiles.md)).
 
 ---
 
 ## 7. Writes — setpoint edits & profile apply
 
 The write path *as the operator experiences it*. The platform is the
-[single authority](../platform/spec-platform-crop-profiles.md);
+[single authority](../platform/05-spec-platform-crop-profiles.md);
 the UI never commands actuators ([constraints](./09-spec-frontend-constraints.md)).
 
 1. **Edit** in `SetpointEditForm` / `ProfileEditor`. Inputs validate live against
@@ -131,7 +131,7 @@ the UI never commands actuators ([constraints](./09-spec-frontend-constraints.md
    - **Failed** → optimistic value **rolls back**, an error toast shows the API
      message, the form stays open for retry.
 5. **Attribution.** Every applied write appears in the `ActivityFeed` with who/what/
-   when ([platform fleet management](../platform/spec-platform-crop-profiles.md#5-fleet-management--operator-control)).
+   when ([platform fleet management](../platform/05-spec-platform-crop-profiles.md#5-fleet-management--operator-control)).
 
 In **2a** an edit is a thin relay; in **2b** it becomes sticky intended state and
 participates in reconciliation — same UX, different backend semantics.
@@ -146,7 +146,7 @@ participates in reconciliation — same UX, different backend semantics.
 - **Drift (2b)** is **non-blocking**: a drift badge on the fleet card + detail
   header and an entry in the feed; no modal interruption (drift is informational,
   the platform may auto-correct,
-  [platform crop profiles](../platform/spec-platform-crop-profiles.md)).
+  [platform crop profiles](../platform/05-spec-platform-crop-profiles.md)).
 - **Toasts** auto-dismiss (info/warn) or persist until acknowledged (critical), are
   keyboard-dismissible, and stack without covering primary actions.
 

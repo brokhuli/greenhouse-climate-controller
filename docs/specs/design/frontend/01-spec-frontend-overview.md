@@ -6,13 +6,13 @@
 > [cross-spec map](#6-cross-spec-map) — which document owns which concern. Read
 > this file first; read the others for detail.
 
-This set sits **one altitude below** [`spec-platform-dashboard.md`](../platform/spec-platform-dashboard.md),
+This set sits **one altitude below** [`06-spec-platform-dashboard.md`](../platform/06-spec-platform-dashboard.md),
 which owns the dashboard's *capabilities*. These documents own *how the SPA is
 built*: views, client architecture, data binding, components, tokens,
 interactions, and hard constraints. The discipline throughout: **reference, do
 not redefine.** Wire formats live in [`contracts/`](../../../../contracts/);
 capabilities and platform behavior live in the
-[platform spec](../platform/spec-platform-overview.md); quality targets live in the
+[platform spec](../platform/01-spec-platform-overview.md); quality targets live in the
 [NFR doc](../../artifacts/non-functional-requirements.md). This set consumes all
 three.
 
@@ -23,7 +23,7 @@ three.
 The dashboard is the Phase 2 platform's **React single-page app** — and, because
 Phase 1 controllers are [headless](../controller/08-spec-controller-interfaces.md),
 the **only UI in the entire system**. It is the operator's single pane of glass
-over a [site](../platform/spec-platform-overview.md) of independent
+over a [site](../platform/01-spec-platform-overview.md) of independent
 greenhouses: it visualizes live and historical telemetry, surfaces fleet health,
 and is the operator's surface for the platform's downward control (setpoint edits
 in 2a; crop-profile management in 2b).
@@ -62,7 +62,7 @@ committed interface.
 ## 3. System context
 
 The SPA is one box behind the platform's single
-[nginx entry point](../platform/spec-platform-architecture.md#4-reverse-proxy--the-edge). It is
+[nginx entry point](../platform/02-spec-platform-architecture.md#4-reverse-proxy--the-edge). It is
 a pure client of the Go API.
 
 ```
@@ -91,8 +91,8 @@ The browser's entire contract is with the Go API: **REST** for request/response
 (fleet, telemetry range queries, profiles, setpoint edits) and **WebSockets** for
 live push (telemetry, status changes, drift, events). The SPA holds **no**
 knowledge of MQTT topics or the controller REST API — those are platform-internal
-([platform ingestion](../platform/spec-platform-ingestion.md),
-[interfaces](../platform/spec-platform-interfaces.md)). See
+([platform ingestion](../platform/04-spec-platform-ingestion.md),
+[interfaces](../platform/09-spec-platform-interfaces.md)). See
 [`05-spec-frontend-data-model.md`](./05-spec-frontend-data-model.md) for the binding.
 
 ---
@@ -139,14 +139,14 @@ How this set divides the work, and where each concern is detailed:
 
 | Concern | Owned by | Defers upward to |
 |---|---|---|
-| Why the dashboard exists; the view inventory | [`02-spec-frontend-purpose-and-views.md`](./02-spec-frontend-purpose-and-views.md) | [platform dashboard](../platform/spec-platform-dashboard.md) |
-| App structure, route tree, runtime data flow, failure modes | [`03-spec-frontend-architecture.md`](./03-spec-frontend-architecture.md) | [platform architecture](../platform/spec-platform-architecture.md), [reverse proxy](../platform/spec-platform-architecture.md#4-reverse-proxy--the-edge) |
+| Why the dashboard exists; the view inventory | [`02-spec-frontend-purpose-and-views.md`](./02-spec-frontend-purpose-and-views.md) | [platform dashboard](../platform/06-spec-platform-dashboard.md) |
+| App structure, route tree, runtime data flow, failure modes | [`03-spec-frontend-architecture.md`](./03-spec-frontend-architecture.md) | [platform architecture](../platform/02-spec-platform-architecture.md), [reverse proxy](../platform/02-spec-platform-architecture.md#4-reverse-proxy--the-edge) |
 | Per-dependency choices + rejected alternatives | [`04-spec-frontend-tech-stack.md`](./04-spec-frontend-tech-stack.md) | [tech-stack-decisions.md](../tech-stack-decisions.md#phase-2--local-paas-platform-docker-only) |
-| Client data model + API/WS binding | [`05-spec-frontend-data-model.md`](./05-spec-frontend-data-model.md) | [platform API surface](../platform/spec-platform-interfaces.md#3-api-surface-inventory), [`contracts/`](../../../../contracts/) |
+| Client data model + API/WS binding | [`05-spec-frontend-data-model.md`](./05-spec-frontend-data-model.md) | [platform API surface](../platform/09-spec-platform-interfaces.md#3-api-surface-inventory), [`contracts/`](../../../../contracts/) |
 | Component inventory, props, states, role-gating | [`06-spec-frontend-components.md`](./06-spec-frontend-components.md) | — |
 | Color, type, spacing, motion, chart tokens, themes | [`07-spec-frontend-design-tokens.md`](./07-spec-frontend-design-tokens.md) | — |
 | Hover/focus/keyboard/motion + real-time interaction | [`08-spec-frontend-interactions.md`](./08-spec-frontend-interactions.md) | — |
-| Non-negotiable rules (hosting, auth, safety, perf) | [`09-spec-frontend-constraints.md`](./09-spec-frontend-constraints.md) | [platform fleet management](../platform/spec-platform-crop-profiles.md#5-fleet-management--operator-control), [authentication](../platform/spec-platform-security.md), [constraints](../platform/spec-platform-constraints.md#7-scope--deferred--out-of-scope) |
+| Non-negotiable rules (hosting, auth, safety, perf) | [`09-spec-frontend-constraints.md`](./09-spec-frontend-constraints.md) | [platform fleet management](../platform/05-spec-platform-crop-profiles.md#5-fleet-management--operator-control), [authentication](../platform/07-spec-platform-security.md), [constraints](../platform/11-spec-platform-constraints.md#7-scope--deferred--out-of-scope) |
 | Quality targets (load, latency, a11y, test) | [NFR doc](../../artifacts/non-functional-requirements.md) | — (single source) |
 
 If a frontend change can't be traced to one of these documents — or to the

@@ -22,7 +22,7 @@ keep individual *cycles* safe; this section keeps the *service* recoverable and 
 surfaces honest under failure — mirroring the controller's restart treatment
 ([02-spec-controller-architecture.md §9](../controller/02-spec-controller-architecture.md#9-availability-restart--resource-footprint))
 and the platform's operational resilience
-([spec-platform-operations.md](../platform/spec-platform-operations.md)).
+([08-spec-platform-operations.md](../platform/08-spec-platform-operations.md)).
 
 - **Stateless restart.** The optimizer holds no authoritative persistent state. Intended state lives
   in Phase 2; the optimizer's only across-cycle memory — the last accepted plan and its trajectory,
@@ -42,7 +42,7 @@ and the platform's operational resilience
 - **Fail-fast configuration validation.** Config ([configuration](./10-spec-optimizer-configuration.md))
   is validated **on startup**; an invalid config **blocks the service from coming up** rather than
   letting it run on silent defaults — the same startup-gate discipline the platform applies to schema
-  migrations ([spec-platform-operations.md](../platform/spec-platform-operations.md)). Validation covers
+  migrations ([08-spec-platform-operations.md](../platform/08-spec-platform-operations.md)). Validation covers
   presence and ranges (thresholds in `[0, 1]`, positive intervals and horizons, a reachable DSN and
   Phase 2 endpoint, a known LLM provider with credentials, and a **pinned model id matching the
   [evaluation](./07-spec-optimizer-evaluation.md) baseline**). Because the active model id pins
@@ -60,7 +60,7 @@ and the platform's operational resilience
   ([configuration](./10-spec-optimizer-configuration.md)) into a single **standing** escalation with a
   recurrence count and last-seen time, rather than one fresh escalation per cycle. This is the same
   damping the platform uses for recurring drift
-  ([crop-profiles §3](../platform/spec-platform-crop-profiles.md#3-reconciliation--the-platform-is-the-source-of-truth)):
+  ([crop-profiles §3](../platform/05-spec-platform-crop-profiles.md#3-reconciliation--the-platform-is-the-source-of-truth)):
   it bounds operator load — the escalation-backlog failure mode — without dropping signal.
 - **Health & cadence watchdog.** The FastAPI surface ([interfaces](./09-spec-optimizer-interfaces.md))
   exposes a health endpoint reporting DB and Phase 2 reachability, the last-successful-cycle time, and

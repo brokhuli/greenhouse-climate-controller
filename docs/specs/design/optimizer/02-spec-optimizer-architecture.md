@@ -57,4 +57,4 @@ Phase 1 Controller
 
 The optimizer is a **client** of Phase 2, not a peer of Phase 1: it reads from Phase 2's history and
 writes through Phase 2's setpoint API exactly as an operator edit would, layered on the crop-profile
-baseline ([P2 crop profiles](../platform/spec-platform-crop-profiles.md)).
+baseline ([P2 crop profiles](../platform/05-spec-platform-crop-profiles.md)).

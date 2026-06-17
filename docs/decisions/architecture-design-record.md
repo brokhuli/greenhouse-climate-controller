@@ -232,7 +232,7 @@ envelope `zone_id`.
 **not** authenticated and rely on the trusted local Docker Compose network. This **reverses the
 RFC-009 proposal** (a Keycloak service-account client-credentials grant for the optimizer plus a
 per-controller pre-shared bearer token); neither is adopted. The committed boundaries:
-(1) **Human → platform** — Keycloak OIDC, unchanged ([P2 authentication](../specs/design/platform/spec-platform-security.md));
+(1) **Human → platform** — Keycloak OIDC, unchanged ([P2 authentication](../specs/design/platform/07-spec-platform-security.md));
 the only authenticated boundary. (2) **Optimizer → Phase 2 API** (setpoint writes) — no service
 token; trusted on the internal network. (3) **Platform → controller REST** — no controller-side auth;
 the REST config/override API stays unauthenticated in managed mode exactly as standalone, protected
@@ -529,8 +529,8 @@ layers have opposite constraints.
 
 **Decision:** Instrument the platform's **own** health with **Prometheus** scraping the Go API's
 `/metrics` endpoint and **Grafana** rendering the dashboards, alongside structured logs
-([P2 observability](../specs/design/platform/spec-platform-operations.md#1-observability),
-[deployment](../specs/design/platform/spec-platform-operations.md#2-deployment)). This is platform-service telemetry
+([P2 observability](../specs/design/platform/08-spec-platform-operations.md#1-observability),
+[deployment](../specs/design/platform/08-spec-platform-operations.md#2-deployment)). This is platform-service telemetry
 (ingestion rate, API latency/errors, reconciliation actions, per-controller connectivity) — distinct
 from the greenhouse climate telemetry that lives in TimescaleDB and the dashboard.
 
@@ -538,7 +538,7 @@ from the greenhouse climate telemetry that lives in TimescaleDB and the dashboar
 they hold to the zero-cloud posture and add only two well-understood containers. They also give the
 visibility needed for the platform's primary performance-testing mechanism — running a variable
 number of controllers and watching the platform under load
-([P2 deployment](../specs/design/platform/spec-platform-operations.md#2-deployment)).
+([P2 deployment](../specs/design/platform/08-spec-platform-operations.md#2-deployment)).
 
 **Alternatives considered:** *Logs only* — simplest, but no time-series view of ingestion rate or
 latency, which the perf-testing story needs. *Hosted APM (Datadog, New Relic)* — turnkey but a cloud
@@ -559,7 +559,7 @@ posture and directly serves performance testing.
 **Decision:** Delegate platform identity to **Keycloak**, a self-hosted OIDC identity provider
 running as a container in the stack; the Go API is a relying party that validates Keycloak's tokens
 and maps their roles onto the platform's viewer/operator roles
-([P2 authentication](../specs/design/platform/spec-platform-security.md)). The API never
+([P2 authentication](../specs/design/platform/07-spec-platform-security.md)). The API never
 handles credentials itself.
 
 **Why:** Keycloak owns the user store, login, password policy, and optional MFA, so none of that is
@@ -588,11 +588,11 @@ Keycloak internals, so the IdP can be replaced without touching the authorizatio
 **Decision:** Build the operator dashboard as a **React single-page application** — fleet overview,
 per-greenhouse detail, profile management, and control — served as a static bundle by the platform's
 nginx and talking to the Go API over HTTP + WebSockets
-([P2 dashboard](../specs/design/platform/spec-platform-dashboard.md)).
+([P2 dashboard](../specs/design/platform/06-spec-platform-dashboard.md)).
 
 **Why:** The dashboard is a live, interactive client: real-time charts of readings vs setpoints and a
 streaming event feed driven by the API's WebSocket fan-out
-([P2 API surface](../specs/design/platform/spec-platform-interfaces.md#3-api-surface-inventory)). React's mature ecosystem
+([P2 API surface](../specs/design/platform/09-spec-platform-interfaces.md#3-api-surface-inventory)). React's mature ecosystem
 (component model, charting libraries, WebSocket integration) fits that directly, and a built static
 bundle drops straight into the single-nginx entry point from
 [RFC-003](./request-for-comments.md#rfc-003-phase-2-platform-ingress) with no extra serving component.
@@ -620,15 +620,15 @@ monitoring core ships in the 2a slice; profile management and richer control fol
 **Decision:** Implement the platform's API hub in **Go** using the **Echo** web framework. The Go API
 is the platform's center: it ingests telemetry from MQTT, persists to TimescaleDB, resolves crop
 profiles into setpoints, drives the controllers' REST APIs, and fans telemetry out to the dashboard
-over WebSockets ([P2 architecture](../specs/design/platform/spec-platform-architecture.md),
-[deployment](../specs/design/platform/spec-platform-operations.md#2-deployment)).
+over WebSockets ([P2 architecture](../specs/design/platform/02-spec-platform-architecture.md),
+[deployment](../specs/design/platform/08-spec-platform-operations.md#2-deployment)).
 
 **Why:** The API's workload is concurrency-heavy — a steady MQTT ingest stream, frequent downward
 REST calls to many controllers, and live WebSocket fan-out to dashboard clients. Go's goroutine model
 handles that many-connection concurrency cleanly, compiles to a single static binary that
 containerizes trivially, and has mature Postgres, MQTT, and HTTP/WebSocket libraries. Echo is a
 lightweight router/middleware layer over `net/http` with first-class WebSocket-upgrade support, which
-is what the API surface ([P2 API surface](../specs/design/platform/spec-platform-interfaces.md#3-api-surface-inventory)) needs
+is what the API surface ([P2 API surface](../specs/design/platform/09-spec-platform-interfaces.md#3-api-surface-inventory)) needs
 without a heavier framework.
 
 **Alternatives considered:** *Node.js / TypeScript* — strong async I/O and shares a language with the

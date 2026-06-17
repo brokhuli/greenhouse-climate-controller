@@ -9,9 +9,9 @@
 > (per-dependency). Read this to understand *how the pieces connect*.
 
 > **Scope note.** The platform-level topology (services behind the proxy) is owned
-> by [platform architecture](../platform/spec-platform-architecture.md) and
-> [reverse proxy](../platform/spec-platform-architecture.md#4-reverse-proxy--the-edge); the API surface by
-> [platform API surface](../platform/spec-platform-interfaces.md#3-api-surface-inventory). This file describes the
+> by [platform architecture](../platform/02-spec-platform-architecture.md) and
+> [reverse proxy](../platform/02-spec-platform-architecture.md#4-reverse-proxy--the-edge); the API surface by
+> [platform API surface](../platform/09-spec-platform-interfaces.md#3-api-surface-inventory). This file describes the
 > **client** that consumes them. Concrete library choices are in
 > [`04-spec-frontend-tech-stack.md`](./04-spec-frontend-tech-stack.md).
 
@@ -46,8 +46,8 @@
 The SPA's **only** runtime dependency is the Go API (and, in 2b, Keycloak for the
 login redirect). It has **no** knowledge of MQTT, TimescaleDB, or the controller
 REST API — those are platform-internal
-([platform ingestion](../platform/spec-platform-ingestion.md),
-[interfaces](../platform/spec-platform-interfaces.md)). This
+([platform ingestion](../platform/04-spec-platform-ingestion.md),
+[interfaces](../platform/09-spec-platform-interfaces.md)). This
 boundary is load-bearing and is restated as a hard rule in
 [`09-spec-frontend-constraints.md`](./09-spec-frontend-constraints.md).
 
@@ -110,7 +110,7 @@ Three boundaries are load-bearing:
 
 Client-side routes (React Router). nginx serves `index.html` for any unmatched
 path so deep links resolve (SPA fallback,
-[platform reverse proxy](../platform/spec-platform-architecture.md#4-reverse-proxy--the-edge)).
+[platform reverse proxy](../platform/02-spec-platform-architecture.md#4-reverse-proxy--the-edge)).
 
 | Route | View | Slice | Notes |
 |---|---|---|---|
@@ -232,7 +232,7 @@ npm run build
 
 A multi-stage `Dockerfile` builds `dist/` then copies it into the `frontend`
 nginx image that the platform's `proxy` serves
-([platform deployment](../platform/spec-platform-operations.md#2-deployment)). The SPA is **static
+([platform deployment](../platform/08-spec-platform-operations.md#2-deployment)). The SPA is **static
 assets**; there is no Node runtime at request time.
 
 ### CI
@@ -336,4 +336,4 @@ app.** Cached data and the shell stay on screen while the SPA recovers.
 | Behavior, motion, real-time UX | referenced | [`08-spec-frontend-interactions.md`](./08-spec-frontend-interactions.md) |
 | Hard rules (hosting, auth, safety, perf) | constrained by | [`09-spec-frontend-constraints.md`](./09-spec-frontend-constraints.md) |
 | Views being connected | composed from | [`02-spec-frontend-purpose-and-views.md`](./02-spec-frontend-purpose-and-views.md) |
-| Platform topology & API surface | consumes | [platform architecture](../platform/spec-platform-architecture.md), [API surface](../platform/spec-platform-interfaces.md#3-api-surface-inventory) |
+| Platform topology & API surface | consumes | [platform architecture](../platform/02-spec-platform-architecture.md), [API surface](../platform/09-spec-platform-interfaces.md#3-api-surface-inventory) |

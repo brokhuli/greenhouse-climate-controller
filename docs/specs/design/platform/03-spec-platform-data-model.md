@@ -26,7 +26,7 @@ extension, not a separate database):
 | Crop profile | A named, **stage-aware** bundle of climate + irrigation targets for a crop |
 | Profile target bundle | The actual values — mirrors the controller's **runtime-adjustable** config: the climate `[setpoints]` (temperature day/night, humidity band, VPD, DLI, CO₂) **plus** per-zone soil-moisture thresholds + watering schedule |
 | Profile assignment | Which profile (and growth stage) is currently assigned to a greenhouse |
-| User / role | Identity and access level (see [security](./spec-platform-security.md)) |
+| User / role | Identity and access level (see [security](./07-spec-platform-security.md)) |
 
 **Time-series (telemetry & events)** — high-volume, append-only:
 
@@ -48,15 +48,15 @@ datastore and a second operational surface while letting each table use the acce
 pattern it needs.
 
 The profile target bundle intentionally **mirrors the controller's runtime-adjustable
-config** so that resolving a profile ([crop profiles](./spec-platform-crop-profiles.md))
+config** so that resolving a profile ([crop profiles](./05-spec-platform-crop-profiles.md))
 is a direct mapping, not a translation — keeping the contract between platform and
 controller thin and the data model honest about where authority lives.
 
 The time-series streams are exactly the surface the controller publishes over MQTT
 ([controller interfaces](../controller/08-spec-controller-interfaces.md)); the platform
-stores what it ingests ([ingestion](./spec-platform-ingestion.md)) without reshaping
+stores what it ingests ([ingestion](./04-spec-platform-ingestion.md)) without reshaping
 it. Retention and downsampling of those streams are owned by
-[ingestion](./spec-platform-ingestion.md#5-retention--downsampling).
+[ingestion](./04-spec-platform-ingestion.md#5-retention--downsampling).
 
 ---
 
@@ -76,8 +76,8 @@ controller.
 
 | Concern | This spec | Detailed in |
 |---|---|---|
-| How telemetry gets into the time-series store | stores output of | [`spec-platform-ingestion.md`](./spec-platform-ingestion.md) |
-| How profiles resolve into controller setpoints | holds inputs for | [`spec-platform-crop-profiles.md`](./spec-platform-crop-profiles.md) |
+| How telemetry gets into the time-series store | stores output of | [`04-spec-platform-ingestion.md`](./04-spec-platform-ingestion.md) |
+| How profiles resolve into controller setpoints | holds inputs for | [`05-spec-platform-crop-profiles.md`](./05-spec-platform-crop-profiles.md) |
 | The runtime-adjustable config the bundle mirrors | mirrors | [controller config](../controller/07-spec-controller-config-and-parameters.md) |
-| Users / roles | defines storage for | [`spec-platform-security.md`](./spec-platform-security.md) |
+| Users / roles | defines storage for | [`07-spec-platform-security.md`](./07-spec-platform-security.md) |
 | Wire shapes of the ingested streams | conforms to | [`contracts/`](../../../../contracts/) |

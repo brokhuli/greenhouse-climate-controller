@@ -8,7 +8,7 @@
 > conflicts with anything below, the design choice changes.
 
 Each entry: the constraint, **why** it exists, and **what it forces or forbids**.
-Most are inherited from the [platform spec](../platform/spec-platform-overview.md) and the
+Most are inherited from the [platform spec](../platform/01-spec-platform-overview.md) and the
 [RFCs](../../../decisions/request-for-comments.md); this file restates them in
 frontend terms.
 
@@ -19,10 +19,10 @@ frontend terms.
 ### Served as static assets by the platform's nginx — not a public static host
 
 - **Why:** The platform is a local, containerized stack behind a
-  [single nginx entry point](../platform/spec-platform-architecture.md#4-reverse-proxy--the-edge)
+  [single nginx entry point](../platform/02-spec-platform-architecture.md#4-reverse-proxy--the-edge)
   ([RFC-003](../../../decisions/request-for-comments.md#rfc-003-phase-2-platform-ingress));
   the SPA is the `frontend` service's built assets
-  ([platform deployment](../platform/spec-platform-operations.md#2-deployment)).
+  ([platform deployment](../platform/08-spec-platform-operations.md#2-deployment)).
 - **Forces:** A static `dist/` build (Vite); client-side routing with an
   `index.html` fallback configured in nginx; runtime config (API base) supplied by
   the deployment, not hardcoded.
@@ -43,8 +43,8 @@ frontend terms.
 ### The browser talks **only** to the Go API
 
 - **Why:** MQTT and the controller REST API are platform-internal
-  ([platform ingestion](../platform/spec-platform-ingestion.md),
-  [interfaces](../platform/spec-platform-interfaces.md)); the
+  ([platform ingestion](../platform/04-spec-platform-ingestion.md),
+  [interfaces](../platform/09-spec-platform-interfaces.md)); the
   SPA is a pure API client ([architecture §1](./03-spec-frontend-architecture.md#1-system-boundaries)).
 - **Forces:** All data access via `src/api/` (REST + the one WebSocket); the client
   holds no MQTT or controller knowledge.
@@ -68,7 +68,7 @@ frontend terms.
 ### Setpoint-only control — never actuators
 
 - **Why:** The platform's downward control is
-  [setpoint-only](../platform/spec-platform-crop-profiles.md#5-fleet-management--operator-control);
+  [setpoint-only](../platform/05-spec-platform-crop-profiles.md#5-fleet-management--operator-control);
   manual actuator forcing is a
   [controller-local action](../controller/02-spec-controller-architecture.md#6-manual-override).
 - **Forces:** Write UIs expose only setpoints / target bundles.
@@ -80,7 +80,7 @@ frontend terms.
 - **Why:** Critical-temp and CO₂-ceiling
   [interlocks](../controller/06-spec-controller-safety-and-constraints.md#2-safety-interlocks) hold unconditional
   priority **inside** the controller
-  ([platform fleet management](../platform/spec-platform-crop-profiles.md#5-fleet-management--operator-control)).
+  ([platform fleet management](../platform/05-spec-platform-crop-profiles.md#5-fleet-management--operator-control)).
 - **Forces:** The dashboard *displays* interlock activations prominently and treats
   them as authoritative.
 - **Forbids:** Any control that could override or silence a safety interlock.
@@ -89,7 +89,7 @@ frontend terms.
 
 - **Why:** The platform is the sole setpoint authority and delivery path
   ([RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain),
-  [platform crop profiles](../platform/spec-platform-crop-profiles.md)).
+  [platform crop profiles](../platform/05-spec-platform-crop-profiles.md)).
 - **Forces:** Setpoint edits and profile applies POST/PATCH to the platform API; the
   UI shows provenance/attribution.
 - **Forbids:** Any client-side path that delivers setpoints to a controller bypassing
@@ -104,7 +104,7 @@ frontend terms.
 - **Why:** 2a runs on the trusted local Docker network
   ([RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries));
   2b delegates identity to Keycloak with viewer/operator roles
-  ([platform authentication](../platform/spec-platform-security.md),
+  ([platform authentication](../platform/07-spec-platform-security.md),
   `P2-SEC-1`).
 - **Forces:** 2a ships no auth UI; 2b gates every write affordance to the operator
   role and performs the OIDC redirect flow.
@@ -158,18 +158,18 @@ frontend terms.
 
 ## Scope — what the dashboard is **not**
 
-Mirrors [platform constraints](../platform/spec-platform-constraints.md#7-scope--deferred--out-of-scope):
+Mirrors [platform constraints](../platform/11-spec-platform-constraints.md#7-scope--deferred--out-of-scope):
 
 - **Not the controller UI** — no actuator forcing; safety stays controller-owned.
 - **Not a zone-topology editor** — adding/removing zones is a controller config +
   restart change ([P1 §4](../controller/07-spec-controller-config-and-parameters.md)),
   outside the platform write path.
 - **Not platform observability** — Prometheus/Grafana cover platform health
-  ([platform observability](../platform/spec-platform-operations.md#1-observability)); this is greenhouse
+  ([platform observability](../platform/08-spec-platform-operations.md#1-observability)); this is greenhouse
   climate.
 - **Not multi-site / multi-tenant** — a single site.
 - **Not the optimizer's UI** — Phase 3 refines setpoints through the same platform
-  write path ([platform crop profiles](../platform/spec-platform-crop-profiles.md));
+  write path ([platform crop profiles](../platform/05-spec-platform-crop-profiles.md));
   no separate optimizer console here.
 
 If a future capability crosses one of these lines, it belongs in the platform/

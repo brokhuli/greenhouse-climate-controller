@@ -6,7 +6,7 @@
 > owned by its own document (ingestion, crop profiles, API surface, operations) and
 > linked from the [cross-spec map](#5-cross-spec-map). Service-deployment detail
 > (Compose, controller generation) lives in
-> [operations](./spec-platform-operations.md#2-deployment); ingress is fixed by
+> [operations](./08-spec-platform-operations.md#2-deployment); ingress is fixed by
 > [RFC-003](../../../decisions/request-for-comments.md#rfc-003-phase-2-platform-ingress).
 
 ---
@@ -64,11 +64,11 @@ shape keeps the platform's logic in one cohesive service and the boundaries thin
 |---|---|
 | Reverse Proxy (nginx) | Single entry point; routes to API and frontend; auth edge ([§4](#4-reverse-proxy--the-edge)) |
 | Go API (Echo) | Ingestion, fleet management, profile resolution, setpoint edits, analytics, WS fan-out |
-| TimescaleDB | Relational registry + crop profiles; time-series telemetry & events ([data model](./spec-platform-data-model.md)) |
+| TimescaleDB | Relational registry + crop profiles; time-series telemetry & events ([data model](./03-spec-platform-data-model.md)) |
 | MQTT Broker (Mosquitto) | Transport for controller telemetry (ingest only) |
-| Auth (Keycloak) *(2b)* | OIDC identity provider — login, user store, roles; the API validates its tokens ([security](./spec-platform-security.md)) |
-| Frontend | React dashboard — fleet overview, per-greenhouse detail, profile & control UI ([dashboard](./spec-platform-dashboard.md)) |
-| Observability *(2b)* | Prometheus scrape + Grafana dashboards over the API's `/metrics`; structured logs ([operations](./spec-platform-operations.md)) |
+| Auth (Keycloak) *(2b)* | OIDC identity provider — login, user store, roles; the API validates its tokens ([security](./07-spec-platform-security.md)) |
+| Frontend | React dashboard — fleet overview, per-greenhouse detail, profile & control UI ([dashboard](./06-spec-platform-dashboard.md)) |
+| Observability *(2b)* | Prometheus scrape + Grafana dashboards over the API's `/metrics`; structured logs ([operations](./08-spec-platform-operations.md)) |
 
 The API never lets a peer reach another peer directly: the frontend never speaks MQTT
 or the controller REST API, and a controller never speaks SQL. Everything funnels
@@ -81,7 +81,7 @@ and a stall in one (a slow DB stalling the write path) could in principle starve
 others. The platform keeps that blast radius contained by **isolating the concerns
 inside the process**: they run as separate goroutines communicating over **bounded
 channels**, so a backlog sheds load **locally** (ingestion drops oldest frames —
-[ingestion §6](./spec-platform-ingestion.md#6-ingest-backpressure--load-shedding))
+[ingestion §6](./04-spec-platform-ingestion.md#6-ingest-backpressure--load-shedding))
 rather than blocking REST serving or the reconciliation loop. The single-process shape
 stays acceptable at this scale because the failure is bounded the other way too:
 **controllers are independent failure domains** (`P2-AVAIL-1`) that keep regulating
@@ -95,19 +95,19 @@ through a platform restart, and the telemetry missed across that restart is a
 Three flows cross this topology; each is owned by a dedicated document:
 
 - **Telemetry (up):** controllers publish over MQTT → API ingests → time-series store
-  ([ingestion](./spec-platform-ingestion.md)).
+  ([ingestion](./04-spec-platform-ingestion.md)).
 - **Control (down):** API resolves profiles / relays operator actions → each
-  controller's REST API ([crop profiles](./spec-platform-crop-profiles.md)). The API
+  controller's REST API ([crop profiles](./05-spec-platform-crop-profiles.md)). The API
   writes only *targets* — never actuator commands.
 - **Dashboard:** frontend ↔ API over HTTP + WebSockets, through the proxy, gated by
-  auth in 2b ([API surface](./spec-platform-interfaces.md#3-api-surface-inventory),
-  [security](./spec-platform-security.md)).
+  auth in 2b ([API surface](./09-spec-platform-interfaces.md#3-api-surface-inventory),
+  [security](./07-spec-platform-security.md)).
 
 The flows are directional and never mixed: MQTT is telemetry-only (up), all control
 is REST (down), per
 [RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)
 and [RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain).
-See [interfaces](./spec-platform-interfaces.md) for the integration contract.
+See [interfaces](./09-spec-platform-interfaces.md) for the integration contract.
 
 ---
 
@@ -139,7 +139,7 @@ nginx has two jobs:
 
 In **2a** that is the whole job (SPA + `/api`); the `/auth` route to Keycloak and the
 auth edge are added in **2b** with authentication
-([security](./spec-platform-security.md)). The proxy applies gzip and cache headers to
+([security](./07-spec-platform-security.md)). The proxy applies gzip and cache headers to
 static assets to meet the dashboard's initial-load target (`P2-USE-1`).
 
 **Out of scope locally:** TLS termination and certificate management. The stack runs
@@ -153,11 +153,11 @@ fronting it with HTTPS is a deployment-environment concern, not a platform-desig
 
 | Concern | This spec | Detailed in |
 |---|---|---|
-| What state flows through the hub | routes to | [`spec-platform-data-model.md`](./spec-platform-data-model.md) |
-| Telemetry-up flow | frames | [`spec-platform-ingestion.md`](./spec-platform-ingestion.md) |
-| Control-down flow | frames | [`spec-platform-crop-profiles.md`](./spec-platform-crop-profiles.md) |
-| API + WebSocket responsibilities | frames | [`spec-platform-interfaces.md`](./spec-platform-interfaces.md#3-api-surface-inventory) |
-| Auth at the proxy edge | sets up | [`spec-platform-security.md`](./spec-platform-security.md) |
-| How the containers are deployed | sets up | [`spec-platform-operations.md`](./spec-platform-operations.md#2-deployment) |
+| What state flows through the hub | routes to | [`03-spec-platform-data-model.md`](./03-spec-platform-data-model.md) |
+| Telemetry-up flow | frames | [`04-spec-platform-ingestion.md`](./04-spec-platform-ingestion.md) |
+| Control-down flow | frames | [`05-spec-platform-crop-profiles.md`](./05-spec-platform-crop-profiles.md) |
+| API + WebSocket responsibilities | frames | [`09-spec-platform-interfaces.md`](./09-spec-platform-interfaces.md#3-api-surface-inventory) |
+| Auth at the proxy edge | sets up | [`07-spec-platform-security.md`](./07-spec-platform-security.md) |
+| How the containers are deployed | sets up | [`08-spec-platform-operations.md`](./08-spec-platform-operations.md#2-deployment) |
 | Ingress technology choice | defers to | [RFC-003](../../../decisions/request-for-comments.md#rfc-003-phase-2-platform-ingress) |
-| Per-dependency choices | defers to | [`spec-platform-tech-stack.md`](./spec-platform-tech-stack.md) |
+| Per-dependency choices | defers to | [`10-spec-platform-tech-stack.md`](./10-spec-platform-tech-stack.md) |

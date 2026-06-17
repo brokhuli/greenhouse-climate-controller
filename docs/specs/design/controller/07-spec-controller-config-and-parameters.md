@@ -197,5 +197,5 @@ tunable — these parameters set only *when* each condition fires, not *what* it
 | What gains/bands/targets mean | values for | [`05-spec-controller-control-loops.md`](./05-spec-controller-control-loops.md) |
 | What limits/ceilings mean | values for | [`06-spec-controller-safety-and-constraints.md`](./06-spec-controller-safety-and-constraints.md) |
 | The REST surface that edits config at runtime | edited via | [`08-spec-controller-interfaces.md`](./08-spec-controller-interfaces.md) |
-| Crop→setpoint resolution above the controller | defers to | [RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain), [platform crop profiles](../platform/spec-platform-crop-profiles.md) |
+| Crop→setpoint resolution above the controller | defers to | [RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain), [platform crop profiles](../platform/05-spec-platform-crop-profiles.md) |
 | `P1-PERF-*`, `P1-REL-*`, `P1-RESIL-2`, `P1-TEST-2` | cited | [NFR doc](../../artifacts/non-functional-requirements.md) |

@@ -7,7 +7,7 @@
 > this file first; read the others for detail.
 
 This set is the **top-level design spec for Phase 1**. It sits alongside the
-[platform](../platform/spec-platform-overview.md), [optimizer](../optimizer/01-spec-optimizer-overview.md),
+[platform](../platform/01-spec-platform-overview.md), [optimizer](../optimizer/01-spec-optimizer-overview.md),
 and [Phase 4](../spec-phase4.md) specs, and one altitude **above** the wire
 contracts in [`contracts/`](../../../../contracts/). The discipline throughout
 mirrors the [frontend spec set](../frontend/01-spec-frontend-overview.md):

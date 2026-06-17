@@ -10,7 +10,7 @@ end-to-end harness used for integration testing.
 runs as a native Windows binary (controller spec §13), not a container, and connects to the
 broker at `localhost:1883`. The Phase 2 platform services are present in
 [`docker-compose.yml`](./docker-compose.yml) as commented-out placeholders (full topology in
-[spec-platform-operations.md](../docs/specs/design/platform/spec-platform-operations.md#2-deployment)) and
+[08-spec-platform-operations.md](../docs/specs/design/platform/08-spec-platform-operations.md#2-deployment)) and
 are activated when Phase 2 begins.
 
 Run the broker:

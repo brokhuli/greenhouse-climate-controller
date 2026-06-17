@@ -7,7 +7,7 @@
 > **why** it's chosen over alternatives, and **how** it's used here. Choices are
 > constrained by the [NFR doc](../../artifacts/non-functional-requirements.md)
 > (`P2-PERF-3` API p95 < 200 ms; `P2-SCAL-1` ~50 controllers; `P2-USE-1` ≥ 1 Hz live)
-> and by the [constraints](./spec-platform-constraints.md) (local/no-cloud, setpoint-only
+> and by the [constraints](./11-spec-platform-constraints.md) (local/no-cloud, setpoint-only
 > downward, single authority).
 
 > **High-stakes picks are flagged ⚑** — the database-access layer and the MQTT client
@@ -28,7 +28,7 @@
   `net/http` — enough structure (routing, middleware, binding) without a heavy
   framework.
 - **How:** One `api` binary hosts every responsibility
-  ([architecture — the hub](./spec-platform-architecture.md#2-the-go-api-is-the-hub)):
+  ([architecture — the hub](./02-spec-platform-architecture.md#2-the-go-api-is-the-hub)):
   REST handlers, the MQTT ingester goroutine, the WS hub, and the reconciliation loop.
   Middleware carries structured logging, recovery, and (2b) token validation.
 
@@ -40,12 +40,12 @@
 
 - **What:** PostgreSQL with the time-series extension; one instance holds both the
   relational registry/profiles and the telemetry hypertables
-  ([data model](./spec-platform-data-model.md)).
+  ([data model](./03-spec-platform-data-model.md)).
 - **Why:** Fixed by
   [RFC-002](../../../decisions/request-for-comments.md#rfc-002-phase-2-persistence-layer).
   One datastore for both shapes avoids a second operational surface; hypertables +
   retention + continuous aggregates handle the append-only telemetry
-  ([ingestion §5](./spec-platform-ingestion.md#5-retention--downsampling)).
+  ([ingestion §5](./04-spec-platform-ingestion.md#5-retention--downsampling)).
 
 ### `pgx` + `sqlc`, `golang-migrate` ⚑
 
@@ -72,9 +72,9 @@
 - **What:** The MQTT client the ingester uses to subscribe to controller telemetry.
 - **Why:** The de-facto Go MQTT client; handles reconnect, QoS, retained messages, and
   last-will — exactly the features ingestion relies on for liveness
-  ([ingestion §4](./spec-platform-ingestion.md#4-qos-retained--liveness)).
+  ([ingestion §4](./04-spec-platform-ingestion.md#4-qos-retained--liveness)).
 - **How:** One client wildcard-subscribes to `gh/+/...`
-  ([ingestion §2](./spec-platform-ingestion.md#2-per-greenhouse-routing)); message
+  ([ingestion §2](./04-spec-platform-ingestion.md#2-per-greenhouse-routing)); message
   handlers validate the envelope, route by `greenhouse_id`, and write to the store.
 - **⚑ Alternatives & trip-wire:** **`autopaho` / paho.golang** (the newer v5 client —
   worth adopting if MQTT 5 features are needed) or **mochi-co/mqtt** (broker, not a
@@ -87,7 +87,7 @@
 - **Why:** Fixed by
   [RFC-001](../../../decisions/request-for-comments.md#rfc-001-mqtt-broker-selection);
   lightweight, ubiquitous, trivial to run as a container.
-- **How:** A `mqtt` Compose service ([operations](./spec-platform-operations.md#2-deployment)).
+- **How:** A `mqtt` Compose service ([operations](./08-spec-platform-operations.md#2-deployment)).
 
 ---
 
@@ -110,7 +110,7 @@
 - **Why:** Fixed by
   [RFC-003](../../../decisions/request-for-comments.md#rfc-003-phase-2-platform-ingress)
   — static, config-driven service map; nginx over Traefik
-  ([architecture §4](./spec-platform-architecture.md#4-reverse-proxy--the-edge)).
+  ([architecture §4](./02-spec-platform-architecture.md#4-reverse-proxy--the-edge)).
 - **How:** Serves the SPA `dist/` and proxies `/api` (+ WS upgrade) and, in 2b,
   `/auth`.
 
@@ -123,12 +123,12 @@
 - **What:** Keycloak is the OIDC identity provider; `go-oidc` + `golang-jwt` validate
   its tokens in the API.
 - **Why:** 2b delegates identity to Keycloak so the API never handles credentials
-  ([security](./spec-platform-security.md), `P2-SEC-1`); the API only needs to validate
+  ([security](./07-spec-platform-security.md), `P2-SEC-1`); the API only needs to validate
   JWTs against Keycloak's JWKS and read the roles claim — no custom crypto.
 - **How:** Validation middleware fetches/caches the JWKS, verifies signature/issuer/
   audience/expiry, and maps realm roles to the platform's viewer/operator roles
-  ([security §3](./spec-platform-security.md#3-roles-and-role-mapping)). **Absent in
-  2a** ([security §5](./spec-platform-security.md#5-the-2a-unauthenticated-stance)).
+  ([security §3](./07-spec-platform-security.md#3-roles-and-role-mapping)). **Absent in
+  2a** ([security §5](./07-spec-platform-security.md#5-the-2a-unauthenticated-stance)).
 
 ---
 
@@ -138,7 +138,7 @@
 
 - **What:** `client_golang` exposes `/metrics`; Prometheus scrapes; Grafana renders.
 - **Why:** The standard Go metrics path; gives the platform-health dashboards
-  ([operations §1](./spec-platform-operations.md#1-observability)) with no bespoke
+  ([operations §1](./08-spec-platform-operations.md#1-observability)) with no bespoke
   metrics pipeline.
 - **How:** Instrument ingestion rate, API latency/errors, reconciliation actions, and
   per-controller connectivity; Prometheus + Grafana run as 2b Compose services.
@@ -148,9 +148,9 @@
 - **What:** Structured logging.
 - **Why:** Stdlib, no dependency; one structured stream serves both operational logs
   and the audit trail
-  ([operations §1](./spec-platform-operations.md#1-observability)).
+  ([operations §1](./08-spec-platform-operations.md#1-observability)).
 - **How:** A JSON handler in production; the change-attribution events from
-  [crop profiles](./spec-platform-crop-profiles.md#5-fleet-management--operator-control)
+  [crop profiles](./05-spec-platform-crop-profiles.md#5-fleet-management--operator-control)
   log through it.
 
 ---
@@ -162,7 +162,7 @@
 - **`go test`** — unit + integration tests (handlers, ingester routing, resolution
   mapping); `P2-TEST-*`.
 - **Docker / Docker Compose** — single-command local orchestration
-  ([operations](./spec-platform-operations.md#2-deployment)).
+  ([operations](./08-spec-platform-operations.md#2-deployment)).
 
 ---
 

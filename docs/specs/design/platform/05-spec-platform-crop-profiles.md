@@ -4,7 +4,7 @@
 > its growth stage into the controller's numeric setpoints, keeping the controller
 > faithful to them (reconciliation), and giving the operator a single surface to act
 > on any greenhouse. This is the **control-down** half of the platform's bidirectional
-> model ([ingestion](./spec-platform-ingestion.md) is the up half). Setpoint authority
+> model ([ingestion](./04-spec-platform-ingestion.md) is the up half). Setpoint authority
 > and the delivery chain are fixed by
 > [RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain).
 
@@ -28,7 +28,7 @@ faithful to them.
   vegetative* → its temperature day/night, humidity band, VPD, DLI, and CO₂ targets,
   **plus** the per-zone soil-moisture thresholds and watering schedule that crop
   wants. Profiles form a small library, editable in the dashboard
-  ([data model](./spec-platform-data-model.md)).
+  ([data model](./03-spec-platform-data-model.md)).
 - A greenhouse has exactly **one active assignment** at a time: a profile + the
   current growth stage. Advancing the stage (propagation → vegetative → fruiting)
   re-selects the stage's target bundle.
@@ -42,7 +42,7 @@ setpoints and pushes them down via the controller's REST config API — the runt
 `PATCH` path described in
 [controller config](../controller/07-spec-controller-config-and-parameters.md). Because
 the target bundle mirrors the controller's `[setpoints]` schema
-([data model](./spec-platform-data-model.md)), resolution is a direct mapping.
+([data model](./03-spec-platform-data-model.md)), resolution is a direct mapping.
 
 ---
 
@@ -56,7 +56,7 @@ controller matching it:
 - **Apply on change** — assigning a profile or editing its targets pushes the new
   setpoints down.
 - **Re-assert on reconnect** — when a controller comes back online
-  ([ingestion](./spec-platform-ingestion.md#4-qos-retained--liveness)), the platform
+  ([ingestion](./04-spec-platform-ingestion.md#4-qos-retained--liveness)), the platform
   re-pushes the intended setpoints so a restarted controller cannot silently revert to
   its local TOML defaults. If a controller is **offline** when its intended state
   changes, the change is held and applied on reconnect rather than lost.
@@ -90,13 +90,13 @@ reconciliation analogue of the controller's bounded-buffer discipline
 The platform owns the **static** mapping — "this crop, this stage → these targets."
 Phase 3 later **refines** those targets dynamically (anticipatory, cost-aware) within
 crop-safe bounds; that optimization is out of scope here
-([constraints](./spec-platform-constraints.md)).
+([constraints](./11-spec-platform-constraints.md)).
 
 Crucially, the optimizer is **not** a second setpoint authority. The platform is the
 **single authority for controller setpoints**
 ([RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain)):
 when Phase 3 lands, the optimizer submits refined targets through this same setpoint
-write path (a setpoint-submission endpoint, [API surface](./spec-platform-interfaces.md#3-api-surface-inventory)),
+write path (a setpoint-submission endpoint, [API surface](./09-spec-platform-interfaces.md#3-api-surface-inventory)),
 and the platform enforces the crop-safe bounds, records the write with its source
 (`optimizer`), and remains the sole delivery path to the controller — exactly as it
 does for a crop-profile assignment or an operator override. The optimizer never writes
@@ -116,7 +116,7 @@ above and so lands in **2b**.
   controllers); this registry is the bootstrap that ingestion and resolution key off.
   Greenhouses can also be retired.
 - **Status aggregation** *(2a; drift in 2b)* — per-greenhouse online/degraded status
-  (from [ingestion](./spec-platform-ingestion.md#4-qos-retained--liveness)) rolled up
+  (from [ingestion](./04-spec-platform-ingestion.md#4-qos-retained--liveness)) rolled up
   into a site-wide fleet view; the **drift** dimension arrives with reconciliation
   ([§3](#3-reconciliation--the-platform-is-the-source-of-truth), 2b).
 - **Ad-hoc setpoint edits** *(2a relay; sticky/reconciled in 2b)* — the operator's
@@ -128,7 +128,7 @@ above and so lands in **2b**.
   resolution — held and re-asserted on reconnect
   ([§3](#3-reconciliation--the-platform-is-the-source-of-truth)). The platform's
   downward control is **setpoint-only**; it does not force individual actuators
-  ([constraints](./spec-platform-constraints.md)).
+  ([constraints](./11-spec-platform-constraints.md)).
 - **Change attribution** — every downward write (profile application, ad-hoc setpoint
   edit) is recorded as an event with who/what/when, for audit and for the dashboard's
   activity view.
@@ -147,9 +147,9 @@ above and so lands in **2b**.
 
 | Concern | This spec | Detailed in |
 |---|---|---|
-| Where profiles, assignments, and intended state are stored | reads/writes | [`spec-platform-data-model.md`](./spec-platform-data-model.md) |
-| The status / liveness reconciliation reacts to | consumes | [`spec-platform-ingestion.md`](./spec-platform-ingestion.md) |
-| The REST endpoints that expose profiles, assignments, setpoints | exposed by | [`spec-platform-interfaces.md`](./spec-platform-interfaces.md#3-api-surface-inventory) |
+| Where profiles, assignments, and intended state are stored | reads/writes | [`03-spec-platform-data-model.md`](./03-spec-platform-data-model.md) |
+| The status / liveness reconciliation reacts to | consumes | [`04-spec-platform-ingestion.md`](./04-spec-platform-ingestion.md) |
+| The REST endpoints that expose profiles, assignments, setpoints | exposed by | [`09-spec-platform-interfaces.md`](./09-spec-platform-interfaces.md#3-api-surface-inventory) |
 | The controller config API setpoints are pushed to | writes to | [controller config](../controller/07-spec-controller-config-and-parameters.md), [controller interfaces](../controller/08-spec-controller-interfaces.md) |
 | Setpoint authority + delivery chain | defers to | [RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain) |
-| Why safety is not the platform's to own | defers to | [`spec-platform-constraints.md`](./spec-platform-constraints.md) |
+| Why safety is not the platform's to own | defers to | [`11-spec-platform-constraints.md`](./11-spec-platform-constraints.md) |

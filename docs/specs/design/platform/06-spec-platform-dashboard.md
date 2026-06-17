@@ -8,8 +8,8 @@
 > boundary: platform here says **what**, the frontend set says **how**.
 
 A React single-page app, served through the
-[reverse proxy](./spec-platform-architecture.md#4-reverse-proxy--the-edge), talking to
-the API over HTTP + WebSockets ([API surface](./spec-platform-interfaces.md#3-api-surface-inventory)). It is
+[reverse proxy](./02-spec-platform-architecture.md#4-reverse-proxy--the-edge), talking to
+the API over HTTP + WebSockets ([API surface](./09-spec-platform-interfaces.md#3-api-surface-inventory)). It is
 the **only frontend in the system** and serves **one or more** greenhouses — a single
 greenhouse is the fleet-of-one case. Its monitoring and setpoint-edit core ships in
 **2a**; profile management follows in **2b**.
@@ -24,10 +24,10 @@ greenhouse is the fleet-of-one case. Its monitoring and setpoint-edit core ships
   actuator states, and event history, fed by the WebSocket stream.
 - **Profile management** *(2b)* — browse/edit the crop-profile library; assign a
   profile + growth stage to a greenhouse and apply it
-  ([crop profiles](./spec-platform-crop-profiles.md)).
+  ([crop profiles](./05-spec-platform-crop-profiles.md)).
 - **Control** *(2a)* — issue ad-hoc setpoint edits (operator role once auth lands in
   2b); actuator-level forcing is not offered here — it stays a controller-local action
-  ([constraints](./spec-platform-constraints.md)).
+  ([constraints](./11-spec-platform-constraints.md)).
 - **Health surfacing** *(2a)* — faults, offline controllers, and interlock activations
   raised prominently (drift surfacing arrives with reconciliation in 2b).
 
@@ -63,7 +63,7 @@ and the `P2-USE-1` / `P2-TEST-2` targets in
 | Concern | This spec | Detailed in |
 |---|---|---|
 | How the SPA is built (views, components, tokens, interactions) | defers to | [frontend set](../frontend/01-spec-frontend-overview.md) |
-| The API + WebSocket surface it consumes | consumes | [`spec-platform-interfaces.md`](./spec-platform-interfaces.md#3-api-surface-inventory) |
-| The profile/assignment actions it drives | drives | [`spec-platform-crop-profiles.md`](./spec-platform-crop-profiles.md) |
-| Role-gating of write actions | gated by | [`spec-platform-security.md`](./spec-platform-security.md) |
+| The API + WebSocket surface it consumes | consumes | [`09-spec-platform-interfaces.md`](./09-spec-platform-interfaces.md#3-api-surface-inventory) |
+| The profile/assignment actions it drives | drives | [`05-spec-platform-crop-profiles.md`](./05-spec-platform-crop-profiles.md) |
+| Role-gating of write actions | gated by | [`07-spec-platform-security.md`](./07-spec-platform-security.md) |
 | Load / latency / a11y / test targets | defers to | [NFR doc](../../artifacts/non-functional-requirements.md) |

@@ -11,7 +11,7 @@ that sits above each greenhouse's deterministic Phase 1 controller and refines t
 climate targets Phase 2 resolves from crop profiles. It describes the **software
 service**. It sits alongside the
 [controller](../controller/01-spec-controller-overview.md),
-[platform](../platform/spec-platform-overview.md), and [Phase 4](../spec-phase4.md)
+[platform](../platform/01-spec-platform-overview.md), and [Phase 4](../spec-phase4.md)
 specs, one altitude **above** the wire contracts in
 [`contracts/`](../../../../contracts/). For the physical system whose dynamics it
 simulates — the sensors, actuators, and the coupling between climate variables — see
@@ -19,7 +19,7 @@ simulates — the sensors, actuators, and the coupling between climate variables
 ultimately steers, see
 [`01-spec-controller-overview.md`](../controller/01-spec-controller-overview.md); for the
 platform it integrates with, see
-[`spec-platform-overview.md`](../platform/spec-platform-overview.md).
+[`01-spec-platform-overview.md`](../platform/01-spec-platform-overview.md).
 
 > Scope note: this is an architectural spec (components, responsibilities, behavior, configuration).
 > Concrete code/module/class design is deferred until implementation. Wire formats (MQTT topics,

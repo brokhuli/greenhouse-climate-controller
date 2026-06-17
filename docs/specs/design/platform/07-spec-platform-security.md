@@ -10,7 +10,7 @@
 
 > **Phase 2b.** 2a runs **unauthenticated** on the trusted local Docker network
 > (consistent with RFC-009); Keycloak, the viewer/operator roles, and the nginx
-> `/auth` route ([architecture §4](./spec-platform-architecture.md#4-reverse-proxy--the-edge))
+> `/auth` route ([architecture §4](./02-spec-platform-architecture.md#4-reverse-proxy--the-edge))
 > all land in 2b. See [§5](#5-the-2a-unauthenticated-stance).
 
 ---
@@ -18,7 +18,7 @@
 ## 1. Identity is delegated to Keycloak
 
 Identity is delegated to **Keycloak**, a self-hosted **OIDC identity provider** that
-runs as a container in the stack ([operations](./spec-platform-operations.md#2-deployment))
+runs as a container in the stack ([operations](./08-spec-platform-operations.md#2-deployment))
 — no cloud dependency. Keycloak owns the user store, login, password policies, and
 (optionally) MFA, so the Go API never handles credentials itself.
 
@@ -66,13 +66,13 @@ hard-coding Keycloak's role names through the codebase — is what lets the IdP'
 taxonomy change without touching capability logic.
 
 Finer-grained RBAC and multi-tenant identity are out of scope
-([constraints](./spec-platform-constraints.md)).
+([constraints](./11-spec-platform-constraints.md)).
 
 ---
 
 ## 4. Capability matrix
 
-How the two roles line up against the [API surface](./spec-platform-interfaces.md#3-api-surface-inventory):
+How the two roles line up against the [API surface](./09-spec-platform-interfaces.md#3-api-surface-inventory):
 
 | Surface | Viewer | Operator |
 |---|---|---|
@@ -128,9 +128,9 @@ ever leaves the single-host local model**.
 
 | Concern | This spec | Detailed in |
 |---|---|---|
-| Where users / roles are stored | defines | [`spec-platform-data-model.md`](./spec-platform-data-model.md) |
-| The `/auth` route + the proxy edge | gated at | [`spec-platform-architecture.md`](./spec-platform-architecture.md#4-reverse-proxy--the-edge) |
-| The surfaces these roles gate | gates | [`spec-platform-interfaces.md`](./spec-platform-interfaces.md#3-api-surface-inventory) |
+| Where users / roles are stored | defines | [`03-spec-platform-data-model.md`](./03-spec-platform-data-model.md) |
+| The `/auth` route + the proxy edge | gated at | [`02-spec-platform-architecture.md`](./02-spec-platform-architecture.md#4-reverse-proxy--the-edge) |
+| The surfaces these roles gate | gates | [`09-spec-platform-interfaces.md`](./09-spec-platform-interfaces.md#3-api-surface-inventory) |
 | The browser-side OIDC client | paired with | [frontend tech stack](../frontend/04-spec-frontend-tech-stack.md) |
 | Internal trust boundary; 2a no-auth | defers to | [RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries) |
 | `P2-SEC-1` | cited | [NFR doc](../../artifacts/non-functional-requirements.md) |

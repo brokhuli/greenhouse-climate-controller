@@ -104,7 +104,7 @@ here:
 
 Forcing an actuator is a **controller-local** action — the platform's downward
 control is setpoint-only and does not proxy actuator overrides
-([platform constraints](../platform/spec-platform-constraints.md#7-scope--deferred--out-of-scope)).
+([platform constraints](../platform/11-spec-platform-constraints.md#7-scope--deferred--out-of-scope)).
 
 ---
 
@@ -186,5 +186,5 @@ The broker itself (Mosquitto) and the QoS / retained-message policy are owned by
 | Actuator-health faults + observed actuator state | surfaces | [`06-spec-controller-safety-and-constraints.md`](./06-spec-controller-safety-and-constraints.md#5-actuator-health-monitoring) |
 | Runtime-mutable config the REST API edits | edits | [`07-spec-controller-config-and-parameters.md`](./07-spec-controller-config-and-parameters.md#startup-vs-runtime) |
 | Wire formats (topics, payloads, status codes) | binds to | [`contracts/`](../../../../contracts/), [`spec-contracts.md`](../spec-contracts.md) |
-| Who consumes the telemetry | consumed by | [platform ingestion](../platform/spec-platform-ingestion.md), [frontend data model](../frontend/05-spec-frontend-data-model.md) |
+| Who consumes the telemetry | consumed by | [platform ingestion](../platform/04-spec-platform-ingestion.md), [frontend data model](../frontend/05-spec-frontend-data-model.md) |
 | `P1-OBS-1` (per-tick publish), `P1-OBS-2` (health), `P1-RESIL-3` (publish never blocks control) | cited | [NFR doc](../../artifacts/non-functional-requirements.md) |

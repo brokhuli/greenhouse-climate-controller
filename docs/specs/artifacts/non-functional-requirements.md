@@ -181,9 +181,9 @@ HAL time constants ([HAL §2](../design/controller/03-spec-controller-hal-simula
 
 - **P2-OBS-1** — The Go API exposes `/metrics`; Prometheus scrapes on a **15 s interval**; Grafana
   dashboards cover ingestion rate, API latency/errors, reconciliation actions, and per-controller
-  connectivity. *([operations §1](../design/platform/spec-platform-operations.md#1-observability); 2b.)*
+  connectivity. *([operations §1](../design/platform/08-spec-platform-operations.md#1-observability); 2b.)*
 - **P2-OBS-2** — Every setpoint write emits a **structured (`slog`) audit log entry with provenance**.
-  *([operations §1](../design/platform/spec-platform-operations.md#1-observability), [crop profiles §5](../design/platform/spec-platform-crop-profiles.md#5-fleet-management--operator-control).)*
+  *([operations §1](../design/platform/08-spec-platform-operations.md#1-observability), [crop profiles §5](../design/platform/05-spec-platform-crop-profiles.md#5-fleet-management--operator-control).)*
 
 **Usability**
 
@@ -194,22 +194,22 @@ HAL time constants ([HAL §2](../design/controller/03-spec-controller-hal-simula
 **Availability**
 
 - **P2-AVAIL-1** — Platform **≥ 99.5% availability**; a platform restart **never interrupts controller
-  control loops** (controllers are independent failure domains). *([overview §1](../design/platform/spec-platform-overview.md#1-what-the-platform-is).)*
+  control loops** (controllers are independent failure domains). *([overview §1](../design/platform/01-spec-platform-overview.md#1-what-the-platform-is).)*
 
 **Reliability**
 
 - **P2-REL-1** — Setpoint reconciliation **re-asserts intended state on controller reconnect within
-  one reconciliation cycle**. *([crop profiles §3](../design/platform/spec-platform-crop-profiles.md#3-reconciliation--the-platform-is-the-source-of-truth); 2b.)*
+  one reconciliation cycle**. *([crop profiles §3](../design/platform/05-spec-platform-crop-profiles.md#3-reconciliation--the-platform-is-the-source-of-truth); 2b.)*
 
 **Resilience**
 
 - **P2-RESIL-1** — Telemetry lost during platform downtime is a **recoverable data gap, not a control
-  failure**; ingestion resumes automatically on restart. *([overview §1](../design/platform/spec-platform-overview.md#1-what-the-platform-is), [ingestion §1](../design/platform/spec-platform-ingestion.md#1-subscribe-and-store).)*
+  failure**; ingestion resumes automatically on restart. *([overview §1](../design/platform/01-spec-platform-overview.md#1-what-the-platform-is), [ingestion §1](../design/platform/04-spec-platform-ingestion.md#1-subscribe-and-store).)*
 
 **Testability**
 
 - **P2-TEST-1** — An integration test covers the **full up/down path** (MQTT ingest → store; profile
-  resolve → controller REST). *([architecture §3](../design/platform/spec-platform-architecture.md#3-three-data-flows).)*
+  resolve → controller REST). *([architecture §3](../design/platform/02-spec-platform-architecture.md#3-three-data-flows).)*
 - **P2-TEST-2** — The React dashboard is validated with **Playwright** (E2E flows + live-update latency
   over the WebSocket stream — the ≥ 1 Hz half of P2-USE-1) and **Lighthouse CI** (initial-load
   performance + accessibility), both run against the **production build**, not the dev server.
@@ -218,17 +218,17 @@ HAL time constants ([HAL §2](../design/controller/03-spec-controller-hal-simula
 **Modifiability**
 
 - **P2-MOD-1** — The Phase 3 optimizer integrates via the **existing `POST /setpoints` path with zero
-  breaking interface changes**. *([crop profiles §4](../design/platform/spec-platform-crop-profiles.md#4-boundary-with-phase-3--single-setpoint-authority), [interfaces §3](../design/platform/spec-platform-interfaces.md#3-api-surface-inventory); RFC-005.)*
+  breaking interface changes**. *([crop profiles §4](../design/platform/05-spec-platform-crop-profiles.md#4-boundary-with-phase-3--single-setpoint-authority), [interfaces §3](../design/platform/09-spec-platform-interfaces.md#3-api-surface-inventory); RFC-005.)*
 
 **Security**
 
 - **P2-SEC-1** — 2b: **Keycloak OIDC with viewer/operator roles**; every write path requires the
-  operator role. *([security §3](../design/platform/spec-platform-security.md#3-roles-and-role-mapping), [§4](../design/platform/spec-platform-security.md#4-capability-matrix); 2b.)*
+  operator role. *([security §3](../design/platform/07-spec-platform-security.md#3-roles-and-role-mapping), [§4](../design/platform/07-spec-platform-security.md#4-capability-matrix); 2b.)*
 
 **Portability**
 
 - **P2-PORT-1** — The whole stack stands up with **one `docker compose up`**, no cloud account.
-  *([operations §2](../design/platform/spec-platform-operations.md#2-deployment).)*
+  *([operations §2](../design/platform/08-spec-platform-operations.md#2-deployment).)*
 
 ### Phase 3 — Python optimizer, LLM-assisted planning, digital twin simulation
 
@@ -338,7 +338,7 @@ the fleet view simultaneously.
 ### Test method
 
 Controllers run as Docker containers on the local development machine (see
-[platform deployment](../design/platform/spec-platform-operations.md#2-deployment)). A generation script produces a
+[platform deployment](../design/platform/08-spec-platform-operations.md#2-deployment)). A generation script produces a
 `docker-compose.override.yml` with N named controller services; `docker compose up -d` brings the
 full stack up. To vary N, regenerate and redeploy.
 

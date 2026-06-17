@@ -15,14 +15,14 @@
 > (the Go API's structured logs are still available).
 
 The platform instruments **itself**, distinct from the greenhouse telemetry it
-ingests ([ingestion](./spec-platform-ingestion.md)).
+ingests ([ingestion](./04-spec-platform-ingestion.md)).
 
 ### Platform health, not crop climate
 
 This distinction is load-bearing. Greenhouse readings (temperature, humidity, soil
 moisture, …) live in the time-series store and the dashboard
-([data model](./spec-platform-data-model.md),
-[dashboard](./spec-platform-dashboard.md)). Observability here is about the **service**
+([data model](./03-spec-platform-data-model.md),
+[dashboard](./06-spec-platform-dashboard.md)). Observability here is about the **service**
 — is ingestion keeping up, is the API healthy, are controllers connected — never about
 the crops.
 
@@ -46,7 +46,7 @@ the internal network.
 
 The API emits **structured logs** (Go `slog`) for operational events and the audit
 trail. Every downward write recorded as a change-attribution event
-([crop profiles](./spec-platform-crop-profiles.md#5-fleet-management--operator-control))
+([crop profiles](./05-spec-platform-crop-profiles.md#5-fleet-management--operator-control))
 appears in the log stream with who/what/when, so the audit trail and the operational
 log share one structured pipeline.
 
@@ -69,7 +69,7 @@ authentication and observability.
 | `mqtt` | Mosquitto | 2a |
 | `proxy` | nginx (single entry point; also serves the SPA) | 2a |
 | `frontend` | Built React app served by the `proxy` nginx | 2a |
-| `auth` | Keycloak — self-hosted OIDC identity provider ([security](./spec-platform-security.md)) | 2b |
+| `auth` | Keycloak — self-hosted OIDC identity provider ([security](./07-spec-platform-security.md)) | 2b |
 | `prometheus` | Prometheus — scrapes the API's `/metrics` ([§1](#1-observability)) | 2b |
 | `grafana` | Grafana — platform dashboards ([§1](#1-observability)) | 2b |
 
@@ -77,7 +77,7 @@ The platform's own service configuration — database DSN, MQTT broker address, 
 client credentials (2b), proxy routing — is supplied via **environment variables / the
 Compose file**, not a per-greenhouse config (contrast the controller's TOML).
 Per-greenhouse data lives in the registry and assignments
-([data model](./spec-platform-data-model.md)).
+([data model](./03-spec-platform-data-model.md)).
 
 ### Controller services
 
@@ -114,7 +114,7 @@ cannot supply per-replica configuration.
 The whole stack and 20–50 controllers share **one host**
 ([constraints — deployment & scale](../../artifacts/constraints.md#deployment--scale)),
 so "independent failure domain" has to hold at the *compute* level, not just in physics
-([constraints §6](./spec-platform-constraints.md#6-manages-does-not-couple-physics)).
+([constraints §6](./11-spec-platform-constraints.md#6-manages-does-not-couple-physics)).
 The Compose definition makes that explicit:
 
 - **Per-service CPU/memory limits.** Each service — platform and controller alike —
@@ -130,9 +130,9 @@ The Compose definition makes that explicit:
 - **Bounded platform logs.** The API's structured `slog` / audit stream
   ([§1](#1-observability)) is rotated/size-capped so it cannot fill the disk — the
   log-side sibling of the telemetry **retention** policy
-  ([ingestion §5](./spec-platform-ingestion.md#5-retention--downsampling)).
+  ([ingestion §5](./04-spec-platform-ingestion.md#5-retention--downsampling)).
 - **Migration-on-startup is the startup gate.** Schema migrations run on `api` startup
-  ([tech stack](./spec-platform-tech-stack.md)); a failed migration blocks the API from
+  ([tech stack](./10-spec-platform-tech-stack.md)); a failed migration blocks the API from
   coming up. This is reversible — migrations are versioned
   `golang-migrate` files — but it is the one place a bad change halts the platform rather
   than degrading it, so migrations are reviewed as carefully as code.
@@ -151,9 +151,9 @@ observe and target controller counts (`P2-SCAL-1`) — see
 
 | Concern | This spec | Detailed in |
 |---|---|---|
-| The container topology being deployed | deploys | [`spec-platform-architecture.md`](./spec-platform-architecture.md) |
-| The auth service (Keycloak) stood up in 2b | runs | [`spec-platform-security.md`](./spec-platform-security.md) |
-| The greenhouse telemetry (not platform metrics) | distinct from | [`spec-platform-data-model.md`](./spec-platform-data-model.md), [`spec-platform-dashboard.md`](./spec-platform-dashboard.md) |
+| The container topology being deployed | deploys | [`02-spec-platform-architecture.md`](./02-spec-platform-architecture.md) |
+| The auth service (Keycloak) stood up in 2b | runs | [`07-spec-platform-security.md`](./07-spec-platform-security.md) |
+| The greenhouse telemetry (not platform metrics) | distinct from | [`03-spec-platform-data-model.md`](./03-spec-platform-data-model.md), [`06-spec-platform-dashboard.md`](./06-spec-platform-dashboard.md) |
 | The controllers being generated/run | manages | [controller deployment](../controller/02-spec-controller-architecture.md#8-deployment) |
 | The shared-host resource envelope the per-service limits enforce | defers to | [constraints — deployment & scale](../../artifacts/constraints.md#deployment--scale) |
 | Target controller counts, latencies (`P2-SCAL-1`, `P2-PERF-3`) | defers to | [NFR doc](../../artifacts/non-functional-requirements.md) |

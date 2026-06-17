@@ -19,7 +19,7 @@ schemas.
 | **Service API (FastAPI)** | Operator/tools → optimizer | Trigger planning cycles, inspect proposed plans, review and act on escalations |
 
 The optimizer **consumes** the contracts owned by [`contracts/`](../../../../contracts/) and the Phase 2
-interfaces ([P2 crop profiles](../platform/spec-platform-crop-profiles.md),
-[P2 interfaces](../platform/spec-platform-interfaces.md)) rather than defining new
+interfaces ([P2 crop profiles](../platform/05-spec-platform-crop-profiles.md),
+[P2 interfaces](../platform/09-spec-platform-interfaces.md)) rather than defining new
 ones. It does **not** open its own channel to the Phase 1 controller — all downward influence flows
 through Phase 2, preserving the platform's authority over intended state.

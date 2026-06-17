@@ -9,8 +9,8 @@
 > this file lists *responsibilities*, not schemas.
 
 This is the **telemetry-up** half of the platform's bidirectional model
-([overview §1](./spec-platform-overview.md#1-what-the-platform-is)); the
-**control-down** half is [crop profiles](./spec-platform-crop-profiles.md).
+([overview §1](./01-spec-platform-overview.md#1-what-the-platform-is)); the
+**control-down** half is [crop profiles](./05-spec-platform-crop-profiles.md).
 
 ---
 
@@ -19,7 +19,7 @@ This is the **telemetry-up** half of the platform's bidirectional model
 The API subscribes to the controllers' MQTT topics (topic map defined in
 [`contracts/mqtt`](../../../../contracts/mqtt/), following the taxonomy and envelope
 fixed by RFC-007) and writes what it receives into the time-series store
-([data model](./spec-platform-data-model.md)). Ingestion is the platform's only
+([data model](./03-spec-platform-data-model.md)). Ingestion is the platform's only
 inbound path from the greenhouses.
 
 ---
@@ -29,7 +29,7 @@ inbound path from the greenhouses.
 Each controller publishes under its own `gh/{greenhouse_id}/...` topic root (RFC-007);
 the ingester wildcard-subscribes and maps topic → greenhouse via the registry's
 controller-endpoint record, keyed by the same `greenhouse_id`. The registry
-([fleet management](./spec-platform-crop-profiles.md#5-fleet-management--operator-control))
+([fleet management](./05-spec-platform-crop-profiles.md#5-fleet-management--operator-control))
 is the bootstrap that routing keys off — an unregistered `greenhouse_id` has nowhere
 to land and is rejected/logged rather than silently stored.
 
@@ -56,7 +56,7 @@ The same surface the controller publishes
 - **Liveness / health** — absence of expected messages (or an MQTT last-will) marks a
   greenhouse **offline**; ingested fault events mark it **degraded**. Per-greenhouse
   status is derived *here* and surfaced to the fleet view and reconciliation
-  ([crop profiles](./spec-platform-crop-profiles.md)). Liveness is therefore a product
+  ([crop profiles](./05-spec-platform-crop-profiles.md)). Liveness is therefore a product
   of ingestion, not a separate poll.
 
 ---
@@ -67,7 +67,7 @@ Telemetry is append-only and grows without bound, so the time-series store needs
 **retention policy** (and optionally continuous aggregates / downsampling for
 long-range dashboard queries). The specific horizon is an implementation/config
 choice, not fixed by this spec; TimescaleDB's retention + continuous-aggregate
-features are the intended mechanism ([data model](./spec-platform-data-model.md)).
+features are the intended mechanism ([data model](./03-spec-platform-data-model.md)).
 
 ---
 
@@ -91,7 +91,7 @@ publishing from its control tick
   *recoverable data gap, not a control failure* that `P2-RESIL-1` already sanctions for
   platform downtime — backpressure shedding is that gap under live load.
 - **Shedding is observable.** A filling buffer shows up as the ingestion **lag/backlog**
-  metric ([operations §1](./spec-platform-operations.md#1-observability)); sustained
+  metric ([operations §1](./08-spec-platform-operations.md#1-observability)); sustained
   shedding is the signal that the store is the bottleneck, surfaced before any loss is
   silent.
 
@@ -100,7 +100,7 @@ publishing from its control tick
 ## 7. Read-only with respect to the greenhouse
 
 Ingestion **never changes a controller**. All downward writes go through the control
-path in [crop profiles](./spec-platform-crop-profiles.md). This one-way property is
+path in [crop profiles](./05-spec-platform-crop-profiles.md). This one-way property is
 what lets ingestion wildcard-subscribe to the whole fleet without any risk of a
 side effect on a greenhouse.
 
@@ -110,8 +110,8 @@ side effect on a greenhouse.
 
 | Concern | This spec | Detailed in |
 |---|---|---|
-| Where ingested telemetry is stored | writes to | [`spec-platform-data-model.md`](./spec-platform-data-model.md) |
-| How derived status feeds the fleet view + reconciliation | feeds | [`spec-platform-crop-profiles.md`](./spec-platform-crop-profiles.md) |
-| The lag/backlog metric that surfaces shedding | surfaced by | [operations §1](./spec-platform-operations.md#1-observability) |
+| Where ingested telemetry is stored | writes to | [`03-spec-platform-data-model.md`](./03-spec-platform-data-model.md) |
+| How derived status feeds the fleet view + reconciliation | feeds | [`05-spec-platform-crop-profiles.md`](./05-spec-platform-crop-profiles.md) |
+| The lag/backlog metric that surfaces shedding | surfaced by | [operations §1](./08-spec-platform-operations.md#1-observability) |
 | The published surface being ingested | consumes | [controller interfaces](../controller/08-spec-controller-interfaces.md) |
 | Topic taxonomy, envelope, QoS, retained policy | defers to | [`contracts/mqtt`](../../../../contracts/mqtt/), [RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format) |

@@ -165,7 +165,7 @@
 
 - **What:** OIDC relying-party client for the browser (Authorization Code + PKCE).
 - **Why:** 2b delegates identity to **Keycloak**
-  ([platform authentication](../platform/spec-platform-security.md),
+  ([platform authentication](../platform/07-spec-platform-security.md),
   `P2-SEC-1`); the SPA only needs to perform the login redirect, hold tokens, and
   expose the role. These libraries do exactly that with no custom crypto.
 - **How:** `AuthProvider` wraps the app; `/auth/callback` consumes the code; the
@@ -219,7 +219,7 @@ Recorded so the choice isn't re-litigated:
 
 - **Next.js / Remix** — SSR/server runtime is pointless behind a static nginx
   mount on a local Docker network; adds a Node server the deployment model
-  ([platform deployment](../platform/spec-platform-operations.md#2-deployment)) doesn't want.
+  ([platform deployment](../platform/08-spec-platform-operations.md#2-deployment)) doesn't want.
 - **Redux Toolkit** — server state belongs in Query; the residual UI state doesn't
   justify a global store and its boilerplate. Zustand is the fallback if needed.
 - **socket.io** — needs a matching server; the Go API speaks plain WebSockets.
