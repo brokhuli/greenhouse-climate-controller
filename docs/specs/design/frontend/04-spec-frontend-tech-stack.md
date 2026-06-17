@@ -8,7 +8,7 @@
 > [NFR doc](../../artifacts/non-functional-requirements.md) (`P2-USE-1` load < 2 s
 > + ≥ 1 Hz live; `P2-PERF-2` WS lag < 1 s; `P2-PERF-3` API p95 < 200 ms;
 > `P2-TEST-2` Playwright + Lighthouse) and the
-> [constraints](./spec-frontend-constraints.md) (Docker/nginx, API-only, 2a/2b).
+> [constraints](./09-spec-frontend-constraints.md) (Docker/nginx, API-only, 2a/2b).
 
 > **High-stakes picks are flagged ⚑** — the charting library and the styling
 > approach are the two choices most worth a second look before locking; each lists
@@ -23,7 +23,7 @@
 - **What:** Component UI library + strict typing.
 - **Why:** Fixed by [tech-stack-decisions.md](../tech-stack-decisions.md#phase-2--local-paas-platform-docker-only).
   TypeScript strict pays off because the API responses are validated and typed end
-  to end (see [`spec-frontend-data-model.md`](./spec-frontend-data-model.md)).
+  to end (see [`05-spec-frontend-data-model.md`](./05-spec-frontend-data-model.md)).
 - **How:** Function components + hooks only. `tsconfig` in `strict` mode; CI fails
   on type errors.
 
@@ -32,7 +32,7 @@
 - **What:** Dev server (HMR) + production bundler.
 - **Why:** Fast dev loop; first-class React + TS; trivial static output for nginx;
   built-in route-level code splitting. No SSR is needed — the SPA is served as
-  static assets behind the proxy ([architecture §6](./spec-frontend-architecture.md#6-build--deploy-pipeline)).
+  static assets behind the proxy ([architecture §6](./03-spec-frontend-architecture.md#6-build--deploy-pipeline)).
 - **How:** `output` is a static `dist/`. Dev proxies `/api` + `/auth` to the local
   Go API. `vite-plugin-checker` runs `tsc` in the build.
 
@@ -44,7 +44,7 @@
 
 - **What:** Client-side router.
 - **Why:** The dashboard has a small, stable route set
-  ([architecture §3](./spec-frontend-architecture.md#3-route-tree)); React Router
+  ([architecture §3](./03-spec-frontend-architecture.md#3-route-tree)); React Router
   is the conventional, well-supported choice and supports lazy route modules for
   code splitting.
 - **How:** Route table in `src/app/routes.tsx`; views are lazy-loaded. nginx
@@ -60,11 +60,11 @@
 - **Why:** The dashboard is read-heavy over a live backend; Query gives caching,
   background refetch, staleness, and bounded retry for free, and is the natural
   home for the cache that WS frames patch
-  ([architecture §4](./spec-frontend-architecture.md#4-runtime-data-flow)). It
+  ([architecture §4](./03-spec-frontend-architecture.md#4-runtime-data-flow)). It
   removes the need for a hand-rolled fetch/cache layer or a Redux data slice.
 - **How:** One `QueryClient` in `providers.tsx`. All REST access is via query/
   mutation hooks in `src/api/queries/`. The query-key scheme is owned by
-  [`spec-frontend-data-model.md`](./spec-frontend-data-model.md). Mutations
+  [`05-spec-frontend-data-model.md`](./05-spec-frontend-data-model.md). Mutations
   (setpoint edit, profile assign) invalidate or optimistically patch the relevant
   keys.
 
@@ -73,7 +73,7 @@
 - **What:** A thin wrapper over the browser `WebSocket`: subscribe, dispatch
   parsed frames, reconnect with backoff, backfill on resume.
 - **Why:** The live channel is a single socket with a small message taxonomy
-  ([data-model](./spec-frontend-data-model.md)); a dependency (socket.io etc.)
+  ([data-model](./05-spec-frontend-data-model.md)); a dependency (socket.io etc.)
   would add weight and a server-side counterpart the Go API doesn't speak. ~100
   lines of vanilla TS covers it.
 - **How:** One socket for the app; frames are Zod-parsed, then either appended to a
@@ -85,7 +85,7 @@
 - **What:** UI state is local (`useState`/`useReducer`); **Zustand** is adopted
   *only if* a piece of UI state must be shared across distant components.
 - **Why:** Server state lives in Query; live data in ring-buffer hooks
-  ([architecture §5](./spec-frontend-architecture.md#5-client-state-topology)).
+  ([architecture §5](./03-spec-frontend-architecture.md#5-client-state-topology)).
   That leaves little global UI state. Starting without a store keeps the bundle and
   the mental model small; Zustand (~1 KB) is the escape hatch — mirroring the
   portfolio's "Preact as fallback" discipline.
@@ -105,8 +105,8 @@
   incur, holding the live cadence on a mid-tier machine. uPlot is purpose-built for
   exactly this (dense, live time series) and is small.
 - **How:** Wrapped once in a `TimeSeriesChart` primitive
-  ([components](./spec-frontend-components.md)) that takes a `series` array and
-  reads colors from chart tokens ([design-tokens §chart](./spec-frontend-design-tokens.md)). The
+  ([components](./06-spec-frontend-components.md)) that takes a `series` array and
+  reads colors from chart tokens ([design-tokens §chart](./07-spec-frontend-design-tokens.md)). The
   live ring buffer feeds it directly.
 - **⚑ Alternatives & trip-wire:** **Recharts** (ergonomic, but SVG — drops frames
   with many live points), **ECharts** (capable but ~1 MB, heavier than the whole
@@ -126,9 +126,9 @@
 - **Why:** The dashboard is a dense, card-and-table UI with many small spacing/
   border variants — utilities scale better than per-component stylesheets. CSS
   variables make the dark/light swap a one-attribute change
-  ([architecture §8](./spec-frontend-architecture.md#8-theming-architecture)).
+  ([architecture §8](./03-spec-frontend-architecture.md#8-theming-architecture)).
 - **How:** Tokens in `src/styles/tokens.css` (owned by
-  [`spec-frontend-design-tokens.md`](./spec-frontend-design-tokens.md)); Tailwind theme reads `var(--…)`;
+  [`07-spec-frontend-design-tokens.md`](./07-spec-frontend-design-tokens.md)); Tailwind theme reads `var(--…)`;
   components write semantic utility classes, never raw hex.
 - **⚑ Alternative:** **CSS Modules** (more isolation, more boilerplate) or a
   component kit like **shadcn/ui** (faster to assemble, but ships opinionated
@@ -152,7 +152,7 @@
 - **Why:** The dashboard has *real* forms (setpoint edit, profile editor) unlike a
   static site. react-hook-form keeps re-renders minimal; **Zod** validates both
   form input *and* API responses, so one schema serves both the form and the
-  data-model layer ([`spec-frontend-data-model.md`](./spec-frontend-data-model.md)).
+  data-model layer ([`05-spec-frontend-data-model.md`](./05-spec-frontend-data-model.md)).
 - **How:** Zod schemas in `src/api/schemas.ts` are reused as form resolvers.
   Setpoint inputs validate against crop-safe ranges surfaced by the API; submit is
   blocked until valid.

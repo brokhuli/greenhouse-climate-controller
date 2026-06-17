@@ -17,7 +17,7 @@
 
 The controller has **no UI of its own**. There is no local dashboard and no
 WebSocket stream; the only frontend in the system is the
-[Phase 2 platform's](../frontend/spec-frontend-overview.md), which monitors one or
+[Phase 2 platform's](../frontend/01-spec-frontend-overview.md), which monitors one or
 more controllers. In standalone Phase 1, the controller is observed directly through
 MQTT tooling (e.g. MQTT Explorer) and its REST surface.
 
@@ -111,7 +111,7 @@ control is setpoint-only and does not proxy actuator overrides
 ## 5. Published shapes & health
 
 What the controller publishes (the shapes the
-[frontend data model](../frontend/spec-frontend-data-model.md) ultimately consumes,
+[frontend data model](../frontend/05-spec-frontend-data-model.md) ultimately consumes,
 via the platform): per-metric readings (temperature, humidity, CO₂, PAR, per-zone
 soil moisture), actuator states (commanded vs observed, plus a per-actuator health
 flag), fault/interlock events, and the consolidated system state.
@@ -186,5 +186,5 @@ The broker itself (Mosquitto) and the QoS / retained-message policy are owned by
 | Actuator-health faults + observed actuator state | surfaces | [`06-spec-controller-safety-and-constraints.md`](./06-spec-controller-safety-and-constraints.md#5-actuator-health-monitoring) |
 | Runtime-mutable config the REST API edits | edits | [`07-spec-controller-config-and-parameters.md`](./07-spec-controller-config-and-parameters.md#startup-vs-runtime) |
 | Wire formats (topics, payloads, status codes) | binds to | [`contracts/`](../../../../contracts/), [`spec-contracts.md`](../spec-contracts.md) |
-| Who consumes the telemetry | consumed by | [platform ingestion](../platform/spec-platform-ingestion.md), [frontend data model](../frontend/spec-frontend-data-model.md) |
+| Who consumes the telemetry | consumed by | [platform ingestion](../platform/spec-platform-ingestion.md), [frontend data model](../frontend/05-spec-frontend-data-model.md) |
 | `P1-OBS-1` (per-tick publish), `P1-OBS-2` (health), `P1-RESIL-3` (publish never blocks control) | cited | [NFR doc](../../artifacts/non-functional-requirements.md) |

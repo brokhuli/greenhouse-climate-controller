@@ -5,9 +5,9 @@
 > chart updates, WebSocket reconnect/backfill UX, the connection-status indicator,
 > optimistic-vs-confirmed writes, confirmation dialogs, fault/drift alerting,
 > loading states, and (2b) the auth flow. Pairs with
-> [`spec-frontend-components.md`](./spec-frontend-components.md) (what is
+> [`06-spec-frontend-components.md`](./06-spec-frontend-components.md) (what is
 > interactive) by specifying *how it feels*. Motion tokens are defined in
-> [`spec-frontend-design-tokens.md`](./spec-frontend-design-tokens.md) §6 and referenced here by name.
+> [`07-spec-frontend-design-tokens.md`](./07-spec-frontend-design-tokens.md) §6 and referenced here by name.
 
 > **Operator-console tone.** This is a control surface, not a marketing site.
 > Motion is functional (state changes, confirmations), never decorative; nothing
@@ -52,7 +52,7 @@ their data either way; only transitions are suppressed).
   backdrop tap / `Esc`. Body scroll locks while open.
 - **Deep links resolve** — `/greenhouses/:id?range=…` restores the selected
   greenhouse and range (nginx SPA fallback,
-  [architecture §3](./spec-frontend-architecture.md#3-route-tree)).
+  [architecture §3](./03-spec-frontend-architecture.md#3-route-tree)).
 
 ---
 
@@ -63,7 +63,7 @@ their data either way; only transitions are suppressed).
   buffer.
 - **No transition animation on new points** — a live value must read as *now*, not
   ease in. Appends are immediate redraws (uPlot canvas,
-  [tech-stack](./spec-frontend-tech-stack.md)).
+  [tech-stack](./04-spec-frontend-tech-stack.md)).
 - **Setpoint reference + bands** are drawn as static overlays (`--chart-setpoint`,
   `--chart-band-*`); a reading crossing out of band recolors the relevant
   `MetricTile`, not the line.
@@ -77,7 +77,7 @@ their data either way; only transitions are suppressed).
 
 ## 5. Connection status, reconnect & backfill
 
-The `ConnectionStatus` indicator ([components](./spec-frontend-components.md)) is
+The `ConnectionStatus` indicator ([components](./06-spec-frontend-components.md)) is
 the operator's trust signal that what they're seeing is *live*.
 
 | State | Trigger | UI |
@@ -90,7 +90,7 @@ the operator's trust signal that what they're seeing is *live*.
 - **Reconnect** uses exponential backoff (cap a few seconds).
 - **Backfill on resume:** after reconnect, the affected telemetry range query
   re-runs to fill the gap, then the buffer resumes — **no silent holes**
-  ([architecture §4](./spec-frontend-architecture.md#4-runtime-data-flow)).
+  ([architecture §4](./03-spec-frontend-architecture.md#4-runtime-data-flow)).
 - **a11y:** `role="status"`, `aria-live="polite"`; state has an icon + label, never
   color alone.
 
@@ -115,7 +115,7 @@ These are distinct and must not be conflated:
 
 The write path *as the operator experiences it*. The platform is the
 [single authority](../platform/spec-platform-crop-profiles.md);
-the UI never commands actuators ([constraints](./spec-frontend-constraints.md)).
+the UI never commands actuators ([constraints](./09-spec-frontend-constraints.md)).
 
 1. **Edit** in `SetpointEditForm` / `ProfileEditor`. Inputs validate live against
    crop-safe ranges surfaced by the API (`react-hook-form` + Zod); submit is blocked
@@ -155,7 +155,7 @@ participates in reconciliation — same UX, different backend semantics.
 ## 9. Loading, empty & error states
 
 Consistent across views via shared primitives
-([components](./spec-frontend-components.md)):
+([components](./06-spec-frontend-components.md)):
 
 - **Loading** → `Skeleton` matching the eventual layout (skeleton cards, skeleton
   chart) — no spinners on primary views.
@@ -163,7 +163,7 @@ Consistent across views via shared primitives
   (e.g. "No greenhouses registered").
 - **Error** → `ErrorState` with the cause and a **Retry**; cached data stays visible
   underneath where possible (degrade, don't blank,
-  [architecture §9](./spec-frontend-architecture.md#9-failure-modes--recovery)).
+  [architecture §9](./03-spec-frontend-architecture.md#9-failure-modes--recovery)).
 
 ---
 
@@ -202,5 +202,5 @@ Consistent across views via shared primitives
 Every interaction here is achievable with CSS transitions + small React handlers +
 the `ws.ts` client. No animation library, no scroll library. Live rendering cost is
 bounded by uPlot's canvas redraw and the memoized series-merge
-([components §5](./spec-frontend-components.md#5-performance-notes)), keeping the
+([components §5](./06-spec-frontend-components.md#5-performance-notes)), keeping the
 ≥ 1 Hz cadence (`P2-USE-1`) on a mid-tier machine at fleet scale.

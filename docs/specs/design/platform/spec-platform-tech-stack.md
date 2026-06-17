@@ -99,9 +99,9 @@
   to the dashboard.
 - **Why:** Echo proxies the upgrade; a thin, well-maintained WS library is all the hub
   needs. The frontend speaks plain WebSockets (no socket.io counterpart)
-  ([frontend tech stack](../frontend/spec-frontend-tech-stack.md)).
+  ([frontend tech stack](../frontend/04-spec-frontend-tech-stack.md)).
 - **How:** One hub goroutine multiplexes the broadcast to all connected clients; frames
-  mirror the small taxonomy the [frontend data model](../frontend/spec-frontend-data-model.md)
+  mirror the small taxonomy the [frontend data model](../frontend/05-spec-frontend-data-model.md)
   expects.
 
 ### nginx (reverse proxy)

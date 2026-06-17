@@ -27,7 +27,7 @@ Each entry: the constraint, **why** it exists, and **what it forces or forbids**
 ## 2. Headless
 
 - **Why:** The controller has no UI; visualization is the
-  [Phase 2 frontend](../frontend/spec-frontend-overview.md)'s job
+  [Phase 2 frontend](../frontend/01-spec-frontend-overview.md)'s job
   ([interfaces §1](./08-spec-controller-interfaces.md#1-the-headless-principle)).
 - **Forces:** Observability over MQTT + a REST `/health` surface; standalone
   inspection via MQTT tooling.

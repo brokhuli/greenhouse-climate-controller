@@ -10,7 +10,7 @@ This set is the **top-level design spec for Phase 1**. It sits alongside the
 [platform](../platform/spec-platform-overview.md), [optimizer](../optimizer/01-spec-optimizer-overview.md),
 and [Phase 4](../spec-phase4.md) specs, and one altitude **above** the wire
 contracts in [`contracts/`](../../../../contracts/). The discipline throughout
-mirrors the [frontend spec set](../frontend/spec-frontend-overview.md):
+mirrors the [frontend spec set](../frontend/01-spec-frontend-overview.md):
 **reference, do not redefine.** Wire formats live in
 [`contracts/`](../../../../contracts/); the physical inventory being controlled
 lives in [`physical-system-single.md`](../physical-system-single.md); quality
@@ -33,7 +33,7 @@ Three properties define it and recur throughout this set:
 
 - **Headless.** The controller has no UI of its own. It exposes state over MQTT
   (telemetry out) and accepts configuration/control over a REST API (the sole
-  write path). Visualization is the [Phase 2 frontend](../frontend/spec-frontend-overview.md)'s
+  write path). Visualization is the [Phase 2 frontend](../frontend/01-spec-frontend-overview.md)'s
   job. See [interfaces](./08-spec-controller-interfaces.md).
 - **Crop-agnostic.** It knows only numeric setpoints, never a crop. The mapping
   from a crop + growth stage to target values is owned *above* it (the platform,

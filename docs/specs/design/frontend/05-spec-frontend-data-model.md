@@ -36,7 +36,7 @@
 | **REST PATCH/POST** | Writes (setpoint edits 2a; profile assign/apply 2b) | invalidates / patches Query cache |
 | **WebSocket** | Live push: telemetry, status changes, drift, events | per-series ring buffer + Query-cache patches |
 
-The split mirrors [architecture §4](./spec-frontend-architecture.md#4-runtime-data-flow):
+The split mirrors [architecture §4](./03-spec-frontend-architecture.md#4-runtime-data-flow):
 REST seeds and backfills; WS carries the live edge.
 
 ---
@@ -202,7 +202,7 @@ export const wsMessage = z.discriminatedUnion("type", [
 ```
 
 `ws.ts` parses each frame, then routes telemetry to the ring buffer and the rest to
-Query-cache patches ([architecture §4](./spec-frontend-architecture.md#4-runtime-data-flow)).
+Query-cache patches ([architecture §4](./03-spec-frontend-architecture.md#4-runtime-data-flow)).
 Unknown `type` values are ignored (forward-compatible).
 
 ---
@@ -227,9 +227,9 @@ Strategy:
 - **Live patches beat refetch.** A `status`/`drift`/`event` frame updates the cache
   in place rather than refetching, keeping fan-out within `P2-PERF-2` (< 1 s).
 - **Mutations** (setpoint edit, profile assign) optimistically patch then settle on
-  the server response; on error they roll back ([interactions](./spec-frontend-interactions.md)).
+  the server response; on error they roll back ([interactions](./08-spec-frontend-interactions.md)).
 - **Backfill** after a WS gap re-runs the affected `["telemetry", id, range]` query
-  ([architecture §4](./spec-frontend-architecture.md#4-runtime-data-flow)).
+  ([architecture §4](./03-spec-frontend-architecture.md#4-runtime-data-flow)).
 
 ---
 
@@ -241,7 +241,7 @@ Every REST response and WS frame is parsed through its Zod schema in
 - **Dev:** a parse failure **throws** — a contract drift is a bug, surfaced loudly.
 - **Prod:** a parse failure **drops the offending record**, logs it, and renders
   the rest. A single malformed telemetry sample never blanks a chart (the
-  degrade-don't-crash rule, [architecture §9](./spec-frontend-architecture.md#9-failure-modes--recovery)).
+  degrade-don't-crash rule, [architecture §9](./03-spec-frontend-architecture.md#9-failure-modes--recovery)).
 - **`schema_version` mismatch** (RFC-007) is logged and surfaced as a non-blocking
   "data format changed — update the dashboard" notice.
 
@@ -273,6 +273,6 @@ derivations are testable in isolation (`P2-TEST-2`-adjacent unit coverage).
 - API surface (routes + responsibilities): [platform API surface](../platform/spec-platform-interfaces.md#3-api-surface-inventory)
 - Wire conventions (envelope, identity, versioning): [RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)
 - Platform data model the shapes mirror: [platform data model](../platform/spec-platform-data-model.md)
-- How the cache is fed and patched: [architecture §4](./spec-frontend-architecture.md#4-runtime-data-flow)
-- Forms reusing these schemas: [tech-stack — forms](./spec-frontend-tech-stack.md)
+- How the cache is fed and patched: [architecture §4](./03-spec-frontend-architecture.md#4-runtime-data-flow)
+- Forms reusing these schemas: [tech-stack — forms](./04-spec-frontend-tech-stack.md)
 - Contracts catalog (index of all contracts): [`spec-contracts.md`](../spec-contracts.md)

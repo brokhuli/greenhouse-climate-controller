@@ -4,7 +4,7 @@
 > do — and the delivery slice each lands in. This file owns *what the dashboard is for*
 > at the platform altitude; *how the SPA is built* (views, components, client
 > architecture, tokens, interactions) is owned one level down by the
-> [frontend spec set](../frontend/spec-frontend-overview.md). This is the ownership
+> [frontend spec set](../frontend/01-spec-frontend-overview.md). This is the ownership
 > boundary: platform here says **what**, the frontend set says **how**.
 
 A React single-page app, served through the
@@ -37,11 +37,11 @@ greenhouse is the fleet-of-one case. Its monitoring and setpoint-edit core ships
 
 This file deliberately stops at capabilities. The view inventory, route tree, client
 data binding, component catalog, design tokens, and interaction model are all owned by
-the [frontend spec set](../frontend/spec-frontend-overview.md):
+the [frontend spec set](../frontend/01-spec-frontend-overview.md):
 
-- *Why it exists and which views* → [frontend purpose & views](../frontend/spec-frontend-purpose-and-views.md)
-- *How the client is structured* → [frontend architecture](../frontend/spec-frontend-architecture.md)
-- *Data shapes + API/WS binding* → [frontend data model](../frontend/spec-frontend-data-model.md)
+- *Why it exists and which views* → [frontend purpose & views](../frontend/02-spec-frontend-purpose-and-views.md)
+- *How the client is structured* → [frontend architecture](../frontend/03-spec-frontend-architecture.md)
+- *Data shapes + API/WS binding* → [frontend data model](../frontend/05-spec-frontend-data-model.md)
 
 If a capability is named here, its realization lives there.
 
@@ -62,7 +62,7 @@ and the `P2-USE-1` / `P2-TEST-2` targets in
 
 | Concern | This spec | Detailed in |
 |---|---|---|
-| How the SPA is built (views, components, tokens, interactions) | defers to | [frontend set](../frontend/spec-frontend-overview.md) |
+| How the SPA is built (views, components, tokens, interactions) | defers to | [frontend set](../frontend/01-spec-frontend-overview.md) |
 | The API + WebSocket surface it consumes | consumes | [`spec-platform-interfaces.md`](./spec-platform-interfaces.md#3-api-surface-inventory) |
 | The profile/assignment actions it drives | drives | [`spec-platform-crop-profiles.md`](./spec-platform-crop-profiles.md) |
 | Role-gating of write actions | gated by | [`spec-platform-security.md`](./spec-platform-security.md) |

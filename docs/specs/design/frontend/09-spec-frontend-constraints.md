@@ -45,7 +45,7 @@ frontend terms.
 - **Why:** MQTT and the controller REST API are platform-internal
   ([platform ingestion](../platform/spec-platform-ingestion.md),
   [interfaces](../platform/spec-platform-interfaces.md)); the
-  SPA is a pure API client ([architecture §1](./spec-frontend-architecture.md#1-system-boundaries)).
+  SPA is a pure API client ([architecture §1](./03-spec-frontend-architecture.md#1-system-boundaries)).
 - **Forces:** All data access via `src/api/` (REST + the one WebSocket); the client
   holds no MQTT or controller knowledge.
 - **Forbids:** Connecting to the MQTT broker from the browser; calling a controller's
@@ -56,7 +56,7 @@ frontend terms.
 - **Why:** `contracts/` + [RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)
   are the single source of truth.
 - **Forces:** Client schemas mirror the platform's shapes and validate at runtime
-  ([data-model](./spec-frontend-data-model.md)); when the Go-API↔SPA contract is
+  ([data-model](./05-spec-frontend-data-model.md)); when the Go-API↔SPA contract is
   formalized in `contracts/`, the client schemas validate against it.
 - **Forbids:** Inventing payload shapes the API doesn't emit; silently tolerating a
   `schema_version` mismatch.
@@ -121,7 +121,7 @@ frontend terms.
   < 1 s), `P2-PERF-3` (API p95 < 200 ms) — and the dashboard *is the product*
   (Observability rated Critical for Phase 2).
 - **Forces:** Route-level code splitting; canvas charting (uPlot); WS patches over
-  refetch; memoized derivations ([components §5](./spec-frontend-components.md#5-performance-notes)).
+  refetch; memoized derivations ([components §5](./06-spec-frontend-components.md#5-performance-notes)).
 - **Forbids:** Shipping a chart library that drops frames at fleet scale; re-querying
   on every live frame; blocking initial paint on non-critical data.
 

@@ -5,7 +5,7 @@
 > shadows, motion, z-index, layout, and breakpoints — across the two themes (dark
 > default + light). Tokens are emitted as CSS custom properties and read by
 > Tailwind's theme so a theme change is a one-file edit
-> ([architecture §8](./spec-frontend-architecture.md#8-theming-architecture)). When
+> ([architecture §8](./03-spec-frontend-architecture.md#8-theming-architecture)). When
 > a component needs a color or spacing value it references a token — never a
 > hardcoded literal.
 
@@ -58,7 +58,7 @@ in any component class.
 
 Greenhouse/connectivity state and event severity drive these — they are the
 dashboard's most important colors and must each pair an icon/label, never color
-alone ([constraints](./spec-frontend-constraints.md)).
+alone ([constraints](./09-spec-frontend-constraints.md)).
 
 | Token | Meaning |
 |---|---|
@@ -136,7 +136,7 @@ alone ([constraints](./spec-frontend-constraints.md)).
 
 ### Contrast guarantees
 
-Per [constraints](./spec-frontend-constraints.md) (WCAG 2.1 AA):
+Per [constraints](./09-spec-frontend-constraints.md) (WCAG 2.1 AA):
 
 - Body text (`--color-fg-default` over `--color-bg`) ≥ 7:1 in both themes.
 - Muted text over `--color-surface-1` ≥ 4.5:1.
@@ -171,7 +171,7 @@ aware.
 }
 ```
 
-The `TimeSeriesChart` ([components](./spec-frontend-components.md)) consumes only
+The `TimeSeriesChart` ([components](./06-spec-frontend-components.md)) consumes only
 these — never `--color-status-*` — so chart styling and status semantics evolve
 independently.
 
@@ -243,7 +243,7 @@ Off-scale spacing means the design is wrong, not the scale.
 
 Motion is **functional only** — state changes, toasts, dialogs. Live chart updates
 are data-driven, not animated transitions. All motion respects
-`prefers-reduced-motion` ([interactions](./spec-frontend-interactions.md)).
+`prefers-reduced-motion` ([interactions](./08-spec-frontend-interactions.md)).
 
 ---
 
@@ -269,7 +269,7 @@ are data-driven, not animated transitions. All motion respects
 ```
 
 `--bp-md` is the canonical cutoff where `SideNav` collapses
-([interactions](./spec-frontend-interactions.md)).
+([interactions](./08-spec-frontend-interactions.md)).
 
 ---
 

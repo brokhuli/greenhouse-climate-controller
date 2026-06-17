@@ -4,8 +4,8 @@
 > system boundaries, directory layout, route tree, the **runtime data-flow graph**
 > (REST + WebSocket), client-state topology, build/deploy pipeline, component
 > composition rules, theming architecture, and failure modes. Sits one level above
-> [`spec-frontend-components.md`](./spec-frontend-components.md) (per-component) and
-> one level below [`spec-frontend-tech-stack.md`](./spec-frontend-tech-stack.md)
+> [`06-spec-frontend-components.md`](./06-spec-frontend-components.md) (per-component) and
+> one level below [`04-spec-frontend-tech-stack.md`](./04-spec-frontend-tech-stack.md)
 > (per-dependency). Read this to understand *how the pieces connect*.
 
 > **Scope note.** The platform-level topology (services behind the proxy) is owned
@@ -13,7 +13,7 @@
 > [reverse proxy](../platform/spec-platform-architecture.md#4-reverse-proxy--the-edge); the API surface by
 > [platform API surface](../platform/spec-platform-interfaces.md#3-api-surface-inventory). This file describes the
 > **client** that consumes them. Concrete library choices are in
-> [`spec-frontend-tech-stack.md`](./spec-frontend-tech-stack.md).
+> [`04-spec-frontend-tech-stack.md`](./04-spec-frontend-tech-stack.md).
 
 ---
 
@@ -49,7 +49,7 @@ REST API — those are platform-internal
 ([platform ingestion](../platform/spec-platform-ingestion.md),
 [interfaces](../platform/spec-platform-interfaces.md)). This
 boundary is load-bearing and is restated as a hard rule in
-[`spec-frontend-constraints.md`](./spec-frontend-constraints.md).
+[`09-spec-frontend-constraints.md`](./09-spec-frontend-constraints.md).
 
 ---
 
@@ -80,7 +80,7 @@ frontend/
 │   ├── lib/                    ← pure helpers (formatting, derivations, time)
 │   ├── types/                  ← shared TS types (inferred from Zod where possible)
 │   └── styles/
-│       ├── tokens.css          ← CSS vars (per spec-frontend-design-tokens.md)
+│       ├── tokens.css          ← CSS vars (per 07-spec-frontend-design-tokens.md)
 │       └── global.css          ← Tailwind entry + base
 ├── tests/
 │   ├── unit/                   ← Vitest + React Testing Library
@@ -102,7 +102,7 @@ Three boundaries are load-bearing:
    greenhouse; a feature wires primitives to query hooks. See [§7](#7-component-composition-rules).
 3. **Displayed values come from API data via the data-model spec.** Components do
    not invent shapes; response/WS shapes are defined once in `src/api/schemas.ts`
-   per [`spec-frontend-data-model.md`](./spec-frontend-data-model.md).
+   per [`05-spec-frontend-data-model.md`](./05-spec-frontend-data-model.md).
 
 ---
 
@@ -158,7 +158,7 @@ is **live**, not built. Two channels feed every view, and they merge.
 
 1. **REST seeds state.** On entering a view, query hooks fetch the current
    snapshot and any historical range. Results land in the Query cache, keyed per
-   the [query-key scheme](./spec-frontend-data-model.md).
+   the [query-key scheme](./05-spec-frontend-data-model.md).
 2. **WS carries the live edge.** A single WebSocket (`src/api/ws.ts`) subscribes
    to the greenhouses currently in view; incoming telemetry frames append to a
    per-series **ring buffer** sized to the visible window, which the chart renders
@@ -180,10 +180,10 @@ re-runs; the live buffer is untouched.
 
 - **Subscribe on view focus.** Detail view subscribes to its one greenhouse;
   fleet view subscribes to status/event streams for all (the API decides
-  granularity — see [data-model WS taxonomy](./spec-frontend-data-model.md)).
+  granularity — see [data-model WS taxonomy](./05-spec-frontend-data-model.md)).
 - **Reconnect with backoff.** On drop, reconnect with exponential backoff (cap a
   few seconds); the connection state drives the `ConnectionStatus` indicator
-  ([interactions](./spec-frontend-interactions.md)).
+  ([interactions](./08-spec-frontend-interactions.md)).
 - **Backfill on reconnect.** After a gap, re-run the relevant range query to fill
   what the socket missed, then resume appending — no silent holes.
 - **Polling fallback.** If the socket cannot be established, fall back to periodic
@@ -205,8 +205,8 @@ Two kinds of state, kept apart:
 There is **no global app store by default.** Server state lives in Query; UI state
 is local. A small store (Zustand) is the *reserved fallback* if a piece of UI
 state genuinely needs to be shared across distant components — see
-[tech-stack](./spec-frontend-tech-stack.md). The query-key scheme that makes this
-work is owned by [`spec-frontend-data-model.md`](./spec-frontend-data-model.md).
+[tech-stack](./04-spec-frontend-tech-stack.md). The query-key scheme that makes this
+work is owned by [`05-spec-frontend-data-model.md`](./05-spec-frontend-data-model.md).
 
 ---
 
@@ -279,7 +279,7 @@ Rules:
 4. **One way only.** `components → (nothing)`, `features → components`,
    `app → features`. No cycles.
 
-Full inventory in [`spec-frontend-components.md`](./spec-frontend-components.md).
+Full inventory in [`06-spec-frontend-components.md`](./06-spec-frontend-components.md).
 
 ---
 
@@ -297,7 +297,7 @@ Tailwind (CSS-first) reads var(--color-*) → utilities resolve per theme
 An inline script in `index.html` sets `data-theme` from `localStorage` (or
 `prefers-color-scheme`) before first paint to avoid a flash. Charts, status
 colors, and surfaces all read the same tokens and re-theme with one attribute
-swap. Token definitions are owned by [`spec-frontend-design-tokens.md`](./spec-frontend-design-tokens.md).
+swap. Token definitions are owned by [`07-spec-frontend-design-tokens.md`](./07-spec-frontend-design-tokens.md).
 
 ---
 
@@ -329,11 +329,11 @@ app.** Cached data and the shell stay on screen while the SPA recovers.
 
 | Concern | This spec | Detailed in |
 |---|---|---|
-| Why each dependency exists | referenced | [`spec-frontend-tech-stack.md`](./spec-frontend-tech-stack.md) |
-| Data shapes, query keys, WS taxonomy | referenced | [`spec-frontend-data-model.md`](./spec-frontend-data-model.md) |
-| Per-component contracts | referenced | [`spec-frontend-components.md`](./spec-frontend-components.md) |
-| Visual tokens & theming values | referenced | [`spec-frontend-design-tokens.md`](./spec-frontend-design-tokens.md) |
-| Behavior, motion, real-time UX | referenced | [`spec-frontend-interactions.md`](./spec-frontend-interactions.md) |
-| Hard rules (hosting, auth, safety, perf) | constrained by | [`spec-frontend-constraints.md`](./spec-frontend-constraints.md) |
-| Views being connected | composed from | [`spec-frontend-purpose-and-views.md`](./spec-frontend-purpose-and-views.md) |
+| Why each dependency exists | referenced | [`04-spec-frontend-tech-stack.md`](./04-spec-frontend-tech-stack.md) |
+| Data shapes, query keys, WS taxonomy | referenced | [`05-spec-frontend-data-model.md`](./05-spec-frontend-data-model.md) |
+| Per-component contracts | referenced | [`06-spec-frontend-components.md`](./06-spec-frontend-components.md) |
+| Visual tokens & theming values | referenced | [`07-spec-frontend-design-tokens.md`](./07-spec-frontend-design-tokens.md) |
+| Behavior, motion, real-time UX | referenced | [`08-spec-frontend-interactions.md`](./08-spec-frontend-interactions.md) |
+| Hard rules (hosting, auth, safety, perf) | constrained by | [`09-spec-frontend-constraints.md`](./09-spec-frontend-constraints.md) |
+| Views being connected | composed from | [`02-spec-frontend-purpose-and-views.md`](./02-spec-frontend-purpose-and-views.md) |
 | Platform topology & API surface | consumes | [platform architecture](../platform/spec-platform-architecture.md), [API surface](../platform/spec-platform-interfaces.md#3-api-surface-inventory) |

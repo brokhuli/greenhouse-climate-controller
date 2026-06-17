@@ -116,7 +116,7 @@ including the platform's own API surface — is [`spec-contracts.md`](../spec-co
 | Controller-REST-down flow behavior | frames | [`spec-platform-crop-profiles.md`](./spec-platform-crop-profiles.md) |
 | What the telemetry queries read | reads | [`spec-platform-ingestion.md`](./spec-platform-ingestion.md), [`spec-platform-data-model.md`](./spec-platform-data-model.md) |
 | What profiles/assignments/setpoints drive | drives | [`spec-platform-crop-profiles.md`](./spec-platform-crop-profiles.md) |
-| Who consumes the WebSocket stream | served to | [`spec-platform-dashboard.md`](./spec-platform-dashboard.md), [frontend data model](../frontend/spec-frontend-data-model.md) |
+| Who consumes the WebSocket stream | served to | [`spec-platform-dashboard.md`](./spec-platform-dashboard.md), [frontend data model](../frontend/05-spec-frontend-data-model.md) |
 | The controller surfaces being integrated | integrates | [controller interfaces](../controller/08-spec-controller-interfaces.md) |
 | Which role may call what | gated by | [`spec-platform-security.md`](./spec-platform-security.md) |
 | Wire formats (topics, REST shapes, schemas, status codes) | defers to | [`contracts/`](../../../../contracts/), [`spec-contracts.md`](../spec-contracts.md) |

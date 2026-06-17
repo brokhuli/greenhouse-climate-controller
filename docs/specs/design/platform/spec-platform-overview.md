@@ -11,7 +11,7 @@ This set is the **top-level design spec for Phase 2**. It sits alongside the
 [optimizer](../optimizer/01-spec-optimizer-overview.md), and [Phase 4](../spec-phase4.md) specs,
 one altitude **above** the wire contracts in
 [`contracts/`](../../../../contracts/), and one altitude **above** the
-[frontend spec set](../frontend/spec-frontend-overview.md), which owns *how the
+[frontend spec set](../frontend/01-spec-frontend-overview.md), which owns *how the
 dashboard SPA is built*. The discipline throughout mirrors those sibling sets:
 **reference, do not redefine.** Wire formats live in
 [`contracts/`](../../../../contracts/); the physical world being managed lives in
@@ -185,7 +185,7 @@ How this set divides the work, and where each concern is detailed:
 | Relational config + time-series telemetry; the data split | [`spec-platform-data-model.md`](./spec-platform-data-model.md) | — |
 | MQTT subscription, routing, liveness, retention, backpressure | [`spec-platform-ingestion.md`](./spec-platform-ingestion.md) | [`contracts/mqtt`](../../../../contracts/mqtt/), [RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format) |
 | Crop profiles, resolution, reconciliation; fleet & operator control | [`spec-platform-crop-profiles.md`](./spec-platform-crop-profiles.md) | [RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain) |
-| Dashboard capabilities (not how it's built) | [`spec-platform-dashboard.md`](./spec-platform-dashboard.md) | [frontend set](../frontend/spec-frontend-overview.md) |
+| Dashboard capabilities (not how it's built) | [`spec-platform-dashboard.md`](./spec-platform-dashboard.md) | [frontend set](../frontend/01-spec-frontend-overview.md) |
 | Identity, roles, the auth edge | [`spec-platform-security.md`](./spec-platform-security.md) | [RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries) |
 | Observability + deployment (Compose, controller generation, resource limits, perf testing) | [`spec-platform-operations.md`](./spec-platform-operations.md) | [NFR doc](../../artifacts/non-functional-requirements.md) |
 | The three Phase 1 integration interfaces + REST/WebSocket API responsibilities | [`spec-platform-interfaces.md`](./spec-platform-interfaces.md) | [`contracts/`](../../../../contracts/), [`spec-contracts.md`](../spec-contracts.md), [controller interfaces](../controller/08-spec-controller-interfaces.md) |

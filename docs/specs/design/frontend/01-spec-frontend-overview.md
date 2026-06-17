@@ -93,27 +93,27 @@ live push (telemetry, status changes, drift, events). The SPA holds **no**
 knowledge of MQTT topics or the controller REST API — those are platform-internal
 ([platform ingestion](../platform/spec-platform-ingestion.md),
 [interfaces](../platform/spec-platform-interfaces.md)). See
-[`spec-frontend-data-model.md`](./spec-frontend-data-model.md) for the binding.
+[`05-spec-frontend-data-model.md`](./05-spec-frontend-data-model.md) for the binding.
 
 ---
 
 ## 4. Reading order
 
 1. **This file** — orientation + cross-spec map.
-2. [`spec-frontend-purpose-and-views.md`](./spec-frontend-purpose-and-views.md) —
+2. [`02-spec-frontend-purpose-and-views.md`](./02-spec-frontend-purpose-and-views.md) —
    *why* it exists and *which views* it has.
-3. [`spec-frontend-architecture.md`](./spec-frontend-architecture.md) — *how the
+3. [`03-spec-frontend-architecture.md`](./03-spec-frontend-architecture.md) — *how the
    pieces connect* (structure, routes, data flow).
-4. [`spec-frontend-tech-stack.md`](./spec-frontend-tech-stack.md) — *what each
+4. [`04-spec-frontend-tech-stack.md`](./04-spec-frontend-tech-stack.md) — *what each
    dependency is and why*.
-5. [`spec-frontend-data-model.md`](./spec-frontend-data-model.md) — *the data
+5. [`05-spec-frontend-data-model.md`](./05-spec-frontend-data-model.md) — *the data
    shapes* and their API/WS binding.
-6. [`spec-frontend-components.md`](./spec-frontend-components.md) — *what each
+6. [`06-spec-frontend-components.md`](./06-spec-frontend-components.md) — *what each
    component is*.
-7. [`spec-frontend-design-tokens.md`](./spec-frontend-design-tokens.md) — *the visual atoms*.
-8. [`spec-frontend-interactions.md`](./spec-frontend-interactions.md) — *how it
+7. [`07-spec-frontend-design-tokens.md`](./07-spec-frontend-design-tokens.md) — *the visual atoms*.
+8. [`08-spec-frontend-interactions.md`](./08-spec-frontend-interactions.md) — *how it
    behaves*.
-9. [`spec-frontend-constraints.md`](./spec-frontend-constraints.md) — *the
+9. [`09-spec-frontend-constraints.md`](./09-spec-frontend-constraints.md) — *the
    non-negotiable rules*.
 
 ---
@@ -139,14 +139,14 @@ How this set divides the work, and where each concern is detailed:
 
 | Concern | Owned by | Defers upward to |
 |---|---|---|
-| Why the dashboard exists; the view inventory | [`spec-frontend-purpose-and-views.md`](./spec-frontend-purpose-and-views.md) | [platform dashboard](../platform/spec-platform-dashboard.md) |
-| App structure, route tree, runtime data flow, failure modes | [`spec-frontend-architecture.md`](./spec-frontend-architecture.md) | [platform architecture](../platform/spec-platform-architecture.md), [reverse proxy](../platform/spec-platform-architecture.md#4-reverse-proxy--the-edge) |
-| Per-dependency choices + rejected alternatives | [`spec-frontend-tech-stack.md`](./spec-frontend-tech-stack.md) | [tech-stack-decisions.md](../tech-stack-decisions.md#phase-2--local-paas-platform-docker-only) |
-| Client data model + API/WS binding | [`spec-frontend-data-model.md`](./spec-frontend-data-model.md) | [platform API surface](../platform/spec-platform-interfaces.md#3-api-surface-inventory), [`contracts/`](../../../../contracts/) |
-| Component inventory, props, states, role-gating | [`spec-frontend-components.md`](./spec-frontend-components.md) | — |
-| Color, type, spacing, motion, chart tokens, themes | [`spec-frontend-design-tokens.md`](./spec-frontend-design-tokens.md) | — |
-| Hover/focus/keyboard/motion + real-time interaction | [`spec-frontend-interactions.md`](./spec-frontend-interactions.md) | — |
-| Non-negotiable rules (hosting, auth, safety, perf) | [`spec-frontend-constraints.md`](./spec-frontend-constraints.md) | [platform fleet management](../platform/spec-platform-crop-profiles.md#5-fleet-management--operator-control), [authentication](../platform/spec-platform-security.md), [constraints](../platform/spec-platform-constraints.md#7-scope--deferred--out-of-scope) |
+| Why the dashboard exists; the view inventory | [`02-spec-frontend-purpose-and-views.md`](./02-spec-frontend-purpose-and-views.md) | [platform dashboard](../platform/spec-platform-dashboard.md) |
+| App structure, route tree, runtime data flow, failure modes | [`03-spec-frontend-architecture.md`](./03-spec-frontend-architecture.md) | [platform architecture](../platform/spec-platform-architecture.md), [reverse proxy](../platform/spec-platform-architecture.md#4-reverse-proxy--the-edge) |
+| Per-dependency choices + rejected alternatives | [`04-spec-frontend-tech-stack.md`](./04-spec-frontend-tech-stack.md) | [tech-stack-decisions.md](../tech-stack-decisions.md#phase-2--local-paas-platform-docker-only) |
+| Client data model + API/WS binding | [`05-spec-frontend-data-model.md`](./05-spec-frontend-data-model.md) | [platform API surface](../platform/spec-platform-interfaces.md#3-api-surface-inventory), [`contracts/`](../../../../contracts/) |
+| Component inventory, props, states, role-gating | [`06-spec-frontend-components.md`](./06-spec-frontend-components.md) | — |
+| Color, type, spacing, motion, chart tokens, themes | [`07-spec-frontend-design-tokens.md`](./07-spec-frontend-design-tokens.md) | — |
+| Hover/focus/keyboard/motion + real-time interaction | [`08-spec-frontend-interactions.md`](./08-spec-frontend-interactions.md) | — |
+| Non-negotiable rules (hosting, auth, safety, perf) | [`09-spec-frontend-constraints.md`](./09-spec-frontend-constraints.md) | [platform fleet management](../platform/spec-platform-crop-profiles.md#5-fleet-management--operator-control), [authentication](../platform/spec-platform-security.md), [constraints](../platform/spec-platform-constraints.md#7-scope--deferred--out-of-scope) |
 | Quality targets (load, latency, a11y, test) | [NFR doc](../../artifacts/non-functional-requirements.md) | — (single source) |
 
 If a frontend change can't be traced to one of these documents — or to the

@@ -1,16 +1,16 @@
 # Frontend — Components
 
 > **Purpose:** The component inventory for the dashboard, derived from the views in
-> [`spec-frontend-purpose-and-views.md`](./spec-frontend-purpose-and-views.md) and
-> the structure in [`spec-frontend-architecture.md`](./spec-frontend-architecture.md).
+> [`02-spec-frontend-purpose-and-views.md`](./02-spec-frontend-purpose-and-views.md) and
+> the structure in [`03-spec-frontend-architecture.md`](./03-spec-frontend-architecture.md).
 > Grouped outermost (shell) inward (primitives). Each entry covers **purpose**,
 > **props**, **data dependency** (which query/subscription it reads), **interaction**,
 > **states** (loading / empty / error / offline), **a11y**, and **role-gating** (2b)
-> where relevant. Visual values come from [`spec-frontend-design-tokens.md`](./spec-frontend-design-tokens.md);
-> behavior from [`spec-frontend-interactions.md`](./spec-frontend-interactions.md).
+> where relevant. Visual values come from [`07-spec-frontend-design-tokens.md`](./07-spec-frontend-design-tokens.md);
+> behavior from [`08-spec-frontend-interactions.md`](./08-spec-frontend-interactions.md).
 
 Composition follows the one-way rule from
-[architecture §7](./spec-frontend-architecture.md#7-component-composition-rules):
+[architecture §7](./03-spec-frontend-architecture.md#7-component-composition-rules):
 `app → features → components`. Primitives know nothing about the API; features own
 data access; the shell owns chrome.
 
@@ -24,7 +24,7 @@ data access; the shell owns chrome.
 - **Props:** none (reads route + session context).
 - **Data:** none directly; renders the router outlet.
 - **States:** always present; it is the surface that *survives* any view-level
-  error or network failure ([architecture §9](./spec-frontend-architecture.md#9-failure-modes--recovery)).
+  error or network failure ([architecture §9](./03-spec-frontend-architecture.md#9-failure-modes--recovery)).
 - **a11y:** landmark regions (`<nav>`, `<main>`, `<header>`); skip-to-content link.
 
 ### `SideNav`
@@ -32,7 +32,7 @@ data access; the shell owns chrome.
 - **Purpose:** Primary navigation: Fleet, Activity, Profiles (2b).
 - **Props:** active route.
 - **Interaction:** client-side route links; collapses to a top bar + drawer below
-  the mobile breakpoint ([interactions](./spec-frontend-interactions.md)).
+  the mobile breakpoint ([interactions](./08-spec-frontend-interactions.md)).
 - **a11y:** `<nav aria-label="Primary">`; `aria-current="page"` on the active item.
 
 ### `TopBar`
@@ -48,7 +48,7 @@ data access; the shell owns chrome.
 - **Props:** `state: "live" | "reconnecting" | "polling" | "offline"`.
 - **Data:** subscribes to the `ws.ts` connection state.
 - **Interaction:** on hover/click, a small popover explains the state and last
-  update time; behavior detailed in [interactions](./spec-frontend-interactions.md).
+  update time; behavior detailed in [interactions](./08-spec-frontend-interactions.md).
 - **a11y:** `role="status"`, `aria-live="polite"`; not color-only (icon + label).
 
 ### `ToastHost`
@@ -64,8 +64,8 @@ data access; the shell owns chrome.
 ## 2. View containers (features)
 
 Each maps to a view in
-[`spec-frontend-purpose-and-views.md`](./spec-frontend-purpose-and-views.md) and a
-route in [architecture §3](./spec-frontend-architecture.md#3-route-tree).
+[`02-spec-frontend-purpose-and-views.md`](./02-spec-frontend-purpose-and-views.md) and a
+route in [architecture §3](./03-spec-frontend-architecture.md#3-route-tree).
 
 ### `FleetOverview` *(2a)*
 
@@ -140,14 +140,14 @@ Reused across views; typed props; zero domain knowledge.
 - **Purpose:** Connectivity/health pill: online / degraded / offline / drift.
 - **Props:** `status`, `drift?`.
 - **a11y:** text label + icon, **never color-only** (WCAG; see
-  [constraints](./spec-frontend-constraints.md)).
+  [constraints](./09-spec-frontend-constraints.md)).
 
 ### `MetricTile` (reading-vs-setpoint)
 
 - **Purpose:** One climate metric: current value, its setpoint, and the delta.
 - **Props:** `label`, `value`, `setpoint`, `unit`, `state` (in-band / warn / fault).
 - **Data:** uses the reading-vs-setpoint derivation
-  ([data-model §8](./spec-frontend-data-model.md#8-view-model-derivations)).
+  ([data-model §8](./05-spec-frontend-data-model.md#8-view-model-derivations)).
 
 ### `TimeSeriesChart`
 
@@ -155,10 +155,10 @@ Reused across views; typed props; zero domain knowledge.
 - **Props:** `series: Series[]`, `bands?` (threshold shading), `range`.
 - **Data:** historical from the Query cache + live from the ring buffer, merged by
   the series-merge derivation; renders via **uPlot**
-  ([tech-stack](./spec-frontend-tech-stack.md)).
+  ([tech-stack](./04-spec-frontend-tech-stack.md)).
 - **Behavior:** appends live points without re-query; cadence ≥ 1 Hz (`P2-USE-1`);
   reduced-motion disables transitions. Detailed in
-  [interactions](./spec-frontend-interactions.md).
+  [interactions](./08-spec-frontend-interactions.md).
 - **States:** loading → skeleton; empty → "no data in range"; live gap rendered
   explicitly on offline/reconnect.
 - **a11y:** chart has an accessible summary + an optional data table fallback.
@@ -175,8 +175,8 @@ Reused across views; typed props; zero domain knowledge.
 - **Data:** `react-hook-form` + the `setpoints` schema; submit → setpoint mutation
   (2a relay; sticky/reconciled in 2b).
 - **Interaction:** validate against crop-safe ranges; **confirmation dialog** before
-  submit; optimistic pending → confirmed/failed ([interactions](./spec-frontend-interactions.md)).
-  **No actuator forcing** — setpoints only ([constraints](./spec-frontend-constraints.md)).
+  submit; optimistic pending → confirmed/failed ([interactions](./08-spec-frontend-interactions.md)).
+  **No actuator forcing** — setpoints only ([constraints](./09-spec-frontend-constraints.md)).
 - **Role-gating (2b):** operator-only; rendered disabled with a tooltip for viewers.
 
 ### `RangePicker`
@@ -189,7 +189,7 @@ Reused across views; typed props; zero domain knowledge.
 - **Purpose:** Standard primitives. `Button` variants (primary/secondary/danger);
   `Dialog` for confirmations; `Skeleton`/`EmptyState`/`ErrorState` are the canonical
   loading/empty/error renderings every view container reuses (so the states from
-  [architecture §9](./spec-frontend-architecture.md#9-failure-modes--recovery) look
+  [architecture §9](./03-spec-frontend-architecture.md#9-failure-modes--recovery) look
   consistent).
 - **a11y:** `Dialog` traps focus, `Esc` closes; `Button` renders `<a>` vs `<button>`
   correctly; disabled write buttons keep an accessible reason.
@@ -221,7 +221,7 @@ Per `P2-USE-1` (load < 2 s; charts ≥ 1 Hz):
 - **Route-level code splitting** — each feature is a lazy module; the fleet view's
   initial bundle excludes the profile editor and the chart-heavy detail view.
 - **uPlot for live charts** — canvas redraw of a moving window avoids per-point DOM
-  churn ([tech-stack](./spec-frontend-tech-stack.md)).
+  churn ([tech-stack](./04-spec-frontend-tech-stack.md)).
 - **Memoize chart inputs** — the series-merge derivation is memoized so a status
   frame for greenhouse B doesn't re-render greenhouse A's chart.
 - **WS patches over refetch** — live frames patch the cache in place; the fleet

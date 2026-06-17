@@ -39,7 +39,7 @@ runs as a container in the stack ([operations](./spec-platform-operations.md#2-d
 
 1. The browser SPA, having no session, redirects to Keycloak via `/auth`
    (**Authorization Code + PKCE** — the public-client flow, no client secret in the
-   browser; see [frontend tech stack](../frontend/spec-frontend-tech-stack.md)).
+   browser; see [frontend tech stack](../frontend/04-spec-frontend-tech-stack.md)).
 2. The user authenticates against Keycloak; Keycloak redirects back with an
    authorization code, which the SPA exchanges for an **access token** (JWT) and a
    refresh token.
@@ -98,7 +98,7 @@ trusted local Docker network, consistent with the internal-trust boundary in
 This is deliberate — it keeps the MVP focused on the telemetry pipeline and the
 setpoint relay, and adding Keycloak in 2b changes **no committed interface** (the same
 write endpoints simply become operator-gated). The frontend's relying-party client is
-absent in 2a and added in 2b ([frontend tech stack](../frontend/spec-frontend-tech-stack.md)).
+absent in 2a and added in 2b ([frontend tech stack](../frontend/04-spec-frontend-tech-stack.md)).
 
 ### Known residual risk — the service-to-service plane stays unauthenticated
 
@@ -131,6 +131,6 @@ ever leaves the single-host local model**.
 | Where users / roles are stored | defines | [`spec-platform-data-model.md`](./spec-platform-data-model.md) |
 | The `/auth` route + the proxy edge | gated at | [`spec-platform-architecture.md`](./spec-platform-architecture.md#4-reverse-proxy--the-edge) |
 | The surfaces these roles gate | gates | [`spec-platform-interfaces.md`](./spec-platform-interfaces.md#3-api-surface-inventory) |
-| The browser-side OIDC client | paired with | [frontend tech stack](../frontend/spec-frontend-tech-stack.md) |
+| The browser-side OIDC client | paired with | [frontend tech stack](../frontend/04-spec-frontend-tech-stack.md) |
 | Internal trust boundary; 2a no-auth | defers to | [RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries) |
 | `P2-SEC-1` | cited | [NFR doc](../../artifacts/non-functional-requirements.md) |

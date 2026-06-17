@@ -123,7 +123,7 @@ nginx has two jobs:
 
 - **Serve the SPA** — the built React app's static assets are served directly by
   nginx (no Node runtime). Unmatched paths fall back to `index.html` so client-side
-  deep links resolve ([frontend architecture](../frontend/spec-frontend-architecture.md)).
+  deep links resolve ([frontend architecture](../frontend/03-spec-frontend-architecture.md)).
 - **Reverse-proxy the API** — inbound API calls are proxied to the Go API, including
   the **WebSocket upgrade** (`Connection: upgrade` / `Upgrade: websocket`) the live
   channel depends on.

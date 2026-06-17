@@ -2,10 +2,10 @@
 
 > **Purpose:** State *why* the dashboard exists and enumerate the *views* it must
 > provide to fulfil that purpose. Other frontend specs derive from this one —
-> [`spec-frontend-components.md`](./spec-frontend-components.md) builds the UI for
-> these views, [`spec-frontend-data-model.md`](./spec-frontend-data-model.md)
+> [`06-spec-frontend-components.md`](./06-spec-frontend-components.md) builds the UI for
+> these views, [`05-spec-frontend-data-model.md`](./05-spec-frontend-data-model.md)
 > defines the data behind them, and
-> [`spec-frontend-architecture.md`](./spec-frontend-architecture.md) routes
+> [`03-spec-frontend-architecture.md`](./03-spec-frontend-architecture.md) routes
 > between them. Capability detail is owned by
 > [platform dashboard](../platform/spec-platform-dashboard.md); this file
 > defers to it rather than restating it.
@@ -49,8 +49,8 @@ Until auth lands (**2b**, [platform authentication](../platform/spec-platform-se
 `P2-SEC-1`) the UI is open on the trusted local network and shows all actions. In
 2b the **viewer** role sees a read-only dashboard; every write affordance
 (setpoint edit, profile assign/apply) is gated to the **operator** role — see
-[role-gating in components](./spec-frontend-components.md) and the
-[login flow in interactions](./spec-frontend-interactions.md).
+[role-gating in components](./06-spec-frontend-components.md) and the
+[login flow in interactions](./08-spec-frontend-interactions.md).
 
 ---
 
@@ -122,7 +122,7 @@ actions**, **role**.
 ## What it is **not**
 
 These belong elsewhere and are out of scope for the dashboard — see
-[`spec-frontend-constraints.md`](./spec-frontend-constraints.md):
+[`09-spec-frontend-constraints.md`](./09-spec-frontend-constraints.md):
 
 - **Not the controller's UI.** It edits *targets*, never forces actuators; safety
   interlocks stay [controller-owned](../controller/06-spec-controller-safety-and-constraints.md#2-safety-interlocks).
@@ -139,7 +139,7 @@ These belong elsewhere and are out of scope for the dashboard — see
 ## Cross-references
 
 - Capabilities & slicing: [platform dashboard](../platform/spec-platform-dashboard.md)
-- The components that render these views: [`spec-frontend-components.md`](./spec-frontend-components.md)
-- The data behind each view: [`spec-frontend-data-model.md`](./spec-frontend-data-model.md)
-- Routing between views: [`spec-frontend-architecture.md`](./spec-frontend-architecture.md#3-route-tree)
+- The components that render these views: [`06-spec-frontend-components.md`](./06-spec-frontend-components.md)
+- The data behind each view: [`05-spec-frontend-data-model.md`](./05-spec-frontend-data-model.md)
+- Routing between views: [`03-spec-frontend-architecture.md`](./03-spec-frontend-architecture.md#3-route-tree)
 - Usability targets `P2-USE-1` / `P2-TEST-2`: [NFR doc](../../artifacts/non-functional-requirements.md)
