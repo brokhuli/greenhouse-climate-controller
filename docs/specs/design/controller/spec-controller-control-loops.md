@@ -47,6 +47,22 @@ to extend to them later. The setpoint values themselves come from
 [config](./spec-controller-config-and-parameters.md#global-climate-setpoints) (TOML
 at startup, runtime edits over REST).
 
+**Clock source.** The time-of-day the window is compared against comes from a single
+**injected clock** — a monotonic wall-clock in production, the
+[deterministic/virtual clock](./spec-controller-hal-simulation.md#7-determinism--seeding)
+under a seeded run — never a raw call to system time scattered through the loop. This
+keeps day/night resolution **reproducible**: a fixed-seed run flips at the same tick
+every time, just like the rest of the pipeline under the
+[latched-write model](./spec-controller-architecture.md#3-real-time--scheduling-model),
+so a scheduling regression shows up as a diff rather than as flake. The `day_start` /
+`day_end` window is validated **at config load** (valid `HH:MM`, `day_start < day_end`),
+so a malformed window is rejected before the first tick rather than silently flipping
+the setpoint — see
+[config — day/night scheduling](./spec-controller-config-and-parameters.md#daynight-scheduling).
+If the clock is ever unreadable at runtime, resolution falls back to the **cooler
+`temperature_night_c`** setpoint — the bias least likely to harm the crop — rather than
+acting on an ambiguous time.
+
 ---
 
 ## Fast loops — reactive

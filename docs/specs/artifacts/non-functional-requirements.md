@@ -95,7 +95,9 @@ HAL time constants ([HAL §2](../design/controller/spec-controller-hal-simulatio
 **Reliability**
 
 - **P1-REL-1** — A safety interlock condition is acted on **within one tick (≤ 1 s)** of detection.
-  *(Hard requirement; [safety §2](../design/controller/spec-controller-safety-and-constraints.md#2-safety-interlocks) — interlocks are always active with unconditional priority.)*
+  *(Hard requirement; [safety §2](../design/controller/spec-controller-safety-and-constraints.md#2-safety-interlocks) — interlocks are always active with unconditional priority. The
+  re-arm hysteresis added in safety §2 governs **clearing only**; assertion latency is
+  unchanged.)*
 - **P1-REL-2** — Temperature tolerates **one faulty probe with no degradation** via 3-probe TMR median
   voting. *([sensing §2](../design/controller/spec-controller-sensing.md#2-redundant-temperature-fusion-tmr).)*
 - **P1-REL-3** — Stuck and out-of-range sensor faults are detected within a **configurable window
@@ -148,7 +150,9 @@ HAL time constants ([HAL §2](../design/controller/spec-controller-hal-simulatio
 
 - **P1-AVAIL-1** — **≥ 99.9% availability** over a continuous run; restart to first control tick is
   **< 5 s**. *(Committed default; the controller models a real production system;
-  [architecture §9](../design/controller/spec-controller-architecture.md#9-availability-restart--resource-footprint).)*
+  [architecture §9](../design/controller/spec-controller-architecture.md#9-availability-restart--resource-footprint).
+  Precondition: an external supervisor — Docker `restart:` in managed mode, a Windows
+  service wrapper in standalone — since the controller does not self-supervise.)*
 
 **Portability**
 

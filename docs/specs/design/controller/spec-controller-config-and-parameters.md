@@ -59,10 +59,19 @@ rest are constant in Phase 1.
 ## Day/night scheduling
 
 The temperature setpoint switches between day and night values on the
-`day_start` / `day_end` window — a time-of-day lookup evaluated each tick. It is
-**not** weather-predictive (Phase 3). The mechanism is built to extend to other
-setpoints later; see
+`day_start` / `day_end` window — a time-of-day lookup evaluated each tick against an
+[injected clock](./spec-controller-control-loops.md#setpoint-resolution) (so the flip
+is reproducible under a seed). It is **not** weather-predictive (Phase 3). The
+mechanism is built to extend to other setpoints later; see
 [setpoint resolution](./spec-controller-control-loops.md#setpoint-resolution).
+
+The window is **validated at config load**, through the same `serde` + `toml` boundary
+that validates every other parameter ([tech stack](./spec-controller-tech-stack.md#configuration)):
+`day_start` and `day_end` must be valid `HH:MM` and satisfy `day_start < day_end`. A
+malformed or inverted window is rejected at startup — naming the violated bound, the
+same way an out-of-range REST edit is rejected — rather than silently selecting the
+wrong setpoint mid-run. This is the day/night counterpart of "a bad config fails at
+load, not mid-tick."
 
 ## Zone configuration
 
@@ -156,6 +165,8 @@ the [deterministic simulation](./spec-controller-hal-simulation.md#7-determinism
 |---|---|---|---|
 | Critical-temperature max | configurable | °C | Interlock trigger (`P1-REL-1`) |
 | CO₂ safety ceiling | configurable | ppm | Interlock trigger |
+| `interlock_rearm_hysteresis` | configurable | °C / ppm | Margin a reading must recover past before an interlock clears ([safety §2](./spec-controller-safety-and-constraints.md#assert-and-clear-re-arm-hysteresis)) |
+| `interlock_min_hold` | configurable | s | Minimum dwell an interlock stays asserted before it may clear ([safety §2](./spec-controller-safety-and-constraints.md#assert-and-clear-re-arm-hysteresis)) |
 | Vent / shade slew rate | configurable | %/s | Motor limit |
 | Heater / injector min on/off | configurable | s | Anti short-cycle |
 | Fan ramp-rate | configurable | %/s | Gradual speed change |

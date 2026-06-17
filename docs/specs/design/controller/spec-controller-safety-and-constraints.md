@@ -53,6 +53,32 @@ actuator, plus stuck and saturated actuators — is
 [actuator health monitoring (§5)](#5-actuator-health-monitoring); the irrigation
 interlock above is the special case that predates it.
 
+### Assert and clear (re-arm hysteresis)
+
+An interlock's **assert** and **clear** edges are deliberately asymmetric, so a reading
+hovering at the threshold cannot chatter the interlock — and the safe response — on and
+off every tick:
+
+- **Assert is immediate.** An interlock fires the tick its threshold is crossed
+  ([§3](#3-priority--ordering-model), `P1-REL-1`). Nothing about this changes; the
+  one-tick latency guarantee is untouched.
+- **Clear is hysteretic.** An asserted interlock de-asserts only after the reading
+  returns past a configurable **`interlock_rearm_hysteresis`** margin (below the
+  critical threshold, not merely back to it) **and** a configurable
+  **`interlock_min_hold`** dwell has elapsed since it fired. This is the same
+  deadband-against-cycling idea the
+  [humidity hysteresis band](./spec-controller-control-loops.md#fast-loops--reactive)
+  uses for normal control, applied here to the safety edge.
+
+A single *physically impossible* spike never reaches the interlock — it is rejected
+upstream as [out-of-range](./spec-controller-sensing.md#4-fault-detection-non-temperature-sensors)
+by sensor fault detection. A spike that is *in range* but spurious still asserts (a
+deliberate bias toward safety: better an unnecessary cool-down than a missed
+over-temp), and the hysteretic clear then prevents it from oscillating. This is why a
+single-sensor interlock such as the CO₂ ceiling is acceptable without the redundant
+fusion that temperature gets. Both thresholds are consolidated in the
+[default-parameters reference](./spec-controller-config-and-parameters.md#default-parameters-reference).
+
 ---
 
 ## 3. Priority & ordering model
@@ -77,10 +103,17 @@ Two consequences fall out of this order:
 - **Override cannot defeat safety.** Because override is upstream of interlocks, a
   forced actuator value is still overridden by a critical-temperature or
   CO₂-ceiling response ([architecture §6](./spec-controller-architecture.md#6-manual-override)).
-- **Even a safety response respects the hardware.** Because constraints are the last
-  stage, an interlock that says "open vents fully" is still shaped by the vent slew
-  rate ([§4](#4-actuator-constraints)) — vents open at maximum slew, not
-  instantaneously. Safety chooses the *target*; constraints govern the *approach*.
+- **Even a safety response respects the hardware — but is never *delayed* by it.**
+  Because constraints are the last stage, an interlock that says "open vents fully" is
+  still shaped by the vent slew rate ([§4](#4-actuator-constraints)) — vents open at
+  maximum slew, not instantaneously. Safety chooses the *target*; constraints govern
+  the *approach rate*. The distinction is load-bearing: a constraint may shape **how
+  fast** a safety transition moves (slew/ramp) but may **never block or delay** a move
+  *toward* an interlock's safe state. In particular the **min on-time / off-time dwell
+  constraints are waived** for an interlock-commanded transition — a heater
+  de-energizes the tick a critical-temperature interlock fires even if its min-on
+  window has not elapsed, because honoring an anti-short-cycle timer over a
+  crop-protection interlock would defeat the `P1-REL-1` one-tick guarantee.
 
 ---
 
@@ -101,6 +134,14 @@ so the constraints shape the final command regardless of who produced it (loop,
 override, or interlock). They model the plant's hardware reality so the control
 problem the loops face is realistic — an instantly-repositioning vent would make
 tuning meaningless.
+
+One carve-out for safety: the **min on-time / off-time** and **valve minimum open
+time** rows are anti-short-cycle protections for *normal control* — they must not act
+as a brake on a safety transition. A rate limit (slew, ramp) still applies to an
+interlock-commanded move because it reflects a physical maximum; a *dwell* constraint
+(min on/off) is **waived** when the move is toward an interlock's safe state
+([§3](#3-priority--ordering-model)). Constraints may govern the approach rate of a
+safety response but never *block or delay* it.
 
 ---
 

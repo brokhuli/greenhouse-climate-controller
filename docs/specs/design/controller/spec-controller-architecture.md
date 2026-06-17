@@ -225,7 +225,7 @@ go wrong, how it's detected, and how the pipeline behaves:
 | Actuator no-response (commanded change, no climate effect) | actuator-health effect check (`P1-REL-4`) | Disable the actuator — the zone, for irrigation; raise alarm ([safety §5](./spec-controller-safety-and-constraints.md#5-actuator-health-monitoring)) |
 | Actuator stuck / jammed (observed diverges from commanded) | actuator-health feedback check (`P1-REL-4`) | Disable the actuator; raise alarm ([safety §5](./spec-controller-safety-and-constraints.md#5-actuator-health-monitoring)) |
 | Actuator saturated (pinned at its limit, setpoint unreachable) | loop saturation check | Keep controlling at the limit; raise alarm — never disable ([control-loops](./spec-controller-control-loops.md#saturation--setpoint-unreachable)) |
-| Dangerous climate condition | safety interlocks (per-tick) | Unconditional override of all loops + override; act within one tick (`P1-REL-1`) |
+| Dangerous climate condition | safety interlocks (per-tick) | Unconditional override of all loops + override; act within one tick (`P1-REL-1`); clear only after re-arm hysteresis + dwell ([safety §2](./spec-controller-safety-and-constraints.md#assert-and-clear-re-arm-hysteresis)) |
 | Forgotten manual override | override expiry timer | Auto-clear after timeout; control resumes (`P1-RESIL-2`) |
 
 Faults are sticky (they persist until the condition clears), every fault is
@@ -246,7 +246,9 @@ delivery differ.
   configured by a **TOML file** ([config](./spec-controller-config-and-parameters.md))
   passed at startup, with values coming from that file plus direct REST edits.
   There is no platform above it. This is the simplest path for developing and
-  testing the control logic.
+  testing the control logic. For the `P1-AVAIL-1` restart guarantee to hold here it
+  must run under a **Windows service wrapper** (NSSM / WinSW), not as a bare process —
+  see [§9](#9-availability-restart--resource-footprint).
 - **Phase 2 (managed):** the same controller as a **Docker container**, configured
   by a **TOML file mounted at startup**, one container per greenhouse, connecting
   to the platform over the local Docker network. See
@@ -298,10 +300,15 @@ operator/OS/Docker restart — are all handled by one fast cold-start path:
   [sensing §4](./spec-controller-sensing.md#4-fault-detection-non-temperature-sensors)),
   a fault that was active before a restart is re-detected within its detection
   window rather than needing to survive the restart.
-- **Restart is external, not self-managed.** The process does not supervise itself:
-  in standalone mode the OS/service manager restarts it, in managed mode Docker's
-  restart policy does ([§8](#8-deployment)). The controller's only responsibility is
-  to come up fast and idempotently from its config — the same input in both modes.
+- **Restart is external, not self-managed.** The process does not supervise itself, so
+  the `P1-AVAIL-1` auto-restart target has a precondition: **an external supervisor must
+  be configured.** In managed mode that is Docker's `restart:` policy; in standalone
+  mode it is a **Windows service wrapper** (e.g. NSSM or WinSW) that runs the binary as
+  a service — *not* a bare double-click of the executable, which has nothing to restart
+  it. Wiring up that supervisor is a **deployment responsibility** ([§8](#8-deployment));
+  absent it, restart is manual and the availability target does not hold. The
+  controller's own responsibility is only to come up fast and idempotently from its
+  config — the same input in both modes.
 
 ### Resource footprint (`P1-PERF-4`)
 
