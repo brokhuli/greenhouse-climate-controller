@@ -8,6 +8,61 @@ alternatives and tradeoffs.
 
 ---
 
+## 2026-06-17 — Frontend (operator/fleet) REST API contract authored (OpenAPI 3.1)
+
+**Decision:** Authored the platform's operator/fleet REST API under `contracts/frontend-rest/` as an
+**OpenAPI 3.1** document (`openapi.json`) plus a README and example fixtures — filling the §2.4
+"Phase 2 operator/fleet REST API" entry in the [contract catalog](../specs/design/spec-contracts.md)
+that was previously "to author," and formalizing the REST half of the *client's working contract*
+sketched in the [frontend data model](../specs/design/frontend/05-spec-frontend-data-model.md). The
+surface is the SPA's consumed REST endpoints (frontend data model §6, platform interfaces §3): fleet
+list + registration, per-greenhouse detail, ad-hoc setpoint edits, telemetry range queries, and the
+activity feed (slice **2a**); crop-profile CRUD and assignments (slice **2b**). Shape choices settled
+while authoring:
+
+- **Directory named by consumer (`frontend-rest/`).** The controller contract is named for its server
+  (`controller-rest/`), but the platform serves *two* REST contracts — this operator/fleet surface and
+  the optimizer-facing single-authority setpoint API (catalog #3) — so a server-based `platform-rest/`
+  name would be ambiguous; named for the consumer instead.
+- **REST only.** The live-push **WebSocket** fan-out (catalog #5) stays a separate, still-to-author
+  contract; this document is the request/response half. The data model's "Go-API ↔ SPA REST/WS"
+  documented gap now narrows to WebSocket-only.
+- **snake_case wire format, no REST envelope.** Field names are snake_case (`greenhouse_id`,
+  `temperature_day_c`) to match the MQTT and controller-rest contracts and
+  [RFC-007](./request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format);
+  the SPA maps them to its camelCase Zod types. Unlike MQTT/WS frames, REST bodies are **not** wrapped
+  in the RFC-007 `schema_version` envelope (matching controller-rest) — identity is embedded directly
+  and the contract version is `info.version`.
+- **Slice-dependent auth.** A `bearerAuth` (Keycloak OIDC/JWT) scheme is declared and applied to 2b
+  operations, with writes restricted to the operator role; 2a operations declare `security: []` —
+  unauthenticated on the trusted Docker network
+  ([RFC-009](./request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)).
+  This differs from controller-rest (unauthenticated in every mode), so this contract carries
+  `securitySchemes`.
+- **Target bundle mirrors the controller's runtime config.** The `Setpoints` bundle reuses the
+  controller-rest climate fields and bounds plus per-zone irrigation, so a resolved crop profile maps
+  directly; zone *topology* stays controller-local and out of the write path (platform data model §3).
+
+A rejected write returns **422** with a `ValidationError` naming the violated `field` and `bound` —
+the same shape controller-rest returns and the platform relays under
+[RFC-005](./request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain). Validation mirrors
+the other contracts — a 3.1-aware Redocly lint of `openapi.json` plus an Ajv (Draft 2020-12) run of
+each fixture against its component schema, with two negative fixtures that must fail — and automating
+it stays the same `contracts/` [backlog](../backlog.md) item.
+
+**Why:** `contracts/` is the single artifact all phases conform to, and this operator/fleet surface —
+the SPA's entire request/response contract with the platform — had a catalog entry and a client-side
+sketch but no normative schema. Authoring it gives the frontend and the Go API one artifact to build
+against and lets the SPA's Zod schemas validate against it. Reusing OpenAPI 3.1 / JSON Schema 2020-12
+keeps one validation discipline across MQTT, controller-rest, and this contract; `/api`-prefixed,
+greenhouse-scoped paths and the shared slug identity keep the model uniform end to end.
+
+**RFC:** [RFC-007](./request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format),
+[RFC-005](./request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain),
+[RFC-009](./request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)
+
+---
+
 ## 2026-06-16 — Actuator-health monitoring, observed actuator channel, and MQTT connection-resilience model
 
 **Decision:** Close four controller failure gaps surfaced by

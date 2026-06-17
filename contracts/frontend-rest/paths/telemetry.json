@@ -1,0 +1,26 @@
+{
+  "parameters": [
+    { "$ref": "../components/parameters.json#/GreenhouseId" },
+    { "$ref": "../components/parameters.json#/From" },
+    { "$ref": "../components/parameters.json#/To" }
+  ],
+  "get": {
+    "operationId": "getTelemetryRange",
+    "summary": "Historical telemetry range query",
+    "description": "Sensor series and actuator states for one greenhouse over [from, to] — the historical seed the SPA caches and merges with the live WebSocket edge (frontend data model §4, §6, key [\"telemetry\", id, range]). An invalid window (e.g. from after to) is rejected with 422.",
+    "x-slice": "2a",
+    "security": [],
+    "responses": {
+      "200": {
+        "description": "Telemetry over the requested window.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "../components/schemas/telemetry.json#/TelemetryRange" }
+          }
+        }
+      },
+      "404": { "$ref": "../components/responses.json#/NotFound" },
+      "422": { "$ref": "../components/responses.json#/ValidationFailed" }
+    }
+  }
+}

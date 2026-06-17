@@ -8,18 +8,20 @@
 > query-key scheme, the cache + live-merge strategy, runtime validation, the
 > WebSocket message taxonomy, and the view-model derivations the UI renders.
 
-> **Source of truth & a documented gap.** The wire contracts are owned by
+> **Source of truth.** The wire contracts are owned by
 > [`contracts/`](../../../../contracts/) under the conventions in
 > [RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format),
 > and the API *surface* by [platform API surface](../platform/09-spec-platform-interfaces.md#3-api-surface-inventory).
-> Today `contracts/` formalizes only `mqtt/` (telemetry, platform-internal) and
-> `controller-rest/` (platform→controller). **The Go-API ↔ SPA REST/WS contract is
-> not yet formalized in `contracts/`.** Until it is, the schemas here bind to
-> platform §7 and are the *client's working contract*; when the API contract is
-> formalized, these Zod schemas must be regenerated/validated against it, and this
-> file points at it. The shapes below mirror the platform's
-> [data model](../platform/03-spec-platform-data-model.md) so the mapping stays
-> thin.
+> `contracts/` formalizes `mqtt/` (telemetry, platform-internal),
+> `controller-rest/` (platform→controller), and
+> [`frontend-rest/`](../../../../contracts/frontend-rest/) — **the Go-API ↔ SPA REST
+> contract these shapes bind to** (the SPA's Zod schemas in `src/api/schemas.ts`
+> validate against it; field names there are camelCase mapping onto the contract's
+> snake_case wire fields). The **only** remaining gap is the live-push **WebSocket**
+> contract (catalog #5), still to author; until it lands, the WS frame shapes in
+> [§5](#5-websocket-message-taxonomy) are the *client's working contract*. The shapes
+> below mirror the platform's [data model](../platform/03-spec-platform-data-model.md)
+> so the mapping stays thin.
 
 > All schema snippets are **illustrative** — they show intent and field origin, not
 > final field names. The Zod schema in `src/api/schemas.ts` is the implementation
@@ -245,8 +247,10 @@ Every REST response and WS frame is parsed through its Zod schema in
 - **`schema_version` mismatch** (RFC-007) is logged and surfaced as a non-blocking
   "data format changed — update the dashboard" notice.
 
-This is the client's enforcement point for the API contract until that contract is
-formalized in `contracts/` (see the scope note above).
+This is the client's runtime enforcement point: REST responses validate against the
+formalized [`contracts/frontend-rest/`](../../../../contracts/frontend-rest/) contract,
+and WS frames against the client's working contract until the WebSocket contract
+(catalog #5) is formalized (see the scope note above).
 
 ---
 
@@ -271,6 +275,7 @@ derivations are testable in isolation (`P2-TEST-2`-adjacent unit coverage).
 ## 9. Cross-references
 
 - API surface (routes + responsibilities): [platform API surface](../platform/09-spec-platform-interfaces.md#3-api-surface-inventory)
+- REST wire contract (the shapes here bind to it): [`contracts/frontend-rest/`](../../../../contracts/frontend-rest/)
 - Wire conventions (envelope, identity, versioning): [RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)
 - Platform data model the shapes mirror: [platform data model](../platform/03-spec-platform-data-model.md)
 - How the cache is fed and patched: [architecture §4](./03-spec-frontend-architecture.md#4-runtime-data-flow)

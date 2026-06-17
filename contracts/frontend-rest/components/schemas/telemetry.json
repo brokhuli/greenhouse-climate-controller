@@ -1,0 +1,76 @@
+{
+  "Reading": {
+    "type": "object",
+    "description": "One time-stamped sample of a single metric.",
+    "properties": {
+      "value": {
+        "type": "number",
+        "description": "The sampled value. Units are the metric's RFC-007 units (°C, %RH, ppm, µmol·m⁻²·s⁻¹, VWC 0–1)."
+      },
+      "ts": {
+        "type": "string",
+        "format": "date-time",
+        "description": "Sample time (RFC 3339 UTC, ms)."
+      }
+    },
+    "required": ["value", "ts"],
+    "additionalProperties": false
+  },
+  "ActuatorState": {
+    "type": "object",
+    "description": "A time-stamped actuator sample: commanded vs observed position (the output-side channel, controller safety §5).",
+    "properties": {
+      "actuator": {
+        "type": "string",
+        "description": "Actuator identifier (e.g. heater, fan, vent, shade, co2_injector, lights, irrigation_valve)."
+      },
+      "commanded": {
+        "type": "number",
+        "description": "Commanded position/level for this sample."
+      },
+      "observed": {
+        "type": ["number", "null"],
+        "description": "Observed (readback) position, or null when unavailable."
+      },
+      "ts": {
+        "type": "string",
+        "format": "date-time",
+        "description": "Sample time (RFC 3339 UTC, ms)."
+      }
+    },
+    "required": ["actuator", "commanded", "observed", "ts"],
+    "additionalProperties": false
+  },
+  "TelemetryRange": {
+    "type": "object",
+    "description": "Historical telemetry for one greenhouse over a [from, to] window — the seed the SPA caches and merges with the live WebSocket edge (frontend data model §4, §6). Metrics match the controller's published surface (temperature, humidity, CO₂, PAR, per-zone soil moisture, actuator positions).",
+    "properties": {
+      "greenhouse_id": { "$ref": "./common.json#/Slug" },
+      "from": {
+        "type": "string",
+        "format": "date-time",
+        "description": "Start of the returned window (RFC 3339 UTC, ms)."
+      },
+      "to": {
+        "type": "string",
+        "format": "date-time",
+        "description": "End of the returned window (RFC 3339 UTC, ms)."
+      },
+      "series": {
+        "type": "object",
+        "description": "Map of metric name to its samples over the window.",
+        "additionalProperties": {
+          "type": "array",
+          "items": { "$ref": "#/Reading" }
+        }
+      },
+      "actuators": {
+        "type": "array",
+        "description": "Actuator state samples over the window.",
+        "items": { "$ref": "#/ActuatorState" }
+      }
+    },
+    "required": ["greenhouse_id", "from", "to", "series", "actuators"],
+    "additionalProperties": false
+  }
+}

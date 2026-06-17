@@ -1,0 +1,11 @@
+{
+  "id": "gh-a",
+  "display_name": "Greenhouse A",
+  "crop": "tomato",
+  "status": "online",
+  "drift": false,
+  "climate": {
+    "temperature": 23.4,
+    "setpoint_temperature": 24.0
+  }
+}

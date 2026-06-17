@@ -1,0 +1,55 @@
+{
+  "id": "tomato-standard",
+  "name": "Tomato — standard",
+  "crop": "tomato",
+  "stages": [
+    {
+      "stage": "vegetative",
+      "targets": {
+        "temperature_day_c": 24.0,
+        "temperature_night_c": 18.0,
+        "day_start": "06:00",
+        "day_end": "20:00",
+        "humidity_low_pct": 65.0,
+        "humidity_high_pct": 80.0,
+        "co2_target_ppm": 900,
+        "co2_vent_interlock_threshold_pct": 15.0,
+        "vpd_target_kpa": 0.9,
+        "dli_target_mol": 18.0,
+        "zones": [
+          {
+            "zone_id": "bench-a",
+            "moisture_low_threshold": 0.4,
+            "moisture_high_threshold": 0.6,
+            "drain_period_secs": 300,
+            "schedule": "06:00,14:00"
+          }
+        ]
+      }
+    },
+    {
+      "stage": "fruiting",
+      "targets": {
+        "temperature_day_c": 25.0,
+        "temperature_night_c": 17.0,
+        "day_start": "06:00",
+        "day_end": "20:00",
+        "humidity_low_pct": 60.0,
+        "humidity_high_pct": 75.0,
+        "co2_target_ppm": 1100,
+        "co2_vent_interlock_threshold_pct": 15.0,
+        "vpd_target_kpa": 1.1,
+        "dli_target_mol": 22.0,
+        "zones": [
+          {
+            "zone_id": "bench-a",
+            "moisture_low_threshold": 0.35,
+            "moisture_high_threshold": 0.55,
+            "drain_period_secs": 360,
+            "schedule": "06:00,12:00,18:00"
+          }
+        ]
+      }
+    }
+  ]
+}

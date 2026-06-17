@@ -1,0 +1,57 @@
+{
+  "GreenhouseId": {
+    "name": "greenhouse_id",
+    "in": "path",
+    "required": true,
+    "description": "Site-unique greenhouse identity; the same slug used in MQTT topics, controller REST paths, and DB rows (RFC-007).",
+    "schema": { "$ref": "./schemas/common.json#/Slug" }
+  },
+  "ProfileId": {
+    "name": "profile_id",
+    "in": "path",
+    "required": true,
+    "description": "Crop-profile identity, unique within the site.",
+    "schema": { "$ref": "./schemas/common.json#/Slug" }
+  },
+  "From": {
+    "name": "from",
+    "in": "query",
+    "required": true,
+    "description": "Start of the telemetry window (RFC 3339 UTC). Must be at or before `to`.",
+    "schema": { "type": "string", "format": "date-time" }
+  },
+  "To": {
+    "name": "to",
+    "in": "query",
+    "required": true,
+    "description": "End of the telemetry window (RFC 3339 UTC). Must be at or after `from`.",
+    "schema": { "type": "string", "format": "date-time" }
+  },
+  "EventGreenhouseId": {
+    "name": "greenhouse_id",
+    "in": "query",
+    "required": false,
+    "description": "Scope the activity feed to one greenhouse; omit for the whole fleet.",
+    "schema": { "$ref": "./schemas/common.json#/Slug" }
+  },
+  "EventKind": {
+    "name": "kind",
+    "in": "query",
+    "required": false,
+    "description": "Filter the feed to one event kind.",
+    "schema": {
+      "type": "string",
+      "enum": ["fault", "interlock", "profile_applied", "setpoint_edit", "drift"]
+    }
+  },
+  "EventSeverity": {
+    "name": "severity",
+    "in": "query",
+    "required": false,
+    "description": "Filter the feed to a minimum severity.",
+    "schema": {
+      "type": "string",
+      "enum": ["info", "warning", "critical"]
+    }
+  }
+}

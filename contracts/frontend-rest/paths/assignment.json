@@ -1,0 +1,51 @@
+{
+  "parameters": [{ "$ref": "../components/parameters.json#/GreenhouseId" }],
+  "get": {
+    "operationId": "getAssignment",
+    "summary": "Current profile/stage assignment",
+    "description": "Which profile and growth stage are currently assigned to the greenhouse (2b). Requires an authenticated viewer or operator.",
+    "x-slice": "2b",
+    "security": [{ "bearerAuth": [] }],
+    "responses": {
+      "200": {
+        "description": "The current assignment.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "../components/schemas/profiles.json#/Assignment" }
+          }
+        }
+      },
+      "401": { "$ref": "../components/responses.json#/Unauthorized" },
+      "404": { "$ref": "../components/responses.json#/NotFound" }
+    }
+  },
+  "put": {
+    "operationId": "setAssignment",
+    "summary": "Assign a profile/stage",
+    "description": "Assign a profile and growth stage to the greenhouse and trigger apply/reconcile (operator only, 2b; platform §5). An unknown profile or a stage not in that profile is rejected with 422.",
+    "x-slice": "2b",
+    "security": [{ "bearerAuth": [] }],
+    "requestBody": {
+      "required": true,
+      "content": {
+        "application/json": {
+          "schema": { "$ref": "../components/schemas/profiles.json#/AssignmentInput" }
+        }
+      }
+    },
+    "responses": {
+      "200": {
+        "description": "The assignment after applying.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "../components/schemas/profiles.json#/Assignment" }
+          }
+        }
+      },
+      "401": { "$ref": "../components/responses.json#/Unauthorized" },
+      "403": { "$ref": "../components/responses.json#/Forbidden" },
+      "404": { "$ref": "../components/responses.json#/NotFound" },
+      "422": { "$ref": "../components/responses.json#/ValidationFailed" }
+    }
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "get": {
+    "operationId": "listGreenhouses",
+    "summary": "Fleet list",
+    "description": "All registered greenhouses with their live status rollup — the source for the fleet overview (frontend data model §6, key [\"fleet\"]). Live status/drift changes arrive separately over the WebSocket fan-out.",
+    "x-slice": "2a",
+    "security": [],
+    "responses": {
+      "200": {
+        "description": "The fleet.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "array",
+              "items": { "$ref": "../components/schemas/greenhouses.json#/GreenhouseSummary" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "post": {
+    "operationId": "registerGreenhouse",
+    "summary": "Register a greenhouse",
+    "description": "Add a greenhouse to the fleet (operator tooling, platform §3). The operator-chosen `id` slug is reused across MQTT topics, controller REST paths, and DB rows (RFC-007).",
+    "x-slice": "2a",
+    "security": [],
+    "requestBody": {
+      "required": true,
+      "content": {
+        "application/json": {
+          "schema": { "$ref": "../components/schemas/greenhouses.json#/GreenhouseRegistration" }
+        }
+      }
+    },
+    "responses": {
+      "201": {
+        "description": "The registered greenhouse.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "../components/schemas/greenhouses.json#/GreenhouseSummary" }
+          }
+        }
+      },
+      "422": { "$ref": "../components/responses.json#/ValidationFailed" }
+    }
+  }
+}

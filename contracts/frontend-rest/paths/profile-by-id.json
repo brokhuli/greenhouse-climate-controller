@@ -1,0 +1,65 @@
+{
+  "parameters": [{ "$ref": "../components/parameters.json#/ProfileId" }],
+  "get": {
+    "operationId": "getProfile",
+    "summary": "One crop profile",
+    "description": "A single profile incl. its stage-aware target bundles (frontend data model §6, key [\"profile\", id]). Requires an authenticated viewer or operator (2b).",
+    "x-slice": "2b",
+    "security": [{ "bearerAuth": [] }],
+    "responses": {
+      "200": {
+        "description": "The profile.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "../components/schemas/profiles.json#/CropProfile" }
+          }
+        }
+      },
+      "401": { "$ref": "../components/responses.json#/Unauthorized" },
+      "404": { "$ref": "../components/responses.json#/NotFound" }
+    }
+  },
+  "patch": {
+    "operationId": "updateProfile",
+    "summary": "Edit a crop profile",
+    "description": "Partial update of a profile's name, crop, or stages (operator only, 2b). The id is immutable.",
+    "x-slice": "2b",
+    "security": [{ "bearerAuth": [] }],
+    "requestBody": {
+      "required": true,
+      "content": {
+        "application/json": {
+          "schema": { "$ref": "../components/schemas/profiles.json#/CropProfilePatch" }
+        }
+      }
+    },
+    "responses": {
+      "200": {
+        "description": "The profile after the update.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "../components/schemas/profiles.json#/CropProfile" }
+          }
+        }
+      },
+      "401": { "$ref": "../components/responses.json#/Unauthorized" },
+      "403": { "$ref": "../components/responses.json#/Forbidden" },
+      "404": { "$ref": "../components/responses.json#/NotFound" },
+      "422": { "$ref": "../components/responses.json#/ValidationFailed" }
+    }
+  },
+  "delete": {
+    "operationId": "deleteProfile",
+    "summary": "Delete a crop profile",
+    "description": "Remove a profile from the library (operator only, 2b). A profile in use by an assignment cannot be deleted and is rejected with 422.",
+    "x-slice": "2b",
+    "security": [{ "bearerAuth": [] }],
+    "responses": {
+      "204": { "description": "Profile deleted." },
+      "401": { "$ref": "../components/responses.json#/Unauthorized" },
+      "403": { "$ref": "../components/responses.json#/Forbidden" },
+      "404": { "$ref": "../components/responses.json#/NotFound" },
+      "422": { "$ref": "../components/responses.json#/ValidationFailed" }
+    }
+  }
+}

@@ -10,6 +10,14 @@ Shared message and data contracts — the single source of truth that all three 
   trusted Docker network ([RFC-009](../docs/decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)).
   See [`controller-rest/README.md`](./controller-rest/README.md). This is the **only** write path
   into the controller — the REST leg of the setpoint chain below.
+- `frontend-rest/` — the Phase 2 platform's operator/fleet REST API (OpenAPI 3.1, same JSON Schema
+  2020-12 dialect): the request/response surface the React SPA and operator tooling consume — fleet
+  registry, per-greenhouse detail, ad-hoc setpoint edits, and telemetry range queries (slice 2a),
+  plus crop-profile CRUD and assignments (slice 2b). `/api`-prefixed, greenhouse-scoped paths; 2a is
+  unauthenticated on the trusted Docker network and 2b adds Keycloak OIDC bearer auth
+  ([RFC-009](../docs/decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)).
+  See [`frontend-rest/README.md`](./frontend-rest/README.md). The live-push **WebSocket** fan-out is
+  a separate, still-to-author contract.
 
 Phase 1 (controller) publishes telemetry to these schemas; Phase 2 (platform) ingests them; Phase 3
 (optimizer) reads that history. **MQTT carries telemetry only** (sensor readings, actuator state,
