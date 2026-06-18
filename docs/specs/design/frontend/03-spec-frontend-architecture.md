@@ -285,6 +285,13 @@ Full inventory in [`06-spec-frontend-components.md`](./06-spec-frontend-componen
 
 ## 8. Theming architecture
 
+The visual system follows the light/dark mockups in `research/frontend mockups/`:
+a dense operator console, not a landing page. Desktop layout is a fixed left
+rail plus a scrolling content canvas; the main area fills the viewport and uses
+responsive grids for rollups, greenhouse cards, charts, and side panels. Mobile
+keeps the same information hierarchy but moves navigation into the top-bar
+drawer defined by the breakpoint tokens.
+
 ```
 src/styles/tokens.css
   ├─ :root                 ← theme-agnostic tokens (spacing, radii, motion)

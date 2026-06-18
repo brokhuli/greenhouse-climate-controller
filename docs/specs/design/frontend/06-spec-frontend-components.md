@@ -23,6 +23,10 @@ data access; the shell owns chrome.
 - **Purpose:** Root layout — persistent nav, header, content outlet, toast host.
 - **Props:** none (reads route + session context).
 - **Data:** none directly; renders the router outlet.
+- **Visual:** desktop uses a two-column operations-console shell: fixed
+  `SideNav` (`--layout-sidenav-width`) and a scrolling main canvas with
+  `--layout-gutter` padding. Main content fills the available width; it is not
+  centered in a marketing-page max-width container.
 - **States:** always present; it is the surface that *survives* any view-level
   error or network failure ([architecture §9](./03-spec-frontend-architecture.md#9-failure-modes--recovery)).
 - **a11y:** landmark regions (`<nav>`, `<main>`, `<header>`); skip-to-content link.
@@ -32,13 +36,24 @@ data access; the shell owns chrome.
 - **Purpose:** Primary navigation: Fleet, Activity, Profiles (2b).
 - **Props:** active route.
 - **Interaction:** client-side route links; collapses to a top bar + drawer below
-  the mobile breakpoint ([interactions](./08-spec-frontend-interactions.md)).
+  the mobile breakpoint ([interactions](./08-spec-frontend-interactions.md)). The
+  active nav item renders with a rounded-rectangle background fill
+  (`--color-surface-3`) to distinguish it from inactive items without relying on
+  color alone.
+- **Visual:** the rail uses `--color-shell`, quiet dividers, 20-24 px internal
+  padding, and icon+label rows at `--size-control-md`. Active nav items invert
+  strongly in light mode and use a warm raised surface in dark mode; inactive
+  items stay flat.
 - **a11y:** `<nav aria-label="Primary">`; `aria-current="page"` on the active item.
 
 ### `TopBar`
 
 - **Purpose:** Header strip — current scope (site / greenhouse name),
   `ConnectionStatus`, theme toggle, and (2b) the signed-in identity + role.
+- **Visual:** page title group sits left; live status, alert bell, and identity
+  controls sit right. Controls use `--color-surface-raised`, `--radius-lg`, and
+  fixed control heights from the token spec so timestamps and badges never resize
+  the header.
 - **Role-gating (2b):** shows the user menu / sign-out; viewer vs operator badge.
 
 ### `ConnectionStatus`
@@ -85,7 +100,20 @@ route in [architecture §3](./03-spec-frontend-architecture.md#3-route-tree).
 - **Renders:** name, crop, `StatusBadge`, a compact reading-vs-setpoint `MetricTile`
   (or two), drift badge (2b).
 - **Interaction:** whole card links to `/greenhouses/:id`.
+- **Visual:** fixed card anatomy: status row, title/crop row, metric pair, then a
+  compact sparkline. Cards keep a stable min-height so online/offline states do
+  not reshape the fleet grid. Offline/no-data cards show a muted empty state in
+  the metric area, not a different card layout.
 - **States:** offline → muted styling + "offline" badge, last-known values dimmed.
+
+### `FleetSummaryBar` *(2a)*
+
+- **Purpose:** Site-level rollup cards: total greenhouses, healthy, attention
+  needed, offline, drift.
+- **Props:** status-rollup view model.
+- **Visual:** a responsive row/grid of summary cards with large tabular numbers,
+  short captions, and optional compact sparklines/icons. The cards use the same
+  `Card` shell and should fit five across on wide desktop before wrapping.
 
 ### `GreenhouseDetail` *(2a)*
 
@@ -134,6 +162,18 @@ Reused across views; typed props; zero domain knowledge.
 
 - **Purpose:** The bordered, rounded container that defines the dashboard look.
 - **Props:** `title?`, `actions?`, `variant?`.
+- **Visual:** cards are flat, bordered panels (`--color-surface-1`,
+  `--color-border`, `--radius-lg`) with 16-20 px internal padding. They do not
+  nest inside other cards. Hoverable cards change border color and surface tone
+  subtly; ordinary dashboard cards do not use visible drop shadows.
+
+### `PanelHeader`
+
+- **Purpose:** Shared header row for cards/panels with title, optional value, and
+  compact actions.
+- **Visual:** title uses `--text-sm` or `--text-md` depending on density; section
+  labels use the token spec's `section-label` pattern. Actions stay right-aligned
+  in fixed-height controls so toolbar changes do not move chart content.
 
 ### `StatusBadge`
 
@@ -153,6 +193,15 @@ Reused across views; typed props; zero domain knowledge.
 
 - **Purpose:** The live + historical line chart — the workhorse of the detail view.
 - **Props:** `series: Series[]`, `bands?` (threshold shading), `range`.
+- **Variants:** **Full** (axes, bands, legend — used in `GreenhouseDetail`) and
+  **Compact/Sparkline** (no axes, no legend, single series — used in fleet header
+  stat cards and `GreenhouseCard`). The compact variant inherits
+  `--chart-stroke-width` and metric-specific chart tokens but renders no grid or
+  band shading.
+- **Visual:** full charts use a bordered plot area, subtle grid, tabular axis
+  labels, solid metric lines, dashed setpoint/min-max references, and low-opacity
+  area fills. Compact sparklines sit at `--chart-sparkline-height`, preserve the
+  same metric color, and never show axes or legends.
 - **Data:** historical from the Query cache + live from the ring buffer, merged by
   the series-merge derivation; renders via **uPlot**
   ([tech-stack](./04-spec-frontend-tech-stack.md)).
@@ -191,6 +240,10 @@ Reused across views; typed props; zero domain knowledge.
   loading/empty/error renderings every view container reuses (so the states from
   [architecture §9](./03-spec-frontend-architecture.md#9-failure-modes--recovery) look
   consistent).
+- **Visual:** controls are compact and utilitarian. Icon-only buttons use
+  `--size-icon-button`; segmented controls and pills use `--size-control-sm` or
+  `--size-control-md`; primary actions use the inverse/accent treatment from the
+  token spec rather than oversized hero-style buttons.
 - **a11y:** `Dialog` traps focus, `Esc` closes; `Button` renders `<a>` vs `<button>`
   correctly; disabled write buttons keep an accessible reason.
 
