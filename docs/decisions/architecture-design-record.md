@@ -8,6 +8,115 @@ alternatives and tradeoffs.
 
 ---
 
+## 2026-06-17 — Frontend WebSocket fan-out contract authored (JSON Schema 2020-12)
+
+**Decision:** Authored the platform's live-push WebSocket fan-out under `contracts/frontend-ws/` as
+**JSON Schema** (Draft 2020-12) — one file per frame type plus a shared envelope, a `common` of shared
+`$defs`, a `message` union, a README, and example fixtures — filling the §2.5 "Phase 2 WebSocket
+fan-out" entry in the [contract catalog](../specs/design/spec-contracts.md) that was previously "to
+author," and formalizing the live-push half of the *client's working contract* sketched in the
+[frontend data model §5](../specs/design/frontend/05-spec-frontend-data-model.md#5-websocket-message-taxonomy).
+With this and the [REST contract](../../contracts/frontend-rest/), the data model's documented
+"Go-API ↔ SPA REST/WS" gap is now fully closed. The surface is the four frames the platform pushes to
+the SPA (frontend data model §5, platform interfaces §3): `telemetry`, `status`, and `event`
+(slice **2a**), and `drift` (slice **2b**). Shape choices settled while authoring:
+
+- **JSON Schema, modeled on `contracts/mqtt/` (not OpenAPI/AsyncAPI).** The WebSocket fan-out is an
+  envelope-based push channel — the MQTT contract, not the REST ones, is its structural analog. JSON
+  Schema is the format RFC-007 §5 fixes for message schemas (AsyncAPI is explicitly only an optional
+  later doc layer), so the frames reuse the MQTT idioms directly: a shared `envelope.schema.json`
+  composed via `allOf`, closed enums, the metric→unit `if/then` binding, `unevaluatedProperties:
+  false`, stable `$id`s under a local base, and Ajv-validated positive + `*.bad-*.json` fixtures. No
+  new dependency or tooling.
+- **Flat frames, not a `{ type, data }` wrapper.** Each frame is the RFC-007 envelope, a `type`
+  discriminator, and the payload all at the top level — the same layout as an MQTT message, with
+  `type` added — rather than nesting the payload under `data`. The `{ type, data }` union in data
+  model §5 is illustrative; the wire shape is flat, and `message.schema.json` is the `oneOf` a consumer
+  validates each frame against (unknown `type` ignored — additive frame types do not bump the major).
+- **Push only; subscription stays out of the contract.** The contract is the server→client frames.
+  The SPA "subscribes to the greenhouses currently in view," but that granularity is server-decided
+  (frontend architecture §4) and is deliberately *not* wire-contracted — there are no client→server
+  frames. Matches the catalog's stated Platform → SPA direction.
+- **Frames carry the envelope; `schema_version` is an integer.** Unlike the REST bodies (no envelope),
+  every frame carries the RFC-007 envelope, like MQTT — so the `event` frame is the frontend-rest
+  `EventEntry` with its `greenhouse_id`/`ts` lifted into the envelope, and `schema_version` is an
+  **integer** major (the data model §2 `z.string()` sketch is illustrative). `status`/`drift`/`event`
+  pin `zone_id` to `null` (greenhouse-scoped); `telemetry` may be zone-scoped.
+
+Connection lifecycle (reconnect/backoff, backfill, polling fallback, the `ConnectionStatus` indicator)
+is **not** redefined here — it is owned by the frontend specs (architecture §4, interactions §5) and
+referenced; the indicator derives from the socket's own state, so there is no heartbeat frame.
+Validation mirrors the MQTT contract — an Ajv (Draft 2020-12, strict) run of each fixture against its
+frame schema and the union, with two negative fixtures that must fail — and automating it stays the
+same `contracts/` [backlog](../backlog.md) item.
+
+**Why:** `contracts/` is the single artifact all phases conform to, and the WebSocket fan-out — the
+SPA's entire live-data contract with the platform — had a catalog entry and a client-side sketch but
+no normative schema. Authoring it gives the Go API (producer) and the SPA (consumer) one artifact to
+build against and lets the SPA's Zod schemas validate against it. Reusing the MQTT JSON-Schema idioms
+keeps one validation discipline across all four contracts and a single shared identity/envelope end to
+end; flat frames keep the layout uniform with the other push channel rather than introducing a wrapper
+shape unique to this surface.
+
+**RFC:** [RFC-007](./request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)
+
+---
+
+## 2026-06-17 — Frontend (operator/fleet) REST API contract authored (OpenAPI 3.1)
+
+**Decision:** Authored the platform's operator/fleet REST API under `contracts/frontend-rest/` as an
+**OpenAPI 3.1** document (`openapi.json`) plus a README and example fixtures — filling the §2.4
+"Phase 2 operator/fleet REST API" entry in the [contract catalog](../specs/design/spec-contracts.md)
+that was previously "to author," and formalizing the REST half of the *client's working contract*
+sketched in the [frontend data model](../specs/design/frontend/05-spec-frontend-data-model.md). The
+surface is the SPA's consumed REST endpoints (frontend data model §6, platform interfaces §3): fleet
+list + registration, per-greenhouse detail, ad-hoc setpoint edits, telemetry range queries, and the
+activity feed (slice **2a**); crop-profile CRUD and assignments (slice **2b**). Shape choices settled
+while authoring:
+
+- **Directory named by consumer (`frontend-rest/`).** The controller contract is named for its server
+  (`controller-rest/`), but the platform serves *two* REST contracts — this operator/fleet surface and
+  the optimizer-facing single-authority setpoint API (catalog #3) — so a server-based `platform-rest/`
+  name would be ambiguous; named for the consumer instead.
+- **REST only.** The live-push **WebSocket** fan-out (catalog #5) stays a separate, still-to-author
+  contract; this document is the request/response half. The data model's "Go-API ↔ SPA REST/WS"
+  documented gap now narrows to WebSocket-only.
+- **snake_case wire format, no REST envelope.** Field names are snake_case (`greenhouse_id`,
+  `temperature_day_c`) to match the MQTT and controller-rest contracts and
+  [RFC-007](./request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format);
+  the SPA maps them to its camelCase Zod types. Unlike MQTT/WS frames, REST bodies are **not** wrapped
+  in the RFC-007 `schema_version` envelope (matching controller-rest) — identity is embedded directly
+  and the contract version is `info.version`.
+- **Slice-dependent auth.** A `bearerAuth` (Keycloak OIDC/JWT) scheme is declared and applied to 2b
+  operations, with writes restricted to the operator role; 2a operations declare `security: []` —
+  unauthenticated on the trusted Docker network
+  ([RFC-009](./request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)).
+  This differs from controller-rest (unauthenticated in every mode), so this contract carries
+  `securitySchemes`.
+- **Target bundle mirrors the controller's runtime config.** The `Setpoints` bundle reuses the
+  controller-rest climate fields and bounds plus per-zone irrigation, so a resolved crop profile maps
+  directly; zone *topology* stays controller-local and out of the write path (platform data model §3).
+
+A rejected write returns **422** with a `ValidationError` naming the violated `field` and `bound` —
+the same shape controller-rest returns and the platform relays under
+[RFC-005](./request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain). Validation mirrors
+the other contracts — a 3.1-aware Redocly lint of `openapi.json` plus an Ajv (Draft 2020-12) run of
+each fixture against its component schema, with two negative fixtures that must fail — and automating
+it stays the same `contracts/` [backlog](../backlog.md) item.
+
+**Why:** `contracts/` is the single artifact all phases conform to, and this operator/fleet surface —
+the SPA's entire request/response contract with the platform — had a catalog entry and a client-side
+sketch but no normative schema. Authoring it gives the frontend and the Go API one artifact to build
+against and lets the SPA's Zod schemas validate against it. Reusing OpenAPI 3.1 / JSON Schema 2020-12
+keeps one validation discipline across MQTT, controller-rest, and this contract; `/api`-prefixed,
+greenhouse-scoped paths and the shared slug identity keep the model uniform end to end.
+
+**RFC:** [RFC-007](./request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format),
+[RFC-005](./request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain),
+[RFC-009](./request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)
+
+---
+
 ## 2026-06-16 — Actuator-health monitoring, observed actuator channel, and MQTT connection-resilience model
 
 **Decision:** Close four controller failure gaps surfaced by

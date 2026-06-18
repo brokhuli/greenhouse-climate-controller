@@ -1,0 +1,27 @@
+{
+  "parameters": [
+    { "$ref": "../components/parameters.json#/EventGreenhouseId" },
+    { "$ref": "../components/parameters.json#/EventKind" },
+    { "$ref": "../components/parameters.json#/EventSeverity" }
+  ],
+  "get": {
+    "operationId": "listEvents",
+    "summary": "Activity feed",
+    "description": "Recent events across the fleet or scoped to one greenhouse — the activity feed (frontend data model §6, key [\"events\", scope]). Newest first; live events are prepended over the WebSocket fan-out.",
+    "x-slice": "2a",
+    "security": [],
+    "responses": {
+      "200": {
+        "description": "The activity feed.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "array",
+              "items": { "$ref": "../components/schemas/events.json#/EventEntry" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -39,7 +39,7 @@ is versioned and accompanied by an ADR, per [`contracts/README.md`](../../../con
 | 1 | MQTT telemetry schemas | Controller → platform, optimizer | JSON Schema (Draft 2020-12) | 1 | [RFC-007](../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format), [RFC-001](../../decisions/request-for-comments.md#rfc-001-mqtt-broker-selection) |
 | 2 | Controller REST API | Controller → platform | OpenAPI 3.1 | 1 | [RFC-005](../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain), [RFC-009](../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries) |
 | 3 | Phase 2 Setpoint API | Optimizer (+ Phase 4) → platform | REST (OpenAPI-style) | 2b / 3 | [RFC-005](../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain) |
-| 4 | Phase 2 operator/fleet REST API | SPA / operator → platform | REST (OpenAPI-style) | 2a (telemetry/registration/edits) / 2b (profiles/assignments) | [P2 API surface](./platform/09-spec-platform-interfaces.md#3-api-surface-inventory) |
+| 4 | Phase 2 operator/fleet REST API | SPA / operator → platform | OpenAPI 3.1 | 2a (telemetry/registration/edits) / 2b (profiles/assignments) | [P2 API surface](./platform/09-spec-platform-interfaces.md#3-api-surface-inventory) |
 | 5 | Phase 2 WebSocket fan-out | Platform → SPA | WebSocket message schema | 2a | [P2 API surface](./platform/09-spec-platform-interfaces.md#3-api-surface-inventory) |
 | 6 | Optimizer plan schema | Planner → constraint engine / applier | Structured schema (JSON Schema) | 3 | [RFC-004](../../decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface) |
 | 7 | Telemetry read-surface views | Platform → optimizer | Versioned SQL views | 2b / 3 | [RFC-008](../../decisions/request-for-comments.md#rfc-008-phase-3-telemetry-read-path) |
@@ -86,11 +86,11 @@ is versioned and accompanied by an ADR, per [`contracts/README.md`](../../../con
 |---|---|
 | **Purpose** | The operator-facing surface: greenhouse registry, historical telemetry range queries, analytics, and ad-hoc setpoint edits (**2a**); crop-profile CRUD and assignments (**2b**). |
 | **Parties / direction** | SPA / operator tooling → platform |
-| **Format** | REST request/response (OpenAPI-style description recommended) |
+| **Format** | OpenAPI 3.1 (uses the JSON Schema 2020-12 dialect); `/api`-prefixed, greenhouse-scoped paths; 422 names the violated bound |
 | **Phase introduced** | Phase 2 — registration/telemetry/edits in 2a, profiles/assignments in 2b |
-| **Governing decision** | [P2 API surface](./platform/09-spec-platform-interfaces.md#3-api-surface-inventory) |
-| **Location** | To be created |
-| **Status** | To author |
+| **Governing decision** | [P2 API surface](./platform/09-spec-platform-interfaces.md#3-api-surface-inventory), [ADR 2026-06-17](../../decisions/architecture-design-record.md) |
+| **Location** | [`contracts/frontend-rest/`](../../../contracts/frontend-rest/) |
+| **Status** | Authored — `openapi.json` + README + example fixtures exist under [`contracts/frontend-rest/`](../../../contracts/frontend-rest/) |
 
 ### 2.5 Phase 2 WebSocket fan-out
 
@@ -98,11 +98,11 @@ is versioned and accompanied by an ADR, per [`contracts/README.md`](../../../con
 |---|---|
 | **Purpose** | Live, fleet-wide push of telemetry, status changes, drift, and events to the dashboard. |
 | **Parties / direction** | Platform → SPA |
-| **Format** | WebSocket message schema (shares the RFC-007 identity / timestamp envelope) |
+| **Format** | WebSocket message schema (JSON Schema, Draft 2020-12); shares the RFC-007 identity / timestamp envelope; one file per frame type, discriminated by `type` |
 | **Phase introduced** | Phase 2a |
-| **Governing decision** | [P2 API surface](./platform/09-spec-platform-interfaces.md#3-api-surface-inventory) |
-| **Location** | To be created |
-| **Status** | To author |
+| **Governing decision** | [P2 API surface](./platform/09-spec-platform-interfaces.md#3-api-surface-inventory), [ADR 2026-06-17](../../decisions/architecture-design-record.md) |
+| **Location** | [`contracts/frontend-ws/`](../../../contracts/frontend-ws/) |
+| **Status** | Authored — envelope + per-frame schemas + README + example fixtures exist under [`contracts/frontend-ws/`](../../../contracts/frontend-ws/) |
 
 ### 2.6 Optimizer plan schema
 

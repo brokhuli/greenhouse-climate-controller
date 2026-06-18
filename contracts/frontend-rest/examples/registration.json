@@ -1,0 +1,9 @@
+{
+  "id": "gh-b",
+  "display_name": "Greenhouse B",
+  "crop": "basil",
+  "controller": {
+    "rest_base_url": "http://gh-b:8080",
+    "mqtt_topic_root": "gh/gh-b"
+  }
+}

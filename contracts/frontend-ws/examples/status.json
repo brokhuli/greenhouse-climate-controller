@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "greenhouse_id": "gh-a",
+  "zone_id": null,
+  "ts": "2026-06-17T00:42:05.000Z",
+  "type": "status",
+  "status": "degraded"
+}

@@ -1,0 +1,139 @@
+{
+  "ZoneTargets": {
+    "type": "object",
+    "description": "One irrigation zone's runtime-adjustable targets. Mirrors the controller's per-zone config (controller spec §4, §6) so a resolved profile maps directly onto it. Zone *topology* (adding/removing zones) is a controller config + restart change and is not in this write path (platform data model §3).",
+    "properties": {
+      "zone_id": { "$ref": "./common.json#/Slug" },
+      "moisture_low_threshold": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1,
+        "description": "Irrigation triggers below this soil moisture (VWC, 0–1). Must be below moisture_high_threshold."
+      },
+      "moisture_high_threshold": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1,
+        "description": "Irrigation stops above this soil moisture (VWC, 0–1). Must be above moisture_low_threshold."
+      },
+      "drain_period_secs": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "Minimum gap between irrigation cycles, to prevent root saturation (seconds)."
+      },
+      "schedule": {
+        "type": "string",
+        "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9](,([01][0-9]|2[0-3]):[0-5][0-9])*$",
+        "description": "Comma-separated time-of-day triggers, HH:MM (e.g. \"06:00,14:00\")."
+      }
+    },
+    "required": [
+      "zone_id",
+      "moisture_low_threshold",
+      "moisture_high_threshold",
+      "drain_period_secs",
+      "schedule"
+    ],
+    "additionalProperties": false
+  },
+  "Setpoints": {
+    "type": "object",
+    "description": "A greenhouse's target bundle: the global climate setpoints plus per-zone irrigation targets. Deliberately mirrors the controller's runtime-adjustable config (controller spec §4) so resolving a crop profile (platform §5) is a mapping, not a translation. Numeric targets only — never a crop. Temperature is a day/night pair resolved against the day window.",
+    "properties": {
+      "temperature_day_c": {
+        "type": "number",
+        "minimum": -20,
+        "maximum": 60,
+        "description": "Daytime air-temperature target (°C)."
+      },
+      "temperature_night_c": {
+        "type": "number",
+        "minimum": -20,
+        "maximum": 60,
+        "description": "Nighttime air-temperature target (°C)."
+      },
+      "day_start": {
+        "type": "string",
+        "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+        "description": "Start of the day window, local time-of-day HH:MM (24h)."
+      },
+      "day_end": {
+        "type": "string",
+        "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+        "description": "End of the day window, local time-of-day HH:MM (24h)."
+      },
+      "humidity_low_pct": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 100,
+        "description": "Fog-on threshold; relative humidity below this turns misters on (%RH). Must be below humidity_high_pct."
+      },
+      "humidity_high_pct": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 100,
+        "description": "Fog-off threshold; relative humidity above this turns misters off (%RH). Must be above humidity_low_pct."
+      },
+      "co2_target_ppm": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 5000,
+        "description": "CO₂ enrichment target; injector opens below this, closes when reached (ppm)."
+      },
+      "co2_vent_interlock_threshold_pct": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 100,
+        "description": "Vent position above which the CO₂ injector is hard-interlocked off, to avoid enriching while venting (% open)."
+      },
+      "vpd_target_kpa": {
+        "type": "number",
+        "minimum": 0,
+        "description": "Vapor-pressure-deficit target jointly served by the temperature and humidity loops (kPa)."
+      },
+      "dli_target_mol": {
+        "type": "number",
+        "minimum": 0,
+        "description": "Daily Light Integral target driving supplemental lighting (mol·m⁻²·day⁻¹)."
+      },
+      "zones": {
+        "type": "array",
+        "description": "Per-zone irrigation targets, one entry per configured zone.",
+        "items": { "$ref": "#/ZoneTargets" }
+      }
+    },
+    "required": [
+      "temperature_day_c",
+      "temperature_night_c",
+      "day_start",
+      "day_end",
+      "humidity_low_pct",
+      "humidity_high_pct",
+      "co2_target_ppm",
+      "co2_vent_interlock_threshold_pct",
+      "vpd_target_kpa",
+      "dli_target_mol",
+      "zones"
+    ],
+    "additionalProperties": false
+  },
+  "SetpointsPatch": {
+    "type": "object",
+    "description": "Partial (merge) update of a Setpoints bundle — any subset of the same fields, same bounds. Absent fields are unchanged; a present `zones` array replaces the zone target set. Cross-field invariants the schema cannot express (humidity_low_pct < humidity_high_pct, moisture_low_threshold < moisture_high_threshold) are enforced server-side and surface as 422.",
+    "properties": {
+      "temperature_day_c": { "$ref": "#/Setpoints/properties/temperature_day_c" },
+      "temperature_night_c": { "$ref": "#/Setpoints/properties/temperature_night_c" },
+      "day_start": { "$ref": "#/Setpoints/properties/day_start" },
+      "day_end": { "$ref": "#/Setpoints/properties/day_end" },
+      "humidity_low_pct": { "$ref": "#/Setpoints/properties/humidity_low_pct" },
+      "humidity_high_pct": { "$ref": "#/Setpoints/properties/humidity_high_pct" },
+      "co2_target_ppm": { "$ref": "#/Setpoints/properties/co2_target_ppm" },
+      "co2_vent_interlock_threshold_pct": { "$ref": "#/Setpoints/properties/co2_vent_interlock_threshold_pct" },
+      "vpd_target_kpa": { "$ref": "#/Setpoints/properties/vpd_target_kpa" },
+      "dli_target_mol": { "$ref": "#/Setpoints/properties/dli_target_mol" },
+      "zones": { "$ref": "#/Setpoints/properties/zones" }
+    },
+    "minProperties": 1,
+    "additionalProperties": false
+  }
+}

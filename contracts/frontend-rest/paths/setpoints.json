@@ -1,0 +1,30 @@
+{
+  "parameters": [{ "$ref": "../components/parameters.json#/GreenhouseId" }],
+  "patch": {
+    "operationId": "editSetpoints",
+    "summary": "Ad-hoc setpoint edit",
+    "description": "Partial (merge) update of a greenhouse's target bundle — the operator's ad-hoc edit (frontend interactions: edit → confirm → optimistic pending → settled/rolled back). In 2a this is a thin relay to the controller's REST `PATCH /setpoints`; in 2b it becomes sticky intended state under reconciliation (platform §5). Out-of-range values and cross-field invariants (e.g. humidity_low_pct < humidity_high_pct) are rejected with 422 naming the violated bound.",
+    "x-slice": "2a",
+    "security": [],
+    "requestBody": {
+      "required": true,
+      "content": {
+        "application/json": {
+          "schema": { "$ref": "../components/schemas/setpoints.json#/SetpointsPatch" }
+        }
+      }
+    },
+    "responses": {
+      "200": {
+        "description": "The target bundle after applying the edit.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "../components/schemas/setpoints.json#/Setpoints" }
+          }
+        }
+      },
+      "404": { "$ref": "../components/responses.json#/NotFound" },
+      "422": { "$ref": "../components/responses.json#/ValidationFailed" }
+    }
+  }
+}

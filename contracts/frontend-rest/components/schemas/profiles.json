@@ -1,0 +1,73 @@
+{
+  "ProfileStage": {
+    "type": "object",
+    "description": "One growth stage of a crop profile and the target bundle it applies.",
+    "properties": {
+      "stage": {
+        "type": "string",
+        "description": "Growth stage label (e.g. propagation, vegetative, fruiting)."
+      },
+      "targets": { "$ref": "./setpoints.json#/Setpoints" }
+    },
+    "required": ["stage", "targets"],
+    "additionalProperties": false
+  },
+  "CropProfile": {
+    "type": "object",
+    "description": "(2b) A named, stage-aware bundle of climate + irrigation targets for a crop — the reusable library entry an operator assigns to a greenhouse (platform §5).",
+    "properties": {
+      "id": { "$ref": "./common.json#/Slug" },
+      "name": {
+        "type": "string",
+        "description": "Operator-facing profile name."
+      },
+      "crop": {
+        "type": "string",
+        "description": "Crop this profile is for (label)."
+      },
+      "stages": {
+        "type": "array",
+        "minItems": 1,
+        "description": "The stage-aware target bundles, one per growth stage.",
+        "items": { "$ref": "#/ProfileStage" }
+      }
+    },
+    "required": ["id", "name", "crop", "stages"],
+    "additionalProperties": false
+  },
+  "CropProfilePatch": {
+    "type": "object",
+    "description": "(2b) Partial update of a CropProfile — any subset of name/crop/stages. The id is immutable (path identity).",
+    "properties": {
+      "name": { "$ref": "#/CropProfile/properties/name" },
+      "crop": { "$ref": "#/CropProfile/properties/crop" },
+      "stages": { "$ref": "#/CropProfile/properties/stages" }
+    },
+    "minProperties": 1,
+    "additionalProperties": false
+  },
+  "Assignment": {
+    "type": "object",
+    "description": "(2b) Which profile and growth stage are currently assigned to a greenhouse (platform §5).",
+    "properties": {
+      "greenhouse_id": { "$ref": "./common.json#/Slug" },
+      "profile_id": { "$ref": "./common.json#/Slug" },
+      "stage": {
+        "type": "string",
+        "description": "The assigned growth stage; must be one of the profile's stages."
+      }
+    },
+    "required": ["greenhouse_id", "profile_id", "stage"],
+    "additionalProperties": false
+  },
+  "AssignmentInput": {
+    "type": "object",
+    "description": "(2b) Assign a profile/stage to the greenhouse in the path. The greenhouse identity comes from the path, not the body.",
+    "properties": {
+      "profile_id": { "$ref": "./common.json#/Slug" },
+      "stage": { "$ref": "#/Assignment/properties/stage" }
+    },
+    "required": ["profile_id", "stage"],
+    "additionalProperties": false
+  }
+}

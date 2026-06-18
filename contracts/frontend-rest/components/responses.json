@@ -1,0 +1,34 @@
+{
+  "NotFound": {
+    "description": "The greenhouse, profile, or assignment does not exist.",
+    "content": {
+      "application/json": {
+        "schema": { "$ref": "./schemas/common.json#/Error" }
+      }
+    }
+  },
+  "ValidationFailed": {
+    "description": "A value is out of range or violates a setpoint/threshold invariant; the body names the violated bound.",
+    "content": {
+      "application/json": {
+        "schema": { "$ref": "./schemas/common.json#/ValidationError" }
+      }
+    }
+  },
+  "Unauthorized": {
+    "description": "(2b) Missing or invalid bearer token. In 2a the API is unauthenticated on the trusted Docker network and this response does not occur (RFC-009).",
+    "content": {
+      "application/json": {
+        "schema": { "$ref": "./schemas/common.json#/Error" }
+      }
+    }
+  },
+  "Forbidden": {
+    "description": "(2b) Authenticated but lacking the operator role required for this write (platform security §4).",
+    "content": {
+      "application/json": {
+        "schema": { "$ref": "./schemas/common.json#/Error" }
+      }
+    }
+  }
+}

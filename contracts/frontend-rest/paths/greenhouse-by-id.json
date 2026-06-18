@@ -1,0 +1,32 @@
+{
+  "parameters": [{ "$ref": "../components/parameters.json#/GreenhouseId" }],
+  "get": {
+    "operationId": "getGreenhouse",
+    "summary": "Greenhouse detail snapshot",
+    "description": "One greenhouse's summary plus its full current target bundle (frontend data model §6, key [\"greenhouse\", id]).",
+    "x-slice": "2a",
+    "security": [],
+    "responses": {
+      "200": {
+        "description": "Greenhouse detail.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "../components/schemas/greenhouses.json#/GreenhouseDetail" }
+          }
+        }
+      },
+      "404": { "$ref": "../components/responses.json#/NotFound" }
+    }
+  },
+  "delete": {
+    "operationId": "retireGreenhouse",
+    "summary": "Retire a greenhouse",
+    "description": "Remove a greenhouse from the fleet (operator tooling, platform §3). Historical telemetry is unaffected; this drops the registry entry.",
+    "x-slice": "2a",
+    "security": [],
+    "responses": {
+      "204": { "description": "Greenhouse retired (or already absent)." },
+      "404": { "$ref": "../components/responses.json#/NotFound" }
+    }
+  }
+}
