@@ -16,7 +16,7 @@ This contract formalizes the REST half of the *client's working contract* previo
 the SPA's Zod schemas in `src/api/schemas.ts` validate against it.
 
 **Scope — REST only.** The live-push WebSocket fan-out (telemetry, status, drift, events) is a
-**separate** contract (catalog #5, still to author) and is **not** described here.
+**separate** contract ([`frontend-ws/`](../frontend-ws/), catalog #5) and is **not** described here.
 
 ## File layout
 

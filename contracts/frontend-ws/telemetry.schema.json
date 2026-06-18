@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://greenhouse.local/contracts/frontend-ws/telemetry.schema.json",
+  "title": "Telemetry Frame",
+  "description": "A live telemetry snapshot pushed to the SPA: the latest sensor readings (and optionally actuator positions) for one greenhouse at the envelope `ts`. The SPA appends one point per metric to its per-series ring buffer and renders the live chart edge (frontend data model §5, architecture §4). Zone-scoped readings carry the envelope zone_id; house-level readings leave it null.",
+  "type": "object",
+  "allOf": [
+    { "$ref": "https://greenhouse.local/contracts/frontend-ws/envelope.schema.json" },
+    {
+      "properties": {
+        "type": {
+          "const": "telemetry",
+          "description": "Frame discriminator."
+        },
+        "readings": {
+          "type": "array",
+          "description": "Latest sensor samples at this instant, one entry per metric (metric→unit bound).",
+          "items": { "$ref": "https://greenhouse.local/contracts/frontend-ws/common.schema.json#/$defs/reading" }
+        },
+        "actuators": {
+          "type": "array",
+          "description": "Optional actuator position samples at this instant (commanded vs observed). Feeds the detail view's actuator panel (platform dashboard §1).",
+          "items": { "$ref": "https://greenhouse.local/contracts/frontend-ws/common.schema.json#/$defs/actuator_sample" }
+        }
+      },
+      "required": ["type", "readings"]
+    }
+  ],
+  "unevaluatedProperties": false
+}

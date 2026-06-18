@@ -98,11 +98,11 @@ is versioned and accompanied by an ADR, per [`contracts/README.md`](../../../con
 |---|---|
 | **Purpose** | Live, fleet-wide push of telemetry, status changes, drift, and events to the dashboard. |
 | **Parties / direction** | Platform → SPA |
-| **Format** | WebSocket message schema (shares the RFC-007 identity / timestamp envelope) |
+| **Format** | WebSocket message schema (JSON Schema, Draft 2020-12); shares the RFC-007 identity / timestamp envelope; one file per frame type, discriminated by `type` |
 | **Phase introduced** | Phase 2a |
-| **Governing decision** | [P2 API surface](./platform/09-spec-platform-interfaces.md#3-api-surface-inventory) |
-| **Location** | To be created |
-| **Status** | To author |
+| **Governing decision** | [P2 API surface](./platform/09-spec-platform-interfaces.md#3-api-surface-inventory), [ADR 2026-06-17](../../decisions/architecture-design-record.md) |
+| **Location** | [`contracts/frontend-ws/`](../../../contracts/frontend-ws/) |
+| **Status** | Authored — envelope + per-frame schemas + README + example fixtures exist under [`contracts/frontend-ws/`](../../../contracts/frontend-ws/) |
 
 ### 2.6 Optimizer plan schema
 

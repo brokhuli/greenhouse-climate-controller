@@ -17,7 +17,12 @@ Shared message and data contracts — the single source of truth that all three 
   unauthenticated on the trusted Docker network and 2b adds Keycloak OIDC bearer auth
   ([RFC-009](../docs/decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)).
   See [`frontend-rest/README.md`](./frontend-rest/README.md). The live-push **WebSocket** fan-out is
-  a separate, still-to-author contract.
+  a separate contract — [`frontend-ws/`](./frontend-ws/README.md), below.
+- `frontend-ws/` — the Phase 2 platform's live-push **WebSocket** fan-out (JSON Schema, Draft 2020-12):
+  the frames the React SPA receives over a single socket — telemetry, status changes, drift, and
+  activity events (slice 2a; drift in 2b). **Platform → SPA push only**; each frame carries the
+  RFC-007 envelope and is discriminated by `type`, validated with Ajv like the MQTT schemas. See
+  [`frontend-ws/README.md`](./frontend-ws/README.md).
 
 Phase 1 (controller) publishes telemetry to these schemas; Phase 2 (platform) ingests them; Phase 3
 (optimizer) reads that history. **MQTT carries telemetry only** (sensor readings, actuator state,

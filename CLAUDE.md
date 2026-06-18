@@ -15,6 +15,7 @@
 - Avoid untested logic
 
 ## Git
+- Don't commit unless directed to do so
 - Use conventional commits
 - Keep commits focused
 - Update documentation when behavior changes

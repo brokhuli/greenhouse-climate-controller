@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://greenhouse.local/contracts/frontend-ws/event.schema.json",
+  "title": "Event Frame",
+  "description": "An activity-feed event pushed live to the SPA: a fault, safety-interlock activation, profile application, setpoint edit, or drift detection. The SPA prepends it to the activity feed cache and raises a toast when severity is critical (frontend data model §5). This is the frontend-rest EventEntry shape with its greenhouse_id and ts carried by the frame envelope rather than inline (REST bodies have no envelope, so EventEntry embeds them; here they live in the envelope). Greenhouse-scoped — the envelope zone_id is null.",
+  "type": "object",
+  "allOf": [
+    { "$ref": "https://greenhouse.local/contracts/frontend-ws/envelope.schema.json" },
+    {
+      "properties": {
+        "type": {
+          "const": "event",
+          "description": "Frame discriminator."
+        },
+        "kind": { "$ref": "https://greenhouse.local/contracts/frontend-ws/common.schema.json#/$defs/event_kind" },
+        "severity": { "$ref": "https://greenhouse.local/contracts/frontend-ws/common.schema.json#/$defs/event_severity" },
+        "message": {
+          "type": "string",
+          "description": "Human-readable description of the event."
+        },
+        "source": {
+          "type": "string",
+          "description": "Who or what produced the event (audit attribution, platform §6) — e.g. operator, crop_profile, optimizer."
+        },
+        "zone_id": {
+          "const": null,
+          "description": "Always null: events surface at greenhouse scope on the dashboard, matching the frontend-rest EventEntry."
+        }
+      },
+      "required": ["type", "kind", "severity", "message"]
+    }
+  ],
+  "unevaluatedProperties": false
+}

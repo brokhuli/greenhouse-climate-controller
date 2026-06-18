@@ -17,9 +17,9 @@
 > [`frontend-rest/`](../../../../contracts/frontend-rest/) — **the Go-API ↔ SPA REST
 > contract these shapes bind to** (the SPA's Zod schemas in `src/api/schemas.ts`
 > validate against it; field names there are camelCase mapping onto the contract's
-> snake_case wire fields). The **only** remaining gap is the live-push **WebSocket**
-> contract (catalog #5), still to author; until it lands, the WS frame shapes in
-> [§5](#5-websocket-message-taxonomy) are the *client's working contract*. The shapes
+> snake_case wire fields). The live-push **WebSocket** contract (catalog #5) is now
+> formalized at [`frontend-ws/`](../../../../contracts/frontend-ws/); the WS frame shapes in
+> [§5](#5-websocket-message-taxonomy) bind to it. The shapes
 > below mirror the platform's [data model](../platform/03-spec-platform-data-model.md)
 > so the mapping stays thin.
 
@@ -207,6 +207,12 @@ export const wsMessage = z.discriminatedUnion("type", [
 Query-cache patches ([architecture §4](./03-spec-frontend-architecture.md#4-runtime-data-flow)).
 Unknown `type` values are ignored (forward-compatible).
 
+> The wire shapes are owned by [`contracts/frontend-ws/`](../../../../contracts/frontend-ws/)
+> (catalog #5). The `{ type, data }` snippet above is **illustrative**: on the wire each frame is
+> *flat* — the RFC-007 envelope (`schema_version`, `greenhouse_id`, `zone_id`, `ts`), the `type`
+> discriminator, and the payload all at the top level, the same layout as an MQTT message. `ws.ts`
+> maps those frames onto the client union above.
+
 ---
 
 ## 6. Query keys & cache strategy
@@ -249,8 +255,8 @@ Every REST response and WS frame is parsed through its Zod schema in
 
 This is the client's runtime enforcement point: REST responses validate against the
 formalized [`contracts/frontend-rest/`](../../../../contracts/frontend-rest/) contract,
-and WS frames against the client's working contract until the WebSocket contract
-(catalog #5) is formalized (see the scope note above).
+and WS frames against the formalized
+[`contracts/frontend-ws/`](../../../../contracts/frontend-ws/) contract (catalog #5).
 
 ---
 
@@ -276,6 +282,7 @@ derivations are testable in isolation (`P2-TEST-2`-adjacent unit coverage).
 
 - API surface (routes + responsibilities): [platform API surface](../platform/09-spec-platform-interfaces.md#3-api-surface-inventory)
 - REST wire contract (the shapes here bind to it): [`contracts/frontend-rest/`](../../../../contracts/frontend-rest/)
+- WS wire contract (the §5 frames bind to it): [`contracts/frontend-ws/`](../../../../contracts/frontend-ws/)
 - Wire conventions (envelope, identity, versioning): [RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)
 - Platform data model the shapes mirror: [platform data model](../platform/03-spec-platform-data-model.md)
 - How the cache is fed and patched: [architecture §4](./03-spec-frontend-architecture.md#4-runtime-data-flow)
