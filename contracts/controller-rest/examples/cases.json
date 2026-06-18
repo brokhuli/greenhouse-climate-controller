@@ -1,0 +1,13 @@
+{
+  "_comment": "Fixture-validation manifest for the contract harness (scripts/validate-contracts.mjs). Mirrors the fixture table in this contract's README. `schema` is `<component-file>#/<ComponentName>` under components/schemas/.",
+  "cases": [
+    { "fixture": "setpoints.json", "schema": "setpoints.json#/Setpoints", "expect": "pass" },
+    { "fixture": "setpoints.patch.json", "schema": "setpoints.json#/SetpointsPatch", "expect": "pass" },
+    { "fixture": "setpoints.bad-range.json", "schema": "setpoints.json#/Setpoints", "expect": "fail" },
+    { "fixture": "zone-status.json", "schema": "zones.json#/ZoneStatus", "expect": "pass" },
+    { "fixture": "zone-config.patch.json", "schema": "zones.json#/ZoneConfigPatch", "expect": "pass" },
+    { "fixture": "override.put.json", "schema": "overrides.json#/OverridePut", "expect": "pass" },
+    { "fixture": "override.bad-level.json", "schema": "overrides.json#/OverridePut", "expect": "fail" },
+    { "fixture": "health.json", "schema": "health.json#/Health", "expect": "pass" }
+  ]
+}

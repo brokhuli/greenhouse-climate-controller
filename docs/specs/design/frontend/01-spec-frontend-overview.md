@@ -147,6 +147,7 @@ How this set divides the work, and where each concern is detailed:
 | Color, type, spacing, motion, chart tokens, themes | [`07-spec-frontend-design-tokens.md`](./07-spec-frontend-design-tokens.md) | — |
 | Hover/focus/keyboard/motion + real-time interaction | [`08-spec-frontend-interactions.md`](./08-spec-frontend-interactions.md) | — |
 | Non-negotiable rules (hosting, auth, safety, perf) | [`09-spec-frontend-constraints.md`](./09-spec-frontend-constraints.md) | [platform fleet management](../platform/05-spec-platform-crop-profiles.md#5-fleet-management--operator-control), [authentication](../platform/07-spec-platform-security.md), [constraints](../platform/11-spec-platform-constraints.md#7-scope--deferred--out-of-scope) |
+| Verification & feedback loops (system-wide strategy, tooling, CI) | [`spec-verification.md`](../spec-verification.md) | [NFR doc](../../artifacts/non-functional-requirements.md) |
 | Quality targets (load, latency, a11y, test) | [NFR doc](../../artifacts/non-functional-requirements.md) | — (single source) |
 
 If a frontend change can't be traced to one of these documents — or to the

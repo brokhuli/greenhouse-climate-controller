@@ -19,6 +19,18 @@ if git diff --cached --name-only | grep -q '^climate-controller/'; then
   )
 fi
 
+# Contracts gate: validate the JSON Schema / OpenAPI contracts and their example fixtures when any
+# contract, the harness, or its manifest is staged. Mirrors the crate-scoped Rust gate above so
+# docs-only commits are not blocked on Node. Requires `npm install` (ajv + @redocly/cli).
+if git diff --cached --name-only | grep -qE '^(contracts/|scripts/validate-contracts|package(-lock)?\.json)'; then
+  echo "contract changes staged — validating schemas + fixtures..."
+  if [[ -d node_modules ]]; then
+    npm run --silent validate:contracts
+  else
+    echo "  node_modules/ missing — run 'npm install' to enable the contracts gate; skipping." >&2
+  fi
+fi
+
 echo "Checks passed."
 
 # Bump PATCH version in VERSION file (e.g. 1.2.3 → 1.2.4)

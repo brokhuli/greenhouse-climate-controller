@@ -521,7 +521,7 @@ combustion code, weather feed, or actuator-selection logic lands before Phase 4.
 
 ### Summary
 
-Establish the conventions that govern [`contracts/`](../../../contracts/) before any schema file is
+Establish the conventions that govern [`contracts/`](../../contracts/) before any schema file is
 written: (1) the **MQTT topic taxonomy** and the **canonical identity scheme** (`greenhouse_id` /
 `zone_id`) shared across MQTT topics, REST paths, and DB keys; (2) a **common payload envelope** with
 a fixed timestamp format and units convention; and (3) the **schema format** (JSON Schema, Draft
@@ -963,3 +963,93 @@ remain the natural seams to add a per-controller token, and the optimizer the na
 service account, **if** the system ever leaves the single-host local model. The Proposal's open
 questions (token rotation, narrow service role vs. operator, auth on read endpoints) are moot under
 this decision. See ADR entry 2026-06-08.
+
+---
+
+## RFC-010: Verification & Continuous-Integration Strategy
+
+| Field   | Value |
+|---------|-------|
+| Status  | Accepted |
+| Created | 2026-06-18 |
+| Decided | 2026-06-18 |
+| Priority | Medium — gates the transition from spec to Phase 1 implementation |
+
+> **Decision (2026-06-18):** Adopt a single, system-wide verification strategy with two homes — a
+> cross-cutting [`spec-verification.md`](../specs/design/spec-verification.md) (the verification
+> ladder, the feedback-loop ladder, the tooling matrix, the CI plan) plus per-component verification
+> docs deferring to it (the optimizer's
+> [`07`](../specs/design/optimizer/07-spec-optimizer-evaluation.md) and the controller's
+> [`11`](../specs/design/controller/11-spec-controller-verification.md) are the first two). Wire the
+> **contract-validation harness now** — it runs locally and needs no CI. Defer the **CI pipeline**
+> until a platform is adopted. The tooling decision is recorded in
+> [`local-environment-record.md`](./local-environment-record.md).
+
+### Summary
+
+The system had quality *targets* (the `*-TEST-*` / `*-PERF-*` IDs in the
+[NFR doc](../specs/artifacts/non-functional-requirements.md)) and one component-level verification
+*strategy* (optimizer [`07`](../specs/design/optimizer/07-spec-optimizer-evaluation.md)), but no
+system-wide statement of **how the system is verified**, **what the development feedback loops are**,
+or **what tooling is required** — the open `research/todo.md` item "Identify code verification and
+feedback loops." This RFC settles that strategy and wires the one piece that did not depend on
+infrastructure the repo lacks: the contract-validation harness.
+
+### Problem
+
+Verification was scattered and partly aspirational:
+
+- The contract READMEs each specified an Ajv/Redocly fixture check but called it a **manual** step
+  with "no committed harness or CI yet"; [`docs/backlog.md`](../backlog.md) tracked it as blocked on
+  CI. Nothing re-ran the check, so a schema regression or a drifted fixture would pass unnoticed.
+- Only the local [`.githooks/pre-commit`](../../.githooks/pre-commit) Rust gate existed; there was no
+  named ladder of feedback loops, no per-language tooling matrix, and no CI definition.
+- "Feedback loop" is ambiguous in a control-systems project — the runtime sensor→actuator control
+  loop versus the development loops that prove a change correct.
+
+### Proposal
+
+1. **Two-home verification spec.** A cross-cutting
+   [`spec-verification.md`](../specs/design/spec-verification.md) owns the system-wide story
+   (verification ladder, the development-feedback-loop ladder explicitly distinguished from the
+   control loop, the tooling matrix, the deferred CI topology, and the contract harness). Each spec
+   set carries (or will carry, as it approaches implementation) a per-component verification doc that
+   defers to it — controller `11` now, platform/frontend later.
+2. **Wire the contract harness now.** [`scripts/validate-contracts.mjs`](../../scripts/validate-contracts.mjs)
+   (`npm run validate:contracts`) validates every contract's schemas + example fixtures with Ajv
+   (Draft 2020-12) and lints the OpenAPI documents with `@redocly/cli`; it runs in a pre-commit
+   contracts gate scoped to staged contract paths. `@redocly/cli` is added as a **pinned
+   devDependency** — the linter the OpenAPI READMEs already mandate. No runtime dependency is added.
+3. **Defer CI.** A clean-environment pipeline (Rust gate, contract harness, coverage, and the
+   Go/Python/frontend gates as they land) is the plan of record but waits for a CI platform; it stays
+   the open item in [`docs/backlog.md`](../backlog.md).
+
+### What this adopts now vs. defers
+
+- **Adopted now:** the verification/feedback-loop strategy docs; the wired contract harness + pre-commit
+  contracts gate; the filled-in dev-command entries in the root README.
+- **Deferred:** the CI pipeline; per-component verification docs for the platform and frontend;
+  `cargo llvm-cov` coverage enforcement and the Go/Python/frontend/load tooling — each lands with the
+  phase it verifies.
+
+### Alternatives Considered
+
+- **Fold everything into the NFR doc.** Rejected: the NFR doc owns *targets* (a single source of
+  truth for numbers); mixing the *strategy* and tooling into it would blur that boundary and break the
+  symmetry the optimizer set already established with `07`.
+- **One monolithic verification doc, no per-component docs.** Rejected: it breaks the per-set
+  structure and would force the controller/platform/frontend scenario detail into a doc that also
+  carries cross-cutting concerns.
+- **Build CI now.** Out of scope by choice — no CI platform is adopted, and the harness runs locally
+  without one. Building it now would front-run that decision.
+- **`check-jsonschema` (Python) for the harness instead of an Ajv/Node script.** Rejected: `ajv` is
+  already a repo dependency and the OpenAPI lint needs Redocly (Node) regardless; one Node harness is
+  simpler than adding a Python toolchain purely for validation.
+
+### Resolution
+
+Accepted as the decision above. The strategy lives in
+[`spec-verification.md`](../specs/design/spec-verification.md); the tooling choice (Ajv + pinned
+Redocly, the `npm` script, the pre-commit gate) is recorded in
+[`local-environment-record.md`](./local-environment-record.md); the remaining CI-pipeline work is the
+open item in [`docs/backlog.md`](../backlog.md).

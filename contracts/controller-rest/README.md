@@ -156,9 +156,13 @@ is unauthenticated by design (RFC-009, no `securitySchemes`), and `info-license`
 npx @redocly/cli lint --config contracts/controller-rest/redocly.yaml contracts/controller-rest/openapi.json
 ```
 
-This is currently a **manual** check — there is no committed harness or CI yet. Automating it
-(extending the `contracts/` validation harness to lint OpenAPI and validate these fixtures) is
-tracked in [`docs/backlog.md`](../../docs/backlog.md).
+This check is **automated** by the repo's contract harness —
+[`scripts/validate-contracts.mjs`](../../scripts/validate-contracts.mjs) (`npm run validate:contracts`)
+lints `openapi.json` with Redocly and validates each fixture against its component schema per
+[`examples/cases.json`](./examples/cases.json) — and is fired by the pre-commit contracts gate.
+Re-running it in a clean-environment **CI** pipeline is the one piece still deferred
+([`docs/backlog.md`](../../docs/backlog.md)); the overall strategy is
+[`spec-verification.md`](../../docs/specs/design/spec-verification.md).
 
 ## Versioning
 

@@ -1,6 +1,12 @@
 {
+  "scripts": {
+    "validate:contracts": "node scripts/validate-contracts.mjs"
+  },
   "dependencies": {
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1"
+  },
+  "devDependencies": {
+    "@redocly/cli": "^2.34.0"
   }
 }

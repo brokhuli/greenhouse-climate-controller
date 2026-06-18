@@ -9,19 +9,29 @@ React frontend is the system's only dashboard, and an AI climate optimizer (Pyth
 
 ## Development Commands
 
+Phase 1 is the Rust controller; the cross-component contracts are validated with a Node harness.
+Go (Phase 2) and Python (Phase 3) commands arrive with their phases. The full verification strategy
+and per-phase tooling matrix is [`spec-verification.md`](docs/specs/design/spec-verification.md).
+
 ```sh
 # format
-<command>
+cargo fmt --manifest-path climate-controller/Cargo.toml --all
 
 # lint
-<command>
+cargo clippy --manifest-path climate-controller/Cargo.toml --all-targets --all-features -- -D warnings
 
 # typecheck
-<command>
+cargo check --manifest-path climate-controller/Cargo.toml --all-targets
 
 # test
-<command>
+cargo test --manifest-path climate-controller/Cargo.toml
 
 # build
-<command>
+cargo build --manifest-path climate-controller/Cargo.toml
+
+# validate cross-component contracts (schemas + fixtures + OpenAPI lint)
+npm install && npm run validate:contracts
 ```
+
+These run automatically in the [pre-commit hook](.githooks/pre-commit): the Rust gate when
+`climate-controller/` is touched, the contracts gate when `contracts/` is touched.

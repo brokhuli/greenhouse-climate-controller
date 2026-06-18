@@ -186,6 +186,7 @@ How this set divides the work, and where each concern is detailed:
 | The three Phase 1 integration interfaces + REST/WebSocket API responsibilities | [`09-spec-platform-interfaces.md`](./09-spec-platform-interfaces.md) | [`contracts/`](../../../../contracts/), [`spec-contracts.md`](../spec-contracts.md), [controller interfaces](../controller/08-spec-controller-interfaces.md) |
 | Per-dependency choices + rejected alternatives | [`10-spec-platform-tech-stack.md`](./10-spec-platform-tech-stack.md) | [tech-stack-decisions.md](../tech-stack-decisions.md#phase-2--local-paas-platform-docker-only) |
 | Non-negotiable rules; scope / deferred capabilities | [`11-spec-platform-constraints.md`](./11-spec-platform-constraints.md) | [constraints artifact](../../artifacts/constraints.md), [NFR doc](../../artifacts/non-functional-requirements.md) |
+| Verification & feedback loops (system-wide strategy, tooling, CI) | [`spec-verification.md`](../spec-verification.md) | [NFR doc](../../artifacts/non-functional-requirements.md) |
 | Quality targets (load, latency, scale, test) | [NFR doc](../../artifacts/non-functional-requirements.md) | — (single source) |
 
 If a platform change can't be traced to one of these documents — or to the contracts

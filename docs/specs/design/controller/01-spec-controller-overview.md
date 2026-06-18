@@ -115,6 +115,9 @@ not change between them. Detail is in
    each dependency is and why*.
 10. [`10-spec-controller-constraints.md`](./10-spec-controller-constraints.md) — *the
     non-negotiable rules* and what is out of scope.
+11. [`11-spec-controller-verification.md`](./11-spec-controller-verification.md) — *proving
+    it works*: the per-stage unit suites, the golden control/safety scenario library, and
+    contract conformance.
 
 ---
 
@@ -151,6 +154,7 @@ How this set divides the work, and where each concern is detailed:
 | MQTT + REST surfaces, contract binding, connection resilience | [`08-spec-controller-interfaces.md`](./08-spec-controller-interfaces.md) | [`contracts/`](../../../../contracts/), [`spec-contracts.md`](../spec-contracts.md), `P1-RESIL-3` |
 | Per-dependency choices + rejected alternatives | [`09-spec-controller-tech-stack.md`](./09-spec-controller-tech-stack.md) | [tech-stack-decisions.md](../tech-stack-decisions.md#phase-1--deterministic-greenhouse-controller) |
 | Non-negotiable rules; scope / deferred capabilities | [`10-spec-controller-constraints.md`](./10-spec-controller-constraints.md) | [constraints artifact](../../artifacts/constraints.md), [NFR doc](../../artifacts/non-functional-requirements.md) |
+| Verification strategy: unit suites, golden control/safety scenarios, contract conformance | [`11-spec-controller-verification.md`](./11-spec-controller-verification.md) | [`spec-verification.md`](../spec-verification.md), `P1-TEST-*`, `P1-REL-*` |
 | Quality targets (tick rate, jitter, coverage, availability) | [NFR doc](../../artifacts/non-functional-requirements.md) | — (single source) |
 
 If a controller change can't be traced to one of these documents — or to the

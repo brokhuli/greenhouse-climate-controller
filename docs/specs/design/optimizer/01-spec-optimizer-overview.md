@@ -113,6 +113,7 @@ How this set divides the work, and where each concern is detailed:
 | The three integration interfaces + the served FastAPI surface | [`09-spec-optimizer-interfaces.md`](./09-spec-optimizer-interfaces.md) | [`contracts/`](../../../../contracts/), [`spec-contracts.md`](../spec-contracts.md), [RFC-008](../../../decisions/request-for-comments.md#rfc-008-phase-3-telemetry-read-path) |
 | Service configuration (env / Compose) and its keys | [`10-spec-optimizer-configuration.md`](./10-spec-optimizer-configuration.md) | — |
 | Non-negotiable scope; deferred / out-of-scope capabilities | [`11-spec-optimizer-scope.md`](./11-spec-optimizer-scope.md) | [spec-phase4.md](../spec-phase4.md) |
+| Verification & feedback loops (system-wide strategy, tooling, CI; `07` is this set's instance) | [`spec-verification.md`](../spec-verification.md) | [NFR doc](../../artifacts/non-functional-requirements.md) |
 | Quality targets (perf, scale, reliability, test) | [NFR doc](../../artifacts/non-functional-requirements.md) | — (single source) |
 
 If a Phase 3 change can't be traced to one of these documents — or to the contracts /

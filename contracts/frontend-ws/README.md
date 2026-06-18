@@ -142,9 +142,11 @@ cross-schema references (the envelope, the shared `$defs` in `common`) use absol
 base is **not a network location** — register the local files under that base with your validator so
 refs resolve offline (the same per-stack guidance as [`mqtt/README.md`](../mqtt/README.md#consuming-the-schemas-ref-resolution)).
 
-This is currently a **manual** check — there is no committed harness or CI yet. Automating it
-(extending the `contracts/` validation harness to these schemas and fixtures) is the same item tracked
-in [`docs/backlog.md`](../../docs/backlog.md).
+This check is **automated** by the repo's contract harness —
+[`scripts/validate-contracts.mjs`](../../scripts/validate-contracts.mjs) (`npm run validate:contracts`),
+fired by the pre-commit contracts gate. Re-running it in a clean-environment **CI** pipeline is the
+one piece still deferred ([`docs/backlog.md`](../../docs/backlog.md)); the overall strategy is
+[`spec-verification.md`](../../docs/specs/design/spec-verification.md).
 
 ## Versioning
 

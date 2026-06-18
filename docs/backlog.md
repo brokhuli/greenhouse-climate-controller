@@ -10,13 +10,14 @@ the relevant ADR / RFC.
 
 | Item | Why | Blocked on / When | Reference |
 |---|---|---|---|
-| Add a checked-in JSON Schema validation harness for `contracts/` | The MQTT schemas, the `controller-rest/openapi.json` document, and their `examples/` fixtures are validated only by one-off runs (Ajv Draft 2020-12 strict for the schemas/fixtures, a 3.1-aware lint for the OpenAPI doc); nothing re-runs them, so a schema regression or a drifted example would go unnoticed. | When CI is available — there is no build system or CI in the repo yet. | [`contracts/mqtt/README.md`](../contracts/mqtt/README.md); [`contracts/controller-rest/README.md`](../contracts/controller-rest/README.md); ADR [2026-06-09](./decisions/architecture-design-record.md) |
+| Stand up a CI pipeline (clean-environment gate) | The verification gates exist but run only locally — the pre-commit Rust gate and the contract harness (`npm run validate:contracts`) fire on a developer's machine, gated by staged paths. Nothing re-runs them in a clean environment on push/PR, and there is no coverage enforcement (`P1-TEST-1`). | When a CI platform is adopted — there is no CI in the repo yet. | [RFC-010](./decisions/request-for-comments.md#rfc-010-verification--continuous-integration-strategy); [`spec-verification.md §6`](./specs/design/spec-verification.md#6-ci-topology-plan-of-record-deferred) |
 
 ### Notes
 
-**Validation harness shape.** Run every `contracts/mqtt/*.schema.json` against
-`contracts/mqtt/examples/**` — positive fixtures must validate, the `*.bad-*.json`
-counter-examples must fail. Two viable forms when CI lands: a pinned Ajv dev-dependency script
-(matches the manual check already used), or [`check-jsonschema`](https://github.com/python-jsonschema/check-jsonschema)
-invoked in CI. Cross-schema `$ref`s resolve by `$id`, so each schema must be registered with
-the validator (see the consuming-the-schemas note in the contracts README).
+**CI pipeline scope.** When a CI platform lands it re-runs, in a clean environment on push/PR, the
+gates already defined: the Rust gate (`fmt`/`clippy`/`check`/`test`), the contract harness
+([`scripts/validate-contracts.mjs`](../scripts/validate-contracts.mjs)), Rust coverage against
+`P1-TEST-1` (`cargo llvm-cov`), and — as each phase lands — the Go, Python, and frontend gates and the
+load suite. The contract harness itself is **done** ([RFC-010](./decisions/request-for-comments.md#rfc-010-verification--continuous-integration-strategy),
+[local-environment-record 2026-06-18](./decisions/local-environment-record.md)); only the
+clean-environment runner is outstanding.

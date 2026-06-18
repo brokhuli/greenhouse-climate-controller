@@ -1,0 +1,16 @@
+{
+  "_comment": "Fixture-validation manifest for the contract harness (scripts/validate-contracts.mjs). Mirrors the fixture table in this contract's README. `schema` is `<component-file>#/<ComponentName>` under components/schemas/.",
+  "cases": [
+    { "fixture": "greenhouse-summary.json", "schema": "greenhouses.json#/GreenhouseSummary", "expect": "pass" },
+    { "fixture": "greenhouse-detail.json", "schema": "greenhouses.json#/GreenhouseDetail", "expect": "pass" },
+    { "fixture": "registration.json", "schema": "greenhouses.json#/GreenhouseRegistration", "expect": "pass" },
+    { "fixture": "setpoints.patch.json", "schema": "setpoints.json#/SetpointsPatch", "expect": "pass" },
+    { "fixture": "setpoints.bad-range.json", "schema": "setpoints.json#/Setpoints", "expect": "fail" },
+    { "fixture": "telemetry-range.json", "schema": "telemetry.json#/TelemetryRange", "expect": "pass" },
+    { "fixture": "analytics.json", "schema": "analytics.json#/AnalyticsResponse", "expect": "pass" },
+    { "fixture": "event.json", "schema": "events.json#/EventEntry", "expect": "pass" },
+    { "fixture": "event.bad-kind.json", "schema": "events.json#/EventEntry", "expect": "fail" },
+    { "fixture": "profile.json", "schema": "profiles.json#/CropProfile", "expect": "pass" },
+    { "fixture": "assignment.json", "schema": "profiles.json#/Assignment", "expect": "pass" }
+  ]
+}

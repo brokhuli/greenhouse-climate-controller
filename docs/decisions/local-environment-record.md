@@ -6,6 +6,38 @@ A running log of decisions about the local development environment, tooling, and
 
 ---
 
+## 2026-06-18 — Contract-validation harness: Ajv + pinned Redocly, run via npm + pre-commit
+
+**Decision:** Wire the long-specified `contracts/` validation as a committed Node harness —
+[`scripts/validate-contracts.mjs`](../../scripts/validate-contracts.mjs), invoked by
+`npm run validate:contracts` and by a new contracts gate in
+[`.githooks/pre-commit`](../../.githooks/pre-commit). It validates every contract's JSON Schema /
+OpenAPI fixtures with **Ajv** (Draft 2020-12, already a repo dependency) and lints the two
+`openapi.json` documents with **`@redocly/cli`**, added as a **pinned devDependency**. This implements
+[RFC-010](./request-for-comments.md#rfc-010-verification--continuous-integration-strategy) and resolves
+the harness half of the backlog item; the **CI** half stays open.
+
+**Why:**
+- The check was already specified in every contract README but ran only by hand, so a schema
+  regression or drifted fixture went uncaught. A committed harness makes it a real gate.
+- It needs no CI to be useful — it runs locally and in the pre-commit hook today, gated by staged
+  paths so docs-only commits are not blocked on Node (mirroring the crate-scoped Rust gate).
+- `ajv`/`ajv-formats` were already present; `@redocly/cli` is the exact OpenAPI linter the
+  `controller-rest` / `frontend-rest` READMEs already mandate (and ship a `redocly.yaml` for), so
+  pinning it adds no new *conceptual* dependency — only determinism over ad-hoc `npx`. No runtime
+  dependency is added.
+
+**Consequences / notes:**
+- Requires `npm install` before the gate works; the hook skips with a clear message if `node_modules`
+  is absent.
+- On Node 24 / Windows the Redocly CLI can hit a libuv teardown assertion *after* a clean lint; the
+  harness forgives a nonzero exit only when the success marker is present, so a real lint failure is
+  still caught.
+- The full strategy this serves is [`spec-verification.md`](../specs/design/spec-verification.md); the
+  remaining clean-environment **CI** pipeline is tracked in [`docs/backlog.md`](../backlog.md).
+
+---
+
 ## 2026-05-25 — Repository layout: single monorepo for all three phases (for now)
 
 **Decision:** Keep `climate-controller` (Phase 1, Rust), `climate-platform` (Phase 2, Go), and `climate-optimizer`

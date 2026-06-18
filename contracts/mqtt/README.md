@@ -91,9 +91,11 @@ mode): each positive fixture must validate against its schema, and each `*.bad-*
 counter-example must fail. The schemas also compile clean under strict mode, so the strict
 validators in all three stacks accept them.
 
-This is currently a **manual** check — there is no committed harness or CI yet. Automating it
-(a pinned Ajv dev-dependency script, or `check-jsonschema` in CI) is tracked in
-[`docs/backlog.md`](../../docs/backlog.md).
+This check is **automated** by the repo's contract harness —
+[`scripts/validate-contracts.mjs`](../../scripts/validate-contracts.mjs) (`npm run validate:contracts`),
+fired by the pre-commit contracts gate. Re-running it in a clean-environment **CI** pipeline is the
+one piece still deferred ([`docs/backlog.md`](../../docs/backlog.md)); the overall strategy is
+[`spec-verification.md`](../../docs/specs/design/spec-verification.md).
 
 ## Consuming the schemas (`$ref` resolution)
 
