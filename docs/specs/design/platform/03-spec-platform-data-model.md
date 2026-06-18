@@ -26,6 +26,10 @@ extension, not a separate database):
 | Crop profile | A named, **stage-aware** bundle of climate + irrigation targets for a crop |
 | Profile target bundle | The actual values — mirrors the controller's **runtime-adjustable** config: the climate `[setpoints]` (temperature day/night, humidity band, VPD, DLI, CO₂) **plus** per-zone soil-moisture thresholds + watering schedule |
 | Profile assignment | Which profile (and growth stage) is currently assigned to a greenhouse |
+| Intended setpoint state | The effective setpoints the platform believes each greenhouse should be running: resolved profile baseline plus sticky operator edits and accepted optimizer refinements |
+| Setpoint revision / provenance | Monotonic revision, source (`profile`, `operator_edit`, `optimizer`), actor/run id, reason, and timestamps for each intended-state change |
+| Delivery state | Per-greenhouse status for the latest revision: pending, delivered, acknowledged, rejected, or deferred until reconnect |
+| Drift state | The current comparison between intended setpoints and controller-reported setpoints, including first-seen/last-seen timestamps and last correction attempt |
 | User / role | Identity and access level (see [security](./07-spec-platform-security.md)) |
 
 **Time-series (telemetry & events)** — high-volume, append-only:
@@ -51,6 +55,15 @@ The profile target bundle intentionally **mirrors the controller's runtime-adjus
 config** so that resolving a profile ([crop profiles](./05-spec-platform-crop-profiles.md))
 is a direct mapping, not a translation — keeping the contract between platform and
 controller thin and the data model honest about where authority lives.
+
+Intended state is stored separately from profiles because it is the platform's live
+control ledger, not just crop metadata. A profile assignment contributes the baseline,
+an operator setpoint edit can layer a sticky exception on top, and an optimizer plan
+can submit a time-bounded refinement. Reconciliation reads the latest intended-state
+revision, delivery state records whether that revision reached the controller, and
+drift state records whether the controller is still reporting the same effective
+setpoints. This is the persistence behind re-assert-on-reconnect, last-write-wins
+semantics, provenance, and "operator wins" behavior in Phase 3.
 
 The time-series streams are exactly the surface the controller publishes over MQTT
 ([controller interfaces](../controller/08-spec-controller-interfaces.md)); the platform

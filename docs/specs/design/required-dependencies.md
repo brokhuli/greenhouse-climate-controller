@@ -108,25 +108,33 @@ docker --version; docker compose version  # container runtime (MQTT broker)
 
 ## Phase 2 — Local PaaS Platform
 
-> _Stub — to be filled out when Phase 2 begins._
->
-> Anticipated host tooling: **Go** toolchain (+ `gopls` LSP), **Node.js** (React dashboard), Docker
-> Compose stack (TimescaleDB, MQTT broker, Keycloak, reverse proxy), and a Postgres client.
-> Frontend testing adds **Playwright** (E2E browser automation — needs `npx playwright install` for
-> the browser binaries, a host step beyond the npm manifest) and **Lighthouse CI** (`@lhci/cli`, a
-> project dev-dependency). See
-> [`tech-stack-decisions.md`](./tech-stack-decisions.md#phase-2--local-paas-platform-docker-only).
+Host tooling:
+
+- **Go** toolchain plus `gopls` for the platform API.
+- **Node.js** for the React dashboard build/test toolchain.
+- **Docker Compose** for TimescaleDB, Mosquitto, Keycloak, nginx, and generated controller services.
+- **Postgres client tooling** for migrations, inspection, and TimescaleDB troubleshooting.
+- **Playwright browser binaries** for E2E tests (`npx playwright install` after npm dependencies).
+- **Lighthouse CI** via the frontend dev dependencies for initial-load and accessibility gates.
+
+See [`tech-stack-decisions.md`](./tech-stack-decisions.md#phase-2--local-paas-platform-docker-only),
+[platform tech stack](./platform/10-spec-platform-tech-stack.md), and
+[frontend tech stack](./frontend/04-spec-frontend-tech-stack.md).
 
 ---
 
 ## Phase 3 — Local LLM Climate Optimizer
 
-> _Stub — to be filled out when Phase 3 begins._
->
-> Anticipated host tooling: **Python** (+ a virtual-environment / dependency manager and
-> Pylance/Ruff LSP tooling), the **LangChain packages** (`langchain-anthropic`, `langchain-openai`,
-> `langchain-community`) as Python dependencies, an **API key for a hosted LLM** (Anthropic or
-> OpenAI — primary backend), a **local Ollama runtime** for the fallback container, and access to
-> the Phase 2 TimescaleDB. See
-> [RFC-004](../../decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface)
-> and [`tech-stack-decisions.md`](./tech-stack-decisions.md#phase-3--llm-climate-optimizer-python-only).
+Host tooling:
+
+- **Python** plus a project virtual-environment/dependency manager.
+- **Pylance/Ruff** editor tooling for type/lint feedback.
+- **LangChain provider packages** such as `langchain-anthropic`, `langchain-openai`, and
+  `langchain-community`.
+- **Hosted LLM API key** for the configured primary provider, supplied through environment/secret.
+- **Ollama runtime** for the local fallback backend.
+- **Phase 2 TimescaleDB access** through the read-only optimizer view surface once authored.
+
+See [RFC-004](../../decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface),
+[`tech-stack-decisions.md`](./tech-stack-decisions.md#phase-3--llm-climate-optimizer-python-only), and
+[optimizer configuration](./optimizer/10-spec-optimizer-configuration.md).

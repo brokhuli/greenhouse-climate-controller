@@ -23,7 +23,9 @@ plan output is parsed via `.with_structured_output(ActuatorPlan)`. See
 
 The planner is prompted with the observed state, the simulated forward trajectory, the active
 crop-safe bounds, and the [optimization objectives](#2-optimization-objectives), and asked to
-propose a **refined plan**: adjusted setpoints and a coordinated actuator strategy for the horizon.
+propose a **refined setpoint trajectory** for the horizon. The plan may reason about actuator
+coupling while choosing targets, but it does not contain actuator commands or a controller-side
+actuator strategy.
 
 The planner emits a **structured plan** (not prose) conforming to the schema in
 [`contracts/`](../../../../contracts/), so the constraint engine and applier can consume it
@@ -83,9 +85,12 @@ Within the crop-safe envelope, the optimizer plans against three objectives:
 | Objective | What it does |
 |---|---|
 | **Predictive / anticipatory control** | Simulate the greenhouse forward and pre-position setpoints for upcoming *clock-known* conditions instead of reacting after the fact — e.g. pre-cool ahead of the solar peak, ease into the night setpoint before the schedule flips. Deterministic disturbances only; no weather feed |
-| **Coupling-aware planning** | Choose the optimal *combination* of coupled actuators (vent / fan / mister / heater) to hit VPD + DLI + CO₂ together, rather than independent reactive loops that fight each other |
-| **Per-greenhouse efficiency** | Optimize one greenhouse's own consumption against a cost / time-of-use signal — shifting flexible load (e.g. lighting toward cheaper hours) while still meeting the crop's DLI and climate targets |
+| **Coupling-aware planning** | Choose setpoint trajectories that account for how coupled actuators will respond (vent / fan / mister / heater), so VPD + DLI + CO₂ are optimized together without issuing actuator commands |
+| **Per-greenhouse efficiency** | Optimize one greenhouse's own consumption against the local cost / time-of-use schedule in configuration, shifting flexible load (e.g. lighting toward cheaper hours) while still meeting the crop's DLI and climate targets |
 
 These objectives are weighted by configuration ([configuration](./10-spec-optimizer-configuration.md))
 and are always subordinate to the crop-safe bounds enforced by the
 [constraint engine](./05-spec-optimizer-constraints-and-application.md#1-constraint-engine--safety).
+The Phase 3 cost signal is deliberately local and static: a configured time-of-use schedule, not an
+external tariff feed. Live price feeds or site-wide load coordination are deferred with the other
+shared-input concerns in [scope](./11-spec-optimizer-scope.md).

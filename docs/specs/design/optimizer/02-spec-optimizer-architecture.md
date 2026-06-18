@@ -31,7 +31,7 @@ Input-Quality Gate                   ← freshness / completeness / sensor-healt
 Digital Twin / Simulation            ← rolls climate forward over the planning horizon
       │  predicted trajectory
       ▼
-LLM Planner                          ← proposes refined setpoints / actuator coordination
+LLM Planner                          ← proposes refined setpoint trajectories
       │  candidate plan
       ▼
 Constraint Engine                    ← validates against crop-safe bounds + physical limits
@@ -50,7 +50,7 @@ Phase 1 Controller
 |---|---|
 | Data Access | Read historical telemetry, actuator states, and current setpoints for one greenhouse from Phase 2's store; never writes. Runs the input data-quality / freshness gate ([input gating](./06-spec-optimizer-input-gating.md)) before planning |
 | Digital Twin / Simulation | Roll heat / humidity / CO₂ / VPD / DLI forward over the planning horizon under candidate setpoints |
-| LLM Planner | Propose refined setpoints and coupled-actuator coordination from the simulated trajectory and objectives |
+| LLM Planner | Propose refined setpoint trajectories from the simulated trajectory and objectives, accounting for actuator coupling without issuing actuator commands |
 | Constraint Engine | Validate every candidate plan against crop-safe bounds and physical limits before it can be applied |
 | Plan Applier | Write within-bounds plans down via the Phase 2 REST API; route the rest to operator escalation |
 | Service / API | FastAPI surface for triggering cycles, inspecting plans, and exposing escalations; service config & health |

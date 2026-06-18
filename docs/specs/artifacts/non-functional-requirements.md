@@ -168,8 +168,11 @@ HAL time constants ([HAL §2](../design/controller/03-spec-controller-hal-simula
 
 **Performance**
 
-- **P2-PERF-1** — Telemetry ingestion sustains **≥ 50 msg/s** (50 controllers × 1 Hz) with **no
-  backlog growth**. *(Derived from P1-OBS-1 × P2-SCAL-1.)*
+- **P2-PERF-1** — Telemetry ingestion sustains the full MQTT topic fan-out for **50 controllers at
+  1 Hz** with **no backlog growth**. For the baseline two-zone simulated greenhouse this is **≥ 750
+  MQTT messages/s** (50 controllers × roughly 15 per-tick readings/state frames); if the configured
+  zone count changes, the target scales with the actual contract-defined topic fan-out.
+  *(Derived from P1-OBS-1 × P2-SCAL-1 and the MQTT topic map.)*
 - **P2-PERF-2** — WebSocket fan-out lag (ingest → dashboard) is **< 1 s** at 50 controllers.
   *(Committed default.)*
 - **P2-PERF-3** — REST API **p95 latency < 200 ms** under concurrent operator + dashboard load.

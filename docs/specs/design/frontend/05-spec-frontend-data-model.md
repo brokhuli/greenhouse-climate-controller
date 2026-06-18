@@ -8,20 +8,16 @@
 > query-key scheme, the cache + live-merge strategy, runtime validation, the
 > WebSocket message taxonomy, and the view-model derivations the UI renders.
 
-> **Source of truth.** The wire contracts are owned by
+> **Source of truth & current contract gap.** The wire contracts are owned by
 > [`contracts/`](../../../../contracts/) under the conventions in
 > [RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format),
 > and the API *surface* by [platform API surface](../platform/09-spec-platform-interfaces.md#3-api-surface-inventory).
 > `contracts/` formalizes `mqtt/` (telemetry, platform-internal),
-> `controller-rest/` (platform→controller), and
-> [`frontend-rest/`](../../../../contracts/frontend-rest/) — **the Go-API ↔ SPA REST
-> contract these shapes bind to** (the SPA's Zod schemas in `src/api/schemas.ts`
-> validate against it; field names there are camelCase mapping onto the contract's
-> snake_case wire fields). The live-push **WebSocket** contract (catalog #5) is now
-> formalized at [`frontend-ws/`](../../../../contracts/frontend-ws/); the WS frame shapes in
-> [§5](#5-websocket-message-taxonomy) bind to it. The shapes
-> below mirror the platform's [data model](../platform/03-spec-platform-data-model.md)
-> so the mapping stays thin.
+> `controller-rest/` (platform-to-controller). The Go-API-to-SPA REST and WebSocket
+> contracts are still being authored, so the snippets here are the client's working
+> model until those contracts land; the implementation Zod schemas must then be
+> validated against the formal contracts. The shapes below mirror the platform's
+> [data model](../platform/03-spec-platform-data-model.md) so the mapping stays thin.
 
 > All schema snippets are **illustrative** — they show intent and field origin, not
 > final field names. The Zod schema in `src/api/schemas.ts` is the implementation
@@ -58,7 +54,7 @@ export const zoneId = z.string().min(1);
 export const envelope = z.object({
   greenhouse_id: greenhouseId,
   ts: z.coerce.date(),          // server timestamp
-  schema_version: z.string(),   // payload schema version (RFC-007)
+  schema_version: z.number().int(), // payload schema major version (RFC-007)
 });
 
 export const connectivity = z.enum(["online", "degraded", "offline"]);
@@ -116,7 +112,7 @@ export const setpoints = z.object({
     soilMoistureMin: z.number(),
     soilMoistureMax: z.number(),
     // watering schedule mirrors the controller's runtime config
-    schedule: z.array(z.object({ start: z.string(), durationMin: z.number() })),
+    schedule: z.string(), // comma-separated HH:MM triggers, e.g. "06:00,14:00"
   })),
 });
 ```
@@ -207,8 +203,8 @@ export const wsMessage = z.discriminatedUnion("type", [
 Query-cache patches ([architecture §4](./03-spec-frontend-architecture.md#4-runtime-data-flow)).
 Unknown `type` values are ignored (forward-compatible).
 
-> The wire shapes are owned by [`contracts/frontend-ws/`](../../../../contracts/frontend-ws/)
-> (catalog #5). The `{ type, data }` snippet above is **illustrative**: on the wire each frame is
+> The final wire shapes will be owned by the pending WebSocket contract (catalog #5).
+> The `{ type, data }` snippet above is **illustrative**: on the wire each frame is
 > *flat* — the RFC-007 envelope (`schema_version`, `greenhouse_id`, `zone_id`, `ts`), the `type`
 > discriminator, and the payload all at the top level, the same layout as an MQTT message. `ws.ts`
 > maps those frames onto the client union above.
@@ -253,10 +249,9 @@ Every REST response and WS frame is parsed through its Zod schema in
 - **`schema_version` mismatch** (RFC-007) is logged and surfaced as a non-blocking
   "data format changed — update the dashboard" notice.
 
-This is the client's runtime enforcement point: REST responses validate against the
-formalized [`contracts/frontend-rest/`](../../../../contracts/frontend-rest/) contract,
-and WS frames against the formalized
-[`contracts/frontend-ws/`](../../../../contracts/frontend-ws/) contract (catalog #5).
+This is the client's runtime enforcement point while the Go-API-to-SPA REST and WebSocket
+contracts are being authored. Once those contracts land under `contracts/`, these Zod schemas
+must validate against them rather than remaining a parallel source of truth.
 
 ---
 
@@ -281,8 +276,8 @@ derivations are testable in isolation (`P2-TEST-2`-adjacent unit coverage).
 ## 9. Cross-references
 
 - API surface (routes + responsibilities): [platform API surface](../platform/09-spec-platform-interfaces.md#3-api-surface-inventory)
-- REST wire contract (the shapes here bind to it): [`contracts/frontend-rest/`](../../../../contracts/frontend-rest/)
-- WS wire contract (the §5 frames bind to it): [`contracts/frontend-ws/`](../../../../contracts/frontend-ws/)
+- Future REST wire contract (pending): see [`spec-contracts.md`](../spec-contracts.md#24-phase-2-operatorfleet-rest-api)
+- Future WS wire contract (pending): see [`spec-contracts.md`](../spec-contracts.md#25-phase-2-websocket-fan-out)
 - Wire conventions (envelope, identity, versioning): [RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)
 - Platform data model the shapes mirror: [platform data model](../platform/03-spec-platform-data-model.md)
 - How the cache is fed and patched: [architecture §4](./03-spec-frontend-architecture.md#4-runtime-data-flow)

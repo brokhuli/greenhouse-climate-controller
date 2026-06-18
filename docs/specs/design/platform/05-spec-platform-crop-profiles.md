@@ -99,7 +99,7 @@ when Phase 3 lands, the optimizer submits refined targets through this same setp
 write path (a setpoint-submission endpoint, [API surface](./09-spec-platform-interfaces.md#3-api-surface-inventory)),
 and the platform enforces the crop-safe bounds, records the write with its source
 (`optimizer`), and remains the sole delivery path to the controller — exactly as it
-does for a crop-profile assignment or an operator override. The optimizer never writes
+does for a crop-profile assignment or an operator setpoint edit. The optimizer never writes
 to a controller directly.
 
 ---

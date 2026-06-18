@@ -80,7 +80,8 @@ publishing from its control tick
 
 - **Bounded buffer.** A buffer sits between MQTT receipt and the time-series write; it
   is **bounded**, not unbounded. The store keeping up is the normal case (`P2-PERF-1`:
-  ≥ 50 msg/s with no backlog growth; `P2-PERF-4`: < 1 s write latency).
+  the full MQTT topic fan-out for 50 controllers at 1 Hz with no backlog growth; `P2-PERF-4`:
+  < 1 s write latency).
 - **Shed oldest under sustained backpressure.** If the write path slows enough that the
   buffer fills, the ingester **drops the oldest frames per greenhouse** rather than
   accumulating until it exhausts memory. Load-shedding is bounded and local — never an

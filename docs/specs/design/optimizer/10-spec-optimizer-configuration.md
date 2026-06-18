@@ -1,7 +1,7 @@
 # Optimizer — Configuration
 
 > **Purpose:** Catalogue the optimizer's service configuration — data-store DSN, Phase
-> 2 endpoint, LLM provider/sampling, objective weights, and the data-quality,
+> 2 endpoint, LLM provider/sampling, objective weights, local cost schedule, and the data-quality,
 > twin-robustness, application-gate, and service thresholds — and how it is supplied
 > via environment variables / the Compose file rather than a per-greenhouse TOML.
 
@@ -15,7 +15,7 @@ referenced throughout the set (e.g.
 ---
 
 The optimizer's service configuration — data-store DSN, Phase 2 API endpoint, LLM provider/endpoint,
-sampling parameters, objective weights, the input data-quality thresholds, the twin-robustness and
+sampling parameters, objective weights, the local time-of-use cost schedule, the input data-quality thresholds, the twin-robustness and
 service-resilience thresholds, and the application-gate thresholds — is supplied via **environment
 variables / the Compose file**, mirroring the Phase 2
 convention rather than a per-greenhouse TOML (contrast the controller's config). Per-greenhouse inputs
@@ -45,6 +45,16 @@ horizon_hours = 12                    # extended to 24 only near day boundaries
 context_token_budget = 4000           # serializer raises if exceeded; no silent truncation
 state_change_threshold = 0.05         # fraction deviation to suppress a cycle's LLM call
 objective_weights = { anticipation = 1.0, coupling = 1.0, efficiency = 0.5 }
+
+[cost]
+# Local static time-of-use schedule for the Phase 3 efficiency objective.
+# Live tariffs / external price feeds are out of scope until a later phase.
+time_of_use = [
+  { start = "00:00", end = "06:00", relative_cost = 0.7 },
+  { start = "06:00", end = "16:00", relative_cost = 1.0 },
+  { start = "16:00", end = "21:00", relative_cost = 1.4 },
+  { start = "21:00", end = "24:00", relative_cost = 0.8 },
+]
 
 [application]
 confidence_threshold = 0.8            # below → escalate to operator

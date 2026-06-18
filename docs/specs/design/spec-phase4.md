@@ -41,7 +41,7 @@ With two ways to add heat (electric vs. burner) and two ways to add CO₂ (clean
 the system can no longer run independent loops — it must **choose the device**. That choice is a
 control-layer concern that runs on the live system, so it is added to the **Phase 1 controller** as
 an actuator-selection coordination layer above the existing PIDs
-([P1 §12](./controller/10-spec-controller-constraints.md#9-scope--deferred-controller-capabilities)).
+([P1 constraints §9](./controller/10-spec-controller-constraints.md#9-scope--deferred-controller-capabilities)).
 
 **The deterministic-disturbance assumption.** The Phase 3 optimizer anticipates only **clock-known**
 disturbances — the diurnal solar/temperature curve and the day/night schedule — which need no
@@ -152,7 +152,7 @@ choosing a device in isolation can double-heat, double-enrich, or fight each oth
 inserts an **actuator-selection coordination** stage **above the individual control loops**
 ([P1 §6](./controller/05-spec-controller-control-loops.md)), the capability the controller spec names as
 the prerequisite for a combustion heater
-([P1 §12](./controller/10-spec-controller-constraints.md#9-scope--deferred-controller-capabilities)).
+([P1 constraints §9](./controller/10-spec-controller-constraints.md#9-scope--deferred-controller-capabilities)).
 
 Its job is to map the loops' *demands* (how much heat, how much CO₂) onto the *cheapest
 non-conflicting combination of devices* that satisfies them — e.g. preferring the burner when both
