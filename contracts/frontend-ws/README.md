@@ -30,7 +30,7 @@ layout as [`mqtt/`](../mqtt/):
 ```
 envelope.schema.json       # the RFC-007 4-field envelope, composed into every frame via allOf
 common.schema.json         # shared $defs: connectivity, event_kind, event_severity, metric, unit, reading, actuator_sample
-message.schema.json        # oneOf union of the four frames — the consumer's entry point
+message.schema.json        # oneOf union of known frames plus an unknown-type fallback
 telemetry.schema.json      # type:"telemetry" — readings[] (+ optional actuators[])
 status.schema.json         # type:"status"    — status: connectivity
 drift.schema.json          # type:"drift"     — drift: boolean            (2b)
@@ -54,9 +54,10 @@ One socket; every frame is discriminated by `type`. The effect-on-client column 
 | `drift` | envelope + `drift` (boolean) | patch `greenhouseSummary.drift`; raise a drift event | 2b | [`drift.schema.json`](./drift.schema.json) |
 | `event` | envelope + `kind` / `severity` / `message` / `source` | prepend to the activity feed; raise a toast if `critical` | 2a | [`event.schema.json`](./event.schema.json) |
 
-`message.schema.json` is the `oneOf` of all four — a consumer validates each received frame against it
-and dispatches on `type`. **Unknown `type` values are ignored** (forward-compatible, per data model §5),
-so adding a frame type is an additive change.
+`message.schema.json` is the consumer entry point: a `oneOf` of the four known frames plus an
+unknown-type fallback. A consumer validates each received frame against it, dispatches known `type`
+values, and ignores an envelope-valid frame whose `type` it does not understand. Adding a frame type is
+therefore additive for older clients.
 
 ## Identity
 

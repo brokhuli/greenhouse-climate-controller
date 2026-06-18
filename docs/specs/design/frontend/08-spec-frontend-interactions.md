@@ -102,7 +102,7 @@ These are distinct and must not be conflated:
 
 - **Socket/platform offline** → `ConnectionStatus` reflects it (§5); *all* live data
   is suspect.
-- **One controller offline** (telemetry absence / last-will) → only that greenhouse
+- **One controller offline** (telemetry absence / staleness) → only that greenhouse
   is marked **offline** (`--color-status-offline`, muted): its card dims, its detail
   charts show last-known data + a gap, and its **edit affordances disable** with the
   reason "controller offline — change will apply on reconnect" (offline edits are

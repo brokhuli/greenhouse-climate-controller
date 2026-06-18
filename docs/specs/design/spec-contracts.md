@@ -89,8 +89,8 @@ is versioned and accompanied by an ADR, per [`contracts/README.md`](../../../con
 | **Format** | OpenAPI 3.1 (uses the JSON Schema 2020-12 dialect); `/api`-prefixed, greenhouse-scoped paths; 422 names the violated bound |
 | **Phase introduced** | Phase 2 — registration/telemetry/edits in 2a, profiles/assignments in 2b |
 | **Governing decision** | [P2 API surface](./platform/09-spec-platform-interfaces.md#3-api-surface-inventory), [ADR 2026-06-17](../../decisions/architecture-design-record.md) |
-| **Location** | To be created |
-| **Status** | To author |
+| **Location** | [`contracts/frontend-rest/`](../../../contracts/frontend-rest/) |
+| **Status** | Authored — `openapi.json` + README + example fixtures exist under [`contracts/frontend-rest/`](../../../contracts/frontend-rest/) |
 
 ### 2.5 Phase 2 WebSocket fan-out
 
@@ -101,8 +101,8 @@ is versioned and accompanied by an ADR, per [`contracts/README.md`](../../../con
 | **Format** | WebSocket message schema (JSON Schema, Draft 2020-12); shares the RFC-007 identity / timestamp envelope; one file per frame type, discriminated by `type` |
 | **Phase introduced** | Phase 2a |
 | **Governing decision** | [P2 API surface](./platform/09-spec-platform-interfaces.md#3-api-surface-inventory), [ADR 2026-06-17](../../decisions/architecture-design-record.md) |
-| **Location** | To be created |
-| **Status** | To author |
+| **Location** | [`contracts/frontend-ws/`](../../../contracts/frontend-ws/) |
+| **Status** | Authored — JSON Schema files + README + example fixtures exist under [`contracts/frontend-ws/`](../../../contracts/frontend-ws/) |
 
 ### 2.6 Optimizer plan schema
 

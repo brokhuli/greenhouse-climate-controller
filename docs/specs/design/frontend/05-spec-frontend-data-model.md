@@ -8,15 +8,15 @@
 > query-key scheme, the cache + live-merge strategy, runtime validation, the
 > WebSocket message taxonomy, and the view-model derivations the UI renders.
 
-> **Source of truth & current contract gap.** The wire contracts are owned by
+> **Source of truth.** The wire contracts are owned by
 > [`contracts/`](../../../../contracts/) under the conventions in
 > [RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format),
 > and the API *surface* by [platform API surface](../platform/09-spec-platform-interfaces.md#3-api-surface-inventory).
 > `contracts/` formalizes `mqtt/` (telemetry, platform-internal),
-> `controller-rest/` (platform-to-controller). The Go-API-to-SPA REST and WebSocket
-> contracts are still being authored, so the snippets here are the client's working
-> model until those contracts land; the implementation Zod schemas must then be
-> validated against the formal contracts. The shapes below mirror the platform's
+> `controller-rest/` (platform-to-controller), `frontend-rest/` (Go API to SPA REST),
+> and `frontend-ws/` (Go API to SPA live push). The snippets here are the client's
+> working model and explanatory mirror of those formal contracts; the implementation
+> Zod schemas must validate against the formal contracts. The shapes below mirror the platform's
 > [data model](../platform/03-spec-platform-data-model.md) so the mapping stays thin.
 
 > All schema snippets are **illustrative** — they show intent and field origin, not
@@ -153,11 +153,16 @@ High-volume, append-only. Fetched as range queries and streamed live.
 // A range query result for one greenhouse over [from, to].
 export const telemetryRange = z.object({
   greenhouse_id: greenhouseId,
-  series: z.record(z.string(), z.array(reading)), // metric -> samples
+  series: z.array(z.object({
+    metric: z.enum(["temperature", "humidity", "co2", "par", "vpd", "soil_moisture"]),
+    zone_id: zoneId.nullable(),
+    readings: z.array(reading),
+  })), // one entry per metric/scope pair
 });
 
 export const actuatorState = z.object({
   actuator: z.string(),
+  zone_id: zoneId.nullable(),
   commanded: z.number(),
   observed: z.number().nullable(),
   ts: z.coerce.date(),
@@ -203,7 +208,7 @@ export const wsMessage = z.discriminatedUnion("type", [
 Query-cache patches ([architecture §4](./03-spec-frontend-architecture.md#4-runtime-data-flow)).
 Unknown `type` values are ignored (forward-compatible).
 
-> The final wire shapes will be owned by the pending WebSocket contract (catalog #5).
+> The final wire shapes are owned by the WebSocket contract (catalog #5).
 > The `{ type, data }` snippet above is **illustrative**: on the wire each frame is
 > *flat* — the RFC-007 envelope (`schema_version`, `greenhouse_id`, `zone_id`, `ts`), the `type`
 > discriminator, and the payload all at the top level, the same layout as an MQTT message. `ws.ts`
@@ -276,8 +281,8 @@ derivations are testable in isolation (`P2-TEST-2`-adjacent unit coverage).
 ## 9. Cross-references
 
 - API surface (routes + responsibilities): [platform API surface](../platform/09-spec-platform-interfaces.md#3-api-surface-inventory)
-- Future REST wire contract (pending): see [`spec-contracts.md`](../spec-contracts.md#24-phase-2-operatorfleet-rest-api)
-- Future WS wire contract (pending): see [`spec-contracts.md`](../spec-contracts.md#25-phase-2-websocket-fan-out)
+- REST wire contract: see [`spec-contracts.md`](../spec-contracts.md#24-phase-2-operatorfleet-rest-api)
+- WS wire contract: see [`spec-contracts.md`](../spec-contracts.md#25-phase-2-websocket-fan-out)
 - Wire conventions (envelope, identity, versioning): [RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)
 - Platform data model the shapes mirror: [platform data model](../platform/03-spec-platform-data-model.md)
 - How the cache is fed and patched: [architecture §4](./03-spec-frontend-architecture.md#4-runtime-data-flow)

@@ -50,10 +50,10 @@ The same surface the controller publishes
 
 ## 4. QoS, retained & liveness
 
-- **QoS & retained** — readings use the QoS the contract specifies; retained
-  system-state / last-will messages let the platform recover a controller's current
-  state on (re)connect without waiting for the next sample.
-- **Liveness / health** — absence of expected messages (or an MQTT last-will) marks a
+- **QoS & retained** — readings use the QoS the contract specifies; the retained
+  system-state message lets the platform recover a controller's current state on
+  (re)connect without waiting for the next sample.
+- **Liveness / health** — absence of expected messages marks a
   greenhouse **offline**; ingested fault events mark it **degraded**. Per-greenhouse
   status is derived *here* and surfaced to the fleet view and reconciliation
   ([crop profiles](./05-spec-platform-crop-profiles.md)). Liveness is therefore a product

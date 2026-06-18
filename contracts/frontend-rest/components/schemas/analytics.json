@@ -1,7 +1,7 @@
 {
   "AnalyticsBucket": {
     "type": "object",
-    "description": "One time-bucket aggregate for a single metric over the bucket interval — the derived series the dashboard charts (platform interfaces §3, analytics surface). The bucket spans [bucket_start, bucket_start + interval).",
+    "description": "One time-bucket aggregate for a single metric over the bucket interval. The bucket spans [bucket_start, bucket_start + interval).",
     "properties": {
       "bucket_start": {
         "type": "string",
@@ -10,15 +10,15 @@
       },
       "min": {
         "type": "number",
-        "description": "Minimum sample value in the bucket (the metric's RFC-007 units)."
+        "description": "Minimum sample value in the bucket."
       },
       "max": {
         "type": "number",
-        "description": "Maximum sample value in the bucket (the metric's RFC-007 units)."
+        "description": "Maximum sample value in the bucket."
       },
       "avg": {
         "type": "number",
-        "description": "Mean sample value in the bucket (the metric's RFC-007 units)."
+        "description": "Mean sample value in the bucket."
       },
       "count": {
         "type": "integer",
@@ -29,9 +29,28 @@
     "required": ["bucket_start", "min", "max", "avg", "count"],
     "additionalProperties": false
   },
+  "AnalyticsSeries": {
+    "type": "object",
+    "description": "One aggregated metric/scope series. zone_id preserves per-zone identity for soil-moisture aggregates; house-level metrics use null.",
+    "properties": {
+      "metric": { "$ref": "./telemetry.json#/Metric" },
+      "zone_id": {
+        "type": ["string", "null"],
+        "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+        "description": "Zone identity for zone-scoped aggregates, or null for greenhouse-scoped metrics."
+      },
+      "buckets": {
+        "type": "array",
+        "description": "Ordered buckets for this metric/scope pair. A series with no samples in the window has an empty array.",
+        "items": { "$ref": "#/AnalyticsBucket" }
+      }
+    },
+    "required": ["metric", "zone_id", "buckets"],
+    "additionalProperties": false
+  },
   "AnalyticsResponse": {
     "type": "object",
-    "description": "Aggregated, time-bucketed telemetry for one greenhouse over [from, to] — the derived-series read surface the dashboard uses for trend charts, distinct from the raw TelemetryRange seed (platform interfaces §3; data model §4). Buckets are evenly spaced at `interval`; a metric with no samples in the window has an empty array.",
+    "description": "Aggregated, time-bucketed telemetry for one greenhouse over [from, to]. Buckets are evenly spaced at interval.",
     "properties": {
       "greenhouse_id": { "$ref": "./common.json#/Slug" },
       "from": {
@@ -50,12 +69,9 @@
         "description": "Time-bucket size used for the aggregation, echoing the request (default 1h)."
       },
       "series": {
-        "type": "object",
-        "description": "Map of metric name to its ordered buckets over the window. Keys are the RFC-007 metric names (temperature, humidity, co2, par, vpd, soil_moisture).",
-        "additionalProperties": {
-          "type": "array",
-          "items": { "$ref": "#/AnalyticsBucket" }
-        }
+        "type": "array",
+        "description": "Aggregated sensor series over the window, one entry per metric/scope pair.",
+        "items": { "$ref": "#/AnalyticsSeries" }
       }
     },
     "required": ["greenhouse_id", "from", "to", "interval", "series"],

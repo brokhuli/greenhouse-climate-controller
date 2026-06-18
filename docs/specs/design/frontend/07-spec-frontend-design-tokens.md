@@ -64,7 +64,7 @@ alone ([constraints](./09-spec-frontend-constraints.md)).
 |---|---|
 | `--color-status-online` | Online / healthy / OK |
 | `--color-status-degraded` | Degraded (faults present, still reporting) |
-| `--color-status-offline` | Offline (no telemetry / last-will) — *neutral muted*, not alarming |
+| `--color-status-offline` | Offline (no telemetry / stale stream) — *neutral muted*, not alarming |
 | `--color-status-drift` | Setpoint drift (2b) — intended ≠ reported |
 | `--color-fault` | Critical fault / interlock activation |
 | `--color-warning` | Warning-level event |

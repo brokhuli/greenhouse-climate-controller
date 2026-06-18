@@ -39,8 +39,8 @@ components/
     common.json              #   Slug, Connectivity, ActuatorName, Error, ValidationError (shared)
     greenhouses.json         #   GreenhouseSummary, GreenhouseDetail, GreenhouseRegistration, ControllerEndpoint
     setpoints.json           #   Setpoints (target bundle), SetpointsPatch, ZoneTargets
-    telemetry.json           #   TelemetryRange, Reading, ActuatorState
-    analytics.json           #   AnalyticsResponse, AnalyticsBucket
+    telemetry.json           #   TelemetryRange, TelemetrySeries, Reading, ActuatorState
+    analytics.json           #   AnalyticsResponse, AnalyticsSeries, AnalyticsBucket
     events.json              #   EventEntry
     profiles.json            #   CropProfile, CropProfilePatch, ProfileStage, Assignment, AssignmentInput (2b)
   parameters.json            # shared path/query parameters

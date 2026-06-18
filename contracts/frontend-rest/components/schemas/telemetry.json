@@ -5,7 +5,7 @@
     "properties": {
       "value": {
         "type": "number",
-        "description": "The sampled value. Units are the metric's RFC-007 units (°C, %RH, ppm, µmol·m⁻²·s⁻¹, VWC 0–1)."
+        "description": "The sampled value. Units are the metric's RFC-007 units."
       },
       "ts": {
         "type": "string",
@@ -16,22 +16,51 @@
     "required": ["value", "ts"],
     "additionalProperties": false
   },
+  "Metric": {
+    "type": "string",
+    "enum": ["temperature", "humidity", "co2", "par", "vpd", "soil_moisture"],
+    "description": "Closed set of measured/derived quantities (RFC-007). soil_moisture is zone-scoped; house-level metrics carry zone_id null."
+  },
+  "TelemetrySeries": {
+    "type": "object",
+    "description": "One historical sensor series for a greenhouse over the requested window. zone_id preserves per-zone identity for soil-moisture series; house-level metrics use null.",
+    "properties": {
+      "metric": { "$ref": "#/Metric" },
+      "zone_id": {
+        "type": ["string", "null"],
+        "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+        "description": "Zone identity for zone-scoped series, or null for greenhouse-scoped metrics."
+      },
+      "readings": {
+        "type": "array",
+        "description": "Samples for this metric/scope pair, ordered by timestamp.",
+        "items": { "$ref": "#/Reading" }
+      }
+    },
+    "required": ["metric", "zone_id", "readings"],
+    "additionalProperties": false
+  },
   "ActuatorState": {
     "type": "object",
-    "description": "A time-stamped actuator sample: commanded vs observed position (the output-side channel, controller safety §5). Position is a 0–100 number: for variable/modulating actuators (fans, roof_vents, grow_lights, shade_screen, modulating heater) it is the level (% open / speed / dim); for pure on/off devices (misters, co2_injector, irrigation_valve) it is 0 (off) or 100 (on). This is the platform's flattening of the MQTT actuator-state {on, level_pct} shape into the single position the data model stores (platform data model §1).",
+    "description": "A time-stamped actuator sample: commanded vs observed position. Position is a 0-100 number: variable/modulating actuators report their level; pure on/off devices report 0 (off) or 100 (on).",
     "properties": {
       "actuator": { "$ref": "./common.json#/ActuatorName" },
+      "zone_id": {
+        "type": ["string", "null"],
+        "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+        "description": "Zone identity for per-zone actuators such as irrigation_valve, or null for house-level actuators."
+      },
       "commanded": {
         "type": "number",
         "minimum": 0,
         "maximum": 100,
-        "description": "Commanded position/level for this sample (0–100; on/off devices use 0=off, 100=on)."
+        "description": "Commanded position/level for this sample (0-100; on/off devices use 0=off, 100=on)."
       },
       "observed": {
         "type": ["number", "null"],
         "minimum": 0,
         "maximum": 100,
-        "description": "Observed (readback) position (0–100), or null when the readback is unavailable."
+        "description": "Observed readback position (0-100), or null when unavailable."
       },
       "ts": {
         "type": "string",
@@ -39,12 +68,12 @@
         "description": "Sample time (RFC 3339 UTC, ms)."
       }
     },
-    "required": ["actuator", "commanded", "observed", "ts"],
+    "required": ["actuator", "zone_id", "commanded", "observed", "ts"],
     "additionalProperties": false
   },
   "TelemetryRange": {
     "type": "object",
-    "description": "Historical telemetry for one greenhouse over a [from, to] window — the seed the SPA caches and merges with the live WebSocket edge (frontend data model §4, §6). Metrics match the controller's published surface (temperature, humidity, CO₂, PAR, per-zone soil moisture, actuator positions).",
+    "description": "Historical telemetry for one greenhouse over a [from, to] window: the seed the SPA caches and merges with the live WebSocket edge. Metrics match the controller's published surface, including per-zone soil moisture and actuator positions.",
     "properties": {
       "greenhouse_id": { "$ref": "./common.json#/Slug" },
       "from": {
@@ -58,12 +87,9 @@
         "description": "End of the returned window (RFC 3339 UTC, ms)."
       },
       "series": {
-        "type": "object",
-        "description": "Map of metric name to its samples over the window.",
-        "additionalProperties": {
-          "type": "array",
-          "items": { "$ref": "#/Reading" }
-        }
+        "type": "array",
+        "description": "Sensor series over the window, one entry per metric/scope pair. This keeps per-zone soil-moisture history distinct instead of collapsing all zones under one metric key.",
+        "items": { "$ref": "#/TelemetrySeries" }
       },
       "actuators": {
         "type": "array",

@@ -69,8 +69,8 @@
 ### Eclipse Paho MQTT Go client — `paho.mqtt.golang` ⚑
 
 - **What:** The MQTT client the ingester uses to subscribe to controller telemetry.
-- **Why:** The de-facto Go MQTT client; handles reconnect, QoS, retained messages, and
-  last-will — exactly the features ingestion relies on for liveness
+- **Why:** The de-facto Go MQTT client; handles reconnect, QoS, and retained messages —
+  exactly the MQTT features ingestion relies on for liveness and current-state recovery
   ([ingestion §4](./04-spec-platform-ingestion.md#4-qos-retained--liveness)).
 - **How:** One client wildcard-subscribes to `gh/+/...`
   ([ingestion §2](./04-spec-platform-ingestion.md#2-per-greenhouse-routing)); message

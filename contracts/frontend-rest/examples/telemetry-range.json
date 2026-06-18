@@ -2,18 +2,34 @@
   "greenhouse_id": "gh-a",
   "from": "2026-06-17T00:00:00.000Z",
   "to": "2026-06-17T01:00:00.000Z",
-  "series": {
-    "temperature": [
-      { "value": 23.1, "ts": "2026-06-17T00:00:00.000Z" },
-      { "value": 23.4, "ts": "2026-06-17T00:05:00.000Z" }
-    ],
-    "humidity": [
-      { "value": 68.0, "ts": "2026-06-17T00:00:00.000Z" }
-    ]
-  },
+  "series": [
+    {
+      "metric": "temperature",
+      "zone_id": null,
+      "readings": [
+        { "value": 23.1, "ts": "2026-06-17T00:00:00.000Z" },
+        { "value": 23.4, "ts": "2026-06-17T00:05:00.000Z" }
+      ]
+    },
+    {
+      "metric": "humidity",
+      "zone_id": null,
+      "readings": [
+        { "value": 68.0, "ts": "2026-06-17T00:00:00.000Z" }
+      ]
+    },
+    {
+      "metric": "soil_moisture",
+      "zone_id": "bench-a",
+      "readings": [
+        { "value": 0.43, "ts": "2026-06-17T00:00:00.000Z" }
+      ]
+    }
+  ],
   "actuators": [
     {
       "actuator": "roof_vents",
+      "zone_id": null,
       "commanded": 20.0,
       "observed": 19.5,
       "ts": "2026-06-17T00:00:00.000Z"
