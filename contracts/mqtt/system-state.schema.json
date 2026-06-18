@@ -37,7 +37,7 @@
     },
     "soil_moisture_reading": {
       "type": ["object", "null"],
-      "properties": { "value": { "type": "number" }, "unit": { "const": "%VWC" } },
+      "properties": { "value": { "type": "number" }, "unit": { "const": "VWC" } },
       "required": ["value", "unit"],
       "additionalProperties": false
     },

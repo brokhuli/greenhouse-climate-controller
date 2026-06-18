@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "greenhouse_id": "gh-a",
+  "zone_id": null,
+  "ts": "2026-06-17T00:42:00.000Z",
+  "type": "telemetry",
+  "readings": [
+    { "metric": "temperature", "value": 23.4, "unit": "°C" }
+  ],
+  "bogus_field": "not in the schema"
+}

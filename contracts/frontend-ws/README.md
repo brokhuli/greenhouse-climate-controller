@@ -99,7 +99,7 @@ is distinct from the controller's fault severity (`warning`/`alarm`).
 
 Carried in `telemetry` readings and bound to the metric, following the RFC-007 units convention and
 reusing the MQTT metric→unit binding: temperature °C, humidity %RH, CO₂ ppm, PAR µmol·m⁻²·s⁻¹,
-VPD kPa, soil moisture %VWC. A mismatched unit is rejected at the contract boundary (see the
+VPD kPa, soil moisture VWC (0–1). A mismatched unit is rejected at the contract boundary (see the
 `telemetry.bad-unit.json` fixture). `metric` is a **closed enum** — adding one is a contract change.
 
 ## Connection lifecycle
@@ -116,7 +116,7 @@ this contract; the frames here are only the four data-bearing message types abov
 ## Examples
 
 [`examples/`](./examples/) holds frame fixtures used as tests. Positive fixtures must validate against
-their frame schema (and the `message.schema.json` union); the two `*.bad-*.json` counter-examples must
+their frame schema (and the `message.schema.json` union); the three `*.bad-*.json` counter-examples must
 **fail**:
 
 | Fixture | Schema | Expect |
@@ -126,6 +126,7 @@ their frame schema (and the `message.schema.json` union); the two `*.bad-*.json`
 | `drift.json` | `drift.schema.json` | valid |
 | `event.json` | `event.schema.json` | valid |
 | `telemetry.bad-unit.json` | `telemetry.schema.json` | **fail** (`temperature` with `ppm` — metric→unit binding) |
+| `telemetry.bad-extra.json` | `telemetry.schema.json` | **fail** (stray top-level field — envelope+frame `unevaluatedProperties: false` closure) |
 | `event.bad-kind.json` | `event.schema.json` | **fail** (`kind` outside the closed enum) |
 
 ## Validation

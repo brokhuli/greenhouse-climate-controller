@@ -1,0 +1,28 @@
+{
+  "parameters": [
+    { "$ref": "../components/parameters.json#/GreenhouseId" },
+    { "$ref": "../components/parameters.json#/From" },
+    { "$ref": "../components/parameters.json#/To" },
+    { "$ref": "../components/parameters.json#/Metric" },
+    { "$ref": "../components/parameters.json#/Interval" }
+  ],
+  "get": {
+    "operationId": "getAnalytics",
+    "summary": "Aggregated telemetry (derived series)",
+    "description": "Time-bucketed min/max/avg/count aggregates per metric for one greenhouse over [from, to] — the derived series the dashboard charts for trends, distinct from the raw telemetry range query (platform interfaces §3 analytics surface; data model §4). `interval` sets the bucket size (default 1h); `metric` optionally restricts to one metric. An invalid window (from after to) or unknown interval/metric is rejected with 422.",
+    "x-slice": "2a",
+    "security": [],
+    "responses": {
+      "200": {
+        "description": "Aggregated series over the requested window.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "../components/schemas/analytics.json#/AnalyticsResponse" }
+          }
+        }
+      },
+      "404": { "$ref": "../components/responses.json#/NotFound" },
+      "422": { "$ref": "../components/responses.json#/ValidationFailed" }
+    }
+  }
+}

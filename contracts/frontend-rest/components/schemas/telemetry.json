@@ -18,19 +18,20 @@
   },
   "ActuatorState": {
     "type": "object",
-    "description": "A time-stamped actuator sample: commanded vs observed position (the output-side channel, controller safety §5).",
+    "description": "A time-stamped actuator sample: commanded vs observed position (the output-side channel, controller safety §5). Position is a 0–100 number: for variable/modulating actuators (fans, roof_vents, grow_lights, shade_screen, modulating heater) it is the level (% open / speed / dim); for pure on/off devices (misters, co2_injector, irrigation_valve) it is 0 (off) or 100 (on). This is the platform's flattening of the MQTT actuator-state {on, level_pct} shape into the single position the data model stores (platform data model §1).",
     "properties": {
-      "actuator": {
-        "type": "string",
-        "description": "Actuator identifier (e.g. heater, fan, vent, shade, co2_injector, lights, irrigation_valve)."
-      },
+      "actuator": { "$ref": "./common.json#/ActuatorName" },
       "commanded": {
         "type": "number",
-        "description": "Commanded position/level for this sample."
+        "minimum": 0,
+        "maximum": 100,
+        "description": "Commanded position/level for this sample (0–100; on/off devices use 0=off, 100=on)."
       },
       "observed": {
         "type": ["number", "null"],
-        "description": "Observed (readback) position, or null when unavailable."
+        "minimum": 0,
+        "maximum": 100,
+        "description": "Observed (readback) position (0–100), or null when the readback is unavailable."
       },
       "ts": {
         "type": "string",

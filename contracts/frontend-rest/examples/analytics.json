@@ -1,0 +1,20 @@
+{
+  "greenhouse_id": "gh-a",
+  "from": "2026-06-16T00:00:00.000Z",
+  "to": "2026-06-17T00:00:00.000Z",
+  "interval": "6h",
+  "series": {
+    "temperature": [
+      { "bucket_start": "2026-06-16T00:00:00.000Z", "min": 17.9, "max": 19.2, "avg": 18.4, "count": 360 },
+      { "bucket_start": "2026-06-16T06:00:00.000Z", "min": 19.0, "max": 24.6, "avg": 22.1, "count": 360 },
+      { "bucket_start": "2026-06-16T12:00:00.000Z", "min": 23.4, "max": 25.1, "avg": 24.2, "count": 360 },
+      { "bucket_start": "2026-06-16T18:00:00.000Z", "min": 18.6, "max": 23.8, "avg": 20.7, "count": 360 }
+    ],
+    "humidity": [
+      { "bucket_start": "2026-06-16T00:00:00.000Z", "min": 64.0, "max": 72.0, "avg": 68.3, "count": 360 },
+      { "bucket_start": "2026-06-16T06:00:00.000Z", "min": 60.5, "max": 70.1, "avg": 66.0, "count": 360 },
+      { "bucket_start": "2026-06-16T12:00:00.000Z", "min": 58.2, "max": 67.4, "avg": 63.1, "count": 360 },
+      { "bucket_start": "2026-06-16T18:00:00.000Z", "min": 62.0, "max": 71.8, "avg": 67.2, "count": 360 }
+    ]
+  }
+}

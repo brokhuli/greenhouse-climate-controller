@@ -27,6 +27,27 @@
     "description": "End of the telemetry window (RFC 3339 UTC). Must be at or after `from`.",
     "schema": { "type": "string", "format": "date-time" }
   },
+  "Metric": {
+    "name": "metric",
+    "in": "query",
+    "required": false,
+    "description": "Restrict the analytics response to one metric; omit for all metrics.",
+    "schema": {
+      "type": "string",
+      "enum": ["temperature", "humidity", "co2", "par", "vpd", "soil_moisture"]
+    }
+  },
+  "Interval": {
+    "name": "interval",
+    "in": "query",
+    "required": false,
+    "description": "Time-bucket size for the aggregation. Defaults to 1h when omitted.",
+    "schema": {
+      "type": "string",
+      "enum": ["5m", "15m", "1h", "6h", "1d"],
+      "default": "1h"
+    }
+  },
   "EventGreenhouseId": {
     "name": "greenhouse_id",
     "in": "query",

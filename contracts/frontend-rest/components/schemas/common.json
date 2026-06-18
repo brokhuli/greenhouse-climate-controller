@@ -9,6 +9,20 @@
     "enum": ["online", "degraded", "offline"],
     "description": "A greenhouse's controller connectivity as the platform sees it: online = fresh telemetry; degraded = a non-critical fault or stale stream; offline = no contact. Offline is data absence, not a fault."
   },
+  "ActuatorName": {
+    "type": "string",
+    "enum": [
+      "heater",
+      "fans",
+      "roof_vents",
+      "misters",
+      "co2_injector",
+      "grow_lights",
+      "shade_screen",
+      "irrigation_valve"
+    ],
+    "description": "Closed set of actuators (physical-system-single.md §Outputs); the same names the MQTT and controller-rest contracts use. Kept as a local copy rather than cross-contract $ref, matching this contract's convention for shared definitions."
+  },
   "Error": {
     "type": "object",
     "description": "A generic error body.",

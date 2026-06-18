@@ -18,7 +18,7 @@
     "zone_id": {
       "type": ["string", "null"],
       "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
-      "description": "Lowercase kebab slug, unique within a greenhouse (e.g. zone-1). Present for zone-scoped telemetry frames; null for greenhouse-scoped frames (status, drift, and event are always greenhouse-scoped)."
+      "description": "Lowercase kebab slug, unique within a greenhouse (e.g. bench-a). Present for zone-scoped telemetry frames; null for greenhouse-scoped frames (status, drift, and event are always greenhouse-scoped)."
     },
     "ts": {
       "type": "string",
@@ -32,6 +32,5 @@
     "zone_id": { "$ref": "#/$defs/zone_id" },
     "ts": { "$ref": "#/$defs/ts" }
   },
-  "required": ["schema_version", "greenhouse_id", "zone_id", "ts"],
-  "additionalProperties": true
+  "required": ["schema_version", "greenhouse_id", "zone_id", "ts"]
 }

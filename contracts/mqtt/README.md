@@ -16,7 +16,7 @@ command/plan topics here
 |---|---|---|---|---|
 | `gh/{greenhouse_id}/sensor/{metric}` | greenhouse-scoped sensor reading | [`sensor-reading.schema.json`](./sensor-reading.schema.json) | 1 | no |
 | `gh/{greenhouse_id}/zone/{zone_id}/sensor/{metric}` | zone-scoped sensor reading | [`sensor-reading.schema.json`](./sensor-reading.schema.json) | 1 | no |
-| `gh/{greenhouse_id}/actuator/{actuator}/state` | actuator state | [`actuator-state.schema.json`](./actuator-state.schema.json) | 1 | no |
+| `gh/{greenhouse_id}/actuator/{actuator}/state` | house-level actuator state | [`actuator-state.schema.json`](./actuator-state.schema.json) | 1 | no |
 | `gh/{greenhouse_id}/fault` | fault event | [`fault-event.schema.json`](./fault-event.schema.json) | 1 | no |
 | `gh/{greenhouse_id}/state` | consolidated system state | [`system-state.schema.json`](./system-state.schema.json) | 1 | **yes** |
 
@@ -27,6 +27,11 @@ command/plan topics here
   ([RFC-007 open-question resolution](../../docs/decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)).
 - A sensor reading uses the **same schema** whether greenhouse- or zone-scoped; scope is
   carried by the topic and the envelope `zone_id`, not by the metric.
+- The `actuator/{actuator}/state` topic carries **house-level** actuators only. `irrigation_valve`
+  is per-zone and is **not** published here — there is no zone-scoped actuator topic; per-zone valve
+  state is reported only in the retained `gh/{id}/state` snapshot's `zones[].irrigation`. (The
+  `irrigation_valve` enum member is retained because the same actuator set is used for manual
+  overrides and the system-state snapshot.)
 
 ## Identity
 
@@ -61,7 +66,7 @@ Carried explicitly in sensor payloads; each metric is **bound to its unit** in t
 | `co2` | ppm |
 | `par` | µmol·m⁻²·s⁻¹ |
 | `vpd` | kPa |
-| `soil_moisture` | %VWC |
+| `soil_moisture` | VWC (0–1 fraction) |
 
 `metric` and `actuator` names are **closed enums** — adding one is a contract change (see
 Versioning).
@@ -69,12 +74,15 @@ Versioning).
 ## Examples
 
 [`examples/`](./examples/) holds fixtures used as tests. Positive fixtures must validate
-against their schema; the two `*.bad-*.json` counter-examples must **fail**:
+against their schema; the three `*.bad-*.json` counter-examples must **fail**:
 
 - [`sensor-reading.bad-unit.json`](./examples/sensor-reading.bad-unit.json) — `temperature`
   with `ppm`; rejected by the metric→unit binding.
 - [`actuator-state.bad-level.json`](./examples/actuator-state.bad-level.json) — `level_pct`
   of 150; rejected by the 0–100 bound.
+- [`sensor-reading.bad-extra.json`](./examples/sensor-reading.bad-extra.json) — an otherwise
+  valid reading with a stray top-level `bogus_field`; rejected by the envelope+message
+  `unevaluatedProperties: false` closure.
 
 ## Validation
 

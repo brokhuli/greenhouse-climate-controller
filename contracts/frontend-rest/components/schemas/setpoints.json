@@ -60,7 +60,7 @@
       "day_end": {
         "type": "string",
         "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
-        "description": "End of the day window, local time-of-day HH:MM (24h)."
+        "description": "End of the day window, local time-of-day HH:MM (24h). Must be after day_start (enforced server-side; a violation is rejected with 422)."
       },
       "humidity_low_pct": {
         "type": "number",

@@ -8,7 +8,7 @@
     "name": {
       "type": "string",
       "enum": ["heater", "fans", "roof_vents", "misters", "co2_injector", "grow_lights", "shade_screen", "irrigation_valve"],
-      "description": "Closed set of actuators (physical-system-single.md §Outputs). irrigation_valve is per-zone."
+      "description": "Closed set of actuators (physical-system-single.md §Outputs). This per-actuator `state` topic carries house-level actuators only; irrigation_valve is per-zone and is reported via the system-state snapshot's zones[].irrigation, not published on this topic. irrigation_valve remains in the enum because the same actuator set is reused for manual overrides and the system-state snapshot."
     },
     "state": {
       "type": "object",

@@ -17,13 +17,13 @@
   "zones": [
     {
       "zone_id": "bench-a",
-      "soil_moisture": { "value": 0.42, "unit": "%VWC" },
+      "soil_moisture": { "value": 0.42, "unit": "VWC" },
       "irrigation": { "on": false, "level_pct": null },
       "faulted": false
     },
     {
       "zone_id": "seedling-tray",
-      "soil_moisture": { "value": 0.58, "unit": "%VWC" },
+      "soil_moisture": { "value": 0.58, "unit": "VWC" },
       "irrigation": { "on": true, "level_pct": null },
       "faulted": false
     }

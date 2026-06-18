@@ -78,7 +78,7 @@ of the identity it already holds.
 ## Units
 
 Carried in field names and descriptions, following the RFC-007 units convention: temperature
-°C, humidity %RH, CO₂ ppm, VPD kPa, soil moisture %VWC (0–1), DLI mol·m⁻²·day⁻¹. Timestamps are
+°C, humidity %RH, CO₂ ppm, VPD kPa, soil moisture VWC (0–1), DLI mol·m⁻²·day⁻¹. Timestamps are
 RFC 3339 / ISO 8601, UTC, millisecond precision.
 
 ## Validation semantics
@@ -91,8 +91,8 @@ Two classes of rule:
 - **Single-field bounds** are expressed in the schema (e.g. `humidity_low_pct` 0–100,
   `level_pct` 0–100) and so are also checked by the fixtures below.
 - **Cross-field invariants** that JSON Schema cannot express — `humidity_low_pct` must be below
-  `humidity_high_pct`, `moisture_low_threshold` below `moisture_high_threshold` — are enforced by
-  the controller at runtime and surface as the same 422.
+  `humidity_high_pct`, `moisture_low_threshold` below `moisture_high_threshold`, and `day_start`
+  before `day_end` — are enforced by the controller at runtime and surface as the same 422.
 
 ## Authentication
 

@@ -12,7 +12,7 @@
     },
     "unit": {
       "type": "string",
-      "enum": ["°C", "%RH", "ppm", "µmol·m⁻²·s⁻¹", "kPa", "%VWC"],
+      "enum": ["°C", "%RH", "ppm", "µmol·m⁻²·s⁻¹", "kPa", "VWC"],
       "description": "Unit of measure. Bound to the metric by the conditional clauses below (RFC-007 units convention)."
     },
     "value": {
@@ -35,7 +35,7 @@
     { "if": { "properties": { "metric": { "const": "co2" } } }, "then": { "properties": { "unit": { "const": "ppm" } } } },
     { "if": { "properties": { "metric": { "const": "par" } } }, "then": { "properties": { "unit": { "const": "µmol·m⁻²·s⁻¹" } } } },
     { "if": { "properties": { "metric": { "const": "vpd" } } }, "then": { "properties": { "unit": { "const": "kPa" } } } },
-    { "if": { "properties": { "metric": { "const": "soil_moisture" } } }, "then": { "properties": { "unit": { "const": "%VWC" } } } }
+    { "if": { "properties": { "metric": { "const": "soil_moisture" } } }, "then": { "properties": { "unit": { "const": "VWC" } } } }
   ],
   "unevaluatedProperties": false
 }

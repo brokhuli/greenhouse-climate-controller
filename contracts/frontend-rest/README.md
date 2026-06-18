@@ -29,16 +29,18 @@ paths/                       # one file per path
   greenhouse-by-id.json      #   /api/greenhouses/{greenhouse_id}            (GET, DELETE)
   setpoints.json             #   /api/greenhouses/{greenhouse_id}/setpoints  (PATCH)
   telemetry.json             #   /api/greenhouses/{greenhouse_id}/telemetry  (GET)
+  analytics.json             #   /api/greenhouses/{greenhouse_id}/analytics  (GET)
   assignment.json            #   /api/greenhouses/{greenhouse_id}/assignment (GET, PUT)   (2b)
   events.json                #   /api/events                                 (GET)
   profiles.json              #   /api/profiles                               (GET, POST)  (2b)
   profile-by-id.json         #   /api/profiles/{profile_id}                  (GET, PATCH, DELETE) (2b)
 components/
   schemas/                   # request/response body schemas, one file per resource
-    common.json              #   Slug, Connectivity, Error, ValidationError (shared)
+    common.json              #   Slug, Connectivity, ActuatorName, Error, ValidationError (shared)
     greenhouses.json         #   GreenhouseSummary, GreenhouseDetail, GreenhouseRegistration, ControllerEndpoint
     setpoints.json           #   Setpoints (target bundle), SetpointsPatch, ZoneTargets
     telemetry.json           #   TelemetryRange, Reading, ActuatorState
+    analytics.json           #   AnalyticsResponse, AnalyticsBucket
     events.json              #   EventEntry
     profiles.json            #   CropProfile, CropProfilePatch, ProfileStage, Assignment, AssignmentInput (2b)
   parameters.json            # shared path/query parameters
@@ -66,6 +68,7 @@ nginx-proxied prefix.
 | `DELETE /api/greenhouses/{greenhouse_id}` | Retire a greenhouse | 2a | 204 | 404 |
 | `PATCH /api/greenhouses/{greenhouse_id}/setpoints` | Ad-hoc setpoint edit | 2a | 200 `Setpoints` | 404, 422 |
 | `GET /api/greenhouses/{greenhouse_id}/telemetry?from&to` | Historical range query | 2a | 200 `TelemetryRange` | 404, 422 |
+| `GET /api/greenhouses/{greenhouse_id}/analytics?from&to&metric&interval` | Aggregated/derived series | 2a | 200 `AnalyticsResponse` | 404, 422 |
 | `GET /api/events?greenhouse_id&kind&severity` | Activity feed | 2a | 200 `EventEntry[]` | — |
 | `GET /api/profiles` | Crop-profile library | 2b | 200 `CropProfile[]` | 401 |
 | `POST /api/profiles` | Create a profile | 2b | 201 `CropProfile` | 401, 403, 422 |
@@ -119,9 +122,9 @@ Two classes of rule:
 - **Single-field bounds** are expressed in the schema (e.g. `humidity_low_pct` 0–100,
   `moisture_low_threshold` 0–1) and are checked by the fixtures below.
 - **Cross-field invariants** JSON Schema cannot express — `humidity_low_pct` below
-  `humidity_high_pct`, `moisture_low_threshold` below `moisture_high_threshold`, a telemetry `from`
-  at or before `to`, an assignment `stage` that exists in the profile, a profile still referenced by
-  an assignment — are enforced server-side and surface as the same 422.
+  `humidity_high_pct`, `moisture_low_threshold` below `moisture_high_threshold`, `day_start` before
+  `day_end`, a telemetry `from` at or before `to`, an assignment `stage` that exists in the profile,
+  a profile still referenced by an assignment — are enforced server-side and surface as the same 422.
 
 A missing greenhouse, profile, or assignment returns **404**.
 
@@ -150,6 +153,7 @@ validate against their component schema; the two `*.bad-*.json` counter-examples
 | `setpoints.patch.json` | `SetpointsPatch` | valid |
 | `setpoints.bad-range.json` | `Setpoints` | **fail** (`humidity_high_pct` 150, outside 0–100) |
 | `telemetry-range.json` | `TelemetryRange` | valid |
+| `analytics.json` | `AnalyticsResponse` | valid |
 | `event.json` | `EventEntry` | valid |
 | `event.bad-kind.json` | `EventEntry` | **fail** (`kind` outside the closed enum) |
 | `profile.json` | `CropProfile` | valid |
