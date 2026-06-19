@@ -43,18 +43,23 @@ temperature_day_c = 24.0
 temperature_night_c = 18.0
 day_start = "06:00"
 day_end = "20:00"
-humidity_low_pct = 65.0
-humidity_high_pct = 75.0
+humidity_low_pct = 50.0     # safety clamp floor for the VPD-derived RH target
+humidity_high_pct = 85.0    # safety clamp ceiling for the VPD-derived RH target
+humidity_deadband_pct = 5.0 # full hysteresis band width around the derived RH target
 co2_target_ppm = 1000
 co2_vent_interlock_threshold_pct = 15.0
-vpd_target_kpa = 1.0
+vpd_target_kpa = 1.0        # primary humidity control input (drives the RH target each tick)
 dli_target_mol = 20.0
 ```
 
 These are the values the [control loops](./05-spec-controller-control-loops.md)
 regulate to. `temperature_day_c` / `temperature_night_c` are selected by
-[setpoint resolution](./05-spec-controller-control-loops.md#setpoint-resolution); the
-rest are constant in Phase 1.
+[setpoint resolution](./05-spec-controller-control-loops.md#setpoint-resolution). The
+**humidity** target is *not* stored: it is derived each tick by inverting
+`vpd_target_kpa` at the fused temperature and clamping to
+`[humidity_low_pct, humidity_high_pct]` (the [humidity loop](./05-spec-controller-control-loops.md#humidity-hysteresis-band-vpd-feedforward)),
+so it tracks temperature even though `vpd_target_kpa` is constant in Phase 1. The
+remaining setpoints are constant in Phase 1.
 
 ## Day/night scheduling
 
@@ -154,9 +159,11 @@ the [deterministic simulation](./03-spec-controller-hal-simulation.md#7-determin
 | Parameter | Default | Unit | Role |
 |---|---|---|---|
 | Temperature PID `Kp/Ki/Kd` | tuned | — | Proportional response + anti-windup |
-| Humidity band | `humidity_low_pct`–`humidity_high_pct` | % RH | Hysteresis deadband |
+| Humidity safety bounds | `humidity_low_pct`–`humidity_high_pct` | % RH | Clamp the VPD-derived RH target |
+| Humidity deadband | `humidity_deadband_pct` | % RH | Hysteresis width around the derived RH target |
 | CO₂ target / vent interlock | `co2_target_ppm` / `co2_vent_interlock_threshold_pct` | ppm / % | On-off + suppression |
-| VPD / DLI targets | `vpd_target_kpa` / `dli_target_mol` | kPa / mol·m⁻²·d⁻¹ | Joint + accumulated targets |
+| VPD target | `vpd_target_kpa` | kPa | **Primary humidity control input** — derives the RH target each tick |
+| DLI target | `dli_target_mol` | mol·m⁻²·d⁻¹ | Accumulated lighting target |
 | Zone thresholds / drain | per zone | VWC / s | Irrigation gating |
 
 ### Safety & actuator constraints ([safety](./06-spec-controller-safety-and-constraints.md))

@@ -88,11 +88,13 @@ and `bound` — the shape Phase 2 relays when it refuses an out-of-bounds setpoi
 ([RFC-005](../../docs/decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain)).
 Two classes of rule:
 
-- **Single-field bounds** are expressed in the schema (e.g. `humidity_low_pct` 0–100,
-  `level_pct` 0–100) and so are also checked by the fixtures below.
+- **Single-field bounds** are expressed in the schema (e.g. `humidity_low_pct` /
+  `humidity_high_pct` 0–100 safety bounds, `humidity_deadband_pct` 0–50, `level_pct` 0–100) and
+  so are also checked by the fixtures below.
 - **Cross-field invariants** that JSON Schema cannot express — `humidity_low_pct` must be below
-  `humidity_high_pct`, `moisture_low_threshold` below `moisture_high_threshold`, and `day_start`
-  before `day_end` — are enforced by the controller at runtime and surface as the same 422.
+  `humidity_high_pct` (the humidity safety clamp the VPD-derived RH target is held within),
+  `moisture_low_threshold` below `moisture_high_threshold`, and `day_start` before `day_end` —
+  are enforced by the controller at runtime and surface as the same 422.
 
 ## Authentication
 

@@ -86,7 +86,7 @@ HAL (simulated actuators) ──▶ publish post-tick snapshot over MQTT
 | Stage | Responsibility | Detailed in |
 |---|---|---|
 | ① Fusion + fault detection | Combine redundant temperature probes; detect stuck/out-of-range sensors; produce trusted values + fault flags | [sensing](./04-spec-controller-sensing.md) |
-| ② Setpoint resolution | Pick the currently active setpoints (e.g. day vs night) | [control loops](./05-spec-controller-control-loops.md#setpoint-resolution), [config](./07-spec-controller-config-and-parameters.md) |
+| ② Setpoint resolution | Pick the currently active setpoints (e.g. day vs night temperature) and derive the humidity target from `vpd_target_kpa` + fused temperature, clamped to the humidity safety bounds | [control loops](./05-spec-controller-control-loops.md#setpoint-resolution), [config](./07-spec-controller-config-and-parameters.md) |
 | ③ Control loops | Compute desired actuator states from trusted readings + setpoints | [control loops](./05-spec-controller-control-loops.md) |
 | ④ Manual override | Replace desired values for force-flagged actuators | [§6](#6-manual-override) |
 | ⑤ Safety interlocks | Unconditionally override outputs on dangerous conditions | [safety](./06-spec-controller-safety-and-constraints.md#2-safety-interlocks) |
@@ -145,7 +145,7 @@ what lets each tick be reconstructed and each stage stay testable in isolation
 | **Raw readings** | HAL read | one tick | per-probe temperatures, RH, CO₂, PAR, per-zone VWC |
 | **Trusted state** | fusion + fault detection | one tick | fused temperature, validated readings, derived VPD |
 | **Fault flags** | fault detection | sticky until cleared | per-sensor stuck/out-of-range/disagreement; per-actuator stuck/no-response/saturation; alarms |
-| **Resolved setpoints** | setpoint resolution | one tick (from config) | active temperature setpoint, humidity band, CO₂ target |
+| **Resolved setpoints** | setpoint resolution | one tick (from config) | active temperature setpoint, derived humidity target (clamped RH from VPD + temp), CO₂ target |
 | **Loop state** | control loops | across ticks | PID integrator/derivative terms, hysteresis on/off latch, DLI accumulator, per-zone drain timers |
 | **Override state** | manual override | until cleared / expiry | per-actuator force flag, forced value, expiry deadline |
 | **Configuration** | startup + REST | until restart / REST edit | setpoints, thresholds, zone defs, HAL params |

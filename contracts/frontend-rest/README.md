@@ -119,10 +119,12 @@ A write is rejected with **422** and a `ValidationError` body that names the vio
 platform relays under [RFC-005](../../docs/decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain).
 Two classes of rule:
 
-- **Single-field bounds** are expressed in the schema (e.g. `humidity_low_pct` 0–100,
-  `moisture_low_threshold` 0–1) and are checked by the fixtures below.
+- **Single-field bounds** are expressed in the schema (e.g. `humidity_low_pct` /
+  `humidity_high_pct` 0–100 safety bounds, `humidity_deadband_pct` 0–50, `moisture_low_threshold`
+  0–1) and are checked by the fixtures below.
 - **Cross-field invariants** JSON Schema cannot express — `humidity_low_pct` below
-  `humidity_high_pct`, `moisture_low_threshold` below `moisture_high_threshold`, `day_start` before
+  `humidity_high_pct` (the humidity safety clamp the VPD-derived RH target is held within),
+  `moisture_low_threshold` below `moisture_high_threshold`, `day_start` before
   `day_end`, a telemetry `from` at or before `to`, an assignment `stage` that exists in the profile,
   a profile still referenced by an assignment — are enforced server-side and surface as the same 422.
 

@@ -8,6 +8,60 @@ alternatives and tradeoffs.
 
 ---
 
+## 2026-06-18 — VPD becomes the primary humidity control input (feedforward); humidity band demoted to safety clamp
+
+**Decision:** Make `vpd_target_kpa` the **primary** input to humidity control. Each tick the
+humidity loop derives its RH target by inverting vapor-pressure deficit at the fused air
+temperature — `target_rh = 100 · (1 − vpd_target_kpa / svp(T))`, air-VPD convention consistent with
+[sensing §3](../specs/design/controller/04-spec-controller-sensing.md#3-derived-sensing--vpd) — clamps it to
+`[humidity_low_pct, humidity_high_pct]`, and runs hysteresis of width `humidity_deadband_pct`
+around the clamped target. `humidity_low_pct` / `humidity_high_pct` are **demoted** from primary
+fog-on/fog-off thresholds to **safety clamp bounds** (and the fallback band when the feedforward is
+unavailable). A new `humidity_deadband_pct` setpoint replaces the implicit deadband the old band
+width provided. The previously **decorative** `vpd_target_kpa` (stored and validated but consumed
+by nothing) becomes load-bearing.
+
+Two degradation paths are specified distinctly: a **humidity-sensor fault** removes RH feedback, so
+the loop fails safe (misters off, alarm); a **temperature-unavailable** fault removes `svp(T)`, so
+the target falls back to the midpoint of the safety bounds while RH feedback still drives the loop.
+VPD *observation* (temp + RH) is unavailable in either case. The default safety bounds widen from
+`[65, 75]` to `[50, 85]` %RH so a `vpd_target_kpa = 1.0` target (~57 %RH at 20 °C, ~76 %RH at 30 °C)
+is not clamped flat across the normal day/night range.
+
+**Scope:** this lands the **config surface and the design** only. Phase 1 is the config slice; there
+is no control-loop, sensor-fusion, or VPD code yet ([`lib.rs`](../../climate-controller/src/lib.rs):
+loops "land in later slices"). The behavior is specified in the controller specs (control loops §,
+sensing §3–5, architecture §2/§4, config-and-parameters §) and the psychrometric inversion (`svp`,
+`rh_from_vpd`) is **deferred** to the loop slice that will call it — added there alongside its
+consumer as a single shared function so VPD observation and the control inversion cannot drift.
+
+**Contract changes (breaking):** the controller-rest and frontend-rest `Setpoints` / `SetpointsPatch`
+schemas gain a **required** `humidity_deadband_pct` (0–50 %RH) and reword `humidity_low_pct` /
+`humidity_high_pct` (safety clamp bounds) and `vpd_target_kpa` (primary control input). Following the
+[2026-06-16 precedent](#2026-06-16--actuator-health-monitoring-observed-actuator-channel-and-mqtt-connection-resilience-model),
+because Phase 1 is not yet implemented and **no consumer is deployed**, the schemas are edited **in
+place at major `info.version` 1** rather than retained side-by-side; once a controller or platform
+consumes these, the same change would instead bump the major per
+[`contracts/README.md`](../../contracts/README.md). Fixtures (including both `setpoints.bad-range`
+counter-examples and the embedded bundles in `greenhouse-detail` and `profile`) and the controller's
+own `Setpoints` struct + example/default TOML are updated in lockstep, so the in-toolchain
+conformance test (`climate-controller/tests/config.rs`) and the contract harness stay green.
+
+**Why:** VPD is the agronomically correct variable governing transpiration; controlling temperature
+and humidity to independent setpoints lets both hit target while VPD sits wrong, and the unused
+`vpd_target_kpa` field showed the design already anticipated this. A feedforward (derive the humidity
+setpoint from VPD + measured temperature, then run the existing hysteresis) makes the VPD target
+load-bearing without adding a new control tier or a VPD PID — you cannot actuate VPD directly, only
+temperature and humidity. Keeping `humidity_low/high` as a clamp preserves a legible safety envelope
+and a sensor-fault fallback, so the change is strictly additive to safety. Specifying the behavior now
+while deferring the math to its consumer keeps the config/contract surface honest without landing
+unused code.
+
+**Basis:** Operator-directed control-design change. Contract-versioning discipline per
+[RFC-007](./request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format).
+
+---
+
 ## 2026-06-17 — Frontend WebSocket fan-out contract authored (JSON Schema 2020-12)
 
 **Decision:** Authored the platform's live-push WebSocket fan-out under `contracts/frontend-ws/` as

@@ -22,15 +22,24 @@ pub struct Setpoints {
     pub day_start: TimeOfDay,
     /// End of the day window (local time-of-day).
     pub day_end: TimeOfDay,
-    /// Fog-on threshold; RH below this turns misters on (%RH). Must be `< humidity_high_pct`.
+    /// Lower humidity safety bound (%RH). The VPD-derived RH target is clamped to
+    /// `[humidity_low_pct, humidity_high_pct]`; this bound also acts as the floor of the
+    /// fallback band when the VPD feedforward is unavailable (temperature fault). Must be
+    /// `< humidity_high_pct`.
     pub humidity_low_pct: f64,
-    /// Fog-off threshold; RH above this turns misters off (%RH). Must be `> humidity_low_pct`.
+    /// Upper humidity safety bound (%RH). Clamps the VPD-derived RH target from above and caps
+    /// the fallback band. Must be `> humidity_low_pct`.
     pub humidity_high_pct: f64,
+    /// Full hysteresis band width around the VPD-derived RH target (%RH): misters turn on below
+    /// `target − width/2` and off above `target + width/2`.
+    pub humidity_deadband_pct: f64,
     /// CO₂ enrichment target; injector opens below this, closes when reached (ppm).
     pub co2_target_ppm: u32,
     /// Vent position above which the CO₂ injector is hard-interlocked off (% open).
     pub co2_vent_interlock_threshold_pct: f64,
-    /// Vapor-pressure-deficit target jointly served by the temperature and humidity loops (kPa).
+    /// Primary humidity control input: the vapor-pressure-deficit target (kPa). Each tick the
+    /// humidity loop derives its RH target by inverting VPD at the fused air temperature, then
+    /// clamps it to the humidity safety bounds.
     pub vpd_target_kpa: f64,
     /// Daily Light Integral target driving supplemental lighting (mol·m⁻²·day⁻¹).
     pub dli_target_mol: f64,
@@ -68,6 +77,13 @@ impl Setpoints {
             0.0,
             100.0,
         );
+        check_range(
+            violations,
+            "humidity_deadband_pct",
+            self.humidity_deadband_pct,
+            0.0,
+            50.0,
+        );
         check_range(violations, "co2_target_ppm", self.co2_target_ppm, 0, 5000);
         check_range(
             violations,
@@ -102,6 +118,7 @@ mod tests {
             day_end: "20:00".parse().unwrap(),
             humidity_low_pct: 65.0,
             humidity_high_pct: 75.0,
+            humidity_deadband_pct: 5.0,
             co2_target_ppm: 1000,
             co2_vent_interlock_threshold_pct: 15.0,
             vpd_target_kpa: 1.0,
@@ -137,6 +154,18 @@ mod tests {
         assert!(
             v.iter()
                 .any(|x| x.field == "humidity_low_pct" && x.bound == "must be < humidity_high_pct")
+        );
+    }
+
+    #[test]
+    fn out_of_range_humidity_deadband_is_flagged() {
+        let mut s = valid();
+        s.humidity_deadband_pct = 60.0; // above the 50 %RH cap
+        let mut v = Vec::new();
+        s.validate(&mut v);
+        assert!(
+            v.iter()
+                .any(|x| x.field == "humidity_deadband_pct" && x.bound == "0..=50")
         );
     }
 }

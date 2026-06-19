@@ -41,11 +41,15 @@ Before the loops run, **stage ②** resolves which setpoints are active this tic
 The **temperature** setpoint switches between `temperature_day_c` and
 `temperature_night_c` based on the `day_start` / `day_end` window — a simple
 time-of-day lookup, evaluated each tick. This is **not** weather-predictive (that is
-[Phase 3](../optimizer/05-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application)). Other
-setpoints (humidity, CO₂) are constant in Phase 1; the scheduling mechanism is built
-to extend to them later. The setpoint values themselves come from
-[config](./07-spec-controller-config-and-parameters.md#global-climate-setpoints) (TOML
-at startup, runtime edits over REST).
+[Phase 3](../optimizer/05-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application)).
+The **humidity** target is **derived here each tick** — not a stored constant — by
+inverting the VPD setpoint at the fused temperature and clamping to the humidity safety
+bounds (see [the humidity loop](#humidity-hysteresis-band-vpd-feedforward)); because it
+tracks the (day/night-varying) temperature it shifts across the day even though
+`vpd_target_kpa` itself is constant in Phase 1. CO₂ is constant in Phase 1; the
+scheduling mechanism is built to extend to these later. The setpoint values themselves
+come from [config](./07-spec-controller-config-and-parameters.md#global-climate-setpoints)
+(TOML at startup, runtime edits over REST).
 
 **Clock source.** The time-of-day the window is compared against comes from a single
 **injected clock** — a monotonic wall-clock in production, the
@@ -77,14 +81,32 @@ actuator wear and overshoot against the lagged plant
 of the error selects the mode; the integral term is clamped (anti-windup) so a long
 excursion (e.g. while degraded) does not accumulate an unrecoverable correction.
 
-### Humidity hysteresis band
+### Humidity hysteresis band (VPD feedforward)
 
-Fog **on** when RH drops below `humidity_low_pct`; fog **off** when RH rises above
-`humidity_high_pct`. The deadband prevents rapid on/off cycling. On/off solenoids
-can only do hysteresis — PID requires a variable-output actuator. Humidity and
-temperature loops **jointly serve the VPD target**: VPD is computed from fused
-temperature + RH ([sensing §3](./04-spec-controller-sensing.md#3-derived-sensing--vpd)),
-so neither loop chases its own reading in isolation.
+The humidity loop's target is **derived from the VPD setpoint**, not a fixed RH band.
+Each tick (during [setpoint resolution](#setpoint-resolution)) it inverts the VPD
+target at the fused air temperature to get the RH that would achieve it —
+`target_rh = 100 · (1 − vpd_target_kpa / svp(T))`, the air-VPD relation from
+[sensing §3](./04-spec-controller-sensing.md#3-derived-sensing--vpd) — then **clamps**
+that target to the `[humidity_low_pct, humidity_high_pct]` safety bounds. Fog turns
+**on** when RH drops below `clamped_target − humidity_deadband_pct/2` and **off** when
+RH rises above `clamped_target + humidity_deadband_pct/2`; the `humidity_deadband_pct`
+band prevents rapid on/off cycling (on/off solenoids can only do hysteresis — PID
+requires a variable-output actuator).
+
+This makes **VPD — the variable that actually governs transpiration — the control
+target**, while temperature stays on its own [PID](#temperature-pid). Because VPD
+cannot be actuated directly (only temperature and humidity can), driving the humidity
+setpoint *from* VPD is what holds the two loops to a consistent VPD without adding a
+second control tier; `humidity_low_pct` / `humidity_high_pct` are demoted to a
+**safety envelope** the derived target may never leave.
+
+**Degraded behavior** — two distinct paths
+([sensing §3](./04-spec-controller-sensing.md#3-derived-sensing--vpd)): if
+**temperature** is unavailable the RH target cannot be derived, so the loop falls back
+to the **midpoint of the safety bounds** and keeps running on RH feedback; if the
+**humidity** sensor faults there is no feedback to close the loop, so it **fails safe**
+(misters off). Either case raises an alarm.
 
 ### CO₂ on/off with vent interlock
 
@@ -128,8 +150,11 @@ it. Three patterns do the work:
   PID's cooling mode; the same vents also flush humidity and CO₂. The temperature
   loop owns their position; humidity/CO₂ loops read the resulting state rather than
   commanding vents themselves.
-- **VPD as the joint target.** Treating humidity + temperature as jointly serving
-  VPD (above) stops the misters and heater from oscillating against each other.
+- **VPD drives the humidity setpoint.** The humidity loop targets the RH that realizes
+  the VPD setpoint at the current temperature (above), so as the temperature PID moves
+  the air the humidity target moves with it instead of fighting a fixed RH band — the
+  misters and heater settle to a consistent VPD rather than oscillating against each
+  other.
 - **The CO₂/vent interlock.** Suppressing enrichment during venting removes the
   classic self-defeating loop (inject while exhausting).
 

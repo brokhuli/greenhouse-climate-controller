@@ -29,13 +29,19 @@
         "type": "number",
         "minimum": 0,
         "maximum": 100,
-        "description": "Fog-on threshold; relative humidity below this turns misters on (%RH). Must be below humidity_high_pct."
+        "description": "Lower humidity safety bound (%RH). The VPD-derived RH target is clamped to [humidity_low_pct, humidity_high_pct]; this bound also floors the fallback band when the VPD feedforward is unavailable (temperature fault). Must be below humidity_high_pct."
       },
       "humidity_high_pct": {
         "type": "number",
         "minimum": 0,
         "maximum": 100,
-        "description": "Fog-off threshold; relative humidity above this turns misters off (%RH). Must be above humidity_low_pct."
+        "description": "Upper humidity safety bound (%RH). Clamps the VPD-derived RH target from above and caps the fallback band. Must be above humidity_low_pct."
+      },
+      "humidity_deadband_pct": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 50,
+        "description": "Full hysteresis band width around the VPD-derived RH target (%RH): misters turn on below target − width/2 and off above target + width/2."
       },
       "co2_target_ppm": {
         "type": "integer",
@@ -52,7 +58,7 @@
       "vpd_target_kpa": {
         "type": "number",
         "minimum": 0,
-        "description": "Vapor-pressure-deficit target jointly served by the temperature and humidity loops (kPa)."
+        "description": "Primary humidity control input: the vapor-pressure-deficit target (kPa). Each tick the humidity loop derives its RH target by inverting VPD at the fused air temperature, then clamps it to the humidity safety bounds."
       },
       "dli_target_mol": {
         "type": "number",
@@ -67,6 +73,7 @@
       "day_end",
       "humidity_low_pct",
       "humidity_high_pct",
+      "humidity_deadband_pct",
       "co2_target_ppm",
       "co2_vent_interlock_threshold_pct",
       "vpd_target_kpa",
@@ -84,6 +91,7 @@
       "day_end": { "$ref": "#/Setpoints/properties/day_end" },
       "humidity_low_pct": { "$ref": "#/Setpoints/properties/humidity_low_pct" },
       "humidity_high_pct": { "$ref": "#/Setpoints/properties/humidity_high_pct" },
+      "humidity_deadband_pct": { "$ref": "#/Setpoints/properties/humidity_deadband_pct" },
       "co2_target_ppm": { "$ref": "#/Setpoints/properties/co2_target_ppm" },
       "co2_vent_interlock_threshold_pct": { "$ref": "#/Setpoints/properties/co2_vent_interlock_threshold_pct" },
       "vpd_target_kpa": { "$ref": "#/Setpoints/properties/vpd_target_kpa" },

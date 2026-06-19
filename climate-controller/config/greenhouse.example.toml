@@ -20,11 +20,12 @@ temperature_day_c = 24.0
 temperature_night_c = 18.0
 day_start = "06:00"
 day_end = "20:00"
-humidity_low_pct = 65.0  # fog on below this
-humidity_high_pct = 75.0 # fog off above this
+humidity_low_pct = 50.0    # safety clamp floor for the VPD-derived RH target
+humidity_high_pct = 85.0   # safety clamp ceiling for the VPD-derived RH target
+humidity_deadband_pct = 5.0 # full hysteresis band width around the derived RH target
 co2_target_ppm = 1000
 co2_vent_interlock_threshold_pct = 15.0
-vpd_target_kpa = 1.0
+vpd_target_kpa = 1.0       # primary humidity control input (drives the RH target each tick)
 dli_target_mol = 20.0
 
 # --- Irrigation zones (spec §4) ------------------------------------------------------------

@@ -65,18 +65,29 @@ gradient across the greenhouse, which is
 ## 3. Derived sensing — VPD
 
 **Vapor Pressure Deficit** (kPa) is not a sensor but a deterministic quantity
-computed from fused temperature + relative humidity. It is the climate variable
-that most directly reflects the moisture stress a plant experiences, which is why
-the humidity and temperature loops
-[jointly serve a VPD target](./05-spec-controller-control-loops.md#fast-loops--reactive)
-rather than chasing RH alone. The physiology (why too-high and too-low both hurt) is
-owned by
+computed from fused temperature + relative humidity — the saturation-vapor-pressure
+curve evaluated at **air** temperature (air VPD, not leaf VPD). It is the climate
+variable that most directly reflects the moisture stress a plant experiences, which
+is why it is the **primary input to humidity control**: the humidity loop derives its
+RH target by [inverting VPD at the fused temperature](./05-spec-controller-control-loops.md#humidity-hysteresis-band-vpd-feedforward)
+and running hysteresis around it, rather than chasing RH against a fixed band. VPD is
+therefore used in **both** directions — *observed* (temperature + RH → VPD) for
+telemetry, and *inverted* (target VPD + temperature → target RH) to drive the loop —
+and a **single** saturation-vapor-pressure function backs both, so the observed value
+and the control target cannot drift apart. The physiology (why too-high and too-low
+both hurt) is owned by
 [`physical-system-single.md`](../physical-system-single.md#derived-value-vpd).
 
-Because VPD is derived from fused temperature, it inherits temperature's trust
-state: if temperature is unavailable ([§2](#2-redundant-temperature-fusion-tmr)) or
-humidity has faulted ([§4](#4-fault-detection-non-temperature-sensors)), VPD is not
-computed and the VPD loop is suspended.
+Because VPD couples two inputs, losing either takes the *observed* VPD offline — but
+the two faults degrade the humidity loop **differently**:
+
+- **Temperature unavailable** ([§2](#2-redundant-temperature-fusion-tmr)): the
+  saturation curve cannot be evaluated, so the derived RH target is unavailable; the
+  loop falls back to the midpoint of the humidity safety bounds and keeps running on
+  RH feedback.
+- **Humidity faulted** ([§4](#4-fault-detection-non-temperature-sensors)): there is no
+  RH feedback to close the loop, so it **fails safe** (misters off) — the target can
+  still be computed, but nothing can act on it.
 
 ---
 
@@ -96,7 +107,7 @@ over MQTT, and reflects it in the REST `/health` surface
 
 | Sensor | Out-of-range bound | Fail-safe response |
 |---|---|---|
-| Humidity | 0–100 % RH | Disable misters; suspend the VPD loop; alarm |
+| Humidity | 0–100 % RH | Disable misters (no RH feedback to close the loop); suspend VPD observation + feedforward; alarm |
 | CO₂ | ~200–5000 ppm | Disable injector (fail-closed — never enrich blind); alarm |
 | PAR | sensor range | Fall back to time-based lighting schedule; alarm |
 | Soil moisture (per zone) | 0–1 VWC | Disable that zone's irrigation (fail-closed — never water blind); alarm |

@@ -25,7 +25,7 @@ faithful to them.
 ## 1. Profiles and assignment
 
 - A **crop profile** is a named, stage-aware bundle of targets — e.g. *lettuce /
-  vegetative* → its temperature day/night, humidity band, VPD, DLI, and CO₂ targets,
+  vegetative* → its temperature day/night, VPD target (with humidity safety bounds), DLI, and CO₂ targets,
   **plus** the per-zone soil-moisture thresholds and watering schedule that crop
   wants. Profiles form a small library, editable in the dashboard
   ([data model](./03-spec-platform-data-model.md)).
