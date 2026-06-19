@@ -1,0 +1,67 @@
+{
+  "InjectableMetric": {
+    "type": "string",
+    "enum": ["temperature", "humidity", "co2", "par", "soil_moisture"],
+    "description": "Injectable sensor metrics — the measured subset of the MQTT sensor-reading metric enum, kept in sync with it. The derived `vpd` is deliberately excluded: it is not a channel, so reach it by injecting temperature + humidity (controller HAL §9, sensing §3)."
+  },
+  "SensorInjectionPut": {
+    "type": "object",
+    "description": "Request to inject a sensor reading on the simulated HAL (controller HAL §9). The metric is taken from the path; this body carries the forced value, an optional probe/zone selector, and an optional auto-expiry. Simulated backend only — a real-hardware backend rejects these paths with 404.",
+    "properties": {
+      "value": {
+        "type": "number",
+        "description": "Forced reading, in the metric's fixed unit (temperature °C, humidity %RH, co2 ppm, par µmol·m⁻²·s⁻¹, soil_moisture VWC 0–1). Out-of-plausibility values are controller-enforced and surface as 422."
+      },
+      "probe_index": {
+        "type": ["integer", "null"],
+        "minimum": 0,
+        "description": "metric=temperature only: which redundant probe to force (0-based). Omit/null to force all probes — driving the fused median (e.g. to trip the critical-temperature interlock); set it to force one probe — driving outlier/disagreement detection. Non-null on any other metric is rejected with 422."
+      },
+      "zone_id": {
+        "type": ["string", "null"],
+        "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+        "description": "metric=soil_moisture only: the target zone; null/absent for house-level metrics. Required for soil_moisture, where its absence is rejected with 422."
+      },
+      "ttl_secs": {
+        "type": ["integer", "null"],
+        "minimum": 1,
+        "description": "Seconds until the injection auto-expires; omit or null to use the controller's configured default (sensor_injection_timeout_secs, controller config §)."
+      }
+    },
+    "required": ["value"],
+    "additionalProperties": false
+  },
+  "SensorInjection": {
+    "type": "object",
+    "description": "An active sensor-reading injection on the simulated HAL (controller HAL §9).",
+    "properties": {
+      "metric": { "$ref": "#/InjectableMetric" },
+      "value": {
+        "type": "number",
+        "description": "Forced reading in the metric's fixed unit."
+      },
+      "probe_index": {
+        "type": ["integer", "null"],
+        "minimum": 0,
+        "description": "Forced temperature probe (0-based), or null when all probes are forced / the metric is not temperature."
+      },
+      "zone_id": {
+        "type": ["string", "null"],
+        "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+        "description": "Target zone for soil_moisture; null for house-level metrics."
+      },
+      "created_at": {
+        "type": "string",
+        "format": "date-time",
+        "description": "When the injection was set (RFC 3339 UTC, ms)."
+      },
+      "expires_at": {
+        "type": ["string", "null"],
+        "format": "date-time",
+        "description": "When the injection auto-expires (RFC 3339 UTC, ms), or null for no timeout."
+      }
+    },
+    "required": ["metric", "value", "probe_index", "zone_id", "created_at", "expires_at"],
+    "additionalProperties": false
+  }
+}

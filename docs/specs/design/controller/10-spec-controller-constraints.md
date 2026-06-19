@@ -52,7 +52,10 @@ Each entry: the constraint, **why** it exists, and **what it forces or forbids**
   REST API is unauthenticated on the trusted network
   ([RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)).
 - **Forces:** Every inbound change (setpoints, thresholds, override) goes through
-  REST and is latched to a tick boundary.
+  REST and is latched to a tick boundary. The simulated-HAL
+  [sensor-injection](./03-spec-controller-hal-simulation.md#9-sensor-reading-injection)
+  diagnostic is no exception — it enters over REST and is latched like any write, not a
+  back channel.
 - **Forbids:** MQTT command topics; any side channel that mutates controller state.
 
 ## 5. HAL-swappable / no real hardware
@@ -62,6 +65,10 @@ Each entry: the constraint, **why** it exists, and **what it forces or forbids**
   open for a real (or Phase 4) backend (`P1-MOD-1`).
 - **Forces:** Control logic depends on the HAL *trait*; the simulator is one
   implementation behind it ([HAL §1](./03-spec-controller-hal-simulation.md#1-the-hal-boundary)).
+  [Sensor injection](./03-spec-controller-hal-simulation.md#9-sensor-reading-injection) belongs
+  to the *simulated* backend and is reached through a **simulation-only trait extension** — not
+  a reach past the trait into simulator internals — so a real-hardware backend neither
+  implements nor exposes it and the seam stays clean.
 - **Forbids:** Pipeline code reaching past the trait into simulation internals; any
   embedded/RTOS assumption.
 

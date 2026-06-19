@@ -8,6 +8,109 @@ alternatives and tradeoffs.
 
 ---
 
+## 2026-06-19 — All values are in fixed SI/agronomic base units; no conversion layer
+
+**Decision:** Every value in the system — sensor readings, setpoints, config parameters, contract
+payloads, and database rows — is expressed in a single fixed set of base units with no conversion
+layer at any boundary:
+
+| Domain | Unit |
+|---|---|
+| Temperature | °C |
+| Relative humidity | %RH |
+| CO₂ | ppm |
+| VPD | kPa |
+| Soil moisture | %VWC |
+| PAR / DLI | µmol·m⁻²·s⁻¹ / mol·m⁻²·d⁻¹ |
+| Timing | ms / s (SI) |
+
+No component accepts alternate units (e.g. °F) at its boundary and converts internally. If a display
+layer ever needs a different unit, that is a pure presentation transform in the frontend — not
+something the controller, platform API, optimizer, or any contract needs to handle.
+
+**Why:** A single unit set eliminates an entire class of conversion bugs (off-by-factor errors, unit
+mismatch across boundaries) and removes the need for unit metadata in every payload. The MQTT
+contract already enforces this as a schema-level invariant — the `if/then` metric→unit binding
+rejects a mismatched unit at the contract boundary
+([RFC-007 §4](./request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format),
+[2026-06-07 MQTT contract ADR](#2026-06-07--contract-conventions-topic-taxonomy-identity-payload-envelope-json-schema)).
+Extending the same rule uniformly means no translation is needed anywhere in the stack — a value read
+from a sensor, written to the DB, pushed over MQTT or REST, and consumed by the optimizer is the same
+number in the same unit throughout.
+
+**Basis:** Operator-directed design decision. No RFC.
+
+---
+
+## 2026-06-19 — Sensor reading injection: a simulation-only HAL surface for creating fault/interlock conditions on demand
+
+**Decision:** Add **explicit sensor reading injection** to the controller — a way to force a
+sensor channel to a specified value so a fault or interlock condition can be created **on
+demand** rather than waited for (e.g. drive temperature past `critical_temperature_max` and
+assert the interlock fires within one tick, without restarting to retune a disturbance
+profile). It is the **input-side counterpart** to the actuator fault injection already specified
+in [HAL §8](../specs/design/controller/03-spec-controller-hal-simulation.md#8-observed-actuator-state-and-fault-injection),
+and it backs the verification spec's long-standing "an injected fault surfaces in `/health`
+within one tick" assertion, which previously had no specified mechanism. Shape settled:
+
+- **Applied below fusion, through the trait, never around it.** Injection sits in front of the
+  coupled-lag output in the **simulated** backend: an overridden channel returns the injected
+  value, every other channel falls through normally, and the value then flows through fusion →
+  fault detection → loops → interlocks identically to a real reading. It is reached through a
+  **simulation-only HAL extension** (a `SimControl`-style surface), not a reach past the trait
+  into simulator internals — so a real-hardware backend neither implements nor exposes it and
+  the HAL seam stays clean (`P1-MOD-1`,
+  [HAL §9](../specs/design/controller/03-spec-controller-hal-simulation.md#9-sensor-reading-injection)).
+- **Per channel, including per probe.** Injectable channels are the raw sensor outputs:
+  temperature (each TMR probe), humidity, CO₂, PAR, and per-zone soil moisture. Injecting all
+  three temperature probes drives the fused median (the path to the critical-temperature
+  interlock); injecting one drives outlier/disagreement detection. The derived `vpd` is not a
+  channel — reach it by injecting temperature + humidity.
+- **Explicit, latched, auto-expiring.** Scope is **explicit injection only** — no PRNG-driven
+  random sensor faults. An injection is set on demand, latched to a tick boundary like any REST
+  write, and carries an auto-expiry (`sensor_injection_timeout_secs`, default 300 s) plus an
+  explicit clear, so it cannot silently pin a variable (the analogue of `P1-RESIL-2`). Because
+  it is explicit, it is part of the (seed, config, command-log) replay tuple, so an injection
+  scenario replays tick for tick (`P1-TEST-2`).
+- **REST, simulation-only, not a production path.** It is exposed over the existing REST surface
+  (no new MQTT command path — telemetry stays out-only); in managed mode the platform does not
+  call it. It is the only REST surface gated to the simulated backend.
+
+**Scope:** specs + contract surface only. As with the surrounding contract-authoring entries,
+Phase 1 control code is not yet implemented, so there is no HAL, REST, or pipeline code to
+change here; the behavior is specified in the controller specs (HAL §9, interfaces §3, config-
+and-parameters §, constraints §4–5, verification §) and the contract surface is authored.
+
+**Contract changes (additive):** `contracts/controller-rest/` gains a simulation-only resource —
+`GET /sim/sensor-injections` and `PUT`/`DELETE /sim/sensor-injections/{metric}` — with a new
+`sim.json` component (`InjectableMetric`, `SensorInjectionPut`, `SensorInjection`) mirroring the
+manual-override shapes, a `Metric` path parameter, a `simulation` tag, and `x-simulation-only`
+on each operation. `InjectableMetric` is kept in sync with the measured subset of the MQTT
+`sensor-reading` metric enum (minus the derived `vpd`). Three fixtures are added
+(`sim-injection.put`, `sim-injection`, and the `sim-injection.bad-probe` counter-example) and
+registered in `examples/cases.json`. A new endpoint is **additive** per
+[`contracts/README.md`](../../contracts/README.md), so `info.version` stays at major **1** — no
+side-by-side major is needed (and no consumer is deployed regardless).
+
+**Why:** The controller had no way to create a fault condition live — the only lever was lowering
+a threshold under the current reading, never pushing a reading up — yet the verification strategy
+already assumed injected faults. Specifying injection as the deterministic driver makes the
+critical-temperature-interlock and out-of-range sensor scenarios reproducible assertions instead
+of disturbance-tuning, and gives a standalone operator a way to exercise the safety path by hand.
+Routing it through a simulation-only trait extension keeps the change zero-cost above the HAL and
+preserves the swappable-backend invariant; keeping it explicit (no random faults) keeps
+determinism intact; latching + auto-expiry keep it consistent with manual override and the
+no-stranding guarantee.
+
+**Basis:** Operator-directed capability addition. REST-sole-write-path and unauthenticated-on-
+trusted-network postures per
+[RFC-005](./request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain) /
+[RFC-009](./request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries);
+contract-versioning discipline per
+[RFC-007](./request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format).
+
+---
+
 ## 2026-06-18 — VPD becomes the primary humidity control input (feedforward); humidity band demoted to safety clamp
 
 **Decision:** Make `vpd_target_kpa` the **primary** input to humidity control. Each tick the

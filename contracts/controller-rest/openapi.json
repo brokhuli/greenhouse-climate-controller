@@ -24,6 +24,14 @@
     "/greenhouses/{greenhouse_id}/zones/{zone_id}": { "$ref": "./paths/zone-by-id.json" },
     "/greenhouses/{greenhouse_id}/overrides": { "$ref": "./paths/overrides.json" },
     "/greenhouses/{greenhouse_id}/overrides/{actuator}": { "$ref": "./paths/override-by-actuator.json" },
-    "/greenhouses/{greenhouse_id}/health": { "$ref": "./paths/health.json" }
-  }
+    "/greenhouses/{greenhouse_id}/health": { "$ref": "./paths/health.json" },
+    "/greenhouses/{greenhouse_id}/sim/sensor-injections": { "$ref": "./paths/sim-sensor-injections.json" },
+    "/greenhouses/{greenhouse_id}/sim/sensor-injections/{metric}": { "$ref": "./paths/sim-sensor-injection-by-metric.json" }
+  },
+  "tags": [
+    {
+      "name": "simulation",
+      "description": "Simulated-HAL-only diagnostic surface — sensor-reading injection for creating fault/interlock conditions on demand (controller HAL §9). Not a production control path: the platform does not call it, and a real-hardware backend returns 404. Additive to the contract; does not bump info.version major."
+    }
+  ]
 }

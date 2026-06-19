@@ -34,13 +34,17 @@ fixtures are deferred to implementation, per the scope note in [the overview](./
    the optimizer's deterministic twin, which makes a control scenario a **reproducible assertion**.
    Scenarios deliberately reach past the happy path; each fixes seed, config, and setpoints, then
    asserts the driven variable moves the intended direction **and** every fault/interlock assertion
-   lands within its latency bound:
+   lands within its latency bound. Fault and interlock scenarios are driven by **explicit, seeded
+   HAL injection** — [sensor-reading injection](./03-spec-controller-hal-simulation.md#9-sensor-reading-injection)
+   for the input side, [actuator fault injection](./03-spec-controller-hal-simulation.md#8-observed-actuator-state-and-fault-injection)
+   for the output side — so the condition appears deterministically at a known tick rather than by
+   tuning a disturbance toward it:
 
    - **Diurnal ramp** — the temperature PID tracks the day/night setpoint schedule and VPD stays near target.
    - **Redundant-temperature fault** — one probe stuck/outlier: TMR median voting holds with **no degradation** ([`P1-REL-2`](../../artifacts/non-functional-requirements.md), [sensing §2](./04-spec-controller-sensing.md#2-redundant-temperature-fusion-tmr)); on **total disagreement** the controller holds a safe state with **zero unhandled-fault crashes** ([`P1-RESIL-1`](../../artifacts/non-functional-requirements.md)).
-   - **Non-temperature sensor fault** — stuck / out-of-range detected within the configurable window ([`P1-REL-3`](../../artifacts/non-functional-requirements.md)).
+   - **Non-temperature sensor fault** — an injected out-of-range / stuck reading is detected within the configurable window ([`P1-REL-3`](../../artifacts/non-functional-requirements.md)).
    - **Actuator health** — stuck / no-response detected within the window and the actuator/zone failed safe ([`P1-REL-4`](../../artifacts/non-functional-requirements.md), [safety §5](./06-spec-controller-safety-and-constraints.md#5-actuator-health-monitoring)).
-   - **Critical-temperature interlock** — asserted **within one tick** of detection ([`P1-REL-1`](../../artifacts/non-functional-requirements.md)), with the re-arm hysteresis governing **clearing only**.
+   - **Critical-temperature interlock** — injecting the temperature probes past the critical max asserts the interlock **within one tick** of detection ([`P1-REL-1`](../../artifacts/non-functional-requirements.md)), with the re-arm hysteresis governing **clearing only**.
    - **CO₂ vent interlock** — the injector is hard-off whenever vents exceed the interlock threshold (no enrichment while venting).
    - **Manual override auto-expiry** — a forgotten override releases after its timeout ([`P1-RESIL-2`](../../artifacts/non-functional-requirements.md)).
 
@@ -61,5 +65,6 @@ fixtures are deferred to implementation, per the scope note in [the overview](./
 
 An end-to-end integration test exercises the full path **behind the HAL trait** — seed → sense → fuse
 → resolve → control → interlock → constrain → drive + publish — asserting the published system-state
-snapshot agrees with the commanded actuator state and that an injected fault surfaces in the REST
-`/health` response within one tick ([`P1-OBS-2`](../../artifacts/non-functional-requirements.md)).
+snapshot agrees with the commanded actuator state and that an
+[injected fault](./03-spec-controller-hal-simulation.md#9-sensor-reading-injection) surfaces in the
+REST `/health` response within one tick ([`P1-OBS-2`](../../artifacts/non-functional-requirements.md)).

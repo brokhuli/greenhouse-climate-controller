@@ -182,7 +182,8 @@ controller could only ever assume its commands took effect.
   lives above the trait and never knows which backend produced the readback, preserving
   the clean control/plant split ([§1](#1-the-hal-boundary), `P1-MOD-1`).
 - **Injectable actuator faults.** The simulated backend can inject actuator faults under
-  the seed, the counterpart to the sensor faults the sensing stage already handles:
+  the seed — the output-side counterpart to the **sensor reading injection** of
+  [§9](#9-sensor-reading-injection), which forces the *input* side the same way:
   - **Stuck-on / stuck-off** — `observed` freezes at a state and ignores subsequent
     commands (the climate effect follows the frozen state, not the command).
   - **No-effect** — `observed` tracks the command normally, but the actuator's
@@ -200,13 +201,59 @@ existing lag/coupling model, not a new physics path.
 
 ---
 
-## 9. Cross-spec map
+## 9. Sensor reading injection
+
+The input-side counterpart to the actuator fault injection of [§8](#8-observed-actuator-state-and-fault-injection):
+the simulated backend can be told to **force a sensor channel to a specified value**, so a
+fault or interlock condition can be created **on demand** rather than waited for. This is what
+lets a test — or an operator inspecting a standalone controller — drive temperature past the
+[critical-temperature interlock](./06-spec-controller-safety-and-constraints.md#2-safety-interlocks)
+without restarting to retune a [disturbance profile](#5-hidden-disturbance-model), and assert
+the interlock fires within its latency bound.
+
+- **Applied at the raw-reading layer, below fusion.** An injection sits in front of the
+  coupled-lag output: on each tick a channel with an active injection returns the injected
+  value, and every other channel falls through to its normal simulated reading. The injected
+  value then flows through [fusion + fault detection](./04-spec-controller-sensing.md) → loops →
+  [interlocks](./06-spec-controller-safety-and-constraints.md) **identically to a real reading**,
+  so the scenario exercises the actual control/safety path, not a shortcut around it.
+- **Reached through the trait, never around it.** Injection is exposed as a **simulation-only
+  extension of the HAL** (a `SimControl` surface the simulated backend implements alongside the
+  main trait), not a back door into simulation internals. A real-hardware backend does not
+  implement it — its readings come from physical sensors — so the
+  [REST surface that drives it](./08-spec-controller-interfaces.md#3-rest--the-sole-write-path)
+  is rejected on a non-simulated backend. This preserves the clean control/plant split
+  ([§1](#1-the-hal-boundary), `P1-MOD-1`) exactly as the observed-state channel does for
+  actuators.
+- **Per channel, including per probe.** The injectable channels are the raw sensor outputs:
+  temperature (each of the three [TMR probes](./04-spec-controller-sensing.md#2-redundant-temperature-fusion-tmr)),
+  humidity, CO₂, PAR, and per-zone soil moisture. Injecting **all** temperature probes drives
+  the fused median — the path to the critical-temperature interlock; injecting **one** probe
+  drives [disagreement/outlier detection](./04-spec-controller-sensing.md#2-redundant-temperature-fusion-tmr).
+  VPD is [derived](./04-spec-controller-sensing.md#3-derived-sensing--vpd), not a channel —
+  reach it by injecting temperature + humidity.
+- **Explicit, latched, and auto-expiring.** An injection is set explicitly (nothing fires on
+  its own) and, like a [REST write](./02-spec-controller-architecture.md#3-real-time--scheduling-model)
+  and a [manual override](./02-spec-controller-architecture.md#6-manual-override), is **latched
+  to a tick boundary** and carries an **auto-expiry** as well as an explicit clear, so an
+  injection cannot silently pin a variable forever (the analogue of `P1-RESIL-2`).
+- **Deterministic, like everything else.** Because injection is explicit rather than
+  PRNG-driven, it is part of the (seed, config, command-log) replay tuple
+  ([§7](#7-determinism--seeding)) — an injection scenario replays tick for tick (`P1-TEST-2`).
+
+This stays within [bounded fidelity](#6-bounded-fidelity): an injection is a value that gates
+the existing reading path, not a new physics path.
+
+---
+
+## 10. Cross-spec map
 
 | Concern | This spec | Detailed in |
 |---|---|---|
 | What the loops do with the readings | feeds | [`05-spec-controller-control-loops.md`](./05-spec-controller-control-loops.md) |
 | How readings are conditioned before loops | feeds | [`04-spec-controller-sensing.md`](./04-spec-controller-sensing.md) |
 | Commanded-vs-observed actuator-health detection | feeds | [`06-spec-controller-safety-and-constraints.md`](./06-spec-controller-safety-and-constraints.md#5-actuator-health-monitoring) |
+| The simulation-only REST surface that drives sensor injection | exposed via | [`08-spec-controller-interfaces.md`](./08-spec-controller-interfaces.md#3-rest--the-sole-write-path) |
 | Where the HAL sits in the tick | composed by | [`02-spec-controller-architecture.md`](./02-spec-controller-architecture.md#2-the-tick-pipeline) |
 | τ / coupling-gain / disturbance defaults | consolidated in | [`07-spec-controller-config-and-parameters.md`](./07-spec-controller-config-and-parameters.md#default-parameters-reference) |
 | Physical inventory + real-world coupling | mirrors | [`physical-system-single.md`](../physical-system-single.md) |

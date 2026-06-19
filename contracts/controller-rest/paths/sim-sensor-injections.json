@@ -1,0 +1,24 @@
+{
+  "parameters": [{ "$ref": "../components/parameters.json#/GreenhouseId" }],
+  "get": {
+    "operationId": "listSensorInjections",
+    "summary": "Active sensor-reading injections (simulated HAL only)",
+    "description": "Every sensor channel currently forced to an injected value on the simulated HAL (controller HAL §9). Empty when none are active. A diagnostic/test surface, not a production control path — the platform does not call it, and a real-hardware backend returns 404. Safety interlocks act on injected readings exactly as on real ones.",
+    "tags": ["simulation"],
+    "x-simulation-only": true,
+    "responses": {
+      "200": {
+        "description": "Active injections.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "array",
+              "items": { "$ref": "../components/schemas/sim.json#/SensorInjection" }
+            }
+          }
+        }
+      },
+      "404": { "$ref": "../components/responses.json#/NotFound" }
+    }
+  }
+}

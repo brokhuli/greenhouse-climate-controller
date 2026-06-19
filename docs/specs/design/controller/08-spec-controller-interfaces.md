@@ -24,7 +24,7 @@ MQTT tooling (e.g. MQTT Explorer) and its REST surface.
 | Surface | Direction | Role |
 |---|---|---|
 | **MQTT** | out (publish) | Sensor readings, actuator states, fault events, consolidated system state — telemetry only |
-| **REST API** | in (write) | Setpoint/threshold CRUD, zone status, manual-override management, health — the sole inbound write path |
+| **REST API** | in (write) | Setpoint/threshold CRUD, zone status, manual-override management, health — the sole inbound write path; plus a simulated-HAL-only sensor-injection diagnostic surface ([§3](#simulation-control-simulated-hal-only)) |
 
 The split is deliberate and fixed by
 [RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain):
@@ -74,6 +74,10 @@ The REST API is the only way anything enters the controller. It exposes:
 - **Manual-override management** — set / clear / inspect actuator overrides
   ([§4](#4-manual-override-management)).
 - **Health** — every active fault and alarm ([§5](#5-published-shapes--health)).
+- **Simulation control** *(simulated HAL only)* — set / clear / inspect
+  [sensor-reading injections](./03-spec-controller-hal-simulation.md#9-sensor-reading-injection)
+  ([Simulation control](#simulation-control-simulated-hal-only)). A diagnostic/test surface,
+  not a production control path.
 
 Writes are **latched, not applied mid-tick**: an edit updates controller state and
 takes effect on the next tick
@@ -88,6 +92,36 @@ The path shapes, request/response schemas, and status codes are owned by
 [`contracts/controller-rest/`](../../../../contracts/controller-rest/) (OpenAPI
 3.1) under
 [RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain).
+
+### Simulation control (simulated HAL only)
+
+A diagnostic surface for **creating fault and interlock conditions on demand** — the REST
+front for the HAL's
+[sensor-reading injection](./03-spec-controller-hal-simulation.md#9-sensor-reading-injection).
+It lets an operator (standalone) or a test force a sensor channel to a value — e.g. drive
+temperature past the
+[critical-temperature interlock](./06-spec-controller-safety-and-constraints.md#2-safety-interlocks)
+— and watch the real sensing → interlock path respond, instead of waiting for the plant
+dynamics or restarting to retune a disturbance profile.
+
+- **Set / clear / inspect** an injection (sensor channel + forced value + optional timeout),
+  mirroring [manual-override management](#4-manual-override-management): latched to the next
+  tick, with an **auto-expiry** plus an explicit clear so an injection cannot silently pin a
+  variable.
+- **Simulated-backend only.** Injection reaches the plant through a simulation-only
+  [HAL extension](./03-spec-controller-hal-simulation.md#9-sensor-reading-injection); a
+  real-hardware backend, whose readings come from physical sensors, does not implement it, so
+  these paths are **rejected (`404`)** there. This is the only REST surface gated to the
+  simulated backend.
+- **Still REST, still telemetry-out-only over MQTT.** This adds no MQTT command path
+  ([§2](#2-mqtt--telemetry-out)); it is an inbound REST surface like every other write. The
+  injected value needs no separate reporting — it *is* the sensor reading, so it appears in
+  the normal [published shapes](#5-published-shapes--health) for that tick.
+- **Not a production path.** In managed mode the platform does **not** call it; it exists for
+  standalone diagnostics and the [verification scenarios](./11-spec-controller-verification.md).
+  Its path shapes and schemas are owned by
+  [`contracts/controller-rest/`](../../../../contracts/controller-rest/) like the rest of the
+  surface, tagged simulation-only.
 
 ---
 
@@ -184,6 +218,7 @@ The broker itself (Mosquitto) and the QoS / retained-message policy are owned by
 | Override pipeline behavior (vs this REST surface) | managed via | [`02-spec-controller-architecture.md`](./02-spec-controller-architecture.md#6-manual-override) |
 | What faults are surfaced (sensor) | reports | [`04-spec-controller-sensing.md`](./04-spec-controller-sensing.md#6-fault-surfacing) |
 | Actuator-health faults + observed actuator state | surfaces | [`06-spec-controller-safety-and-constraints.md`](./06-spec-controller-safety-and-constraints.md#5-actuator-health-monitoring) |
+| Sensor injection the sim-control surface drives | fronts | [`03-spec-controller-hal-simulation.md`](./03-spec-controller-hal-simulation.md#9-sensor-reading-injection) |
 | Runtime-mutable config the REST API edits | edits | [`07-spec-controller-config-and-parameters.md`](./07-spec-controller-config-and-parameters.md#startup-vs-runtime) |
 | Wire formats (topics, payloads, status codes) | binds to | [`contracts/`](../../../../contracts/), [`spec-contracts.md`](../spec-contracts.md) |
 | Who consumes the telemetry | consumed by | [platform ingestion](../platform/04-spec-platform-ingestion.md), [frontend data model](../frontend/05-spec-frontend-data-model.md) |

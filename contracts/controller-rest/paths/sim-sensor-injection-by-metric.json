@@ -1,0 +1,45 @@
+{
+  "parameters": [
+    { "$ref": "../components/parameters.json#/GreenhouseId" },
+    { "$ref": "../components/parameters.json#/Metric" }
+  ],
+  "put": {
+    "operationId": "setSensorInjection",
+    "summary": "Inject a sensor reading (simulated HAL only)",
+    "description": "Creates or replaces the injection on this sensor metric (controller HAL §9). The simulated HAL returns the forced value until the injection is cleared or its TTL expires. For metric=temperature, omit `probe_index` to force all redundant probes (driving the fused median — e.g. to trip the critical-temperature interlock) or set it to force one probe (driving outlier detection); for metric=soil_moisture, `zone_id` selects the zone. A value outside the metric's plausibility bound, a `probe_index` on a non-temperature metric, or a missing `zone_id` on soil_moisture is rejected with 422. Simulated backend only — a real-hardware backend returns 404. An injection cannot suppress a safety interlock; it can trigger one.",
+    "tags": ["simulation"],
+    "x-simulation-only": true,
+    "requestBody": {
+      "required": true,
+      "content": {
+        "application/json": {
+          "schema": { "$ref": "../components/schemas/sim.json#/SensorInjectionPut" }
+        }
+      }
+    },
+    "responses": {
+      "200": {
+        "description": "The active injection after applying the request.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "../components/schemas/sim.json#/SensorInjection" }
+          }
+        }
+      },
+      "404": { "$ref": "../components/responses.json#/NotFound" },
+      "422": { "$ref": "../components/responses.json#/ValidationFailed" }
+    }
+  },
+  "delete": {
+    "operationId": "clearSensorInjection",
+    "summary": "Clear a sensor-reading injection (simulated HAL only)",
+    "description": "Removes the injection on this metric and returns the channel to its simulated reading (controller HAL §9). For metric=temperature this clears all forced probes; for metric=soil_moisture, pass `zone_id` to select the zone. Simulated backend only — a real-hardware backend returns 404.",
+    "tags": ["simulation"],
+    "x-simulation-only": true,
+    "parameters": [{ "$ref": "../components/parameters.json#/ZoneIdQuery" }],
+    "responses": {
+      "204": { "description": "Injection cleared (or none was active)." },
+      "404": { "$ref": "../components/responses.json#/NotFound" }
+    }
+  }
+}

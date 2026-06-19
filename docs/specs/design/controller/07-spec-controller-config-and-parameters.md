@@ -107,6 +107,7 @@ schedule = "07:00,13:00,18:00"
 | Setpoint / threshold values | Runtime via REST (`PATCH`) |
 | Zone thresholds & schedule | Runtime via REST |
 | Manual override | Runtime via REST |
+| Sensor injection (simulated HAL only) | Runtime via REST — simulation builds only ([HAL §9](./03-spec-controller-hal-simulation.md#9-sensor-reading-injection)) |
 | Adding/removing zones; τ and coupling params | Config file + restart |
 
 The boundary is load-bearing: runtime-mutable state can be edited mid-run without
@@ -134,6 +135,7 @@ the [deterministic simulation](./03-spec-controller-hal-simulation.md#7-determin
 | Coupling gains | per-effect | — | Strength of each [coupling-matrix](./03-spec-controller-hal-simulation.md#3-coupling-matrix) effect |
 | Disturbance profiles | per-disturbance | — | Outdoor temp, solar/PAR cycle, CO₂ uptake, soil drying, humidity drift |
 | Simulation seed | fixed | — | Reproducibility (`P1-TEST-2`) |
+| `sensor_injection_timeout_secs` | 300 | s | Default auto-expiry for a [sensor-reading injection](./03-spec-controller-hal-simulation.md#9-sensor-reading-injection) (sim-only); per-request `ttl_secs` overrides it |
 
 ### Real-time ([architecture](./02-spec-controller-architecture.md#3-real-time--scheduling-model))
 
@@ -148,8 +150,8 @@ the [deterministic simulation](./03-spec-controller-hal-simulation.md#7-determin
 | Parameter | Default | Unit | Role |
 |---|---|---|---|
 | Temperature probe count | 3 | probes | TMR (`P1-REL-2`) |
-| Probe disagreement threshold | configurable | °C | Outlier exclusion |
-| Stuck-value window | configurable | s | Liveness check (`P1-REL-3`) |
+| Probe disagreement threshold | configurable (e.g. 2.0) | °C | Outlier exclusion |
+| Stuck-value window | configurable (e.g. 5) | s | Liveness check (`P1-REL-3`) |
 | Humidity plausibility bound | 0–100 | % RH | Out-of-range |
 | CO₂ plausibility bound | ~200–5000 | ppm | Out-of-range |
 | Soil moisture bound | 0–1 | VWC | Out-of-range |
@@ -170,23 +172,23 @@ the [deterministic simulation](./03-spec-controller-hal-simulation.md#7-determin
 
 | Parameter | Default | Unit | Role |
 |---|---|---|---|
-| Critical-temperature max | configurable | °C | Interlock trigger (`P1-REL-1`) |
-| CO₂ safety ceiling | configurable | ppm | Interlock trigger |
-| `interlock_rearm_hysteresis` | configurable | °C / ppm | Margin a reading must recover past before an interlock clears ([safety §2](./06-spec-controller-safety-and-constraints.md#assert-and-clear-re-arm-hysteresis)) |
-| `interlock_min_hold` | configurable | s | Minimum dwell an interlock stays asserted before it may clear ([safety §2](./06-spec-controller-safety-and-constraints.md#assert-and-clear-re-arm-hysteresis)) |
-| Vent / shade slew rate | configurable | %/s | Motor limit |
-| Heater / injector min on/off | configurable | s | Anti short-cycle |
-| Fan ramp-rate | configurable | %/s | Gradual speed change |
-| Valve minimum open time | configurable | s | Meaningful delivery |
-| Manual-override timeout | configurable | s | Auto-expiry (`P1-RESIL-2`) |
+| Critical-temperature max | configurable (e.g. 40) | °C | Interlock trigger (`P1-REL-1`) |
+| CO₂ safety ceiling | configurable (e.g. 5000) | ppm | Interlock trigger |
+| `interlock_rearm_hysteresis` | configurable (e.g. 2 / 200) | °C / ppm | Margin a reading must recover past before an interlock clears ([safety §2](./06-spec-controller-safety-and-constraints.md#assert-and-clear-re-arm-hysteresis)) |
+| `interlock_min_hold` | configurable (e.g. 60) | s | Minimum dwell an interlock stays asserted before it may clear ([safety §2](./06-spec-controller-safety-and-constraints.md#assert-and-clear-re-arm-hysteresis)) |
+| Vent / shade slew rate | configurable (e.g. 2) | %/s | Motor limit |
+| Heater / injector min on/off | configurable (e.g. 120 / 120) | s | Anti short-cycle |
+| Fan ramp-rate | configurable (e.g. 10) | %/s | Gradual speed change |
+| Valve minimum open time | configurable (e.g. 30) | s | Meaningful delivery |
+| Manual-override timeout | configurable (e.g. 1800) | s | Auto-expiry (`P1-RESIL-2`) |
 
 ### Actuator health ([safety §5](./06-spec-controller-safety-and-constraints.md#5-actuator-health-monitoring))
 
 | Parameter | Default | Unit | Role |
 |---|---|---|---|
-| Commanded-vs-observed tolerance | configurable | % / state | Stuck detection (`P1-REL-4`) |
+| Commanded-vs-observed tolerance | configurable (e.g. 5 / state mismatch) | % / state | Stuck detection (`P1-REL-4`) |
 | No-response detection window | 5 | ticks | No-response detection (`P1-REL-4`) |
-| Saturation / `setpoint_unreachable` window | configurable | s | Sustained-saturation alarm |
+| Saturation / `setpoint_unreachable` window | configurable (e.g. 300) | s | Sustained-saturation alarm |
 
 The per-actuator **fail-safe response** (disable + alarm for stuck/no-response; alarm-only,
 keep-controlling for saturation) is owned by

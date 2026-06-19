@@ -25,12 +25,15 @@ paths/                       # one file per path
   overrides.json             #   /overrides              (GET)
   override-by-actuator.json  #   /overrides/{actuator}   (PUT, DELETE)
   health.json                #   /health                 (GET)
+  sim-sensor-injections.json #   /sim/sensor-injections          (GET)        — sim-only
+  sim-sensor-injection-by-metric.json # /sim/sensor-injections/{metric} (PUT, DELETE) — sim-only
 components/
   schemas/                   # request/response body schemas, one file per resource
     setpoints.json           #   Setpoints, SetpointsPatch
     zones.json               #   ZoneConfig, ZoneConfigPatch, ZoneStatus
     overrides.json           #   Override, OverridePut
     health.json              #   Health, FaultSummary
+    sim.json                 #   InjectableMetric, SensorInjectionPut, SensorInjection (sim-only)
     actuator.json            #   ActuatorName, ActuatorOutputState (shared)
     common.json              #   Slug, Error, ValidationError (shared)
   parameters.json            # shared path/query parameters
@@ -60,11 +63,24 @@ All paths are greenhouse-scoped under `/greenhouses/{greenhouse_id}`.
 | `PUT /overrides/{actuator}` | Force an actuator (manual override) | 200 `Override` | 422, 404 |
 | `DELETE /overrides/{actuator}` | Clear an override | 204 | 404 |
 | `GET /health` | Controller mode, healthy flag, active faults | 200 `Health` | — |
+| `GET /sim/sensor-injections` | Active sensor-reading injections *(sim-only)* | 200 `SensorInjection[]` | 404 |
+| `PUT /sim/sensor-injections/{metric}` | Inject a sensor reading *(sim-only)* | 200 `SensorInjection` | 422, 404 |
+| `DELETE /sim/sensor-injections/{metric}` | Clear a sensor injection *(sim-only)* | 204 | 404 |
 
 Only the runtime-mutable surfaces accept writes. Adding or removing a zone, and changing HAL
 parameters, is a config-file edit plus restart (controller spec
 [§4](../../docs/specs/design/controller/07-spec-controller-config-and-parameters.md)) — there is
 deliberately no `POST`/`DELETE` for zones.
+
+The `/sim/sensor-injections` paths are a **simulation-only** diagnostic surface (tagged
+`simulation`, marked `x-simulation-only`): they force a sensor channel to a value so a fault or
+interlock condition can be created on demand — e.g. drive temperature past the critical max and
+watch the interlock fire (controller
+[HAL §9](../../docs/specs/design/controller/03-spec-controller-hal-simulation.md#9-sensor-reading-injection),
+[interfaces §3](../../docs/specs/design/controller/08-spec-controller-interfaces.md#simulation-control-simulated-hal-only)).
+The injection reaches the plant through a simulation-only HAL extension, so a real-hardware
+backend returns **404** on these paths; the Phase 2 platform does **not** call them. Adding this
+surface is **additive**, so `info.version` stays at major 1 (see [Versioning](#versioning)).
 
 ## Identity
 
@@ -116,6 +132,9 @@ with the obligation that they stay in sync:
 - `Health.mode` / `Health.healthy` and the `FaultSummary` shape mirror the `controller` and
   `faults` of [`system-state.schema.json`](../mqtt/system-state.schema.json); `fault_type` /
   `severity` mirror [`fault-event.schema.json`](../mqtt/fault-event.schema.json).
+- The `InjectableMetric` enum mirrors the **measured subset** of the
+  [`sensor-reading.schema.json`](../mqtt/sensor-reading.schema.json) metric enum — the same
+  values minus the derived `vpd`, which is not an injectable channel.
 
 All ultimately trace to the actuator and fault inventories in
 [`physical-system-single.md`](../../docs/specs/design/physical-system-single.md) and controller
@@ -124,12 +143,14 @@ spec §§5, 7–8. Adding an actuator or fault type is a contract change in both
 ## Examples
 
 [`examples/`](./examples/) holds request/response fixtures used as tests. Positive fixtures must
-validate against their component schema; the two `*.bad-*.json` counter-examples must **fail**:
+validate against their component schema; the `*.bad-*.json` counter-examples must **fail**:
 
 - [`setpoints.bad-range.json`](./examples/setpoints.bad-range.json) — `humidity_high_pct` of
   150; rejected by the 0–100 bound.
 - [`override.bad-level.json`](./examples/override.bad-level.json) — `level_pct` of 150; rejected
   by the 0–100 bound.
+- [`sim-injection.bad-probe.json`](./examples/sim-injection.bad-probe.json) — `probe_index` of
+  -1; rejected by the `minimum: 0` bound.
 
 | Fixture | Schema | Expect |
 |---|---|---|
@@ -141,6 +162,9 @@ validate against their component schema; the two `*.bad-*.json` counter-examples
 | `override.put.json` | `OverridePut` | valid |
 | `override.bad-level.json` | `OverridePut` | **fail** |
 | `health.json` | `Health` | valid |
+| `sim-injection.put.json` | `SensorInjectionPut` | valid |
+| `sim-injection.json` | `SensorInjection` | valid |
+| `sim-injection.bad-probe.json` | `SensorInjectionPut` | **fail** |
 
 ## Validation
 
