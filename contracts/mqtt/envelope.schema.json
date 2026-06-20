@@ -23,7 +23,7 @@
     "ts": {
       "type": "string",
       "format": "date-time",
-      "description": "Reading/event timestamp. RFC 3339 / ISO 8601, UTC, millisecond precision (e.g. 2026-06-07T14:03:00.000Z)."
+      "description": "Reading/event timestamp, taken from the controller's injected clock. RFC 3339 / ISO 8601, UTC, millisecond precision (e.g. 2026-06-07T14:03:00.000Z). On a real-hardware (or 1× simulated) run this tracks wall-clock; under an accelerated simulated run it is the simulated instant, advancing at the active time-scale (controller HAL §7) — so consumers plot telemetry on simulated time directly."
     }
   },
   "properties": {

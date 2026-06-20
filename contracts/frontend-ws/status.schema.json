@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://greenhouse.local/contracts/frontend-ws/status.schema.json",
   "title": "Status Frame",
-  "description": "A connectivity-change frame: the platform's view of a greenhouse's controller connectivity changed. The SPA patches greenhouseSummary.status in the fleet cache in place, rather than refetching (frontend data model §5, §6). Greenhouse-scoped — the envelope zone_id is null.",
+  "description": "A greenhouse status-change frame: the platform's view of a greenhouse's controller connectivity changed, and/or (simulation-only) its simulated-clock speed changed. The SPA patches greenhouseSummary.status — and, when present, greenhouseSummary.time_scale — in the fleet cache in place, rather than refetching (frontend data model §5, §6). Greenhouse-scoped — the envelope zone_id is null.",
   "type": "object",
   "allOf": [
     { "$ref": "https://greenhouse.local/contracts/frontend-ws/envelope.schema.json" },
@@ -13,6 +13,7 @@
           "description": "Frame discriminator."
         },
         "status": { "$ref": "https://greenhouse.local/contracts/frontend-ws/common.schema.json#/$defs/connectivity" },
+        "time_scale": { "$ref": "https://greenhouse.local/contracts/frontend-ws/common.schema.json#/$defs/time_scale" },
         "zone_id": {
           "const": null,
           "description": "Always null: a status change is greenhouse-scoped."

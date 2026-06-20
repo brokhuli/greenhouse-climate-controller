@@ -26,12 +26,13 @@
     "/greenhouses/{greenhouse_id}/overrides/{actuator}": { "$ref": "./paths/override-by-actuator.json" },
     "/greenhouses/{greenhouse_id}/health": { "$ref": "./paths/health.json" },
     "/greenhouses/{greenhouse_id}/sim/sensor-injections": { "$ref": "./paths/sim-sensor-injections.json" },
-    "/greenhouses/{greenhouse_id}/sim/sensor-injections/{metric}": { "$ref": "./paths/sim-sensor-injection-by-metric.json" }
+    "/greenhouses/{greenhouse_id}/sim/sensor-injections/{metric}": { "$ref": "./paths/sim-sensor-injection-by-metric.json" },
+    "/greenhouses/{greenhouse_id}/sim/time-scale": { "$ref": "./paths/sim-time-scale.json" }
   },
   "tags": [
     {
       "name": "simulation",
-      "description": "Simulated-HAL-only diagnostic surface — sensor-reading injection for creating fault/interlock conditions on demand (controller HAL §9). Not a production control path: the platform does not call it, and a real-hardware backend returns 404. Additive to the contract; does not bump info.version major."
+      "description": "Simulated-HAL-only diagnostic surface (controller HAL §7, §9): sensor-reading injection for creating fault/interlock conditions on demand, and the time-scale (speed) knob for running the simulated clock faster/slower than real-time. Not a production control path: a real-hardware backend returns 404, and the platform reaches these only as an explicit simulation-only exception. Additive to the contract; does not bump info.version major."
     }
   ]
 }

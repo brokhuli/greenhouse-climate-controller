@@ -100,6 +100,36 @@ drain_period_secs = 600
 schedule = "07:00,13:00,18:00"
 ```
 
+## Simulation control (simulated HAL only)
+
+```toml
+[simulation]
+time_scale = 1.0   # wall-clock tick-cadence multiplier; 1.0 = real-time
+```
+
+`time_scale` sets how fast the simulated clock runs relative to wall-clock by scaling **only** the
+tick cadence (`sleep = tick_period / time_scale`); it does **not** change the per-tick simulation
+step `Δt`, so determinism is preserved
+([HAL §7](./03-spec-controller-hal-simulation.md#time-scale-speed-without-breaking-determinism)).
+It is a **simulated-HAL-only** knob — a real-hardware backend has no such concept — and is also
+**runtime-adjustable** over the sim-only
+[REST surface](./08-spec-controller-interfaces.md#simulation-control-simulated-hal-only). The value
+is **ephemeral**: this TOML `time_scale` is the **reset-on-restart default**, not persisted live
+state, so a restart returns to it (typically 1×) regardless of any runtime change — the same
+ephemerality as a manual override or a sensor injection. Accepted range **0.25–8×** (canonical
+stops 0.5/1/2/4); the 8× ceiling keeps the wall interval above the per-tick compute budget
+(`P1-PERF-3`). Each controller has its **own** `time_scale`; there is no shared/master clock across
+greenhouses.
+
+> **Duration semantics — simulated seconds, not wall-clock.** Every in-simulation duration in this
+> file and the reference below — `drain_period_secs`, `sensor_injection_timeout_secs`, the
+> manual-override timeout, the saturation and no-response windows, `interlock_min_hold` — is counted
+> in **simulated** time (ticks; one tick = one simulated second at the canonical `Δt`). They
+> therefore **scale with `time_scale`** automatically: a `drain_period_secs = 300` elapses in 300
+> simulated seconds always, which is 150 wall-clock seconds at 2×. Only genuinely wall-clock
+> **infrastructure** timers — MQTT reconnect backoff, REST/HTTP timeouts — stay on wall-clock and do
+> **not** scale. (`_secs` names are kept for readability; they mean simulated seconds.)
+
 ## Startup vs runtime
 
 | Change | How |
@@ -108,6 +138,7 @@ schedule = "07:00,13:00,18:00"
 | Zone thresholds & schedule | Runtime via REST |
 | Manual override | Runtime via REST |
 | Sensor injection (simulated HAL only) | Runtime via REST — simulation builds only ([HAL §9](./03-spec-controller-hal-simulation.md#9-sensor-reading-injection)) |
+| Time-scale / speed (simulated HAL only) | Runtime via REST — simulation builds only; ephemeral, resets to the TOML default on restart ([HAL §7](./03-spec-controller-hal-simulation.md#time-scale-speed-without-breaking-determinism)) |
 | Adding/removing zones; τ and coupling params | Config file + restart |
 
 The boundary is load-bearing: runtime-mutable state can be edited mid-run without
@@ -135,7 +166,8 @@ the [deterministic simulation](./03-spec-controller-hal-simulation.md#7-determin
 | Coupling gains | per-effect | — | Strength of each [coupling-matrix](./03-spec-controller-hal-simulation.md#3-coupling-matrix) effect |
 | Disturbance profiles | per-disturbance | — | Outdoor temp, solar/PAR cycle, CO₂ uptake, soil drying, humidity drift |
 | Simulation seed | fixed | — | Reproducibility (`P1-TEST-2`) |
-| `sensor_injection_timeout_secs` | 300 | s | Default auto-expiry for a [sensor-reading injection](./03-spec-controller-hal-simulation.md#9-sensor-reading-injection) (sim-only); per-request `ttl_secs` overrides it |
+| `sensor_injection_timeout_secs` | 300 | s (sim) | Default auto-expiry for a [sensor-reading injection](./03-spec-controller-hal-simulation.md#9-sensor-reading-injection) (sim-only); per-request `ttl_secs` overrides it |
+| `time_scale` | 1.0 | × (0.25–8) | Wall-clock tick-cadence multiplier (sim-only); runtime-adjustable, ephemeral, per-controller ([HAL §7](./03-spec-controller-hal-simulation.md#time-scale-speed-without-breaking-determinism)) |
 
 ### Real-time ([architecture](./02-spec-controller-architecture.md#3-real-time--scheduling-model))
 
@@ -144,6 +176,11 @@ the [deterministic simulation](./03-spec-controller-hal-simulation.md#7-determin
 | Tick period | 1000 | ms | `P1-PERF-1` |
 | Jitter bound | ≤ 50 | ms | `P1-PERF-2` |
 | Per-tick compute budget | ≤ 100 | ms | `P1-PERF-3` |
+
+Tick period and jitter are the **1× baseline**. On the simulated HAL the
+[`time_scale`](#simulation-control-simulated-hal-only) knob scales the wall-clock period to
+`1000 / time_scale` ms; the per-tick compute budget (`P1-PERF-3`) is unchanged, which is what bounds
+the maximum usable speed.
 
 ### Sensing & fusion ([sensing](./04-spec-controller-sensing.md))
 

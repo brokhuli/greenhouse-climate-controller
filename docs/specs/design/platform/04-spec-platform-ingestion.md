@@ -44,7 +44,15 @@ The same surface the controller publishes
   per-zone soil moisture).
 - **Actuator states** — commanded and observed positions.
 - **Fault / state events** — faults, safety-interlock activations, and the
-  consolidated system state.
+  consolidated system state — which, on a simulated controller, also carries the optional
+  **simulation time-scale** (`time_scale`, `tick_index`,
+  [controller HAL §7](../controller/03-spec-controller-hal-simulation.md#time-scale-speed-without-breaking-determinism)).
+  Ingestion stores it with the rest of the snapshot and fans the current speed out to the dashboard;
+  it is transient telemetry, not new relational state, and ingestion stays
+  [read-only with respect to the controller](#7-read-only-with-respect-to-the-greenhouse) (the speed
+  is *set* over the platform's separate sim-only REST relay, never by the ingest path). Note the
+  controller stamps each message's `ts` from its own clock, so under an accelerated simulation
+  timestamps are simulated time — stored as published.
 
 ---
 

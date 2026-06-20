@@ -164,6 +164,45 @@ regression shows up as a diff in a fixed-seed run rather than as flake. Combined
 the latched-write model ([architecture §3](./02-spec-controller-architecture.md#3-real-time--scheduling-model)),
 an entire run is replayable from (seed, config, command log).
 
+### Time-scale: speed without breaking determinism
+
+Because the simulation advances by a fixed step `Δt` **per tick** ([§2](#2-coupled-first-order-lag)),
+how fast it runs *in wall-clock* is purely a question of how often the
+[scheduler](./02-spec-controller-architecture.md#3-real-time--scheduling-model) fires a tick — a
+property entirely outside the simulation. A simulation-only **`time_scale`** knob exploits this:
+it multiplies the wall-clock tick cadence (`sleep = tick_period / time_scale`) so an operator or
+test can run the plant at 0.5× / 1× / 2× / 4× (any value in a clamped range, canonical stops
+0.5/1/2/4) — slow-motion to inspect a transient, fast-forward to reach a DLI or drain milestone
+sooner.
+
+- **`Δt` and the seed are untouched.** The knob changes *when* ticks fire, never the per-tick step
+  or the seeded PRNG draw order. The tick-for-tick sequence of readings is therefore **identical**
+  at any speed, so the `(seed, config, command-log)` replay tuple still reproduces a run exactly —
+  the determinism guarantee above holds unchanged. Scaling `Δt` instead (bigger steps at a fixed
+  cadence) would *not* be equivalent: it would change the lag integration and could destabilize it
+  as `Δt` approaches the smallest τ (30 s), and it would break replay — so the knob deliberately
+  does **not** do that.
+- **Domain time scales with it; wall-clock infrastructure does not.** Every in-simulation duration
+  is counted in **ticks** (simulated seconds) — drain periods, DLI day, override/injection expiry,
+  saturation and no-response windows — so they all speed up together, the intended effect.
+  Infrastructure timers that are genuinely wall-clock (MQTT reconnect backoff, REST/HTTP timeouts)
+  stay on wall-clock and do **not** scale.
+- **Speed-up is CPU-bound; slow-down is free.** At `time_scale = S` the wall interval is
+  `1000/S` ms, which must stay above the per-tick compute budget (`P1-PERF-3`, ≤100 ms) — so there
+  is a practical ceiling (the contract clamps to 8×); below 1× there is none.
+- **Simulation-only, independent, ephemeral.** A real-hardware backend has no notion of wall-clock
+  speed, so the knob lives on the simulated backend only (reached through a sim-only HAL extension,
+  like [sensor injection §9](#9-sensor-reading-injection)) and its
+  [REST surface](./08-spec-controller-interfaces.md#simulation-control-simulated-hal-only) returns
+  404 on real hardware. Each controller owns its **own** clock — there is no shared/master clock —
+  and the value is **ephemeral**, resetting to the configured default (1×) on restart like a
+  manual override or an injection.
+
+The active `time_scale` (and the current `tick_index`) are published in the consolidated
+[system-state snapshot](./08-spec-controller-interfaces.md#5-published-shapes--health) so observers
+can display the speed; the envelope `ts` is the simulated instant, so telemetry plots on simulated
+time directly.
+
 ---
 
 ## 8. Observed actuator state and fault injection

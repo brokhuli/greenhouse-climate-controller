@@ -74,6 +74,14 @@ frontend terms.
 - **Forces:** Write UIs expose only setpoints / target bundles.
 - **Forbids:** Any UI that commands an actuator directly or proxies an actuator
   override.
+- **One narrow, explicit exception — the simulation-only time-scale knob.** The
+  [`TimeScaleControl`](./06-spec-frontend-components.md) sets a *simulated* controller's clock
+  speed (relayed through the platform's sim-only
+  [`/sim/time-scale`](../controller/08-spec-controller-interfaces.md#simulation-control-simulated-hal-only)).
+  It is a **diagnostic, not a setpoint and not an actuator command** — it never touches a control
+  output — so it does not breach the setpoint-only rule; it is hidden/disabled on real-hardware
+  greenhouses. This mirrors the platform-side exception in
+  [platform constraints §7](../platform/11-spec-platform-constraints.md#7-scope--deferred--out-of-scope).
 
 ### Safety stays in the controller — the UI only observes it
 

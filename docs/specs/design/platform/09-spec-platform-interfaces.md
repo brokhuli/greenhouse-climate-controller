@@ -62,7 +62,8 @@ does*, not its wire shapes.
 | **REST — telemetry** | Range queries over historical readings/actuator states/events | 2a |
 | **REST — analytics** | Aggregations and derived series for dashboards | 2a |
 | **REST — setpoint edits** | Ad-hoc setpoint edits, relayed to controllers (sticky intended state once reconciliation exists) | 2a |
-| **WebSockets** | Live fan-out of telemetry, status changes, drift, and events to the dashboard | 2a |
+| **REST — simulation time-scale** *(sim-only)* | Read/set a controller's simulated-clock **speed**, per-greenhouse and fleet-wide, relayed to the controller's sim-only [`/sim/time-scale`](../controller/08-spec-controller-interfaces.md#simulation-control-simulated-hal-only). The fleet form fans out as N independent per-controller writes (no shared clock). An explicit, narrow exception to setpoint-only control — a diagnostic, not a setpoint; rejected (404) for a real-hardware controller. The current speed is also surfaced on the greenhouse status and the WebSocket `status` frame | 2a |
+| **WebSockets** | Live fan-out of telemetry, status changes (incl. sim time-scale), drift, and events to the dashboard | 2a |
 | **REST — crop profiles** | CRUD on the profile library and their stage-aware target bundles | 2b |
 | **REST — assignments** | Assign a profile/stage to a greenhouse; trigger apply/reconcile | 2b |
 | **REST — setpoints (`POST`)** | Single-authority setpoint submission (the optimizer's RFC-005 write path) + provenance | 2b |

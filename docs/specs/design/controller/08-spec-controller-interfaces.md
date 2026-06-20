@@ -75,7 +75,9 @@ The REST API is the only way anything enters the controller. It exposes:
   ([§4](#4-manual-override-management)).
 - **Health** — every active fault and alarm ([§5](#5-published-shapes--health)).
 - **Simulation control** *(simulated HAL only)* — set / clear / inspect
-  [sensor-reading injections](./03-spec-controller-hal-simulation.md#9-sensor-reading-injection)
+  [sensor-reading injections](./03-spec-controller-hal-simulation.md#9-sensor-reading-injection),
+  and read / set the simulated clock's
+  [time-scale (speed)](./03-spec-controller-hal-simulation.md#time-scale-speed-without-breaking-determinism)
   ([Simulation control](#simulation-control-simulated-hal-only)). A diagnostic/test surface,
   not a production control path.
 
@@ -123,6 +125,28 @@ dynamics or restarting to retune a disturbance profile.
   [`contracts/controller-rest/`](../../../../contracts/controller-rest/) like the rest of the
   surface, tagged simulation-only.
 
+#### Time-scale (speed) control
+
+The same sim-only surface also reads and sets the simulated clock's
+[time-scale](./03-spec-controller-hal-simulation.md#time-scale-speed-without-breaking-determinism)
+(`GET` / `PUT /sim/time-scale`) — running the plant at 0.5×/1×/2×/4× by changing only the
+wall-clock tick cadence, not the per-tick step, so determinism is preserved.
+
+- **Set / inspect**, latched to the next tick like every other write. `scale` is a clamped range
+  (0.25–8×, canonical stops 0.5/1/2/4); out-of-range is **422**. The value is **ephemeral** —
+  reset to the configured default (1×) on restart — and **per-controller** (no shared/master clock).
+- **Simulated-backend only**, like injection: a real-hardware backend has no wall-clock-speed
+  concept and rejects these paths with **404**.
+- **Relayed by the platform — the one exception.** Unlike sensor injection (which the platform
+  never calls), the platform *does* expose a thin sim-only relay to this knob so the
+  [frontend speed control](../frontend/08-spec-frontend-interactions.md) can drive it live. This is
+  an explicit, narrow exception to the platform's setpoint-only downward control
+  ([platform constraints §7](../platform/11-spec-platform-constraints.md#7-scope--deferred--out-of-scope));
+  it remains a simulation diagnostic, never a setpoint.
+- **Reported in telemetry, not separately.** The active `time_scale` and `tick_index` ride in the
+  [system-state snapshot](#5-published-shapes--health); the envelope `ts` is the simulated instant,
+  so observers plot on simulated time directly.
+
 ---
 
 ## 4. Manual-override management
@@ -148,7 +172,10 @@ What the controller publishes (the shapes the
 [frontend data model](../frontend/05-spec-frontend-data-model.md) ultimately consumes,
 via the platform): per-metric readings (temperature, humidity, CO₂, PAR, per-zone
 soil moisture), actuator states (commanded vs observed, plus a per-actuator health
-flag), fault/interlock events, and the consolidated system state.
+flag), fault/interlock events, and the consolidated system state — which, on the
+simulated HAL, also carries the
+[time-scale](./03-spec-controller-hal-simulation.md#time-scale-speed-without-breaking-determinism)
+(`time_scale`, `tick_index`) so observers can show the current simulation speed.
 
 The REST **`/health`** endpoint reflects **every active fault and alarm**
 (`P1-OBS-2`) — the same faults raised by [sensing](./04-spec-controller-sensing.md#6-fault-surfacing),

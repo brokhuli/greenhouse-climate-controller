@@ -92,6 +92,17 @@ HAL time constants ([HAL §2](../design/controller/03-spec-controller-hal-simula
   default; consistent with running 20–50 controllers concurrently on one dev machine;
   [architecture §9](../design/controller/02-spec-controller-architecture.md#9-availability-restart--resource-footprint).)*
 
+> **Time-scale note (simulation-only).** P1-PERF-1 / P1-PERF-2 describe the **1× (real-time)
+> baseline**. On the simulated HAL a per-controller
+> [`time_scale`](../design/controller/03-spec-controller-hal-simulation.md#time-scale-speed-without-breaking-determinism)
+> knob scales only the wall-clock tick *cadence* (`sleep = 1000 / time_scale` ms), so off 1× the
+> effective period and the absolute jitter move with it — the fixed-1 Hz / ≤50 ms targets are stated
+> at 1×, and the knob is bounded to the simulated backend. It does **not** relax the per-tick compute
+> budget **P1-PERF-3** (which is what caps the maximum usable speed), and it does **not** affect
+> **P1-TEST-2**: `Δt` and the seeded draw order are unchanged, so replay stays tick-indexed and
+> bit-identical at any speed. See [HAL §7](../design/controller/03-spec-controller-hal-simulation.md#time-scale-speed-without-breaking-determinism)
+> and [controller constraints §1](../design/controller/10-spec-controller-constraints.md#1-determinism--real-time).
+
 **Reliability**
 
 - **P1-REL-1** — A safety interlock condition is acted on **within one tick (≤ 1 s)** of detection.
@@ -130,7 +141,7 @@ HAL time constants ([HAL §2](../design/controller/03-spec-controller-hal-simula
 **Observability**
 
 - **P1-OBS-1** — Telemetry (readings, actuator states, system state) is published **every tick at
-  1 Hz**; fault events are published **within one tick** of detection. *([interfaces §2](../design/controller/08-spec-controller-interfaces.md#2-mqtt--telemetry-out).)*
+  1 Hz**; fault events are published **within one tick** of detection. *([interfaces §2](../design/controller/08-spec-controller-interfaces.md#2-mqtt--telemetry-out).)* *(One publish per tick; under the simulation `time_scale` knob the wall-clock rate is `time_scale × 1 Hz`, but it stays exactly one frame per tick.)*
 - **P1-OBS-2** — The REST `/health` endpoint reflects **every active fault and alarm**. *([sensing §6](../design/controller/04-spec-controller-sensing.md#6-fault-surfacing), [interfaces §5](../design/controller/08-spec-controller-interfaces.md#5-published-shapes--health).)*
 
 **Modifiability**

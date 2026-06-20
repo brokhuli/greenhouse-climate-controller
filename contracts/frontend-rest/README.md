@@ -31,6 +31,8 @@ paths/                       # one file per path
   telemetry.json             #   /api/greenhouses/{greenhouse_id}/telemetry  (GET)
   analytics.json             #   /api/greenhouses/{greenhouse_id}/analytics  (GET)
   assignment.json            #   /api/greenhouses/{greenhouse_id}/assignment (GET, PUT)   (2b)
+  sim-time-scale.json        #   /api/greenhouses/{greenhouse_id}/sim/time-scale (GET, PATCH) — sim-only
+  sim-time-scale-all.json    #   /api/sim/time-scale                         (PATCH)  — sim-only, fleet-wide
   events.json                #   /api/events                                 (GET)
   profiles.json              #   /api/profiles                               (GET, POST)  (2b)
   profile-by-id.json         #   /api/profiles/{profile_id}                  (GET, PATCH, DELETE) (2b)
@@ -42,6 +44,7 @@ components/
     telemetry.json           #   TelemetryRange, TelemetrySeries, Reading, ActuatorState
     analytics.json           #   AnalyticsResponse, AnalyticsSeries, AnalyticsBucket
     events.json              #   EventEntry
+    sim.json                 #   TimeScale, TimeScalePatch, FleetTimeScaleResult (sim-only)
     profiles.json            #   CropProfile, CropProfilePatch, ProfileStage, Assignment, AssignmentInput (2b)
   parameters.json            # shared path/query parameters
   responses.json             # shared error responses (401, 403, 404, 422)
@@ -69,6 +72,9 @@ nginx-proxied prefix.
 | `PATCH /api/greenhouses/{greenhouse_id}/setpoints` | Ad-hoc setpoint edit | 2a | 200 `Setpoints` | 404, 422 |
 | `GET /api/greenhouses/{greenhouse_id}/telemetry?from&to` | Historical range query | 2a | 200 `TelemetryRange` | 404, 422 |
 | `GET /api/greenhouses/{greenhouse_id}/analytics?from&to&metric&interval` | Aggregated/derived series | 2a | 200 `AnalyticsResponse` | 404, 422 |
+| `GET /api/greenhouses/{greenhouse_id}/sim/time-scale` | Controller sim-clock speed *(sim-only)* | 2a | 200 `TimeScale` | 404 |
+| `PATCH /api/greenhouses/{greenhouse_id}/sim/time-scale` | Set one controller's sim-clock speed *(sim-only)* | 2a | 200 `TimeScale` | 404, 422 |
+| `PATCH /api/sim/time-scale` | Set the whole fleet's sim-clock speed *(sim-only)* | 2a | 200 `FleetTimeScaleResult` | 422 |
 | `GET /api/events?greenhouse_id&kind&severity` | Activity feed | 2a | 200 `EventEntry[]` | — |
 | `GET /api/profiles` | Crop-profile library | 2b | 200 `CropProfile[]` | 401 |
 | `POST /api/profiles` | Create a profile | 2b | 201 `CropProfile` | 401, 403, 422 |
@@ -80,6 +86,17 @@ nginx-proxied prefix.
 
 The optimizer's single-authority `POST /greenhouses/{id}/setpoints` (RFC-005 write path) is a
 **different** contract (catalog #3) and is not here; the ad-hoc edit above is the operator's path.
+
+The `sim/time-scale` paths are a **simulation-only** surface (marked `x-simulation-only`): they read
+and set the controller's simulated-clock speed (0.25–8×) for one greenhouse or — at `/api/sim/time-scale`
+— the whole fleet, relaying to the controller's own sim-only [`/sim/time-scale`](../controller-rest/)
+(controller HAL §7). The fleet form fans out as **N independent per-controller writes** — there is no
+shared/master clock — and returns a per-greenhouse outcome. This is a diagnostic, **not a setpoint**: it
+is the one explicit, narrow exception to the platform's setpoint-only downward control
+([platform constraints §7](../../docs/specs/design/platform/11-spec-platform-constraints.md)). A
+real-hardware controller has no time-scale, so the per-greenhouse paths return **404** there. The current
+speed also rides on `GreenhouseSummary` / `GreenhouseDetail` (`time_scale`) and is patched live by the
+WebSocket `status` frame.
 
 ## Delivery slices
 
@@ -145,7 +162,7 @@ not restated. This differs from the controller-rest contract, which is unauthent
 ## Examples
 
 [`examples/`](./examples/) holds request/response fixtures used as tests. Positive fixtures must
-validate against their component schema; the two `*.bad-*.json` counter-examples must **fail**:
+validate against their component schema; the three `*.bad-*.json` counter-examples must **fail**:
 
 | Fixture | Schema | Expect |
 |---|---|---|
@@ -160,6 +177,10 @@ validate against their component schema; the two `*.bad-*.json` counter-examples
 | `event.bad-kind.json` | `EventEntry` | **fail** (`kind` outside the closed enum) |
 | `profile.json` | `CropProfile` | valid |
 | `assignment.json` | `Assignment` | valid |
+| `sim-time-scale.patch.json` | `TimeScalePatch` | valid |
+| `sim-time-scale.json` | `TimeScale` | valid |
+| `sim-time-scale.bad-range.json` | `TimeScalePatch` | **fail** (`scale` 100, outside 0.25–8) |
+| `sim-time-scale-all.json` | `FleetTimeScaleResult` | valid |
 
 ## Validation
 

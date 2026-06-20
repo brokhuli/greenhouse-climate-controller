@@ -29,10 +29,10 @@ layout as [`mqtt/`](../mqtt/):
 
 ```
 envelope.schema.json       # the RFC-007 4-field envelope, composed into every frame via allOf
-common.schema.json         # shared $defs: connectivity, event_kind, event_severity, metric, unit, reading, actuator_sample
+common.schema.json         # shared $defs: connectivity, event_kind, event_severity, metric, unit, reading, actuator_sample, time_scale
 message.schema.json        # oneOf union of known frames plus an unknown-type fallback
 telemetry.schema.json      # type:"telemetry" — readings[] (+ optional actuators[])
-status.schema.json         # type:"status"    — status: connectivity
+status.schema.json         # type:"status"    — status: connectivity (+ optional time_scale, sim-only)
 drift.schema.json          # type:"drift"     — drift: boolean            (2b)
 event.schema.json          # type:"event"     — kind / severity / message / source
 examples/                  # fixtures used as tests (see below)
@@ -50,7 +50,7 @@ One socket; every frame is discriminated by `type`. The effect-on-client column 
 | `type` | Payload | Effect on client | Slice | Schema |
 |---|---|---|---|---|
 | `telemetry` | envelope + `readings[]` (+ optional `actuators[]`) | append one point per metric to the per-series ring buffer | 2a | [`telemetry.schema.json`](./telemetry.schema.json) |
-| `status` | envelope + `status` (connectivity) | patch `greenhouseSummary.status` in the fleet cache | 2a | [`status.schema.json`](./status.schema.json) |
+| `status` | envelope + `status` (connectivity) (+ optional `time_scale`, sim-only) | patch `greenhouseSummary.status` — and, when present, `greenhouseSummary.time_scale` (the per-greenhouse speed indicator) — in the fleet cache | 2a | [`status.schema.json`](./status.schema.json) |
 | `drift` | envelope + `drift` (boolean) | patch `greenhouseSummary.drift`; raise a drift event | 2b | [`drift.schema.json`](./drift.schema.json) |
 | `event` | envelope + `kind` / `severity` / `message` / `source` | prepend to the activity feed; raise a toast if `critical` | 2a | [`event.schema.json`](./event.schema.json) |
 
@@ -77,7 +77,7 @@ composed via `allOf` — the same envelope the [MQTT](../mqtt/) frames carry, on
 | `schema_version` | integer | Major version of the frame schema (see Versioning). |
 | `greenhouse_id` | string | The frame's greenhouse, redundant with any subscription so a frame stands alone. |
 | `zone_id` | string \| null | Set on zone-scoped telemetry; `null` otherwise. |
-| `ts` | string | RFC 3339 / ISO 8601, UTC, millisecond precision. For telemetry, the sample instant. |
+| `ts` | string | RFC 3339 / ISO 8601, UTC, millisecond precision. For telemetry, the sample instant. From the controller's injected clock — wall-clock on real hardware / 1×, the simulated instant under an accelerated run, so the SPA plots on simulated time directly. |
 
 `schema_version` is an **integer** per RFC-007 — the illustrative `z.string()` in
 [data model §2](../../docs/specs/design/frontend/05-spec-frontend-data-model.md#2-shared-primitives)

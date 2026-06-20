@@ -32,6 +32,8 @@
     "/api/greenhouses/{greenhouse_id}/telemetry": { "$ref": "./paths/telemetry.json" },
     "/api/greenhouses/{greenhouse_id}/analytics": { "$ref": "./paths/analytics.json" },
     "/api/greenhouses/{greenhouse_id}/assignment": { "$ref": "./paths/assignment.json" },
+    "/api/greenhouses/{greenhouse_id}/sim/time-scale": { "$ref": "./paths/sim-time-scale.json" },
+    "/api/sim/time-scale": { "$ref": "./paths/sim-time-scale-all.json" },
     "/api/events": { "$ref": "./paths/events.json" },
     "/api/profiles": { "$ref": "./paths/profiles.json" },
     "/api/profiles/{profile_id}": { "$ref": "./paths/profile-by-id.json" }

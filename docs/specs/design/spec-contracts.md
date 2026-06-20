@@ -48,7 +48,7 @@ is versioned and accompanied by an ADR, per [`contracts/README.md`](../../../con
 
 | | |
 |---|---|
-| **Purpose** | Sensor readings, actuator state, fault events, and consolidated system state published by each controller and ingested by the platform; the optimizer reads the resulting history. Telemetry-only — never a command channel. |
+| **Purpose** | Sensor readings, actuator state, fault events, and consolidated system state published by each controller and ingested by the platform; the optimizer reads the resulting history. Telemetry-only — never a command channel. The consolidated system state carries an optional simulation-only `simulation` block (`time_scale`, `tick_index`) on a simulated controller. |
 | **Parties / direction** | Controller → platform, optimizer (publish / subscribe) |
 | **Format** | JSON Schema (Draft 2020-12), one file per message type; hierarchical `gh/{greenhouse_id}/...` topic taxonomy; common payload envelope |
 | **Phase introduced** | Phase 1 |
@@ -60,7 +60,7 @@ is versioned and accompanied by an ADR, per [`contracts/README.md`](../../../con
 
 | | |
 |---|---|
-| **Purpose** | The controller's setpoint/threshold CRUD, zone status, manual-override management, and health surface — the only inbound write path into a controller. |
+| **Purpose** | The controller's setpoint/threshold CRUD, zone status, manual-override management, and health surface — the only inbound write path into a controller. Plus a simulation-only diagnostic surface: sensor-reading injection and the time-scale (speed) knob (`GET`/`PUT /sim/time-scale`), both 404 on real hardware. |
 | **Parties / direction** | Controller (producer) → platform (the sole consumer). The Phase 2 frontend reaches the controller **through** the Go API, not directly; there is no controller-local frontend. |
 | **Format** | OpenAPI 3.1 (uses the JSON Schema 2020-12 dialect); greenhouse-scoped paths; 422 names the violated bound |
 | **Phase introduced** | Phase 1 (consumed by the platform from Phase 2 — the ad-hoc setpoint relay in 2a, the full resolution path in 2b) |
@@ -84,7 +84,7 @@ is versioned and accompanied by an ADR, per [`contracts/README.md`](../../../con
 
 | | |
 |---|---|
-| **Purpose** | The operator-facing surface: greenhouse registry, historical telemetry range queries, analytics, and ad-hoc setpoint edits (**2a**); crop-profile CRUD and assignments (**2b**). |
+| **Purpose** | The operator-facing surface: greenhouse registry, historical telemetry range queries, analytics, and ad-hoc setpoint edits (**2a**); crop-profile CRUD and assignments (**2b**). Includes a simulation-only time-scale relay (per-greenhouse + fleet-wide `/sim/time-scale`) — the one explicit exception to setpoint-only downward control. |
 | **Parties / direction** | SPA / operator tooling → platform |
 | **Format** | OpenAPI 3.1 (uses the JSON Schema 2020-12 dialect); `/api`-prefixed, greenhouse-scoped paths; 422 names the violated bound |
 | **Phase introduced** | Phase 2 — registration/telemetry/edits in 2a, profiles/assignments in 2b |
@@ -96,7 +96,7 @@ is versioned and accompanied by an ADR, per [`contracts/README.md`](../../../con
 
 | | |
 |---|---|
-| **Purpose** | Live, fleet-wide push of telemetry, status changes, drift, and events to the dashboard. |
+| **Purpose** | Live, fleet-wide push of telemetry, status changes, drift, and events to the dashboard. The `status` frame carries an optional simulation-only `time_scale` so the dashboard's per-greenhouse speed indicator stays live. |
 | **Parties / direction** | Platform → SPA |
 | **Format** | WebSocket message schema (JSON Schema, Draft 2020-12); shares the RFC-007 identity / timestamp envelope; one file per frame type, discriminated by `type` |
 | **Phase introduced** | Phase 2a |

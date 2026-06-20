@@ -11,6 +11,9 @@
     { "fixture": "health.json", "schema": "health.json#/Health", "expect": "pass" },
     { "fixture": "sim-injection.put.json", "schema": "sim.json#/SensorInjectionPut", "expect": "pass" },
     { "fixture": "sim-injection.json", "schema": "sim.json#/SensorInjection", "expect": "pass" },
-    { "fixture": "sim-injection.bad-probe.json", "schema": "sim.json#/SensorInjectionPut", "expect": "fail" }
+    { "fixture": "sim-injection.bad-probe.json", "schema": "sim.json#/SensorInjectionPut", "expect": "fail" },
+    { "fixture": "sim-time-scale.put.json", "schema": "sim.json#/TimeScalePut", "expect": "pass" },
+    { "fixture": "sim-time-scale.json", "schema": "sim.json#/TimeScale", "expect": "pass" },
+    { "fixture": "sim-time-scale.bad-range.json", "schema": "sim.json#/TimeScalePut", "expect": "fail" }
   ]
 }

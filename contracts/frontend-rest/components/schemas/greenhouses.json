@@ -35,6 +35,12 @@
         "default": false,
         "description": "(2b) True when the controller's reported setpoints differ from the platform's intended state (reconciliation, platform §5)."
       },
+      "time_scale": {
+        "type": ["number", "null"],
+        "minimum": 0.25,
+        "maximum": 8.0,
+        "description": "Simulation-only: the controller's current simulated-clock speed multiplier (1.0 = real-time), backing the fleet card's per-greenhouse speed indicator. Null on a real-hardware controller or when unknown. Patched live by the WebSocket status frame (frontend-ws). Each controller's clock is independent (controller HAL §7)."
+      },
       "climate": {
         "type": "object",
         "description": "Compact current-vs-target readout for the fleet card.",
@@ -63,6 +69,7 @@
       "crop": { "$ref": "#/GreenhouseSummary/properties/crop" },
       "status": { "$ref": "./common.json#/Connectivity" },
       "drift": { "$ref": "#/GreenhouseSummary/properties/drift" },
+      "time_scale": { "$ref": "#/GreenhouseSummary/properties/time_scale" },
       "setpoints": { "$ref": "./setpoints.json#/Setpoints" }
     },
     "required": ["id", "display_name", "crop", "status", "drift", "setpoints"],

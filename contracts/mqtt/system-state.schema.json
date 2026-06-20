@@ -125,6 +125,25 @@
       },
       "required": ["actuator", "state", "expires_at"],
       "additionalProperties": false
+    },
+    "simulation": {
+      "type": "object",
+      "description": "Simulation-only: the simulated clock's current time-scale and tick counter (controller HAL §7, architecture §3). Present only on a simulated HAL; omitted on real hardware. Lets observers display or log how fast simulated time is running relative to wall-clock. The envelope `ts` is the simulated instant, so consumers plot telemetry on simulated time directly.",
+      "properties": {
+        "time_scale": {
+          "type": "number",
+          "minimum": 0.25,
+          "maximum": 8.0,
+          "description": "Wall-clock cadence multiplier (1.0 = real-time; <1 slow-motion; >1 fast-forward). Scales only the tick cadence, not the per-tick simulation step Δt, so determinism is preserved."
+        },
+        "tick_index": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Monotonic simulation tick counter since startup. One tick = one simulated second (Δt), independent of `time_scale`."
+        }
+      },
+      "required": ["time_scale", "tick_index"],
+      "additionalProperties": false
     }
   },
   "allOf": [
@@ -156,7 +175,8 @@
           "type": "array",
           "description": "Active manual overrides (controller spec §10). Empty when none.",
           "items": { "$ref": "#/$defs/override_entry" }
-        }
+        },
+        "simulation": { "$ref": "#/$defs/simulation" }
       },
       "required": ["controller", "sensors", "zones", "actuators", "faults", "overrides"]
     }

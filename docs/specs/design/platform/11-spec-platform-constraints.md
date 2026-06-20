@@ -84,6 +84,16 @@ Platform capabilities intentionally **not** in Phase 2:
 | Manual actuator override | Forcing individual actuators is a **controller-local** action ([controller architecture](../controller/02-spec-controller-architecture.md#6-manual-override)); the platform's downward control is **setpoint-only** and does not proxy actuator overrides |
 | Safety authority | Safety interlocks remain **controller-owned** ([§3](#3-safety-authority-stays-in-the-controller)); the platform never overrides them |
 
+> **One explicit exception to setpoint-only downward control: the simulation time-scale relay.** The
+> platform exposes a sim-only [`/sim/time-scale`](./09-spec-platform-interfaces.md#3-api-surface-inventory)
+> surface (per-greenhouse and fleet-wide) that relays the controller's simulated-clock **speed** so the
+> dashboard can drive it live. This is deliberately *not* a setpoint and *not* an actuator command — it
+> is a simulation diagnostic that changes only how fast a simulated controller's clock runs
+> ([controller HAL §7](../controller/03-spec-controller-hal-simulation.md#time-scale-speed-without-breaking-determinism)),
+> rejected (404) on real hardware. Unlike sensor injection (which the platform never calls), this one
+> *is* relayed, because a live speed knob is its whole point; it remains read-only with respect to
+> control state.
+
 ---
 
 ## 8. Cross-spec map

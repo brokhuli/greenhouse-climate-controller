@@ -23,6 +23,15 @@ Each entry: the constraint, **why** it exists, and **what it forces or forbids**
   ([architecture §3](./02-spec-controller-architecture.md#3-real-time--scheduling-model)).
 - **Forbids:** Wall-clock/entropy-driven simulation; mid-tick mutation of pipeline
   state; unbounded per-tick work.
+- **Time-scale is consistent with this, not an exception.** The simulation-only
+  [time-scale knob](./03-spec-controller-hal-simulation.md#time-scale-speed-without-breaking-determinism)
+  changes only *when* the scheduler fires a tick (wall-clock cadence), never the per-tick step `Δt`
+  or the seeded draw order — so the simulation stays seed-driven and replay stays tick-indexed
+  (`P1-TEST-2` holds at every speed). What it *does* relax is the **wall-clock** real-time target:
+  the fixed 1 Hz period and ≤50 ms jitter (`P1-PERF-1/2`) describe the 1× baseline, and above 1× the
+  wall-clock period is `1000/time_scale` ms by design. That relaxation is bounded to the simulated
+  backend (a real-hardware backend rejects the knob) and the per-tick compute budget (`P1-PERF-3`)
+  is unchanged — see the [NFR note](../../artifacts/non-functional-requirements.md).
 
 ## 2. Headless
 

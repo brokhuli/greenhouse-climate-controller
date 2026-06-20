@@ -4,6 +4,7 @@
   "crop": "tomato",
   "status": "online",
   "drift": false,
+  "time_scale": 2.0,
   "climate": {
     "temperature": 23.4,
     "setpoint_temperature": 24.0

@@ -27,6 +27,10 @@ command/plan topics here
   ([RFC-007 open-question resolution](../../docs/decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)).
 - A sensor reading uses the **same schema** whether greenhouse- or zone-scoped; scope is
   carried by the topic and the envelope `zone_id`, not by the metric.
+- The simulated-clock **time-scale** rides inside the retained `gh/{id}/state` snapshot as an
+  optional `simulation` object (`time_scale`, `tick_index`) — sim-only, omitted on real hardware.
+  No new topic: it is part of the consolidated state, set over the controller's sim-only
+  [`/sim/time-scale`](../controller-rest/) REST surface (controller HAL §7).
 - The `actuator/{actuator}/state` topic carries **house-level** actuators only. `irrigation_valve`
   is per-zone and is **not** published here — there is no zone-scoped actuator topic; per-zone valve
   state is reported only in the retained `gh/{id}/state` snapshot's `zones[].irrigation`. (The
@@ -53,7 +57,7 @@ composed into each message schema via `allOf`:
 | `schema_version` | integer | Major version of the message schema (see Versioning). |
 | `greenhouse_id` | string | Redundant with topic; lets ingested rows stand alone. |
 | `zone_id` | string \| null | Present for zone-scoped messages; `null` otherwise. |
-| `ts` | string | RFC 3339 / ISO 8601, UTC, millisecond precision (e.g. `2026-06-07T14:03:00.000Z`). |
+| `ts` | string | RFC 3339 / ISO 8601, UTC, millisecond precision (e.g. `2026-06-07T14:03:00.000Z`). Taken from the controller's injected clock — wall-clock on real hardware / 1×, the simulated instant under an accelerated run (controller HAL §7), so telemetry plots on simulated time directly. |
 
 ## Units
 

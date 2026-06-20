@@ -34,6 +34,14 @@ operator cannot suppress a safety response. A detected condition is acted on
 **within one tick** (`P1-REL-1`); because fault detection and interlocks both run
 every tick, this latency bound is structural, not best-effort.
 
+> **The one-tick bound is in *ticks*, not wall-clock milliseconds.** It holds at any
+> [time-scale](./03-spec-controller-hal-simulation.md#time-scale-speed-without-breaking-determinism):
+> the interlock still fires the tick its threshold is crossed, so the *simulated*-time latency is
+> unchanged, while the *wall-clock* latency simply tracks the cadence (a tick is 250 ms at 4×,
+> 2000 ms at 0.5×). The actuator-health detection windows ([§5](#5-actuator-health-monitoring)) and
+> the interlock dwell (`interlock_min_hold`) are likewise counted in ticks, so they too scale with
+> the knob rather than drifting against simulated time.
+
 | Condition | Response |
 |---|---|
 | Temperature > critical max | Override all loops; run all cooling at full; raise alarm |

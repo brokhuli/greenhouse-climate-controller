@@ -67,6 +67,14 @@ If the clock is ever unreadable at runtime, resolution falls back to the **coole
 `temperature_night_c`** setpoint — the bias least likely to harm the crop — rather than
 acting on an ambiguous time.
 
+Because that injected clock advances by `Δt` **per tick**, day/night resolution and every
+time-based loop here (DLI accumulation, drain periods, photoperiod) follow *simulated* time, not
+wall-clock — so the simulation-only
+[time-scale knob](./03-spec-controller-hal-simulation.md#time-scale-speed-without-breaking-determinism)
+speeds them all up or down uniformly without changing **which tick** anything flips on. All
+durations these loops compare against are counted in ticks (simulated seconds) for exactly this
+reason.
+
 ---
 
 ## Fast loops — reactive

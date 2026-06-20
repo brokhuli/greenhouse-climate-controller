@@ -51,6 +51,17 @@ local:
 
 All five levers are configurable ([configuration](./10-spec-optimizer-configuration.md)).
 
+> **These levers assume real-time (1×) operation.** The fixed cycle cadence and the
+> adaptive horizon are **wall-clock-paced**, and the state-change gate compares trajectories over
+> wall-clock-anchored windows — all of which presume the controller's clock tracks wall-clock. When a
+> greenhouse runs under the P1 simulation
+> [time-scale knob](../controller/03-spec-controller-hal-simulation.md#time-scale-speed-without-breaking-determinism)
+> at `time_scale ≠ 1.0`, telemetry arrives faster/slower than wall-clock and these levers would
+> desync from the plant — so the [input gate](./06-spec-optimizer-input-gating.md) holds
+> the cycle *before* the planner is invoked rather than this layer compensating. The optimizer is
+> explicitly not required to operate off 1× ([scope](./11-spec-optimizer-scope.md)); it resumes when
+> the controller returns to real-time.
+
 ### Determinism & reproducibility
 
 The planner's sampling is **pinned** so plans are reproducible enough to test, diff, and debug. The

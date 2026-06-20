@@ -70,6 +70,14 @@ their data either way; only transitions are suppressed).
 - **Pause on interaction:** hovering to read a value or brushing a range pauses the
   auto-scroll and shows a crosshair tooltip; it resumes shortly after pointer-leave
   so the operator isn't fighting the stream.
+- **Plot on simulated time.** The chart's x-axis is keyed on each frame's envelope `ts`,
+  which is the controller's clock — so under an accelerated simulation
+  ([controller HAL §7](../controller/03-spec-controller-hal-simulation.md#time-scale-speed-without-breaking-determinism))
+  the axis advances at the simulation speed and the chart "just works": at 4× it scrolls four
+  times as fast in wall-clock but stays internally consistent; at 0.5× it crawls. The `≥ 1 Hz`
+  cadence above is a **wall-clock** render guarantee — at speed `S` the stream arrives at ~`S` Hz,
+  so the renderer **coalesces** the extra frames (batch per animation frame) rather than redrawing
+  per message, keeping the cost bounded ([§12](#12-implementation-budget)).
 - **Reduced motion:** identical data behavior; only non-essential UI transitions are
   suppressed (the data is the point).
 
@@ -135,6 +143,30 @@ the UI never commands actuators ([constraints](./09-spec-frontend-constraints.md
 
 In **2a** an edit is a thin relay; in **2b** it becomes sticky intended state and
 participates in reconciliation — same UX, different backend semantics.
+
+### Time-scale (simulation speed) — a live control
+
+The simulation-speed knob is the one **live** (non-confirmed) write, because it is a diagnostic, not
+a setpoint:
+
+- **Immediate, no confirmation dialog.** Picking a speed on the `TimeScaleControl`
+  ([components](./06-spec-frontend-components.md)) — a segmented 0.5×/1×/2×/4× control (or a slider
+  across the 0.25–8× range) — fires the `PATCH .../sim/time-scale` straight away; speeding a
+  simulation up or down is cheap and reversible, so the deliberate edit→confirm gate above does not
+  apply.
+- **Optimistic with rollback.** The control shows the new speed in a **pending** style until the API
+  echoes the applied value (reconciling from the response), and **rolls back** with an error toast
+  on failure — the same settle/rollback machinery as a setpoint edit, minus the dialog.
+- **Authoritative value comes from the stream.** The badge/indicator reflects `time_scale` from the
+  WebSocket `status` frame (patched into the greenhouse summary), so it stays correct even if the
+  speed is changed elsewhere; the knob is a request, the stream is the truth.
+- **Fleet-wide variant.** The fleet view's "set all speed" issues the platform's fleet
+  `PATCH /api/sim/time-scale`, which fans out as **N independent per-controller writes** (no shared
+  clock) and returns a per-greenhouse result; partial failure (an offline or real-hardware
+  controller) is surfaced per card, not as a single failure.
+- **Sim-only, gracefully absent.** On a real-hardware controller the control is hidden/disabled (the
+  greenhouse reports no `time_scale`); it is a diagnostic exception to the platform's setpoint-only
+  control, never an actuator command ([constraints](./09-spec-frontend-constraints.md)).
 
 ---
 

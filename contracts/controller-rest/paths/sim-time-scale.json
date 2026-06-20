@@ -1,0 +1,48 @@
+{
+  "parameters": [{ "$ref": "../components/parameters.json#/GreenhouseId" }],
+  "get": {
+    "operationId": "getTimeScale",
+    "summary": "Current simulated-clock time-scale (simulated HAL only)",
+    "description": "The active time-scale (speed) of this controller's simulated clock, plus the current tick counter (controller HAL §7, architecture §3). A diagnostic/test surface, not a production control path — the platform relays it only as an explicit simulation-only exception, and a real-hardware backend returns 404. Each controller has its own independent clock; this reports only this greenhouse's.",
+    "tags": ["simulation"],
+    "x-simulation-only": true,
+    "responses": {
+      "200": {
+        "description": "Current time-scale state.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "../components/schemas/sim.json#/TimeScale" }
+          }
+        }
+      },
+      "404": { "$ref": "../components/responses.json#/NotFound" }
+    }
+  },
+  "put": {
+    "operationId": "setTimeScale",
+    "summary": "Set the simulated-clock time-scale (simulated HAL only)",
+    "description": "Sets the wall-clock tick cadence multiplier (sleep = tick_period_ms / scale), latched to the next tick. Speeding up costs CPU but does not change the per-tick simulation step Δt, so determinism/replay is preserved (controller HAL §7). Reset to real-time with `scale: 1.0`. A value outside the accepted range is rejected with 422. Simulated backend only — a real-hardware backend returns 404. The time-scale is ephemeral and resets to the configured default (1.0) on restart.",
+    "tags": ["simulation"],
+    "x-simulation-only": true,
+    "requestBody": {
+      "required": true,
+      "content": {
+        "application/json": {
+          "schema": { "$ref": "../components/schemas/sim.json#/TimeScalePut" }
+        }
+      }
+    },
+    "responses": {
+      "200": {
+        "description": "The time-scale state after applying the request.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "../components/schemas/sim.json#/TimeScale" }
+          }
+        }
+      },
+      "404": { "$ref": "../components/responses.json#/NotFound" },
+      "422": { "$ref": "../components/responses.json#/ValidationFailed" }
+    }
+  }
+}

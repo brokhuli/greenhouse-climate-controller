@@ -67,9 +67,13 @@ actions**, **role**.
 - **Shows:** every greenhouse as a card/row with its crop, connectivity status
   (online / degraded / offline; **drift** added in 2b), and a compact
   current-climate-vs-target readout. Site-wide rollup of how many greenhouses are
-  healthy vs need attention.
-- **Primary actions:** open a greenhouse; (2a) register / retire a greenhouse.
-- **Role:** Viewer (read) / Operator (registration).
+  healthy vs need attention. On simulated controllers, each card also shows its
+  current **simulation speed** (time-scale) when it is not 1×.
+- **Primary actions:** open a greenhouse; (2a) register / retire a greenhouse;
+  *(2a, simulation-only)* set the simulation speed for the **whole fleet** at once
+  (a convenience that fans out as independent per-controller writes — there is no
+  shared clock; see [interactions §7](./08-spec-frontend-interactions.md#7-writes--setpoint-edits--profile-apply)).
+- **Role:** Viewer (read) / Operator (registration, speed).
 
 ### 2. Per-greenhouse detail *(2a)*
 
@@ -77,10 +81,13 @@ actions**, **role**.
 - **Shows:** real-time charts of readings vs setpoints (temperature, humidity,
   CO₂, PAR, per-zone soil moisture), current actuator states, and the event
   history — fed live by the WebSocket stream and backfilled by range queries over
-  history. Active faults and interlock activations are raised prominently.
+  history. Active faults and interlock activations are raised prominently. Charts
+  plot on **simulated time** (the controller's clock), and on a simulated controller
+  a **speed indicator** shows the current time-scale.
 - **Primary actions:** edit setpoints (see view 4); change the historical time
-  range; (2b) view/assign the crop profile.
-- **Role:** Viewer (read) / Operator (edits).
+  range; *(2a, simulation-only)* adjust the controller's **simulation speed**
+  (0.5×/1×/2×/4×) as a **live** control; (2b) view/assign the crop profile.
+- **Role:** Viewer (read) / Operator (edits, speed).
 
 ### 3. Control — setpoint edits *(2a relay → sticky in 2b)*
 

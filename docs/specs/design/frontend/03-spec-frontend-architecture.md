@@ -166,15 +166,18 @@ is **live**, not built. Two channels feed every view, and they merge.
 3. **Live patches the cache.** Status-change, drift, and event frames update the
    relevant Query cache entries directly (so the fleet view re-renders), rather
    than triggering a refetch — keeping fan-out within `P2-PERF-2` (< 1 s) and the
-   chart cadence at `P2-USE-1` (≥ 1 Hz).
+   chart cadence at `P2-USE-1` (≥ 1 Hz). On a simulated greenhouse the `status` frame
+   also carries the optional `time_scale`, patched into `greenhouseSummary.timeScale`
+   to drive the speed indicator.
 
 ### Historical + live merge
 
 A detail chart shows one continuous series: the **historical** portion comes from
 a REST range query (the Query cache), the **live** portion from the WS ring
 buffer. The chart concatenates `[…history, …liveBuffer]` and de-duplicates on
-timestamp at the seam. When the user changes the range, only the historical query
-re-runs; the live buffer is untouched.
+timestamp at the seam — the **simulated-time `ts`**, so the seam is consistent
+regardless of the controller's current speed. When the user changes the range, only
+the historical query re-runs; the live buffer is untouched.
 
 ### WebSocket lifecycle
 

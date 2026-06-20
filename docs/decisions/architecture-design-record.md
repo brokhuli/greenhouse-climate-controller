@@ -8,6 +8,85 @@ alternatives and tradeoffs.
 
 ---
 
+## 2026-06-19 — Simulated-clock time-scale: a live, per-controller, simulation-only speed knob
+
+**Decision:** Add a **time-scale (speed) knob** to the simulated controller so a simulation can be
+run faster or slower than real-time at runtime — 0.5× / 1× / 2× / 4× and any value in a clamped range
+— with the frontend visualizing and driving it live. The knob acts on the **scheduler only**, never
+the simulation itself:
+
+- **Two clocks; the knob touches one.** A **simulated clock** advances simulated time by a fixed step
+  `Δt` (one second) **every tick** — the only time the pipeline reads. A separate **scheduler** sets
+  the wall-clock cadence; `time_scale` changes it to `sleep = tick_period / time_scale`. `Δt` and the
+  seeded PRNG draw order are **untouched**, so the tick-for-tick reading sequence is identical at any
+  speed and `(seed, config, command-log)` replay stays bit-identical (`P1-TEST-2`). Scaling `Δt`
+  instead was **rejected**: it would change the lag integration, risk instability as `Δt → τ` (30 s),
+  and break replay.
+- **Independent per-controller clocks; no shared master.** Each controller owns its clock and speed.
+  A fleet-wide "set all" is a **convenience that fans out as N independent writes**, not a coordinated
+  global clock — the distributed-time machinery (a master authority slaving N schedulers) was
+  considered and **rejected** as needless coupling for a dev/sim feature.
+- **Domain durations in ticks; infra timers on wall-clock.** Every in-simulation duration (drain,
+  DLI day, override/injection expiry, saturation/no-response windows, `interlock_min_hold`) is counted
+  in **ticks (simulated seconds)** so it scales with the knob automatically; genuinely wall-clock
+  infrastructure timers (MQTT reconnect backoff, HTTP) stay on wall-clock and do not scale.
+- **Envelope `ts` is the simulated instant.** The controller already stamps `ts` from its injected
+  clock, so under acceleration `ts` is simulated time — consumers plot telemetry on simulated time
+  directly with **no new timestamp field**.
+- **Simulation-only, ephemeral, latched.** The knob is a sim-only HAL extension (like sensor
+  injection); a real-hardware backend rejects it (404). It is **ephemeral** — resets to the configured
+  default (1×) on restart, like an override — and latched to the next tick like every other write.
+- **Live from the frontend via a platform relay — one explicit exception.** Unlike sensor injection
+  (which the platform never calls), the platform **does** expose a thin sim-only relay
+  (per-greenhouse and fleet-wide) so the dashboard's speed knob can drive it live. This is a
+  deliberate, narrow exception to the platform's setpoint-only downward control — a diagnostic, not a
+  setpoint.
+- **Optimizer pauses off 1×.** The Phase 3 optimizer is wall-clock-paced; it **holds** (a transient
+  input-gate reason) when a greenhouse reports `time_scale ≠ 1.0` and resumes at 1×. Coordinating
+  optimizer cadence with arbitrary speeds is out of scope.
+
+**Limitations (accepted):** speed-up is **CPU-bound** — at scale `S` the wall interval is `1000/S` ms
+and must stay above the per-tick compute budget (`P1-PERF-3`, ≤100 ms), so the range is clamped to
+0.25–8×; the wall-clock real-time targets (`P1-PERF-1/2`) describe the 1× baseline and relax off 1×
+(on the simulated backend only); telemetry arrival becomes bursty at `S` Hz; per-controller clocks
+mean cross-greenhouse wall-clock comparison is not meaningful.
+
+**Scope:** specs + contract surface only. As with the surrounding contract-authoring entries, the
+Phase 1 control runtime is not yet implemented, so there is no scheduler, `SimClock`, or REST handler
+code to change here — the behavior is specified across the controller specs (architecture §3, HAL §7,
+control-loops, safety §2, interfaces §3, constraints §1, config-and-parameters), the frontend/platform/
+optimizer specs, and the NFR note; the runtime `SimClock` + scheduler + handler land in the controller
+runtime slice.
+
+**Contract changes (additive):** `contracts/controller-rest/` gains a simulation-only `GET`/`PUT
+/sim/time-scale` with a `TimeScalePut` / `TimeScale` schema (mirroring the sensor-injection shapes),
+under the existing `simulation` tag and `x-simulation-only`. `contracts/mqtt/system-state` gains an
+optional `simulation` object (`time_scale`, `tick_index`), and the envelope `ts` description is
+clarified as the controller's (possibly simulated) clock instant. `contracts/frontend-ws` adds an
+optional `time_scale` to the `status` frame (+ a `common` `$def`); `contracts/frontend-rest` adds a
+sim-only per-greenhouse `GET`/`PATCH /api/greenhouses/{id}/sim/time-scale` plus a fleet-wide `PATCH
+/api/sim/time-scale` (returning a per-greenhouse `FleetTimeScaleResult`), and a nullable `time_scale`
+on `GreenhouseSummary` / `GreenhouseDetail`. Fixtures are added and registered in each contract's
+`cases.json`. All changes are **additive**, so every contract's major version stays at **1**.
+
+**Why:** A speed knob makes the simulation a far better development and demonstration tool — slow-motion
+to inspect a transient, fast-forward to reach a DLI/drain/photoperiod milestone — without sacrificing
+the determinism the test strategy depends on. Realizing speed as *cadence* (not step size) is the whole
+trick: it keeps `Δt`, the seed, and therefore replay untouched, so the feature costs nothing in
+reproducibility. Keeping it simulation-only, ephemeral, and per-controller keeps it consistent with the
+existing sim surfaces (sensor injection, manual override) and the independent-greenhouse model; the one
+platform-relay exception is justified by the explicit requirement for a *live* frontend control.
+
+**Basis:** Operator-directed capability addition. Determinism/real-time posture per
+[controller constraints §1](../specs/design/controller/10-spec-controller-constraints.md#1-determinism--real-time)
+and `P1-TEST-2`; REST-sole-write-path and unauthenticated-on-trusted-network postures per
+[RFC-005](./request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain) /
+[RFC-009](./request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries);
+contract-versioning discipline per
+[RFC-007](./request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format).
+
+---
+
 ## 2026-06-19 — All values are in fixed SI/agronomic base units; no conversion layer
 
 **Decision:** Every value in the system — sensor readings, setpoints, config parameters, contract

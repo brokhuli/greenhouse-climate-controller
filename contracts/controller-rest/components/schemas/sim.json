@@ -63,5 +63,43 @@
     },
     "required": ["metric", "value", "probe_index", "zone_id", "created_at", "expires_at"],
     "additionalProperties": false
+  },
+  "TimeScalePut": {
+    "type": "object",
+    "description": "Request to set the simulated clock's time-scale (speed) on the simulated HAL (controller HAL §7, architecture §3). `scale` multiplies the wall-clock tick cadence only (sleep = tick_period_ms / scale); it does NOT change the per-tick simulation step Δt, so determinism is preserved. Latched to the next tick like every other write. Simulated backend only — a real-hardware backend rejects this with 404.",
+    "properties": {
+      "scale": {
+        "type": "number",
+        "minimum": 0.25,
+        "maximum": 8.0,
+        "description": "Wall-clock cadence multiplier. 1.0 = real-time; <1 slows down (0.5 = half speed); >1 speeds up (2.0, 4.0 = fast-forward). Canonical UI stops are 0.5/1/2/4, but any value in the range is accepted. The 8.0 ceiling leaves headroom above the per-tick compute budget (`P1-PERF-3`, ≤100 ms): at scale S the wall interval is 1000/S ms, so 8× → 125 ms. Out-of-range values are rejected with 422."
+      }
+    },
+    "required": ["scale"],
+    "additionalProperties": false
+  },
+  "TimeScale": {
+    "type": "object",
+    "description": "The simulated clock's current time-scale state on the simulated HAL (controller HAL §7). Ephemeral runtime state — resets to the configured default (1.0) on restart, like manual overrides and sensor injections.",
+    "properties": {
+      "scale": {
+        "type": "number",
+        "minimum": 0.25,
+        "maximum": 8.0,
+        "description": "Active wall-clock cadence multiplier (1.0 = real-time)."
+      },
+      "tick_index": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "Monotonic simulation tick counter since startup. One tick = one simulated second (Δt), independent of `scale`."
+      },
+      "updated_at": {
+        "type": "string",
+        "format": "date-time",
+        "description": "When the scale was last set, as the controller's clock instant (RFC 3339 UTC, ms)."
+      }
+    },
+    "required": ["scale", "tick_index", "updated_at"],
+    "additionalProperties": false
   }
 }

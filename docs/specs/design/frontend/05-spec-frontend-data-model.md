@@ -82,6 +82,7 @@ export const greenhouseSummary = z.object({
   crop: z.string().nullable(),           // assigned crop (label only in 2a)
   status: connectivity,
   drift: z.boolean().default(false),     // (2b) intended ≠ reported setpoints
+  timeScale: z.number().nullable(),      // sim-only: simulated-clock speed (1 = real-time); null on real hardware
   // compact current-vs-target readout for the fleet card
   climate: z.object({
     temperature: z.number().nullable(),
@@ -182,6 +183,13 @@ Metrics covered (matching the controller's published surface,
 [P1 §11](../controller/08-spec-controller-interfaces.md)): temperature, humidity, CO₂,
 PAR, per-zone soil moisture, actuator positions.
 
+> **`ts` is simulated time.** Each reading's `ts` comes from the controller's injected clock, so on a
+> simulated greenhouse it is the *simulated* instant, advancing at that controller's
+> [time-scale](../controller/03-spec-controller-hal-simulation.md#time-scale-speed-without-breaking-determinism)
+> (wall-clock on real hardware / 1×). Charts therefore plot directly against `ts` and need no speed
+> correction; the current speed is carried separately as `greenhouseSummary.timeScale` (above) for the
+> speed indicator.
+
 ---
 
 ## 5. WebSocket message taxonomy
@@ -191,7 +199,7 @@ One socket; frames are discriminated by `type`. Each is Zod-parsed before use.
 | `type` | Payload | Effect on client |
 |---|---|---|
 | `telemetry` | envelope + metric readings | append to the per-series ring buffer for that greenhouse |
-| `status` | envelope + `connectivity` | patch `greenhouseSummary.status` in the fleet cache |
+| `status` | envelope + `connectivity` (+ optional `time_scale`, sim-only) | patch `greenhouseSummary.status` — and, when present, `greenhouseSummary.timeScale` — in the fleet cache |
 | `drift` *(2b)* | envelope + `{ drift: boolean }` | patch `greenhouseSummary.drift`; raise a drift event |
 | `event` | `eventEntry` | prepend to the activity feed cache; raise a toast if critical |
 
@@ -269,9 +277,10 @@ unit-tested and never embedded in components:
 |---|---|---|
 | **Reading-vs-setpoint delta** | current reading + setpoint | detail metric tiles, fleet card |
 | **Status rollup** | per-greenhouse `status` + `drift` | fleet site-wide summary (e.g. "3 online, 1 degraded, 1 drift") |
-| **Series merge** | history range + live ring buffer | the continuous detail chart (de-dup at the seam) |
+| **Series merge** | history range + live ring buffer | the continuous detail chart (de-dup on `ts` at the seam) |
 | **Event severity grouping** | event stream | activity feed ordering + toast triggering |
 | **In-band / out-of-band band** | reading vs humidity/temperature band | chart threshold shading (chart tokens) |
+| **Simulated-time axis** | series `ts` + `timeScale` | the detail chart's x-axis (plots on simulated time) + the speed indicator label |
 
 Keeping these pure means a view never recomputes climate logic inline, and the
 derivations are testable in isolation (`P2-TEST-2`-adjacent unit coverage).

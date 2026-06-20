@@ -1,0 +1,50 @@
+{
+  "parameters": [{ "$ref": "../components/parameters.json#/GreenhouseId" }],
+  "get": {
+    "operationId": "getGreenhouseTimeScale",
+    "summary": "Current simulated-clock speed (simulation-only)",
+    "description": "The greenhouse controller's current simulated-clock speed and tick, relayed from the controller's `GET /sim/time-scale` (controller HAL §7). Simulation-only diagnostic: a real-hardware controller has no time-scale and the platform returns 404. Each controller's clock is independent.",
+    "x-slice": "2a",
+    "x-simulation-only": true,
+    "security": [],
+    "responses": {
+      "200": {
+        "description": "Current time-scale state.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "../components/schemas/sim.json#/TimeScale" }
+          }
+        }
+      },
+      "404": { "$ref": "../components/responses.json#/NotFound" }
+    }
+  },
+  "patch": {
+    "operationId": "setGreenhouseTimeScale",
+    "summary": "Set the simulated-clock speed (simulation-only)",
+    "description": "Sets this greenhouse controller's simulated-clock speed, relayed to the controller's `PUT /sim/time-scale` and latched to the controller's next tick (frontend interactions: edit → optimistic pending → settled/rolled back). A simulation-only diagnostic, NOT a setpoint — an explicit, narrow exception to the platform's setpoint-only downward control (platform constraints §7). Out-of-range values are rejected with 422; a real-hardware controller returns 404.",
+    "x-slice": "2a",
+    "x-simulation-only": true,
+    "security": [],
+    "requestBody": {
+      "required": true,
+      "content": {
+        "application/json": {
+          "schema": { "$ref": "../components/schemas/sim.json#/TimeScalePatch" }
+        }
+      }
+    },
+    "responses": {
+      "200": {
+        "description": "The time-scale state after applying the change.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "../components/schemas/sim.json#/TimeScale" }
+          }
+        }
+      },
+      "404": { "$ref": "../components/responses.json#/NotFound" },
+      "422": { "$ref": "../components/responses.json#/ValidationFailed" }
+    }
+  }
+}

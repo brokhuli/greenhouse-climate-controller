@@ -1,0 +1,7 @@
+{
+  "requested_scale": 2.0,
+  "results": [
+    { "greenhouse_id": "gh-a", "applied": true, "scale": 2.0, "detail": null },
+    { "greenhouse_id": "gh-b", "applied": false, "scale": null, "detail": "offline" }
+  ]
+}

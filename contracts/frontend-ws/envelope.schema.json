@@ -23,7 +23,7 @@
     "ts": {
       "type": "string",
       "format": "date-time",
-      "description": "Frame timestamp. RFC 3339 / ISO 8601, UTC, millisecond precision (e.g. 2026-06-17T14:03:00.000Z). For a telemetry frame this is the sample instant the readings share."
+      "description": "Frame timestamp, originating from the controller's injected clock. RFC 3339 / ISO 8601, UTC, millisecond precision (e.g. 2026-06-17T14:03:00.000Z). For a telemetry frame this is the sample instant the readings share. On a real-hardware / 1× run it tracks wall-clock; under an accelerated simulated run it is the simulated instant, advancing at the active time-scale (controller HAL §7) — so the SPA plots telemetry on simulated time directly."
     }
   },
   "properties": {

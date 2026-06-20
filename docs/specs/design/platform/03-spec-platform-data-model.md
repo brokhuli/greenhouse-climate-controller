@@ -40,6 +40,13 @@ extension, not a separate database):
 | Actuator states | Commanded/observed actuator positions over time |
 | Events | Fault events, safety-interlock activations, profile applications, setpoint edits |
 
+On a **simulated** controller the consolidated system-state snapshot also carries the optional
+simulation **time-scale** (`time_scale`, `tick_index`,
+[controller HAL §7](../controller/03-spec-controller-hal-simulation.md#time-scale-speed-without-breaking-determinism)).
+It is **transient telemetry**, not a new relational entity — ingested with the snapshot and surfaced
+to the dashboard, never a registry row. Each message's `ts` is the controller's clock instant, so for
+an accelerated simulation it is simulated time, stored as published.
+
 ---
 
 ## 2. Why the split

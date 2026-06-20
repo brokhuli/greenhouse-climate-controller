@@ -1,0 +1,29 @@
+{
+  "patch": {
+    "operationId": "setFleetTimeScale",
+    "summary": "Set the simulated-clock speed for the whole fleet (simulation-only)",
+    "description": "Fan the requested speed out to every greenhouse as N independent per-controller writes — there is NO shared/master clock; each controller's simulated clock stays independent (controller HAL §7). Returns the per-greenhouse outcome; a greenhouse whose controller is offline or on real hardware is reported as not applied rather than failing the whole request. A simulation-only diagnostic, NOT a setpoint — an explicit, narrow exception to the platform's setpoint-only downward control (platform constraints §7). An out-of-range requested scale is rejected with 422.",
+    "x-slice": "2a",
+    "x-simulation-only": true,
+    "security": [],
+    "requestBody": {
+      "required": true,
+      "content": {
+        "application/json": {
+          "schema": { "$ref": "../components/schemas/sim.json#/TimeScalePatch" }
+        }
+      }
+    },
+    "responses": {
+      "200": {
+        "description": "Per-greenhouse outcome of the fleet-wide fan-out.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "../components/schemas/sim.json#/FleetTimeScaleResult" }
+          }
+        }
+      },
+      "422": { "$ref": "../components/responses.json#/ValidationFailed" }
+    }
+  }
+}

@@ -87,7 +87,9 @@ route in [architecture §3](./03-spec-frontend-architecture.md#3-route-tree).
 - **Purpose:** The landing view — every greenhouse at a glance + a site rollup.
 - **Data:** `useFleet()` (`["fleet"]`), patched live by `status`/`drift` frames.
 - **Renders:** a `FleetSummaryBar` (status rollup derivation) + a grid of
-  `GreenhouseCard`.
+  `GreenhouseCard`. When any greenhouse is simulated, a `FleetTimeScaleControl` in the
+  view toolbar sets the speed for the whole fleet at once (fan-out of independent
+  per-controller writes — [interactions §7](./08-spec-frontend-interactions.md#7-writes--setpoint-edits--profile-apply)).
 - **States:** loading → `Skeleton` grid; empty → `EmptyState` ("no greenhouses
   registered" + register CTA); error → `ErrorState` with retry; per-card offline
   handled by `GreenhouseCard`.
@@ -98,7 +100,8 @@ route in [architecture §3](./03-spec-frontend-architecture.md#3-route-tree).
 - **Purpose:** One greenhouse in the fleet grid.
 - **Props:** a `greenhouseSummary`.
 - **Renders:** name, crop, `StatusBadge`, a compact reading-vs-setpoint `MetricTile`
-  (or two), drift badge (2b).
+  (or two), drift badge (2b), and a `TimeScaleIndicator` speed badge when the greenhouse
+  reports a non-1× `timeScale` (sim-only).
 - **Interaction:** whole card links to `/greenhouses/:id`.
 - **Visual:** fixed card anatomy: status row, title/crop row, metric pair, then a
   compact sparkline. Cards keep a stable min-height so online/offline states do
@@ -120,9 +123,10 @@ route in [architecture §3](./03-spec-frontend-architecture.md#3-route-tree).
 - **Purpose:** Deep view of one greenhouse.
 - **Data:** `useGreenhouse(id)` (snapshot + current setpoints), `useTelemetryRange(id, range)`
   (history), and a live subscription for the streaming edge.
-- **Renders:** header (`StatusBadge`, crop, profile chip in 2b); a stack of
-  `TimeSeriesChart` (readings vs setpoint bands); `ActuatorStatePanel`; `EventList`;
-  the `SetpointEditForm` entry point; a `RangePicker`.
+- **Renders:** header (`StatusBadge`, crop, profile chip in 2b, and — on a simulated
+  controller — a `TimeScaleControl` live speed knob + `TimeScaleIndicator`); a stack of
+  `TimeSeriesChart` (readings vs setpoint bands, plotted on simulated time); `ActuatorStatePanel`;
+  `EventList`; the `SetpointEditForm` entry point; a `RangePicker`.
 - **States:** loading → skeleton charts; offline → charts show history + a live gap
   + "controller offline"; error → error card, cached snapshot stays.
 - **Role-gating (2b):** edit/assign affordances operator-only (rendered disabled
@@ -206,8 +210,10 @@ Reused across views; typed props; zero domain knowledge.
   the series-merge derivation; renders via **uPlot**
   ([tech-stack](./04-spec-frontend-tech-stack.md)).
 - **Behavior:** appends live points without re-query; cadence ≥ 1 Hz (`P2-USE-1`);
-  reduced-motion disables transitions. Detailed in
-  [interactions](./08-spec-frontend-interactions.md).
+  reduced-motion disables transitions. The x-axis is **simulated time** (keyed on each
+  frame's `ts`), so under an accelerated simulation the window scrolls faster in wall-clock
+  while staying internally consistent; the renderer coalesces the higher arrival rate. Detailed in
+  [interactions §4](./08-spec-frontend-interactions.md#4-live-chart-updates-the-core-real-time-behavior).
 - **States:** loading → skeleton; empty → "no data in range"; live gap rendered
   explicitly on offline/reconnect.
 - **a11y:** chart has an accessible summary + an optional data table fallback.
@@ -232,6 +238,23 @@ Reused across views; typed props; zero domain knowledge.
 
 - **Purpose:** Choose the historical window for the detail charts.
 - **Props:** `value`, `onChange` (writes the `range` query param).
+
+### `TimeScaleControl` / `TimeScaleIndicator` *(2a, simulation-only)*
+
+- **Purpose:** `TimeScaleControl` is the **live** simulation-speed knob (the per-greenhouse one on
+  the detail header; `FleetTimeScaleControl` is the same control wired to the fleet fan-out).
+  `TimeScaleIndicator` is the read-only speed badge shown on cards / headers.
+- **Props:** `TimeScaleControl` — `greenhouseId?` (omitted = fleet), current `scale`, `onChange`;
+  `TimeScaleIndicator` — `scale`.
+- **Data:** reads `greenhouseSummary.timeScale` (kept live by the `status` frame); the control's
+  `onChange` fires `PATCH .../sim/time-scale` (or the fleet path).
+- **Interaction:** a segmented 0.5×/1×/2×/4× control (or a slider over 0.25–8×) that writes
+  **immediately** — no confirmation dialog — with optimistic-pending + rollback
+  ([interactions §7](./08-spec-frontend-interactions.md#7-writes--setpoint-edits--profile-apply)).
+- **States:** hidden/disabled when the greenhouse reports no `timeScale` (real hardware); pending
+  while a write is in flight; per-greenhouse failure surfaced on the fleet variant.
+- **a11y:** a labeled group (radio semantics for the segmented form); not color-only.
+- **Visual:** uses `--size-control-sm`/`-md` like the other segmented controls/pills.
 
 ### `Button`, `Pill`, `Table`, `Dialog`, `Skeleton`, `EmptyState`, `ErrorState`, `Toast`
 
@@ -258,8 +281,8 @@ Reused across views; typed props; zero domain knowledge.
 
 | View / route | Components |
 |---|---|
-| `/` Fleet overview | `FleetOverview` → `FleetSummaryBar`, `GreenhouseCard` → `StatusBadge`, `MetricTile` |
-| `/greenhouses/:id` Detail | `GreenhouseDetail` → `TimeSeriesChart`, `MetricTile`, `ActuatorStatePanel`, `EventList`, `SetpointEditForm`, `RangePicker` |
+| `/` Fleet overview | `FleetOverview` → `FleetSummaryBar`, `FleetTimeScaleControl` (sim-only), `GreenhouseCard` → `StatusBadge`, `MetricTile`, `TimeScaleIndicator` (sim-only) |
+| `/greenhouses/:id` Detail | `GreenhouseDetail` → `TimeSeriesChart`, `MetricTile`, `ActuatorStatePanel`, `EventList`, `SetpointEditForm`, `RangePicker`, `TimeScaleControl`/`TimeScaleIndicator` (sim-only) |
 | `/profiles` (2b) | `ProfileLibrary` → profile cards, assignment panel |
 | `/profiles/:id` (2b) | `ProfileEditor` → `SetpointFields`, stage selector |
 | `/activity` | `ActivityFeed` → `EventList` |

@@ -132,6 +132,34 @@ Consequences of the fixed-tick model:
 - **MQTT publish is downstream of the tick**, reflecting the committed outputs and
   state for that tick — never a partial pipeline.
 
+### Simulation time-scale (simulated HAL only)
+
+The fixed-tick model separates **two** clocks, and a simulation-only knob acts on only one
+of them:
+
+- The **simulated clock** advances simulated time by a fixed step `Δt` (one second) **every
+  tick** — it is the only time the pipeline reads (day/night resolution, DLI, drain timers,
+  override/injection expiry, the [HAL lag step](./03-spec-controller-hal-simulation.md#2-coupled-first-order-lag)).
+- The **scheduler** decides the **wall-clock cadence** at which ticks fire. At 1× it fires
+  every `tick_period` (1000 ms, `P1-PERF-1`); a runtime **`time_scale`** knob changes the
+  interval to `tick_period / time_scale`, so 2× fires every 500 ms and 0.5× every 2000 ms.
+
+The knob touches **only the scheduler**, never `Δt`. So the tick-for-tick sequence of readings
+is unchanged — the simulation runs the same, just emitted faster or slower in wall-clock — and
+the [determinism guarantee](./03-spec-controller-hal-simulation.md#7-determinism--seeding)
+(`P1-TEST-2`, replay is tick-indexed) is fully preserved. Speeding up costs CPU (the per-tick
+`P1-PERF-3` budget is unchanged, so the practical ceiling is reached when the interval approaches
+that budget); slowing down is free. The knob is **simulation-only** — a real-hardware backend has
+no wall-clock-speed concept and rejects it — set over the controller's sim-only
+[REST surface](./08-spec-controller-interfaces.md#simulation-control-simulated-hal-only),
+latched to the next tick like every other write, and **ephemeral** (resets to the configured
+default, 1×, on restart). Each controller's clock is **independent**; there is no shared/master
+clock across greenhouses. The knob is normatively defined in
+[HAL §7](./03-spec-controller-hal-simulation.md#7-determinism--seeding) and surfaced in
+[interfaces §3](./08-spec-controller-interfaces.md#simulation-control-simulated-hal-only); its
+relaxation of the wall-clock real-time targets is recorded in
+[constraints §1](./10-spec-controller-constraints.md#1-determinism--real-time).
+
 ---
 
 ## 4. State topology
@@ -150,7 +178,8 @@ what lets each tick be reconstructed and each stage stay testable in isolation
 | **Override state** | manual override | until cleared / expiry | per-actuator force flag, forced value, expiry deadline |
 | **Configuration** | startup + REST | until restart / REST edit | setpoints, thresholds, zone defs, HAL params |
 
-Configuration splits into runtime-mutable (setpoints, thresholds, override) and
+Configuration splits into runtime-mutable (setpoints, thresholds, override, and — on the
+simulated HAL — the [`time_scale`](#simulation-time-scale-simulated-hal-only) knob) and
 restart-only (zone topology, HAL τ/coupling) — the boundary is owned by
 [config](./07-spec-controller-config-and-parameters.md#startup-vs-runtime).
 

@@ -27,13 +27,14 @@ paths/                       # one file per path
   health.json                #   /health                 (GET)
   sim-sensor-injections.json #   /sim/sensor-injections          (GET)        — sim-only
   sim-sensor-injection-by-metric.json # /sim/sensor-injections/{metric} (PUT, DELETE) — sim-only
+  sim-time-scale.json        #   /sim/time-scale         (GET, PUT)   — sim-only
 components/
   schemas/                   # request/response body schemas, one file per resource
     setpoints.json           #   Setpoints, SetpointsPatch
     zones.json               #   ZoneConfig, ZoneConfigPatch, ZoneStatus
     overrides.json           #   Override, OverridePut
     health.json              #   Health, FaultSummary
-    sim.json                 #   InjectableMetric, SensorInjectionPut, SensorInjection (sim-only)
+    sim.json                 #   InjectableMetric, SensorInjectionPut, SensorInjection, TimeScalePut, TimeScale (sim-only)
     actuator.json            #   ActuatorName, ActuatorOutputState (shared)
     common.json              #   Slug, Error, ValidationError (shared)
   parameters.json            # shared path/query parameters
@@ -66,6 +67,8 @@ All paths are greenhouse-scoped under `/greenhouses/{greenhouse_id}`.
 | `GET /sim/sensor-injections` | Active sensor-reading injections *(sim-only)* | 200 `SensorInjection[]` | 404 |
 | `PUT /sim/sensor-injections/{metric}` | Inject a sensor reading *(sim-only)* | 200 `SensorInjection` | 422, 404 |
 | `DELETE /sim/sensor-injections/{metric}` | Clear a sensor injection *(sim-only)* | 204 | 404 |
+| `GET /sim/time-scale` | Current simulated-clock speed + tick *(sim-only)* | 200 `TimeScale` | 404 |
+| `PUT /sim/time-scale` | Set the simulated-clock speed (0.25–8×) *(sim-only)* | 200 `TimeScale` | 422, 404 |
 
 Only the runtime-mutable surfaces accept writes. Adding or removing a zone, and changing HAL
 parameters, is a config-file edit plus restart (controller spec
@@ -81,6 +84,17 @@ watch the interlock fire (controller
 The injection reaches the plant through a simulation-only HAL extension, so a real-hardware
 backend returns **404** on these paths; the Phase 2 platform does **not** call them. Adding this
 surface is **additive**, so `info.version` stays at major 1 (see [Versioning](#versioning)).
+
+The `/sim/time-scale` paths are the same kind of **simulation-only** surface: they read and set the
+speed of the controller's simulated clock (controller
+[HAL §7](../../docs/specs/design/controller/03-spec-controller-hal-simulation.md#7-determinism--seeding),
+[architecture §3](../../docs/specs/design/controller/02-spec-controller-architecture.md#3-real-time--scheduling-model)).
+`scale` multiplies only the wall-clock tick **cadence** (`sleep = tick_period_ms / scale`); it leaves
+the per-tick simulation step Δt untouched, so determinism/replay is preserved. Each controller's clock
+is **independent** (no shared master); the value is **ephemeral** and resets to the configured default
+(1.0) on restart. A real-hardware backend returns **404**, since wall-clock speed is meaningless there;
+the platform relays it only as an explicit simulation-only exception (it is not a setpoint). Adding this
+surface is **additive**, so `info.version` stays at major 1.
 
 ## Identity
 
@@ -151,6 +165,8 @@ validate against their component schema; the `*.bad-*.json` counter-examples mus
   by the 0–100 bound.
 - [`sim-injection.bad-probe.json`](./examples/sim-injection.bad-probe.json) — `probe_index` of
   -1; rejected by the `minimum: 0` bound.
+- [`sim-time-scale.bad-range.json`](./examples/sim-time-scale.bad-range.json) — `scale` of 100;
+  rejected by the `maximum: 8.0` bound.
 
 | Fixture | Schema | Expect |
 |---|---|---|
@@ -165,6 +181,9 @@ validate against their component schema; the `*.bad-*.json` counter-examples mus
 | `sim-injection.put.json` | `SensorInjectionPut` | valid |
 | `sim-injection.json` | `SensorInjection` | valid |
 | `sim-injection.bad-probe.json` | `SensorInjectionPut` | **fail** |
+| `sim-time-scale.put.json` | `TimeScalePut` | valid |
+| `sim-time-scale.json` | `TimeScale` | valid |
+| `sim-time-scale.bad-range.json` | `TimeScalePut` | **fail** |
 
 ## Validation
 
