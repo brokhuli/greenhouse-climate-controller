@@ -37,7 +37,7 @@ platform dashboards. The metric catalog covers, at minimum:
 | API latency & errors | Request latency distribution (toward `P2-PERF-3` p95 < 200 ms) and error rate |
 | Reconciliation actions | Profile applies, re-asserts on reconnect, drift detections/corrections |
 | Per-controller connectivity | Online/degraded/offline transitions per greenhouse |
-| Datastore | Connection-pool usage, query latency, retention/aggregate job health |
+| Datastore | Connection-pool usage, query latency, retention/prune/aggregate job health |
 
 The proxy exposes nothing extra for metrics; Prometheus scrapes the API directly over
 the internal network.
@@ -131,6 +131,11 @@ The Compose definition makes that explicit:
   ([§1](#1-observability)) is rotated/size-capped so it cannot fill the disk — the
   log-side sibling of the telemetry **retention** policy
   ([ingestion §5](./04-spec-platform-ingestion.md#5-retention--downsampling)).
+- **Bounded provenance ledger.** The append-only setpoint revision / provenance ledger
+  is pruned on a schedule so the one unbounded *relational* table cannot grow without
+  limit — the relational sibling of telemetry retention, keeping each greenhouse's
+  current revision while dropping superseded history past its window
+  ([data model §2](./03-spec-platform-data-model.md#2-why-the-split)).
 - **Migration-on-startup is the startup gate.** Schema migrations run on `api` startup
   ([tech stack](./10-spec-platform-tech-stack.md)); a failed migration blocks the API from
   coming up. This is reversible — migrations are versioned

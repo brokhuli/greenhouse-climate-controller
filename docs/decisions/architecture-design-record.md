@@ -758,7 +758,7 @@ if needed later, terminates at this same nginx as a config addition.
 **Decision:** Use TimescaleDB (the PostgreSQL extension) as Phase 2's single store from the first
 migration. Relational metadata (greenhouse registry, crop profiles) lives in ordinary tables; the
 high-volume telemetry tables (`sensor_readings`, `actuator_events`) are created as hypertables in
-the initial migration, with retention/compression policies applied from the start.
+the initial migration, with a retention policy applied from the start.
 
 **Why:** The telemetry workload is unambiguously time-series, so the adoption question is *when*,
 not *whether*. Because TimescaleDB is a Postgres extension — not a separate database — it serves the

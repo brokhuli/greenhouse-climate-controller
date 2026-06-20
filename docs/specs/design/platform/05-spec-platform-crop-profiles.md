@@ -114,7 +114,17 @@ above and so lands in **2b**.
 - **Device registry** *(2a)* — greenhouses and their controller endpoints are
   **registered manually** via the API/dashboard (the platform does not auto-discover
   controllers); this registry is the bootstrap that ingestion and resolution key off.
-  Greenhouses can also be retired.
+  Greenhouses can also be **retired**; on retire the platform **clears the greenhouse's
+  retained `gh/{greenhouse_id}/state`** by publishing a zero-length retained message, so
+  no ghost snapshot lingers in the broker to be replayed to every new subscriber on
+  connect ([ingestion §4](./04-spec-platform-ingestion.md#4-qos-retained--liveness)).
+  This is **broker-state housekeeping on the retained snapshot**, tied to registry
+  lifecycle — not a control write and not ingestion. It does not breach the
+  setpoint-only / telemetry-only contract
+  ([RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain),
+  [RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)):
+  it targets the broker's retained state, not the departing controller, which subscribes
+  to nothing.
 - **Status aggregation** *(2a; drift in 2b)* — per-greenhouse online/degraded status
   (from [ingestion](./04-spec-platform-ingestion.md#4-qos-retained--liveness)) rolled up
   into a site-wide fleet view; the **drift** dimension arrives with reconciliation

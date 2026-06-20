@@ -25,6 +25,9 @@ command/plan topics here
 - **Retained on `gh/{id}/state` only** — a subscriber has current state on connect. Per-sensor
   topics are not retained; the consolidated state is the single retained snapshot
   ([RFC-007 open-question resolution](../../docs/decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)).
+  When a greenhouse is **retired**, the platform clears this retained snapshot with a
+  zero-length retained publish so it is not replayed to new subscribers — the end of the
+  retained message's lifecycle (platform-side broker housekeeping, not a controller command).
 - A sensor reading uses the **same schema** whether greenhouse- or zone-scoped; scope is
   carried by the topic and the envelope `zone_id`, not by the metric.
 - The simulated-clock **time-scale** rides inside the retained `gh/{id}/state` snapshot as an

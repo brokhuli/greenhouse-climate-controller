@@ -135,6 +135,14 @@ path in [crop profiles](./05-spec-platform-crop-profiles.md). This one-way prope
 what lets ingestion wildcard-subscribe to the whole fleet without any risk of a
 side effect on a greenhouse.
 
+The one platform-originated MQTT publish is **not** here and **not** a control write:
+when a greenhouse is **retired**, the registry path clears its retained
+`gh/{greenhouse_id}/state` with a zero-length retained message
+([crop profiles §5](./05-spec-platform-crop-profiles.md#5-fleet-management--operator-control)).
+That ends the retained snapshot's lifecycle as broker-state housekeeping — it changes
+broker state, not the (departing) controller — so the read-only-with-respect-to-the-greenhouse
+property still holds.
+
 ---
 
 ## 8. Cross-spec map

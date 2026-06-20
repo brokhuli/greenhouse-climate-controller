@@ -113,8 +113,8 @@ The initial migration:
 1. `CREATE EXTENSION IF NOT EXISTS timescaledb;`
 2. Creates the relational tables as ordinary Postgres tables.
 3. Creates the telemetry tables, then converts each with `SELECT create_hypertable('sensor_readings', 'time')` (and likewise for `actuator_events`).
-4. Adds a retention/compression policy on the telemetry hypertables (`add_retention_policy`,
-   `add_compression_policy`) so unbounded telemetry growth is handled from the start.
+4. Adds a retention policy on the telemetry hypertables (`add_retention_policy`) so
+   unbounded telemetry growth is handled from the start.
 
 The relational tables and the hypertables coexist in the one instance and join normally — e.g.,
 crop-profile metadata joined against recent `sensor_readings` is a single query, no cross-store
@@ -136,7 +136,7 @@ queries are naturally joined) for no benefit at local scale.
 
 ### Open Questions
 
-- What chunk interval and retention/compression window fit the expected telemetry rate (controller
+- What chunk interval and retention window fit the expected telemetry rate (controller
   count × sensor count × sample interval)? These are hypertable-policy *parameters* to tune, not
   blockers — defaults are fine to start, with a Phase 2 load test to refine them.
 

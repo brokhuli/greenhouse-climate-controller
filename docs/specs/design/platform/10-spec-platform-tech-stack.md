@@ -74,7 +74,10 @@
   ([ingestion §4](./04-spec-platform-ingestion.md#4-qos-retained--liveness)).
 - **How:** One client wildcard-subscribes to `gh/+/...`
   ([ingestion §2](./04-spec-platform-ingestion.md#2-per-greenhouse-routing)); message
-  handlers validate the envelope, route by `greenhouse_id`, and write to the store.
+  handlers validate the envelope, route by `greenhouse_id`, and write to the store. The
+  same client also issues the single retained-clear publish when a greenhouse is retired
+  ([crop profiles §5](./05-spec-platform-crop-profiles.md#5-fleet-management--operator-control)) —
+  otherwise the ingest path is subscribe-only.
 - **⚑ Alternatives & trip-wire:** **`autopaho` / paho.golang** (the newer v5 client —
   worth adopting if MQTT 5 features are needed) or **mochi-co/mqtt** (broker, not a
   client). Revisit if MQTT 5 features (shared subscriptions, message expiry) become

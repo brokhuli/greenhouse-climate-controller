@@ -78,6 +78,19 @@ stores what it ingests ([ingestion](./04-spec-platform-ingestion.md)) without re
 it. Retention of those streams is owned by
 [ingestion](./04-spec-platform-ingestion.md#5-retention--downsampling).
 
+That telemetry retention bounds only the **hypertables**. One relational table is also
+append-only: the **setpoint revision / provenance** ledger grows by one row per
+intended-state change, so the `drop_chunks` policy does not bound it. It is bounded
+instead by a scheduled **prune**: per greenhouse the **latest (current) revision is kept
+indefinitely** — it is live intended state that reconciliation reads, never history —
+while **superseded** revisions are dropped past a configurable window (default aligned to
+the telemetry horizon, **30 days**). Growth is **edit-paced** (operator edits and
+optimizer refinements), not sample-paced, so the table is small and the prune is a
+guardrail rather than a hot path. It is a plain relational `DELETE`, not a hypertable
+policy, run as a TimescaleDB **user-defined action** (`add_job`) so it shares the same
+background-job scheduler and job-health metric as retention
+([operations §1](./08-spec-platform-operations.md#1-observability)) — no new infrastructure.
+
 ---
 
 ## 3. Boundary — zone topology is controller-local
