@@ -75,7 +75,7 @@ semantics, provenance, and "operator wins" behavior in Phase 3.
 The time-series streams are exactly the surface the controller publishes over MQTT
 ([controller interfaces](../controller/08-spec-controller-interfaces.md)); the platform
 stores what it ingests ([ingestion](./04-spec-platform-ingestion.md)) without reshaping
-it. Retention and downsampling of those streams are owned by
+it. Retention of those streams is owned by
 [ingestion](./04-spec-platform-ingestion.md#5-retention--downsampling).
 
 ---

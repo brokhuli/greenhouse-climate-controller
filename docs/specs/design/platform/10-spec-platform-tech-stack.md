@@ -43,7 +43,7 @@
 - **Why:** Fixed by
   [RFC-002](../../../decisions/request-for-comments.md#rfc-002-phase-2-persistence-layer).
   One datastore for both shapes avoids a second operational surface; hypertables +
-  retention + continuous aggregates handle the append-only telemetry
+  a time-based retention policy handle the append-only telemetry
   ([ingestion §5](./04-spec-platform-ingestion.md#5-retention--downsampling)).
 
 ### `pgx` + `sqlc`, `golang-migrate` ⚑

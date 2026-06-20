@@ -76,11 +76,27 @@ The same surface the controller publishes
 
 ## 5. Retention & downsampling
 
-Telemetry is append-only and grows without bound, so the time-series store needs a
-**retention policy** (and optionally continuous aggregates / downsampling for
-long-range dashboard queries). The specific horizon is an implementation/config
-choice, not fixed by this spec; TimescaleDB's retention + continuous-aggregate
-features are the intended mechanism ([data model](./03-spec-platform-data-model.md)).
+Telemetry is append-only and grows without bound, so the time-series store is bounded
+by a **time-based retention policy**: TimescaleDB's native `drop_chunks` policy
+([data model](./03-spec-platform-data-model.md)) deletes raw telemetry chunks older
+than a configured horizon. This is a one-line, upstream-maintained policy rather than
+custom eviction code.
+
+- **Horizon is configurable; default 30 days.** The retention window is a deploy-time
+  config knob, defaulting to **30 days** of raw history.
+- **No downsampled long-term tier.** History past the horizon is **dropped outright** —
+  the platform keeps no compressed or downsampled rollup to extend it. Queries are served
+  from raw data within the window, and the retained consolidated `state` topic always
+  carries current truth, so dropped history costs **resolution of the past, not current
+  state or control** — the same trade the backpressure design already accepts
+  ([§6](#6-ingest-backpressure--load-shedding)). This is distinct from any *read-path*
+  continuous aggregate that accelerates summary queries **within** the window
+  ([RFC-008](../../../decisions/request-for-comments.md#rfc-008-phase-3-telemetry-read-path)),
+  which is a query optimization, not a retention mechanism.
+- **Footprint scales with the window.** On-disk size is the horizon multiplied by the
+  ingest rate, so it grows with fleet size and with elevated `time_scale` load-test modes
+  ([§6](#6-ingest-backpressure--load-shedding)); shrink the horizon if a deployment needs
+  a tighter disk budget.
 
 ---
 
