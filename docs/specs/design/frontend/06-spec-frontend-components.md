@@ -209,10 +209,11 @@ Reused across views; typed props; zero domain knowledge.
 - **Data:** historical from the Query cache + live from the ring buffer, merged by
   the series-merge derivation; renders via **uPlot**
   ([tech-stack](./04-spec-frontend-tech-stack.md)).
-- **Behavior:** appends live points without re-query; cadence ≥ 1 Hz (`P2-USE-1`);
-  reduced-motion disables transitions. The x-axis is **simulated time** (keyed on each
-  frame's `ts`), so under an accelerated simulation the window scrolls faster in wall-clock
-  while staying internally consistent; the renderer coalesces the higher arrival rate. Detailed in
+- **Behavior:** appends live points without re-query; cadence follows the source stream
+  (`P2-USE-1`: ≥ 1 Hz at 1×, intentionally slower below 1×), and reduced-motion disables
+  transitions. The x-axis is **simulated time** (keyed on each frame's `ts`), so under an
+  accelerated simulation the window scrolls faster in wall-clock while staying internally
+  consistent; the renderer coalesces the higher arrival rate. Detailed in
   [interactions §4](./08-spec-frontend-interactions.md#4-live-chart-updates-the-core-real-time-behavior).
 - **States:** loading → skeleton; empty → "no data in range"; live gap rendered
   explicitly on offline/reconnect.
@@ -292,7 +293,7 @@ Reused across views; typed props; zero domain knowledge.
 
 ## 5. Performance notes
 
-Per `P2-USE-1` (load < 2 s; charts ≥ 1 Hz):
+Per `P2-USE-1` (load < 2 s; charts source-cadence, ≥ 1 Hz at 1×):
 
 - **Route-level code splitting** — each feature is a lazy module; the fleet view's
   initial bundle excludes the profile editor and the chart-heavy detail view.

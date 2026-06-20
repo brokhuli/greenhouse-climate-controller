@@ -53,7 +53,7 @@ export const zoneId = z.string().min(1);
 // RFC-007 payload envelope (every message carries these).
 export const envelope = z.object({
   greenhouse_id: greenhouseId,
-  ts: z.coerce.date(),          // server timestamp
+  ts: z.coerce.date(),          // controller clock instant (simulated time for simulated runs)
   schema_version: z.number().int(), // payload schema major version (RFC-007)
 });
 

@@ -58,9 +58,10 @@ their data either way; only transitions are suppressed).
 
 ## 4. Live chart updates *(the core real-time behavior)*
 
-- **Cadence:** streaming telemetry appends to the chart's ring buffer and renders at
-  **≥ 1 Hz** (`P2-USE-1`). The visible window scrolls; old points fall off the
-  buffer.
+- **Cadence:** streaming telemetry appends to the chart's ring buffer and renders at the **source
+  cadence**. At the 1× baseline this is **≥ 1 Hz** (`P2-USE-1`); under a slowed simulation it is
+  intentionally lower, and under a faster simulation the renderer batches/coalesces frames so drawing
+  cost stays bounded. The visible window scrolls; old points fall off the buffer.
 - **No transition animation on new points** — a live value must read as *now*, not
   ease in. Appends are immediate redraws (uPlot canvas,
   [tech-stack](./04-spec-frontend-tech-stack.md)).
@@ -74,10 +75,12 @@ their data either way; only transitions are suppressed).
   which is the controller's clock — so under an accelerated simulation
   ([controller HAL §7](../controller/03-spec-controller-hal-simulation.md#time-scale-speed-without-breaking-determinism))
   the axis advances at the simulation speed and the chart "just works": at 4× it scrolls four
-  times as fast in wall-clock but stays internally consistent; at 0.5× it crawls. The `≥ 1 Hz`
-  cadence above is a **wall-clock** render guarantee — at speed `S` the stream arrives at ~`S` Hz,
-  so the renderer **coalesces** the extra frames (batch per animation frame) rather than redrawing
-  per message, keeping the cost bounded ([§12](#12-implementation-budget)).
+  times as fast in wall-clock but stays internally consistent; at 0.5× it crawls. The live-update
+  guarantee is therefore **source-cadence-aware**: at speed `S` the stream arrives at ~`S` Hz. For
+  `S >= 1` the chart meets the ≥1 Hz wall-clock target and **coalesces** extra frames (batch per
+  animation frame) rather than redrawing per message; for `S < 1`, the chart advances only when the
+  controller actually produces a new tick, and that slower cadence is not treated as a stale-data
+  condition by itself.
 - **Reduced motion:** identical data behavior; only non-essential UI transitions are
   suppressed (the data is the point).
 
@@ -155,11 +158,13 @@ a setpoint:
   simulation up or down is cheap and reversible, so the deliberate edit→confirm gate above does not
   apply.
 - **Optimistic with rollback.** The control shows the new speed in a **pending** style until the API
-  echoes the applied value (reconciling from the response), and **rolls back** with an error toast
-  on failure — the same settle/rollback machinery as a setpoint edit, minus the dialog.
-- **Authoritative value comes from the stream.** The badge/indicator reflects `time_scale` from the
-  WebSocket `status` frame (patched into the greenhouse summary), so it stays correct even if the
-  speed is changed elsewhere; the knob is a request, the stream is the truth.
+  accepts and echoes the scheduler target, and **rolls back** with an error toast on failure — the
+  same settle/rollback machinery as a setpoint edit, minus the dialog.
+- **Authoritative observed value comes from the stream.** The API response confirms the requested
+  scheduler target, but the badge/indicator reflects `time_scale` from the WebSocket `status` frame
+  (patched into the greenhouse summary), so it stays correct even if the speed is changed elsewhere
+  or the next telemetry frame lands after the write. The knob is a request; the stream is the
+  observed truth.
 - **Fleet-wide variant.** The fleet view's "set all speed" issues the platform's fleet
   `PATCH /api/sim/time-scale`, which fans out as **N independent per-controller writes** (no shared
   clock) and returns a per-greenhouse result; partial failure (an offline or real-hardware
@@ -235,4 +240,4 @@ Every interaction here is achievable with CSS transitions + small React handlers
 the `ws.ts` client. No animation library, no scroll library. Live rendering cost is
 bounded by uPlot's canvas redraw and the memoized series-merge
 ([components §5](./06-spec-frontend-components.md#5-performance-notes)), keeping the
-≥ 1 Hz cadence (`P2-USE-1`) on a mid-tier machine at fleet scale.
+1× / source-cadence target (`P2-USE-1`) on a mid-tier machine at fleet scale.

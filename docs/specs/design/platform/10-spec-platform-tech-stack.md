@@ -5,7 +5,7 @@
 > which fixes only the load-bearing choices. Each entry states **what** it is,
 > **why** it's chosen over alternatives, and **how** it's used here. Choices are
 > constrained by the [NFR doc](../../artifacts/non-functional-requirements.md)
-> (`P2-PERF-3` API p95 < 200 ms; `P2-SCAL-1` ~50 controllers; `P2-USE-1` ≥ 1 Hz live)
+> (`P2-PERF-3` API p95 < 200 ms; `P2-SCAL-1` ~50 controllers; `P2-USE-1` source-cadence live, ≥ 1 Hz at 1×)
 > and by the [constraints](./11-spec-platform-constraints.md) (local/no-cloud, setpoint-only
 > downward, single authority).
 

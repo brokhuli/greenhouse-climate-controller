@@ -166,7 +166,7 @@ is **live**, not built. Two channels feed every view, and they merge.
 3. **Live patches the cache.** Status-change, drift, and event frames update the
    relevant Query cache entries directly (so the fleet view re-renders), rather
    than triggering a refetch — keeping fan-out within `P2-PERF-2` (< 1 s) and the
-   chart cadence at `P2-USE-1` (≥ 1 Hz). On a simulated greenhouse the `status` frame
+   chart cadence at `P2-USE-1` (source cadence; ≥ 1 Hz at 1×). On a simulated greenhouse the `status` frame
    also carries the optional `time_scale`, patched into `greenhouseSummary.timeScale`
    to drive the speed indicator.
 
@@ -253,7 +253,8 @@ on: push / PR
 
 `P2-USE-1`'s two halves are split across the last two steps exactly as the NFR
 doc prescribes: Lighthouse gates initial-load (< 2 s); Playwright asserts the
-live-update cadence (≥ 1 Hz) over the WebSocket stream.
+live-update cadence (source cadence; ≥ 1 Hz at 1×, intentionally slower below 1×)
+over the WebSocket stream.
 
 ---
 

@@ -125,7 +125,7 @@ frontend terms.
 
 ### Load and live-update targets are hard
 
-- **Why:** `P2-USE-1` (initial load < 2 s; live charts ≥ 1 Hz), `P2-PERF-2` (WS lag
+- **Why:** `P2-USE-1` (initial load < 2 s; live charts source-cadence, ≥ 1 Hz at 1×), `P2-PERF-2` (WS lag
   < 1 s), `P2-PERF-3` (API p95 < 200 ms) — and the dashboard *is the product*
   (Observability rated Critical for Phase 2).
 - **Forces:** Route-level code splitting; canvas charting (uPlot); WS patches over
@@ -135,7 +135,7 @@ frontend terms.
 
 ### Validated against the production build in CI
 
-- **Why:** `P2-TEST-2` — Playwright (E2E + ≥ 1 Hz live latency) and Lighthouse CI
+- **Why:** `P2-TEST-2` — Playwright (E2E + source-cadence live latency, including ≥ 1 Hz at 1×) and Lighthouse CI
   (load + a11y) run against the **production build**, not the dev server.
 - **Forces:** A CI pipeline that builds then tests; thresholds that fail the build.
 - **Forbids:** Asserting performance/a11y against the dev server.

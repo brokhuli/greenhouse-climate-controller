@@ -80,7 +80,7 @@
   },
   "TimeScale": {
     "type": "object",
-    "description": "The simulated clock's current time-scale state on the simulated HAL (controller HAL §7). Ephemeral runtime state — resets to the configured default (1.0) on restart, like manual overrides and sensor injections.",
+    "description": "The simulated clock's time-scale state on the simulated HAL (controller HAL §7). On GET this is the current scheduler target; on PUT this is the accepted scheduler target, with the next system-state telemetry snapshot serving as the authoritative observed tick-stream value. Ephemeral runtime state — resets to the configured default (1.0) on restart, like manual overrides and sensor injections.",
     "properties": {
       "scale": {
         "type": "number",

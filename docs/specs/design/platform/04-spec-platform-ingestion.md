@@ -62,10 +62,15 @@ The same surface the controller publishes
   system-state message lets the platform recover a controller's current state on
   (re)connect without waiting for the next sample.
 - **Liveness / health** — absence of expected messages marks a
-  greenhouse **offline**; ingested fault events mark it **degraded**. Per-greenhouse
-  status is derived *here* and surfaced to the fleet view and reconciliation
-  ([crop profiles](./05-spec-platform-crop-profiles.md)). Liveness is therefore a product
-  of ingestion, not a separate poll.
+  greenhouse **offline**; ingested fault events mark it **degraded**. For simulated
+  controllers, "expected" is adjusted by the reported `time_scale`: one frame per tick means
+  approximately `time_scale × 1 Hz` in wall-clock, so a `0.25×` greenhouse is not stale just because
+  it reports every ~4 seconds, while an `8×` greenhouse is expected to report much more frequently
+  until backpressure shedding creates an observable data gap. If no current `time_scale` is known
+  yet, liveness falls back to the 1× baseline until the retained system-state snapshot or status
+  frame supplies it. Per-greenhouse status is derived *here* and surfaced to the fleet view and
+  reconciliation ([crop profiles](./05-spec-platform-crop-profiles.md)). Liveness is therefore a
+  product of ingestion, not a separate poll.
 
 ---
 
@@ -88,8 +93,9 @@ publishing from its control tick
 
 - **Bounded buffer.** A buffer sits between MQTT receipt and the time-series write; it
   is **bounded**, not unbounded. The store keeping up is the normal case (`P2-PERF-1`:
-  the full MQTT topic fan-out for 50 controllers at 1 Hz with no backlog growth; `P2-PERF-4`:
-  < 1 s write latency).
+  the full MQTT topic fan-out for 50 controllers at the 1× baseline with no backlog growth;
+  `P2-PERF-4`: < 1 s write latency). Higher `time_scale` values are diagnostic/load-test
+  modes bounded by this same buffer and the shedding policy below.
 - **Shed oldest under sustained backpressure.** If the write path slows enough that the
   buffer fills, the ingester **drops the oldest frames per greenhouse** rather than
   accumulating until it exhausts memory. Load-shedding is bounded and local — never an

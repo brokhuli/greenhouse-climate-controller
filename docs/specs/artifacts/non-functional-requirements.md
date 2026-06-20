@@ -180,9 +180,14 @@ HAL time constants ([HAL §2](../design/controller/03-spec-controller-hal-simula
 **Performance**
 
 - **P2-PERF-1** — Telemetry ingestion sustains the full MQTT topic fan-out for **50 controllers at
-  1 Hz** with **no backlog growth**. For the baseline two-zone simulated greenhouse this is **≥ 750
-  MQTT messages/s** (50 controllers × roughly 15 per-tick readings/state frames); if the configured
-  zone count changes, the target scales with the actual contract-defined topic fan-out.
+  the 1× baseline (1 Hz)** with **no backlog growth**. For the baseline two-zone simulated greenhouse
+  this is **≥ 750 MQTT messages/s** (50 controllers × roughly 15 per-tick readings/state frames); if
+  the configured zone count changes, the target scales with the actual contract-defined topic fan-out.
+  The simulation `time_scale` knob can deliberately push the platform above or below that baseline:
+  below 1× the expected arrival cadence slows with the controller, while above 1× the stream may reach
+  `time_scale × 1 Hz` per controller and is treated as a diagnostic/load-test mode. Fast-forward must
+  remain bounded by the platform's backpressure and shedding rules; "no backlog growth at 50
+  controllers" is guaranteed at 1× unless a test explicitly declares a higher-speed load target.
   *(Derived from P1-OBS-1 × P2-SCAL-1 and the MQTT topic map.)*
 - **P2-PERF-2** — WebSocket fan-out lag (ingest → dashboard) is **< 1 s** at 50 controllers.
   *(Committed default.)*
@@ -201,9 +206,12 @@ HAL time constants ([HAL §2](../design/controller/03-spec-controller-hal-simula
 
 **Usability**
 
-- **P2-USE-1** — Dashboard **initial load < 2 s**; live charts update at **≥ 1 Hz**. *(Committed
-  default; initial-load half validated by Lighthouse CI against the production build, live-update half
-  by Playwright — see P2-TEST-2.)*
+- **P2-USE-1** — Dashboard **initial load < 2 s**; live charts render new samples at the source
+  cadence, with a **≥ 1 Hz** live-update target at the 1× baseline and any faster simulation. Under a
+  slowed simulated controller (`time_scale < 1`), fewer samples are produced by design, so the chart
+  advances at that slower source cadence without being considered stale. *(Committed default;
+  initial-load half validated by Lighthouse CI against the production build, live-update half by
+  Playwright — see P2-TEST-2.)*
 
 **Availability**
 
@@ -225,8 +233,10 @@ HAL time constants ([HAL §2](../design/controller/03-spec-controller-hal-simula
 - **P2-TEST-1** — An integration test covers the **full up/down path** (MQTT ingest → store; profile
   resolve → controller REST). *([architecture §3](../design/platform/02-spec-platform-architecture.md#3-three-data-flows).)*
 - **P2-TEST-2** — The React dashboard is validated with **Playwright** (E2E flows + live-update latency
-  over the WebSocket stream — the ≥ 1 Hz half of P2-USE-1) and **Lighthouse CI** (initial-load
-  performance + accessibility), both run against the **production build**, not the dev server.
+  over the WebSocket stream — the 1× / source-cadence half of P2-USE-1, including a slowed-simulation
+  case that must not be marked stale solely because samples arrive below 1 Hz) and **Lighthouse CI**
+  (initial-load performance + accessibility), both run against the **production build**, not the dev
+  server.
   *(Committed default.)*
 
 **Modifiability**

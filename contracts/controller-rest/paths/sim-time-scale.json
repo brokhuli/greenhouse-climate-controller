@@ -21,7 +21,7 @@
   "put": {
     "operationId": "setTimeScale",
     "summary": "Set the simulated-clock time-scale (simulated HAL only)",
-    "description": "Sets the wall-clock tick cadence multiplier (sleep = tick_period_ms / scale), latched to the next tick. Speeding up costs CPU but does not change the per-tick simulation step Δt, so determinism/replay is preserved (controller HAL §7). Reset to real-time with `scale: 1.0`. A value outside the accepted range is rejected with 422. Simulated backend only — a real-hardware backend returns 404. The time-scale is ephemeral and resets to the configured default (1.0) on restart.",
+    "description": "Accepts a new wall-clock tick cadence multiplier (sleep = tick_period_ms / scale) into scheduler state; the new cadence is first used for the next scheduled tick and never mutates a tick already in progress. Speeding up costs CPU but does not change the per-tick simulation step Δt, so determinism/replay is preserved (controller HAL §7). Reset to real-time with `scale: 1.0`. A value outside the accepted range is rejected with 422. Simulated backend only — a real-hardware backend returns 404. The time-scale is ephemeral and resets to the configured default (1.0) on restart.",
     "tags": ["simulation"],
     "x-simulation-only": true,
     "requestBody": {
@@ -34,7 +34,7 @@
     },
     "responses": {
       "200": {
-        "description": "The time-scale state after applying the request.",
+        "description": "The accepted scheduler target after the request. The next system-state telemetry snapshot is the authoritative observed value for the tick stream.",
         "content": {
           "application/json": {
             "schema": { "$ref": "../components/schemas/sim.json#/TimeScale" }

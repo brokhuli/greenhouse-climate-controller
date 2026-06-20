@@ -5,7 +5,7 @@
 > which fixes only the load-bearing choices. Each entry states **what** it is,
 > **why** it's chosen over alternatives, and **how** it's used here. Choices are constrained by the
 > [NFR doc](../../artifacts/non-functional-requirements.md) (`P2-USE-1` load < 2 s
-> + ≥ 1 Hz live; `P2-PERF-2` WS lag < 1 s; `P2-PERF-3` API p95 < 200 ms;
+> + source-cadence live updates, ≥ 1 Hz at 1×; `P2-PERF-2` WS lag < 1 s; `P2-PERF-3` API p95 < 200 ms;
 > `P2-TEST-2` Playwright + Lighthouse) and the
 > [constraints](./09-spec-frontend-constraints.md) (Docker/nginx, API-only, 2a/2b).
 
@@ -98,10 +98,10 @@
 ### uPlot — `uplot`
 
 - **What:** A tiny (~40 KB), fast **canvas** time-series chart library.
-- **Why:** The detail view streams multiple series at **≥ 1 Hz** (`P2-USE-1`)
-  across a fleet that can reach **50 controllers** (`P2-SCAL-1`). Canvas rendering
-  redraws a moving window without the per-point DOM/GC churn that SVG chart libs
-  incur, holding the live cadence on a mid-tier machine. uPlot is purpose-built for
+- **Why:** The detail view streams multiple series at source cadence (`P2-USE-1`: **≥ 1 Hz** at
+  1×, faster during fast-forward, intentionally slower below 1×) across a fleet that can reach
+  **50 controllers** (`P2-SCAL-1`). Canvas rendering redraws a moving window without the per-point
+  DOM/GC churn that SVG chart libs incur, holding the live cadence on a mid-tier machine. uPlot is purpose-built for
   exactly this (dense, live time series) and is small.
 - **How:** Wrapped once in a `TimeSeriesChart` primitive
   ([components](./06-spec-frontend-components.md)) that takes a `series` array and
@@ -188,8 +188,8 @@
 
 - **What:** End-to-end browser tests, including the **live-update latency**
   assertion.
-- **Why:** `P2-TEST-2` mandates Playwright for E2E flows *and* the ≥ 1 Hz
-  live-update half of `P2-USE-1`, run against the **production build**.
+- **Why:** `P2-TEST-2` mandates Playwright for E2E flows *and* the source-cadence
+  live-update half of `P2-USE-1` (including ≥ 1 Hz at 1×), run against the **production build**.
 - **How:** Specs in `tests/e2e/`: core flows (load fleet, open greenhouse, edit a
   setpoint) plus a test that drives a stream and asserts chart update cadence.
 

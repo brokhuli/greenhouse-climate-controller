@@ -45,7 +45,8 @@ health). Fault and interlock events are published as they occur — including th
 (`actuator_stuck`, `actuator_no_response`, `setpoint_unreachable`).
 
 - **Cadence.** Telemetry is published **every tick** (`P1-OBS-1`), giving observers
-  a 1 Hz stream aligned to the control clock.
+  a stream aligned to the control clock: 1 Hz at the 1× baseline, and
+  `time_scale × 1 Hz` on the simulated HAL.
 - **Telemetry-only.** MQTT is never a command channel — there are no command topics
   to subscribe to ([spec-contracts §3](../spec-contracts.md#3-not-system-contracts)).
 - **Consumers.** The platform ingests it (Phase 2); the optimizer reads the
@@ -132,9 +133,14 @@ The same sim-only surface also reads and sets the simulated clock's
 (`GET` / `PUT /sim/time-scale`) — running the plant at 0.5×/1×/2×/4× by changing only the
 wall-clock tick cadence, not the per-tick step, so determinism is preserved.
 
-- **Set / inspect**, latched to the next tick like every other write. `scale` is a clamped range
-  (0.25–8×, canonical stops 0.5/1/2/4); out-of-range is **422**. The value is **ephemeral** —
-  reset to the configured default (1×) on restart — and **per-controller** (no shared/master clock).
+- **Set / inspect**, accepted immediately into scheduler state and first used for the **next**
+  scheduled tick; it never changes a tick already in progress. A `200` from `PUT /sim/time-scale`
+  means the request was accepted and the returned `scale` is the scheduler's target for subsequent
+  ticks, not proof that a telemetry frame has already been emitted at that cadence. The
+  authoritative observed value is still the next system-state snapshot / WebSocket status frame.
+  `scale` is a clamped range (0.25-8×, canonical stops 0.5/1/2/4); out-of-range is **422**. The
+  value is **ephemeral** - reset to the configured default (1×) on restart - and
+  **per-controller** (no shared/master clock).
 - **Simulated-backend only**, like injection: a real-hardware backend has no wall-clock-speed
   concept and rejects these paths with **404**.
 - **Relayed by the platform — the one exception.** Unlike sensor injection (which the platform
@@ -210,9 +216,9 @@ to *stop* one. The split that guarantees that: **publishing is decoupled from co
 The MQTT publisher is a separate task that reads the latched post-tick snapshot
 ([architecture §3](./02-spec-controller-architecture.md#3-real-time--scheduling-model)); the
 control tick hands off a snapshot and moves on. So a slow, blocked, or **disconnected
-broker cannot stall the tick** — the controller keeps sensing, deciding, and actuating at
-1 Hz regardless of broker state (`P1-RESIL-3`, and the `P1-PERF-*` budgets stay
-broker-independent).
+broker cannot stall the tick** — the controller keeps sensing, deciding, and actuating at its
+scheduled cadence (1 Hz at the 1× baseline; `tick_period / time_scale` on the simulated HAL)
+regardless of broker state (`P1-RESIL-3`, and the `P1-PERF-*` budgets stay broker-independent).
 
 - **Bounded outbound buffer.** If the broker stalls, the publisher's outgoing queue is
   **bounded**, not unbounded — under sustained backpressure the oldest per-tick frames are
@@ -228,8 +234,8 @@ broker-independent).
   (re)connecting subscriber current state immediately, and the per-tick streams resume.
 - **Staleness is observable.** Every message carries the envelope `ts`
   ([RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)),
-  so a consumer can tell a live 1 Hz stream from a stale last-known retained snapshot by its
-  timestamp — the controller need not signal liveness separately.
+  so a consumer can tell a live source-cadence stream from a stale last-known retained snapshot by
+  its timestamp and reported `time_scale` — the controller need not signal liveness separately.
 
 The broker itself (Mosquitto) and the QoS / retained-message policy are owned by
 [RFC-001](../../../decisions/request-for-comments.md#rfc-001-mqtt-broker-selection) and

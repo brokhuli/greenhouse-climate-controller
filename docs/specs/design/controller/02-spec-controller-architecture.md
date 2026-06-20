@@ -152,9 +152,9 @@ the [determinism guarantee](./03-spec-controller-hal-simulation.md#7-determinism
 that budget); slowing down is free. The knob is **simulation-only** — a real-hardware backend has
 no wall-clock-speed concept and rejects it — set over the controller's sim-only
 [REST surface](./08-spec-controller-interfaces.md#simulation-control-simulated-hal-only),
-latched to the next tick like every other write, and **ephemeral** (resets to the configured
-default, 1×, on restart). Each controller's clock is **independent**; there is no shared/master
-clock across greenhouses. The knob is normatively defined in
+accepted into scheduler state immediately but first used for the next scheduled tick, and
+**ephemeral** (resets to the configured default, 1×, on restart). Each controller's clock is
+**independent**; there is no shared/master clock across greenhouses. The knob is normatively defined in
 [HAL §7](./03-spec-controller-hal-simulation.md#7-determinism--seeding) and surfaced in
 [interfaces §3](./08-spec-controller-interfaces.md#simulation-control-simulated-hal-only); its
 relaxation of the wall-clock real-time targets is recorded in
