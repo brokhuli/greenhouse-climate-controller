@@ -7,12 +7,12 @@
 //! "sticky" only in that the *condition* persists, so re-detection re-raises them); the
 //! [`Mode`] summarizes the worst active fault for the `/health` surface.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::domain::Slug;
 
 /// Why a fault was raised. Variant names match the MQTT `fault_type` enum.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FaultType {
     /// A sensor reading is frozen.
@@ -55,7 +55,7 @@ impl FaultType {
 
 /// Fault severity. `Warning` = degraded but operating; `Alarm` = a safety/interlock/loss-of-trust
 /// condition. Matches the MQTT `severity` enum.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Severity {
     /// Degraded but still operating.
@@ -112,7 +112,7 @@ impl Fault {
 
 /// The controller's operating mode, derived from the worst active fault for the `/health` surface
 /// ([interfaces §5]).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Mode {
     /// All nominal.

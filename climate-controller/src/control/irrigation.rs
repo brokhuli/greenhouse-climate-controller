@@ -30,6 +30,16 @@ impl IrrigationLoop {
         }
     }
 
+    /// Whether the zone's valve is currently in an irrigation cycle.
+    pub fn is_irrigating(&self) -> bool {
+        self.irrigating
+    }
+
+    /// The tick the most recent cycle ended, if any (for `ZoneStatus.last_cycle_ts`).
+    pub fn last_cycle_end_tick(&self) -> Option<u64> {
+        self.last_cycle_end_tick
+    }
+
     /// Compute the desired valve level for this zone and write it into `cmd`.
     pub fn run(&mut self, zone: &Zone, soil: Option<f64>, clock: &Clock, cmd: &mut Commands) {
         let level = self.compute(zone, soil, clock);

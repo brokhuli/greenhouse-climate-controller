@@ -95,12 +95,19 @@ impl Setpoints {
         check_min(violations, "vpd_target_kpa", self.vpd_target_kpa, 0.0);
         check_min(violations, "dli_target_mol", self.dli_target_mol, 0.0);
 
-        // Cross-field invariant the JSON Schema can't express (controller-enforced 422).
+        // Cross-field invariants the JSON Schema can't express (controller-enforced 422).
         if self.humidity_low_pct >= self.humidity_high_pct {
             violations.push(FieldViolation::new(
                 "humidity_low_pct",
                 "must be < humidity_high_pct",
                 serde_json::json!(self.humidity_low_pct),
+            ));
+        }
+        if self.day_start >= self.day_end {
+            violations.push(FieldViolation::new(
+                "day_start",
+                "must be < day_end",
+                serde_json::json!(self.day_start.to_string()),
             ));
         }
     }

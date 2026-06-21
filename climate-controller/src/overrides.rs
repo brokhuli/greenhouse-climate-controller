@@ -11,11 +11,13 @@ use std::collections::BTreeMap;
 use crate::clock::Clock;
 use crate::hal::{ActuatorId, Commands};
 
-/// One active override: a forced level and the tick at which it auto-expires.
+/// One active override: a forced level, when it was set, and when it auto-expires.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Override {
     /// Forced actuator level (0..=100).
     pub level: f64,
+    /// Tick index at which the override was set.
+    pub created_at_tick: u64,
     /// Tick index at which the override auto-clears.
     pub expires_at_tick: u64,
 }
@@ -39,6 +41,7 @@ impl OverrideState {
             id,
             Override {
                 level: level.clamp(0.0, 100.0),
+                created_at_tick: clock.tick_index(),
                 expires_at_tick: clock.tick_index().saturating_add(timeout_secs),
             },
         );

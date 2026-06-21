@@ -107,6 +107,11 @@ impl ControlState {
         }
     }
 
+    /// The per-zone irrigation scheduler state (for building zone status).
+    pub fn irrigation(&self, zone: &Slug) -> Option<&IrrigationLoop> {
+        self.zones.get(zone)
+    }
+
     /// Run every loop in dependency order, returning the desired actuator commands for this tick.
     pub fn run(
         &mut self,

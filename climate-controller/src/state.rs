@@ -19,6 +19,8 @@ use crate::sensing::TrustedState;
 pub struct Snapshot {
     /// The tick this snapshot is for.
     pub tick_index: u64,
+    /// Simulated seconds since the clock epoch at this tick — the instant for telemetry `ts`.
+    pub sim_seconds: u64,
     /// Conditioned, trusted sensor readings.
     pub trusted: TrustedState,
     /// The setpoints that were active this tick.

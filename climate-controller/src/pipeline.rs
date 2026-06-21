@@ -7,8 +7,9 @@
 //! The ordering *is* the safety guarantee: each back-half stage can only tighten toward safety.
 
 use crate::clock::Clock;
-use crate::config::Config;
+use crate::config::{Config, Setpoints, Zone};
 use crate::control::{self, ControlState};
+use crate::domain::Slug;
 use crate::faults::Mode;
 use crate::hal::{Commands, Hal};
 use crate::overrides::OverrideState;
@@ -112,6 +113,7 @@ impl<H: Hal> Pipeline<H> {
         let mode = Mode::from_faults(&faults);
         let snapshot = Snapshot {
             tick_index: self.clock.tick_index(),
+            sim_seconds: self.clock.sim_seconds(),
             trusted,
             resolved,
             commanded: cmd.clone(),
@@ -134,6 +136,35 @@ impl<H: Hal> Pipeline<H> {
     /// The config (read-only).
     pub fn config(&self) -> &Config {
         &self.config
+    }
+
+    /// The current global setpoints (for GET /setpoints).
+    pub fn setpoints(&self) -> &Setpoints {
+        &self.config.setpoints
+    }
+
+    /// The configured zones (for GET /zones).
+    pub fn zones(&self) -> &[Zone] {
+        &self.config.zones
+    }
+
+    /// Replace the global setpoints (latched runtime write — caller validates first).
+    pub fn apply_setpoints(&mut self, setpoints: Setpoints) {
+        self.config.setpoints = setpoints;
+    }
+
+    /// Replace a zone's runtime config in place (latched runtime write — caller validates first).
+    pub fn apply_zone(&mut self, updated: Zone) {
+        if let Some(zone) = self.config.zones.iter_mut().find(|z| z.id == updated.id) {
+            *zone = updated;
+        }
+    }
+
+    /// A zone's live scheduler state `(irrigating, last_cycle_end_tick)`, for `ZoneStatus`.
+    pub fn zone_runtime(&self, zone: &Slug) -> Option<(bool, Option<u64>)> {
+        self.control
+            .irrigation(zone)
+            .map(|loop_| (loop_.is_irrigating(), loop_.last_cycle_end_tick()))
     }
 
     /// Mutable access to manual overrides (the REST surface will drive this in the next slice; tests
