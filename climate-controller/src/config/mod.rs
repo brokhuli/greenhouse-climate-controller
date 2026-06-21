@@ -7,13 +7,21 @@
 //! config and the runtime API enforce the same contract.
 
 mod connection;
+mod control;
 mod hal;
+mod safety;
+mod sensing;
 mod setpoints;
+mod simulation;
 mod zones;
 
 pub use connection::{Api, Mqtt};
+pub use control::{Control, Pid};
 pub use hal::{ActuatorModel, Constraints, Disturbances, Effect, Hal, TimeConstants};
+pub use safety::{RearmHysteresis, Safety};
+pub use sensing::{Bounds, Sensing};
 pub use setpoints::Setpoints;
+pub use simulation::{InitialState, Noise, Simulation, Solar};
 pub use zones::Zone;
 
 use std::collections::HashSet;
@@ -42,6 +50,18 @@ pub struct Config {
     pub zones: Vec<Zone>,
     /// HAL simulation model.
     pub hal: Hal,
+    /// Control-loop tunables (gains, saturation window). Optional — defaults apply if omitted.
+    #[serde(default)]
+    pub control: Control,
+    /// Safety-interlock thresholds and the manual-override timeout. Optional.
+    #[serde(default)]
+    pub safety: Safety,
+    /// Sensing / fault-detection tunables (probe redundancy, bounds, windows). Optional.
+    #[serde(default)]
+    pub sensing: Sensing,
+    /// Simulation tunables (seed, time-scale, day cycle, initial state, noise). Optional.
+    #[serde(default)]
+    pub simulation: Simulation,
 }
 
 impl Config {
@@ -68,6 +88,10 @@ impl Config {
         self.api.validate(&mut violations);
         self.setpoints.validate(&mut violations);
         self.hal.validate(&mut violations);
+        self.control.validate(&mut violations);
+        self.safety.validate(&mut violations);
+        self.sensing.validate(&mut violations);
+        self.simulation.validate(&mut violations);
 
         let mut seen = HashSet::new();
         for zone in &self.zones {

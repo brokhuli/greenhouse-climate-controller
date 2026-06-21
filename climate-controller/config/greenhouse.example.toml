@@ -54,63 +54,126 @@ soil_moisture_s = 1800
 [hal.disturbances] # hidden load the controller cannot see and must fight
 outdoor_temp_c = 10.0
 ambient_humidity_pct = 50.0
-heat_loss_coeff = 0.02
+heat_loss_coeff = 0.002 # extra envelope conduction toward outdoor (small vs the τ pull)
 plant_co2_uptake_ppm_per_s = 0.5
-soil_drying_rate_per_s = 0.00001
+soil_drying_rate_per_s = 0.00005
 
 # Coupling matrix (spec §3): each actuator declares a SET of effects on climate variables,
-# never a one-to-one mapping (RFC-006). `gain` is the signed influence on that variable.
+# never a one-to-one mapping (RFC-006). `gain` is the full-on contribution to that variable's
+# target, in the variable's own units (°C, %RH, ppm, µmol·m⁻²·s⁻¹, VWC), scaled by level/100.
+# Gains are sized to give each actuator real control authority (tuned via the seeded sim).
 [[hal.actuators]]
 actuator = "heater"
-effects = [{ variable = "temperature", gain = 0.05 }]
+effects = [{ variable = "temperature", gain = 18.0 }] # +18 °C above ambient at full
 constraints = { min_on_secs = 60, min_off_secs = 60 }
 
 [[hal.actuators]]
 actuator = "fans"
 effects = [
-  { variable = "temperature", gain = -0.03 }, # pulls toward outdoor
-  { variable = "humidity", gain = -0.02 },
-  { variable = "co2", gain = -0.5 },          # pulls toward ambient
+  { variable = "temperature", gain = -10.0 }, # pulls toward outdoor
+  { variable = "humidity", gain = -20.0 },
+  { variable = "co2", gain = -200.0 },         # pulls toward ambient
 ]
 constraints = { ramp_pct_per_s = 10.0 }
 
 [[hal.actuators]]
 actuator = "roof_vents"
 effects = [
-  { variable = "temperature", gain = -0.04 },
-  { variable = "humidity", gain = -0.03 },
-  { variable = "co2", gain = -0.6 },
+  { variable = "temperature", gain = -12.0 },
+  { variable = "humidity", gain = -30.0 },
+  { variable = "co2", gain = -300.0 },
 ]
 constraints = { slew_pct_per_s = 5.0 }
 
 [[hal.actuators]]
 actuator = "misters"
 effects = [
-  { variable = "humidity", gain = 0.08 },
-  { variable = "temperature", gain = -0.01 }, # evaporative cooling
+  { variable = "humidity", gain = 40.0 },
+  { variable = "temperature", gain = -3.0 }, # evaporative cooling
 ]
 
 [[hal.actuators]]
 actuator = "co2_injector"
-effects = [{ variable = "co2", gain = 2.0 }]
+effects = [{ variable = "co2", gain = 1200.0 }]
 constraints = { min_on_secs = 30, min_off_secs = 30 }
 
 [[hal.actuators]]
 actuator = "grow_lights"
 effects = [
-  { variable = "par", gain = 1.5 },
-  { variable = "temperature", gain = 0.01 }, # waste heat
+  { variable = "par", gain = 600.0 },
+  { variable = "temperature", gain = 2.0 }, # waste heat
 ]
 
 [[hal.actuators]]
 actuator = "shade_screen"
 effects = [
-  { variable = "par", gain = -1.0 },
-  { variable = "temperature", gain = -0.02 }, # sheds solar heat gain
+  { variable = "par", gain = -900.0 },        # blocks incoming solar PAR
+  { variable = "temperature", gain = -4.0 },  # sheds solar heat gain
 ]
 constraints = { slew_pct_per_s = 3.0 }
 
 [[hal.actuators]]
 actuator = "irrigation_valve"
-effects = [{ variable = "soil_moisture", gain = 0.01 }]
+effects = [{ variable = "soil_moisture", gain = 1.0 }] # wets toward saturation (VWC 1.0) when open
 constraints = { min_open_secs = 10 }
+
+# --- Control-loop tunables (spec §5) -------------------------------------------------------
+# Optional: omit any section and the committed defaults from the default-parameters reference
+# (spec §7) apply. Shown here with their defaults for reference.
+[control]
+saturation_window_secs = 300 # sustained saturation before `setpoint_unreachable` is raised
+
+[control.temperature_pid]
+kp = 15.0
+ki = 0.4
+kd = 0.0
+integral_clamp = 80.0 # anti-windup bound on the integral term
+
+# --- Safety interlocks & override (spec §6) ------------------------------------------------
+[safety]
+critical_temperature_c = 40.0 # critical-temperature interlock trigger
+co2_ceiling_ppm = 5000        # CO₂-ceiling interlock trigger
+interlock_min_hold_secs = 60  # minimum dwell before an interlock may clear
+override_timeout_secs = 1800  # manual-override auto-expiry
+
+[safety.interlock_rearm_hysteresis] # margin a reading must recover past before clearing
+temperature_c = 2.0
+co2_ppm = 200.0
+
+# --- Sensing & fault detection (spec §4) ---------------------------------------------------
+[sensing]
+probe_count = 3              # redundant temperature probes (TMR)
+probe_disagreement_c = 2.0   # exclude a probe deviating from the median by more than this
+stuck_window_secs = 5        # a frozen reading is flagged stuck after this
+commanded_vs_observed_tol = 5.0 # stuck-actuator divergence tolerance
+no_response_window_ticks = 5 # ticks a commanded change may show no effect before no-response
+humidity_bounds = { min = 0.0, max = 100.0 }
+co2_bounds = { min = 200.0, max = 5000.0 }
+par_bounds = { min = 0.0, max = 2500.0 }
+soil_moisture_bounds = { min = 0.0, max = 1.0 }
+
+# --- Simulation (spec §3, §7) — simulated HAL only -----------------------------------------
+[simulation]
+time_scale = 1.0                   # reset-on-restart default; runtime-adjustable, ephemeral
+seed = 6582955728036744813         # fixes the run for reproducible tests
+sensor_injection_timeout_secs = 300
+
+[simulation.solar] # natural light day-cycle (so grow lights supplement)
+sunrise = "06:00"
+sunset = "20:00"
+peak_par = 800.0       # µmol·m⁻²·s⁻¹ at solar noon
+peak_heat_gain_c = 6.0 # solar contribution to the air-temperature target at noon
+
+[simulation.initial] # plant state at tick 0
+temperature_c = 20.0
+humidity_pct = 60.0
+co2_ppm = 420.0
+soil_moisture = 0.5
+
+[simulation.noise] # seeded Gaussian sensor noise σ per channel (0 = off; small keeps live
+# channels jittering so equilibrium is never mistaken for a stuck sensor)
+temperature_c = 0.02
+humidity_pct = 0.1
+co2_ppm = 1.0
+par = 1.0
+soil_moisture = 0.001

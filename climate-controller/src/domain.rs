@@ -12,7 +12,7 @@ use std::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// The eight controllable actuators. Variant names match the MQTT `actuator` enum.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Actuator {
     Heater,
@@ -41,7 +41,7 @@ pub enum ClimateVariable {
 }
 
 /// A lowercase kebab-case identifier (`^[a-z0-9]+(-[a-z0-9]+)*$`), per RFC-007 identity.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Slug(String);
 
 impl Slug {
