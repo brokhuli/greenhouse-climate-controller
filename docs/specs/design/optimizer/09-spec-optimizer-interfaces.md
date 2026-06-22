@@ -23,3 +23,17 @@ interfaces ([P2 crop profiles](../platform/05-spec-platform-crop-profiles.md),
 [P2 interfaces](../platform/09-spec-platform-interfaces.md)) rather than defining new
 ones. It does **not** open its own channel to the Phase 1 controller — all downward influence flows
 through Phase 2, preserving the platform's authority over intended state.
+
+### Authenticating the Phase 2 write path
+
+By default the Phase 2 REST write is **trusted on the local Docker network** and carries no credential.
+Per [RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009),
+when the platform runs with `SERVICE_AUTH_MODE=oidc` (the cloud / multi-host posture) the optimizer
+authenticates as a **Keycloak confidential client** (`client_id: optimizer`) via the **client-credentials**
+grant and presents the resulting token as a `Bearer` credential on `POST /greenhouses/{id}/setpoints`.
+The token carries a **narrow `setpoints:write` service role** — not the operator role — so a compromised
+credential can do nothing but propose in-bounds setpoints, which Phase 2 re-validates regardless. The
+client secret and the `SERVICE_AUTH_MODE` the optimizer targets are
+[configuration](./10-spec-optimizer-configuration.md), never committed; the setpoint contract itself is
+**identical** with or without the token. This is the optimizer half of the deferred service-auth seam —
+dormant in the single-host local deployment, enabled by configuration alone.

@@ -130,6 +130,24 @@ greenhouses.
 > **infrastructure** timers — MQTT reconnect backoff, REST/HTTP timeouts — stay on wall-clock and do
 > **not** scale. (`_secs` names are kept for readability; they mean simulated seconds.)
 
+## REST API authentication (optional)
+
+```toml
+[rest]
+auth_token = ""   # optional pre-shared bearer token for the write endpoints; unset = unauthenticated (default)
+```
+
+The REST API is **unauthenticated by default** — the zero-friction standalone posture. Setting
+`auth_token` turns on the optional per-controller bearer-token check
+([RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009),
+[interfaces §3](./08-spec-controller-interfaces.md#authenticating-the-write-path-optional)): **write**
+endpoints then require a matching `Bearer` credential and reject unauthenticated writes (`401`), while
+**read** endpoints (`/health`, status, zone reads) stay open. Standalone Phase 1 leaves it unset; in a
+hardened managed deployment the platform stores the matching token in its
+[controller-endpoint record](../platform/05-spec-platform-crop-profiles.md#5-fleet-management--operator-control)
+and presents it on every downward call. The value is supplied via the TOML / a Compose secret, never a
+committed default, and like other transport config it is **startup-only** (a change needs a restart).
+
 ## Startup vs runtime
 
 | Change | How |
@@ -140,6 +158,7 @@ greenhouses.
 | Sensor injection (simulated HAL only) | Runtime via REST — simulation builds only ([HAL §9](./03-spec-controller-hal-simulation.md#9-sensor-reading-injection)) |
 | Time-scale / speed (simulated HAL only) | Runtime via REST — simulation builds only; ephemeral, resets to the TOML default on restart ([HAL §7](./03-spec-controller-hal-simulation.md#time-scale-speed-without-breaking-determinism)) |
 | Adding/removing zones; τ and coupling params | Config file + restart |
+| REST `auth_token` (optional bearer token) | Config file + restart |
 
 The boundary is load-bearing: runtime-mutable state can be edited mid-run without
 disturbing the tick ([architecture §3](./02-spec-controller-architecture.md#3-real-time--scheduling-model)),

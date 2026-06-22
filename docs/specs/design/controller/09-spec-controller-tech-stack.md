@@ -75,8 +75,10 @@
   [controller REST surface](./08-spec-controller-interfaces.md#3-rest--the-sole-write-path);
   handlers latch writes into controller state. The contract is
   [`contracts/controller-rest/`](../../../../contracts/controller-rest/) (OpenAPI
-  3.1); the server stays unauthenticated per
-  [RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries).
+  3.1); the server is unauthenticated by default, with an optional per-controller bearer token for
+  hardened deployments
+  ([RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009),
+  superseding [RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)).
 
 ---
 

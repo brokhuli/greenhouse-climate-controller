@@ -789,10 +789,18 @@ continuous-aggregate-vs-on-demand) are implementation tuning, not blockers. See 
 
 | Field   | Value |
 |---------|-------|
-| Status  | Accepted |
+| Status  | **Superseded** by [RFC-011](#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009) (2026-06-21) |
 | Created | 2026-06-07 |
 | Decided | 2026-06-08 |
 | Priority | Medium — blocks the Phase 3 write path and managed-mode controller hardening |
+
+> **Superseded (2026-06-21):** [RFC-011](#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009)
+> reopens this decision and **reverses** the human-only Resolution below: both internal write boundaries
+> now gain authentication, shipped as a **config-gated mode that is off by default** in the single-host
+> local deployment. RFC-011 re-adopts this RFC's original *Proposal* (the Keycloak client-credentials
+> grant + per-controller bearer token) and resolves its open question toward a **narrow service role**.
+> This RFC is retained in full as the deliberation record; the "human-only" stance it accepted is **no
+> longer the committed posture**.
 
 > **Decision (2026-06-08 — diverges from the Proposal below):** The system authenticates **human
 > actors only**. The non-human, service-to-service boundaries are **not** authenticated; they rely on
@@ -1053,3 +1061,154 @@ Accepted as the decision above. The strategy lives in
 Redocly, the `npm` script, the pre-commit gate) is recorded in
 [`local-environment-record.md`](./local-environment-record.md); the remaining CI-pipeline work is the
 open item in [`docs/backlog.md`](../backlog.md).
+
+---
+
+## RFC-011: Service-to-Service Auth as a Config-Gated Hardening Mode (supersedes RFC-009)
+
+| Field   | Value |
+|---------|-------|
+| Status  | Accepted |
+| Created | 2026-06-21 |
+| Decided | 2026-06-21 |
+| Supersedes | [RFC-009](#rfc-009-service-to-service-auth--internal-trust-boundaries) |
+| Priority | Medium — establishes the cloud/multi-host posture without disturbing the local MVP |
+
+> **Decision (2026-06-21 — reopens and reverses [RFC-009](#rfc-009-service-to-service-auth--internal-trust-boundaries)):**
+> Adopt authentication on the two internal **write** boundaries RFC-009 left trusted, but ship it as a
+> **config-gated hardening mode that is off by default in the single-host local deployment**. Two
+> independent, deferred mechanisms are reserved and specified now so that enabling them later is a
+> **configuration change, not an interface change**: (1) the optimizer authenticates to the Phase 2 API
+> with a **Keycloak client-credentials** token carrying a narrow `setpoints:write` service role, gated by
+> a Phase 2 `SERVICE_AUTH_MODE` switch (`trusted_network` default | `oidc`); (2) the platform presents a
+> **per-controller pre-shared bearer token** on the controller REST write path, presence-gated (unset =
+> disabled = today's behavior). This re-adopts RFC-009's original *Proposal* — which RFC-009's
+> Resolution rejected — and resolves its open question in favor of a **narrow service role** over the
+> full operator role. RFC-009 is retained as the deliberation record and marked **Superseded**.
+
+### Summary
+
+RFC-009 settled the internal trust model as **human-only authentication**: the optimizer → Phase 2 API
+and platform → controller REST write paths are trusted on the local Docker network, with no service
+credentials. That decision was correct *for a single-host laptop deployment* and is what the MVP still
+ships. This RFC does not contradict that economy — it **reopens the decision** to make the system
+**cloud-ready**: the moment the stack spans more than one host, "the network is the trust boundary"
+stops holding, and RFC-009 itself named the optimizer service account and the controller-endpoint
+registry record as the seams to add auth *if the system ever leaves the single-host model*. Rather than
+leave that as prose to be rediscovered, this RFC specifies both seams now as an **explicit, off-by-default
+mode**, so the upgrade is a config flip with no change to the committed setpoint contract.
+
+### Problem / Context
+
+The accepted RFC-009 posture has a documented residual risk
+([P2 security §5](../specs/design/platform/07-spec-platform-security.md#5-the-2a-unauthenticated-stance--and-the-deferred-service-auth-mode)):
+any process that can reach the Docker network can call the controller REST setpoint path or the
+platform's `POST /setpoints`, and setpoint provenance (`source = optimizer`,
+[RFC-005](#rfc-005-setpoint-authority-and-delivery-chain)) is **self-asserted** rather than backed by a
+verified identity. RFC-009 accepted this *within the single-host local threat model* and stated the
+revisit trigger explicitly. The operator has chosen to **plan the hardening now** — not to burden the
+local MVP, but to keep the architecture pointed at a real cloud posture. The requirement is therefore:
+adopt the auth path in the specs and the config surface, but keep it **dormant by default** so the
+one-laptop deployment carries none of the operational weight until it opts in.
+
+### Decision
+
+**1. Optimizer → Phase 2 API — Keycloak client-credentials, config-gated.**
+
+Reserve the optimizer as a **confidential Keycloak client** (`client_id: optimizer`) using the OAuth2
+**client-credentials** grant — the standard machine-to-machine flow, no browser. Keycloak issues an
+access token carrying a **narrow service role**, `setpoints:write`, that the Phase 2 API maps to the
+single capability of submitting setpoint proposals — **not** the full operator role (operators also
+assign profiles and register greenhouses, which the optimizer never does). This resolves RFC-009's open
+question toward least privilege. The API validates the service token on the **same** JWKS /
+issuer / audience / expiry path it already runs for human operator tokens
+([P2 security §2](../specs/design/platform/07-spec-platform-security.md#2-the-authn--authz-split)) — one
+token-validation mechanism, two actor types (`human` with viewer/operator roles; `service` with
+`setpoints:write`).
+
+The behavior is selected by a Phase 2 **`SERVICE_AUTH_MODE`** config value:
+
+| `SERVICE_AUTH_MODE` | Phase 2 API behavior on `POST /setpoints` | Optimizer behavior | Deployment |
+|---|---|---|---|
+| `trusted_network` *(default)* | accepts the internal call without a service token | calls without a token | single-host local |
+| `oidc` | requires a valid `setpoints:write` token; rejects unauthenticated | acquires a client-credentials token and presents it as `Bearer` | cloud / multi-host |
+
+The setpoint **contract is unchanged** in both modes — same `POST /greenhouses/{id}/setpoints`, same
+bodies, same `202`/`422`. Only the presence of an `Authorization` header and its enforcement differ. The
+client secret is supplied via environment variable / Compose secret (`PLANNER_*`-style,
+[optimizer config](../specs/design/optimizer/10-spec-optimizer-configuration.md)), never committed.
+Provenance is unaffected mechanically but **strengthened**: in `oidc` mode `source = optimizer` is backed
+by a verified client identity instead of being self-asserted.
+
+**2. Platform → controller REST — per-controller pre-shared bearer token, presence-gated.**
+
+Each controller gains an **optional** pre-shared bearer token in its TOML
+([P1 config](../specs/design/controller/07-spec-controller-config-and-parameters.md)). The controller
+requires it on the REST **write** endpoints (setpoint/threshold/override writes) and rejects
+unauthenticated writes **iff the token is set**; **unset = check disabled = today's zero-friction
+standalone binary** ([P1 deployment](../specs/design/controller/02-spec-controller-architecture.md#8-deployment)).
+The platform stores the matching token in the **registry's controller-endpoint record**
+([P2 fleet management](../specs/design/platform/05-spec-platform-crop-profiles.md#5-fleet-management--operator-control))
+and presents it on every downward REST call. This deliberately **does not** put OIDC in the minimal Rust
+controller — a single trusted caller (the platform) does not warrant a full relying-party
+implementation; a pre-shared token is the right weight. **Read** (status/health) endpoints stay open —
+the platform polls them frequently and they carry no authority. Token rotation is static-at-provisioning
+by default; the [deployment generation script](../specs/design/platform/08-spec-platform-operations.md#2-deployment)
+is the natural place to mint one per controller if rotation is ever wanted.
+
+**3. Optimizer → Phase 2 DB & 4. MQTT — unchanged.** The read-only `optimizer_ro` role
+([RFC-008](#rfc-008-phase-3-telemetry-read-path)) is a least-privilege database credential, not service
+authn, and is untouched. MQTT stays **anonymous** on the local network
+([RFC-001](#rfc-001-mqtt-broker-selection)); it is telemetry-only
+([RFC-007](#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)), carries
+no command authority, and is therefore not a write boundary this RFC governs.
+
+**Trust-boundary summary (committed):**
+
+| Boundary | Direction | Mechanism | Default state |
+|---|---|---|---|
+| Human → platform API/SPA | read + write | Keycloak OIDC (Authorization Code + PKCE) — **unchanged** | on (2b) |
+| Optimizer → Phase 2 API | write (setpoints) | Keycloak client-credentials → `setpoints:write`, gated by `SERVICE_AUTH_MODE` | **off** (`trusted_network`) |
+| Platform → controller REST | write (setpoints/override) | Per-controller pre-shared bearer token (registry ↔ TOML) | **off** (token unset) |
+| Optimizer → Phase 2 DB | read (history) | Read-only `optimizer_ro` role — unchanged | on |
+| Any → MQTT broker | telemetry only | Anonymous on local network — unchanged | n/a |
+
+### Alternatives Considered
+
+- **Leave RFC-009 standing (do nothing now).** Rejected by operator direction: the seam stays prose in
+  an RFC resolution, and a future cloud move re-derives the design under time pressure. Specifying the
+  dormant mode now is near-zero cost and makes the upgrade a config flip.
+- **Implement service auth always-on now (full RFC-009 Proposal, no gate).** Rejected: it loads the
+  single-host MVP with Keycloak client registration, token acquisition/refresh in the optimizer, and
+  per-controller token provisioning — exactly the operational surface RFC-009 judged disproportionate
+  for one laptop. The `SERVICE_AUTH_MODE` gate keeps that weight opt-in.
+- **A static API key / shared secret for the optimizer instead of Keycloak.** Rejected for the same
+  reason RFC-009's Proposal rejected it: it stands up a *second* authn path beside the OIDC one the
+  platform already runs. Client-credentials reuses Keycloak, so the API validates one kind of token.
+- **OIDC in the controller too (symmetric with the optimizer).** Rejected: disproportionate for a
+  minimal Rust process with one trusted caller; the pre-shared bearer token is the right weight.
+- **mTLS across all internal services.** Still rejected as over-scoped for a local stack — a local CA
+  and per-service cert rotation far exceed the threat model. Revisitable only if the deployment posture
+  changes substantially beyond multi-host.
+
+### Open Questions
+
+- The exact Keycloak realm-role name (`setpoints:write` vs `optimizer:setpoints.write`) and client
+  scope mapping — finalized when the Keycloak realm is configured in 2b; the spec commits to a *narrow
+  service role*, not the wire name.
+- Whether `oidc` mode should also require service auth on **read**-only platform surfaces consumed by
+  future services — out of scope here; this RFC governs the two write boundaries.
+
+### Resolution
+
+**Accepted 2026-06-21.** Both internal write boundaries gain authentication, specified now and
+**dormant by default**: the optimizer → Phase 2 API path via a `SERVICE_AUTH_MODE`-gated Keycloak
+client-credentials token with a narrow `setpoints:write` role, and the platform → controller REST path
+via a presence-gated per-controller bearer token. This **supersedes RFC-009**, whose human-only
+Resolution is reversed; RFC-009 is retained as the deliberation record. No committed interface changes —
+the setpoint contracts and the controller REST surface are identical in both modes, differing only in
+whether an `Authorization` header is required. Implementation lands with the phases the seams live in
+(Phase 2b for the Keycloak service client + `SERVICE_AUTH_MODE`; the controller token check + registry
+field when managed-mode hardening is exercised); the contract documents
+([`controller-rest`](../../contracts/controller-rest/), [`frontend-rest`](../../contracts/frontend-rest/))
+gain the optional security scheme when those slices are built. See ADR entry 2026-06-21.

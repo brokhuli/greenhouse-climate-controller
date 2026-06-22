@@ -3,15 +3,18 @@
 > **Purpose:** Define **who can do what**: how identity is delegated to a self-hosted
 > OIDC provider, how the Go API validates the resulting tokens, how Keycloak roles map
 > to the platform's two capability roles, and exactly which role may call which
-> surface. The internal-trust model and the 2a "no auth on the local network" stance
-> are fixed by
-> [RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries);
-> the relevant quality target is `P2-SEC-1`.
+> surface. The internal-trust model is fixed by
+> [RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009)
+> (which **supersedes** [RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)):
+> human auth is always-on in 2b, and the two internal **service** write boundaries gain authentication
+> as a **config-gated mode that is off by default** in the single-host local deployment ([§5](#5-the-2a-unauthenticated-stance--and-the-deferred-service-auth-mode)).
+> The relevant quality target is `P2-SEC-1`.
 
-> **Phase 2b.** 2a runs **unauthenticated** on the trusted local Docker network
-> (consistent with RFC-009); Keycloak, the viewer/operator roles, and the nginx
-> `/auth` route ([architecture §4](./02-spec-platform-architecture.md#4-reverse-proxy--the-edge))
-> all land in 2b. See [§5](#5-the-2a-unauthenticated-stance).
+> **Phase 2b.** 2a runs **unauthenticated** on the trusted local Docker network; Keycloak, the
+> viewer/operator roles, and the nginx `/auth` route
+> ([architecture §4](./02-spec-platform-architecture.md#4-reverse-proxy--the-edge)) all land in 2b. The
+> optional **service-auth** mode (`SERVICE_AUTH_MODE=oidc`, [§5](#5-the-2a-unauthenticated-stance--and-the-deferred-service-auth-mode))
+> is a further 2b capability, dormant by default. See [§5](#5-the-2a-unauthenticated-stance--and-the-deferred-service-auth-mode).
 
 ---
 
@@ -65,6 +68,19 @@ platform roles in the API's authorization layer. Keeping the mapping in the API 
 hard-coding Keycloak's role names through the codebase — is what lets the IdP's role
 taxonomy change without touching capability logic.
 
+### Two actor types: human and service
+
+The viewer/operator roles above describe **human** actors. When the deferred service-auth mode is
+enabled ([§5](#5-the-2a-unauthenticated-stance--and-the-deferred-service-auth-mode),
+[RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009)),
+a second actor type appears: a **service** identity — the optimizer — that authenticates with a Keycloak
+**client-credentials** token instead of a browser login. It is deliberately *not* mapped to the operator
+role; it carries a **narrow `setpoints:write` service role** whose only capability is submitting setpoint
+proposals (operators also assign profiles and register greenhouses, which the optimizer never does — so
+giving it the operator role would over-grant). Both actor types are validated through the **same**
+token path ([§2](#2-the-authn--authz-split)); they differ only in the grant that minted the token
+(Authorization Code + PKCE for humans, client-credentials for the service) and the claims the API reads.
+
 Finer-grained RBAC and multi-tenant identity are out of scope
 ([constraints](./11-spec-platform-constraints.md)).
 
@@ -86,41 +102,60 @@ How the two roles line up against the [API surface](./09-spec-platform-interface
 | `POST /setpoints` (optimizer write path) | — | ✓ |
 
 The rule reduces to: **viewers read, operators read and write.** Every write surface
-is an operator-only action.
+is an operator-only action **for human actors**. The `POST /setpoints` row is the one surface a
+**service** actor also reaches: in `SERVICE_AUTH_MODE=oidc` the optimizer calls it with the narrow
+`setpoints:write` role ([§3](#two-actor-types-human-and-service)) — it cannot touch any other write
+surface (registration, profiles, assignments), which remain operator-only.
 
 ---
 
-## 5. The 2a unauthenticated stance
+## 5. The 2a unauthenticated stance — and the deferred service-auth mode
 
 In 2a the platform runs with **no authentication**: every endpoint is open on the
-trusted local Docker network, consistent with the internal-trust boundary in
-[RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries).
-This is deliberate — it keeps the MVP focused on the telemetry pipeline and the
-setpoint relay, and adding Keycloak in 2b changes **no committed interface** (the same
-write endpoints simply become operator-gated). The frontend's relying-party client is
-absent in 2a and added in 2b ([frontend tech stack](../frontend/04-spec-frontend-tech-stack.md)).
+trusted local Docker network. This is deliberate — it keeps the MVP focused on the
+telemetry pipeline and the setpoint relay, and adding Keycloak in 2b changes **no
+committed interface** (the same write endpoints simply become operator-gated). The
+frontend's relying-party client is absent in 2a and added in 2b
+([frontend tech stack](../frontend/04-spec-frontend-tech-stack.md)).
 
-### Known residual risk — the service-to-service plane stays unauthenticated
+### The service-to-service plane: trusted by default, authenticatable on demand
 
-The authenticated boundary is **human → API/SPA only** (Keycloak, 2b). The
-service-to-service plane is unauthenticated *by decision* — and stays that way in 2b,
-not only 2a: the controller REST API is unauthenticated and MQTT is anonymous on the
-local network
-([RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries),
-ADR 2026-06-08). The accepted consequence:
+Per [RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009)
+(which supersedes [RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)),
+the two internal **write** boundaries are **trusted on the Docker network by default**, but each gains an
+**opt-in** authentication mechanism so the system can be hardened for a cloud / multi-host deployment
+**without changing any committed interface**:
 
-- Any process that can reach the Docker network can **spoof a registered
-  `greenhouse_id`** — publish false telemetry over MQTT — or call the **controller REST
-  setpoint path** / the platform's **`POST /setpoints`** directly.
+| Boundary | Default (single-host local) | Hardened mode | Selector |
+|---|---|---|---|
+| Optimizer → Phase 2 `POST /setpoints` | accepted untokened | requires a Keycloak `setpoints:write` client-credentials token ([§3](#two-actor-types-human-and-service)) | `SERVICE_AUTH_MODE=trusted_network` \| `oidc` |
+| Platform → controller REST writes | accepted untokened | requires a per-controller pre-shared bearer token ([controller interfaces §3](../controller/08-spec-controller-interfaces.md#3-rest--the-sole-write-path)) | controller token set / unset |
+
+`SERVICE_AUTH_MODE` is a Phase 2 API config value
+([operations — deployment](./08-spec-platform-operations.md#2-deployment)); the controller token is an
+optional TOML field whose **presence** turns the check on
+([controller config](../controller/07-spec-controller-config-and-parameters.md)). MQTT stays anonymous
+and telemetry-only regardless ([RFC-001](../../../decisions/request-for-comments.md#rfc-001-mqtt-broker-selection)) —
+it carries no command authority, so it is not a write boundary.
+
+### Residual risk in the default (`trusted_network`) posture
+
+With both switches off — the committed single-host default — the accepted consequence is unchanged from
+the prior posture:
+
+- Any process that can reach the Docker network can **spoof a registered `greenhouse_id`** (publish
+  false telemetry over MQTT) or call the **controller REST setpoint path** / the platform's
+  **`POST /setpoints`** directly.
 - Setpoint **provenance** (`source = optimizer`, [RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain))
-  is therefore **self-asserted by the caller**, not backed by a verified token identity.
+  is **self-asserted by the caller**, not backed by a verified token identity.
 
-This is **accepted within the single-host local threat model**: `P2-SEC-1` commits
-*human* authentication only, because service-credential machinery (per-controller tokens,
-an optimizer service account) is operational surface disproportionate to a one-host
-deployment. The **revisit trigger** is explicit — the controller-endpoint registry
-record and the optimizer are the natural seams to add per-service tokens **if the system
-ever leaves the single-host local model**.
+This is **accepted within the single-host local threat model** (`P2-SEC-1` commits *human* authentication
+as the always-on boundary; service-credential machinery is disproportionate operational surface for a
+one-host deployment). What [RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009)
+changes from RFC-009 is that the mitigation is **already specified and wired as a dormant mode**: enabling
+`SERVICE_AUTH_MODE=oidc` and provisioning controller tokens **closes** this gap — the optimizer's
+provenance becomes identity-backed and the controller's only inbound write path becomes
+platform-authenticated — the instant a deployment leaves the single-host model, with no interface change.
 
 ---
 
@@ -132,5 +167,6 @@ ever leaves the single-host local model**.
 | The `/auth` route + the proxy edge | gated at | [`02-spec-platform-architecture.md`](./02-spec-platform-architecture.md#4-reverse-proxy--the-edge) |
 | The surfaces these roles gate | gates | [`09-spec-platform-interfaces.md`](./09-spec-platform-interfaces.md#3-api-surface-inventory) |
 | The browser-side OIDC client | paired with | [frontend tech stack](../frontend/04-spec-frontend-tech-stack.md) |
-| Internal trust boundary; 2a no-auth | defers to | [RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries) |
+| Internal trust boundary; service-auth mode | defers to | [RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009) (supersedes [RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)) |
+| `SERVICE_AUTH_MODE` config value | set in | [`08-spec-platform-operations.md`](./08-spec-platform-operations.md#2-deployment) |
 | `P2-SEC-1` | cited | [NFR doc](../../artifacts/non-functional-requirements.md) |

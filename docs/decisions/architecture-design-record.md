@@ -8,6 +8,58 @@ alternatives and tradeoffs.
 
 ---
 
+## 2026-06-21 — Internal trust model reopened: service-to-service auth adopted as a config-gated, off-by-default hardening mode
+
+**Decision:** **Reverse** the [2026-06-08 human-only decision](#2026-06-08--internal-trust-model-no-service-to-service-auth-authentication-is-human-only)
+and adopt authentication on the two internal **write** boundaries — but ship it as a **config-gated mode
+that is off by default** in the single-host local deployment, so the local MVP carries none of the
+operational weight until it opts in. Both seams RFC-009 named as "where to add auth if the system leaves
+the single-host model" are now specified, dormant, ready to flip:
+
+1. **Optimizer → Phase 2 API** — the optimizer authenticates with a **Keycloak client-credentials**
+   token carrying a **narrow `setpoints:write` service role** (not the full operator role; operators
+   also assign profiles and register greenhouses, which the optimizer never does), validated on the
+   *same* JWKS/issuer/audience path as human operator tokens. Selected by a Phase 2 **`SERVICE_AUTH_MODE`**
+   switch: `trusted_network` (default — accept the internal call untokened, today's behavior) or `oidc`
+   (require and validate the service token). The setpoint contract `POST /greenhouses/{id}/setpoints` is
+   **identical** in both modes — only the `Authorization` header's presence and enforcement differ.
+2. **Platform → controller REST** — each controller gains an **optional** pre-shared **bearer token** in
+   its TOML; the controller enforces it on **write** endpoints **iff set** (unset = check disabled =
+   today's zero-friction standalone binary), reads stay open. The platform stores the matching token in
+   the **registry's controller-endpoint record** and presents it on every downward call. No OIDC in the
+   minimal Rust controller — a single trusted caller does not warrant a relying-party implementation.
+
+`optimizer_ro` DB access ([RFC-008](./request-for-comments.md#rfc-008-phase-3-telemetry-read-path)) and
+anonymous telemetry-only MQTT ([RFC-001](./request-for-comments.md#rfc-001-mqtt-broker-selection)) are
+**unchanged** — neither is a service write boundary. This **resolves RFC-009's open question** toward a
+narrow service role and re-adopts RFC-009's original *Proposal*, which its Resolution had rejected.
+
+**Scope:** specs + decision records only. Phase 2 (Go API) and Phase 3 (optimizer) are unimplemented
+scaffolding, so there is no token-validation, config-switch, or client-credentials code to change yet;
+the controller's REST handlers exist but the optional-token check lands when managed-mode hardening is
+exercised. The behavior is specified across the platform security/interfaces/fleet specs, the optimizer
+interfaces/application/configuration specs, and the controller interfaces/config specs. The contract
+documents ([`controller-rest`](../../contracts/controller-rest/),
+[`frontend-rest`](../../contracts/frontend-rest/)) gain the **optional** security scheme when those
+slices are built — additive, no major version bump, no consumer deployed.
+
+**Why:** RFC-009's economy was correct *for a single laptop*, where the host network is itself the trust
+boundary — and that is still what the MVP ships. But "the network is the trust boundary" stops holding
+the moment the stack spans more than one host, and RFC-009 already named these two seams as the place to
+add auth in that event. Specifying the dormant mode now makes the cloud/multi-host upgrade a **config
+flip, not an interface change**, and closes the documented residual risk (a setpoint write's
+`source = optimizer` provenance is self-asserted, not identity-backed) the instant `oidc` mode is
+enabled — at near-zero cost to the local deployment, which simply leaves both switches off. Keeping the
+optimizer's role **narrow** (`setpoints:write`, not operator) is least-privilege: the only thing a
+compromised optimizer credential can do is propose in-bounds setpoints, which Phase 2 re-validates
+anyway.
+
+**Basis:** Operator-directed reversal of an accepted decision.
+**RFC:** [RFC-011](./request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009)
+(supersedes [RFC-009](./request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)).
+
+---
+
 ## 2026-06-19 — Simulated-clock time-scale: a live, per-controller, simulation-only speed knob
 
 **Decision:** Add a **time-scale (speed) knob** to the simulated controller so a simulation can be

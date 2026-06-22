@@ -114,6 +114,13 @@ above and so lands in **2b**.
 - **Device registry** *(2a)* — greenhouses and their controller endpoints are
   **registered manually** via the API/dashboard (the platform does not auto-discover
   controllers); this registry is the bootstrap that ingestion and resolution key off.
+  The controller-endpoint record also carries an **optional per-controller bearer token**
+  ([RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009)):
+  when a controller is configured to require it
+  ([controller interfaces §3](../controller/08-spec-controller-interfaces.md#authenticating-the-write-path-optional)),
+  the platform stores the matching token here and presents it on every downward REST call; by default
+  the field is empty and downward calls are untokened (the single-host local posture). It is a
+  credential, not control data — it does not touch the setpoint-only contract.
   Greenhouses can also be **retired**; on retire the platform **clears the greenhouse's
   retained `gh/{greenhouse_id}/state`** by publishing a zero-length retained message, so
   no ghost snapshot lingers in the broker to be replayed to every new subscriber on

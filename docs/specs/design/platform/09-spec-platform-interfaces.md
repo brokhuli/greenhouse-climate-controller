@@ -90,10 +90,18 @@ channel is consumed by the [dashboard](./06-spec-platform-dashboard.md).
 
 Write endpoints require the **operator** role once auth lands
 ([security](./07-spec-platform-security.md), **2b**); in the unauthenticated 2a MVP the
-setpoint-edit and registration endpoints are open on the trusted local network
-([RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)).
-The per-surface capability split (viewer reads; operator reads + writes) is owned by
+setpoint-edit and registration endpoints are open on the trusted local network. The per-surface
+capability split (viewer reads; operator reads + writes) is owned by
 [security](./07-spec-platform-security.md#4-capability-matrix).
+
+The **`POST /setpoints`** surface additionally accepts a **service** actor — the optimizer — when the
+deferred service-auth mode is enabled (`SERVICE_AUTH_MODE=oidc`,
+[RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009),
+superseding [RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)):
+the optimizer presents a Keycloak client-credentials token carrying the narrow `setpoints:write` role
+rather than a human operator token ([security §3](./07-spec-platform-security.md#two-actor-types-human-and-service)).
+By default (`trusted_network`) the path is open on the local network, as in 2a. No other surface is
+reachable by a service actor.
 
 ---
 

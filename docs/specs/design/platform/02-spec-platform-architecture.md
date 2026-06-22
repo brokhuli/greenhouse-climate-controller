@@ -144,8 +144,10 @@ static assets to meet the dashboard's initial-load target (`P2-USE-1`).
 
 **Out of scope locally:** TLS termination and certificate management. The stack runs
 on a trusted local Docker network on a single host
-([RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries));
-fronting it with HTTPS is a deployment-environment concern, not a platform-design one.
+([RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009),
+superseding [RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries));
+fronting it with HTTPS — like the service-auth `oidc` mode — is a deployment-environment concern for a
+multi-host posture, not a single-host platform-design one.
 
 ---
 

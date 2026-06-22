@@ -129,8 +129,11 @@
   JWTs against Keycloak's JWKS and read the roles claim — no custom crypto.
 - **How:** Validation middleware fetches/caches the JWKS, verifies signature/issuer/
   audience/expiry, and maps realm roles to the platform's viewer/operator roles
-  ([security §3](./07-spec-platform-security.md#3-roles-and-role-mapping)). **Absent in
-  2a** ([security §5](./07-spec-platform-security.md#5-the-2a-unauthenticated-stance)).
+  ([security §3](./07-spec-platform-security.md#3-roles-and-role-mapping)). The **same**
+  middleware validates the optimizer's client-credentials **service** token in
+  `SERVICE_AUTH_MODE=oidc`, mapping it to the narrow `setpoints:write` role rather than an operator role
+  ([security §3](./07-spec-platform-security.md#two-actor-types-human-and-service)). **Absent in
+  2a** ([security §5](./07-spec-platform-security.md#5-the-2a-unauthenticated-stance--and-the-deferred-service-auth-mode)).
 
 ---
 

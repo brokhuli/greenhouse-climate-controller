@@ -51,7 +51,11 @@ tracing), and is the sole delivery path to the controller — applying on change
 reconnect, and detecting drift. The optimizer submits refined targets via
 `POST /greenhouses/{id}/setpoints` and either receives `202` (accepted) or `422` (rejected with the
 violated bound); it does **not** write to controllers directly and does **not** publish actuator
-commands.
+commands. The call is trusted on the local network by default; under the platform's hardened
+`SERVICE_AUTH_MODE=oidc` posture it carries a Keycloak `setpoints:write` service token
+([interfaces — authenticating the Phase 2 write path](./09-spec-optimizer-interfaces.md#authenticating-the-phase-2-write-path),
+[RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009)),
+with no change to the bundle or the `202`/`422` contract.
 
 **Application gate — auto-apply within bounds:**
 

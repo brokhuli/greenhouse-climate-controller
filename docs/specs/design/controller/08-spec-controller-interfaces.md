@@ -88,13 +88,39 @@ takes effect on the next tick
 In managed mode the platform is the sole REST consumer; the frontend reaches the
 controller *through* the platform, never directly
 ([spec-contracts §2.2](../spec-contracts.md#22-controller-rest-api)). The API is
-**unauthenticated** — the Docker network is the trust boundary
-([RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)).
+**unauthenticated by default** — the Docker network is the trust boundary — with an **optional
+per-controller bearer token** for the hardened multi-host posture: see
+[authentication](#authenticating-the-write-path-optional)
+([RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009)).
 
 The path shapes, request/response schemas, and status codes are owned by
 [`contracts/controller-rest/`](../../../../contracts/controller-rest/) (OpenAPI
 3.1) under
 [RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain).
+
+### Authenticating the write path (optional)
+
+The REST API is **unauthenticated by default**, which is what keeps the standalone Phase 1 binary
+zero-friction ([deployment](./02-spec-controller-architecture.md#8-deployment)). For a hardened,
+multi-host managed deployment, the controller supports an **optional pre-shared bearer token**
+([RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009)):
+
+- **Presence-gated.** The token is an optional field in the controller's
+  [TOML config](./07-spec-controller-config-and-parameters.md). **Unset → the check is disabled** and
+  the API behaves exactly as today; **set → write endpoints require a matching `Bearer` credential** and
+  reject unauthenticated writes (`401`). This is deliberately not OIDC — the controller is a minimal
+  process with a single trusted caller (the platform), for which a full relying-party implementation
+  would be disproportionate; a pre-shared token is the right weight.
+- **Writes only.** The token gates the **write** surfaces (setpoint/threshold edits, override and
+  sim-control writes); **read** endpoints (`/health`, status, zone reads) stay open — the platform polls
+  them frequently and they carry no authority.
+- **The platform holds the matching token.** In managed mode the platform stores it in the registry's
+  [controller-endpoint record](../platform/05-spec-platform-crop-profiles.md#5-fleet-management--operator-control)
+  and presents it on every downward REST call; the [setpoint-delivery chain](../platform/05-spec-platform-crop-profiles.md)
+  is otherwise unchanged. Standalone Phase 1 leaves the token unset.
+
+The token is the controller half of the deferred service-auth seam; the optimizer half is the platform's
+Keycloak `setpoints:write` path ([platform security §5](../platform/07-spec-platform-security.md#5-the-2a-unauthenticated-stance--and-the-deferred-service-auth-mode)).
 
 ### Simulation control (simulated HAL only)
 
@@ -200,7 +226,7 @@ contracts both exist today:
 | Contract | Location | Status | Governing decision |
 |---|---|---|---|
 | MQTT telemetry schemas | [`contracts/mqtt/`](../../../../contracts/mqtt/) | Authored | [RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format), [RFC-001](../../../decisions/request-for-comments.md#rfc-001-mqtt-broker-selection) |
-| Controller REST API | [`contracts/controller-rest/`](../../../../contracts/controller-rest/) | Authored | [RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain), [RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries) |
+| Controller REST API | [`contracts/controller-rest/`](../../../../contracts/controller-rest/) | Authored | [RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain), [RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009) (supersedes [RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)) |
 
 A change to either is versioned and accompanied by an ADR, per
 [`contracts/README.md`](../../../../contracts/README.md). The catalog of all system

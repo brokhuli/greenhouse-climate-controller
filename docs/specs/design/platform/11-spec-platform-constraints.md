@@ -103,6 +103,6 @@ Platform capabilities intentionally **not** in Phase 2:
 | The setpoint-only / single-authority write path these rules bound | constrains | [`05-spec-platform-crop-profiles.md`](./05-spec-platform-crop-profiles.md) |
 | The telemetry-only / control-REST split | constrains | [`09-spec-platform-interfaces.md`](./09-spec-platform-interfaces.md) |
 | Setpoint authority + delivery chain | defers to | [RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain) |
-| Internal trust boundary; the accepted residual risk it leaves | defers to | [RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries), [security §5](./07-spec-platform-security.md#5-the-2a-unauthenticated-stance) |
+| Internal trust boundary; service-auth mode + its default residual risk | defers to | [RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009) (supersedes [RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)), [security §5](./07-spec-platform-security.md#5-the-2a-unauthenticated-stance--and-the-deferred-service-auth-mode) |
 | System-wide constraint inventory | mirrors | [constraints artifact](../../artifacts/constraints.md) |
 | Quality targets (not constraints) | separate from | [NFR doc](../../artifacts/non-functional-requirements.md) |

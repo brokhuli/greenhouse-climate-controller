@@ -58,8 +58,11 @@ Each entry: the constraint, **why** it exists, and **what it forces or forbids**
 - **Why:** Telemetry flows out over MQTT; *all* control flows in over REST
   ([RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain),
   [interfaces](./08-spec-controller-interfaces.md#3-rest--the-sole-write-path)). The
-  REST API is unauthenticated on the trusted network
-  ([RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)).
+  REST API is unauthenticated on the trusted network **by default**, with an optional
+  per-controller bearer token for hardened multi-host deployments
+  ([RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009),
+  superseding [RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries);
+  [interfaces §3](./08-spec-controller-interfaces.md#authenticating-the-write-path-optional)).
 - **Forces:** Every inbound change (setpoints, thresholds, override) goes through
   REST and is latched to a tick boundary. The simulated-HAL
   [sensor-injection](./03-spec-controller-hal-simulation.md#9-sensor-reading-injection)

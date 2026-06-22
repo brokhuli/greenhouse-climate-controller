@@ -1,9 +1,9 @@
 # Optimizer — Configuration
 
 > **Purpose:** Catalogue the optimizer's service configuration — data-store DSN, Phase
-> 2 endpoint, LLM provider/sampling, objective weights, local cost schedule, and the data-quality,
-> twin-robustness, application-gate, and service thresholds — and how it is supplied
-> via environment variables / the Compose file rather than a per-greenhouse TOML.
+> 2 endpoint and its service-auth mode ([RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009)), LLM provider/sampling, objective weights, local
+> cost schedule, and the data-quality, twin-robustness, application-gate, and service thresholds — and
+> how it is supplied via environment variables / the Compose file rather than a per-greenhouse TOML.
 
 Part of the [optimizer set](./01-spec-optimizer-overview.md); the thresholds here are
 referenced throughout the set (e.g.
@@ -25,6 +25,15 @@ convention rather than a per-greenhouse TOML (contrast the controller's config).
 [data]
 postgres_dsn = "postgresql://optimizer_ro:***@platform-db:5432/greenhouse"  # read-only role; SELECT on the RFC-008 view surface only
 platform_api_url = "https://platform/api"
+
+[platform_auth]
+# Service-to-service auth for the Phase 2 setpoint write path (RFC-011).
+# "trusted_network" (default): call POST /setpoints untokened — single-host local posture.
+# "oidc": obtain a Keycloak client-credentials token and present it as Bearer — cloud / multi-host.
+mode = "trusted_network"              # must match the platform's SERVICE_AUTH_MODE
+oidc_token_url = ""                   # Keycloak token endpoint; required only when mode = "oidc"
+oidc_client_id = "optimizer"          # confidential client; narrow setpoints:write service role
+oidc_client_secret = ""               # set via PLANNER_OIDC_CLIENT_SECRET env var; never in file
 
 [llm]
 # Primary backend: "anthropic" | "openai"
