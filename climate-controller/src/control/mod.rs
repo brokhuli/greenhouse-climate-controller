@@ -14,13 +14,13 @@ pub mod lighting;
 pub mod pid;
 pub mod temperature;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::clock::Clock;
 use crate::config::{Config, Setpoints};
 use crate::domain::Slug;
 use crate::faults::Fault;
-use crate::hal::Commands;
+use crate::hal::{ActuatorId, Commands};
 use crate::sensing::{TrustedState, saturation_vapor_pressure_kpa};
 
 use humidity::HumidityLoop;
@@ -113,6 +113,9 @@ impl ControlState {
     }
 
     /// Run every loop in dependency order, returning the desired actuator commands for this tick.
+    /// Actuators a loop drives to their fail-safe state because the governing sensor became
+    /// untrusted (CO₂ injector, irrigation valve) are recorded in `fail_closed` so the constraints
+    /// stage waives anti-short-cycle dwell on the safe move ([sensing §4], [safety §4]).
     pub fn run(
         &mut self,
         trusted: &TrustedState,
@@ -120,6 +123,7 @@ impl ControlState {
         config: &Config,
         clock: &Clock,
         faults: &mut Vec<Fault>,
+        fail_closed: &mut BTreeSet<ActuatorId>,
     ) -> Commands {
         let zone_ids: Vec<Slug> = config.zones.iter().map(|z| z.id.clone()).collect();
         let mut cmd = Commands::all_off(&zone_ids);
@@ -130,12 +134,12 @@ impl ControlState {
         // Humidity hysteresis (misters).
         self.humidity.run(trusted, resolved, &mut cmd);
         // CO₂ — reads the resolved vent position for its interlock, so it must run after temperature.
-        co2::run(trusted, resolved, &mut cmd);
+        co2::run(trusted, resolved, &mut cmd, fail_closed);
         // Irrigation — one independent scheduler per zone.
         for zone in &config.zones {
             if let Some(loop_) = self.zones.get_mut(&zone.id) {
                 let soil = trusted.soil_moisture.get(&zone.id).copied().flatten();
-                loop_.run(zone, soil, clock, &mut cmd);
+                loop_.run(zone, soil, clock, &mut cmd, fail_closed);
             }
         }
         // Lighting / DLI (grow lights + shade screen).

@@ -128,12 +128,20 @@ Two classes of rule:
 
 ## Authentication
 
-**None.** The controller REST API is unauthenticated in both standalone and managed mode; it is
-reachable only on the trusted local Docker network and protected by network isolation, not
-credentials
-([RFC-009](../../docs/decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)).
-The OpenAPI document therefore declares no `securitySchemes`. If the system ever leaves the
-single-host model, this API is the seam to add a per-controller token.
+**Unauthenticated by default, with an optional per-controller bearer token.** Out of the box the
+controller REST API is unauthenticated — the local Docker network is the trust boundary, not
+credentials. For a hardened, multi-host posture the controller config may set `[rest].auth_token`;
+when set, the **write** endpoints (setpoint/threshold edits, override management, and the sim-control
+writes) require a matching `Authorization: Bearer <token>` and reject unauthenticated writes with
+`401`, while **read** endpoints (`/health`, status, zone reads) stay open
+([RFC-011](../../docs/decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009),
+a config-gated hardening mode that supersedes
+[RFC-009](../../docs/decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)
+for this surface). The OpenAPI document declares a `bearerAuth` security scheme and lists it as an
+**optional** scheme on each write operation (`security: [{}, { bearerAuth: [] }]`) — the empty object
+keeps anonymous access valid at the contract level, and whether the token is actually required is
+gated on the controller's config. Standalone Phase 1 leaves `auth_token` unset; in managed mode the
+platform stores the matching token and presents it on every downward write call.
 
 ## Relationship to the MQTT contract
 

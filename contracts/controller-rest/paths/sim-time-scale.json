@@ -24,6 +24,7 @@
     "description": "Accepts a new wall-clock tick cadence multiplier (sleep = tick_period_ms / scale) into scheduler state; the new cadence is first used for the next scheduled tick and never mutates a tick already in progress. Speeding up costs CPU but does not change the per-tick simulation step Δt, so determinism/replay is preserved (controller HAL §7). Reset to real-time with `scale: 1.0`. A value outside the accepted range is rejected with 422. Simulated backend only — a real-hardware backend returns 404. The time-scale is ephemeral and resets to the configured default (1.0) on restart.",
     "tags": ["simulation"],
     "x-simulation-only": true,
+    "security": [{}, { "bearerAuth": [] }],
     "requestBody": {
       "required": true,
       "content": {
@@ -41,6 +42,7 @@
           }
         }
       },
+      "401": { "$ref": "../components/responses.json#/Unauthorized" },
       "404": { "$ref": "../components/responses.json#/NotFound" },
       "422": { "$ref": "../components/responses.json#/ValidationFailed" }
     }

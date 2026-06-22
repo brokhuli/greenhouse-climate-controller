@@ -3,12 +3,12 @@
   "info": {
     "title": "Greenhouse Climate Controller — REST API",
     "version": "1.0.0",
-    "description": "The Phase 1 controller's REST configuration and control surface: runtime setpoint/threshold updates, irrigation-zone status, manual-override management, and system health (controller spec §11). One controller process serves exactly one greenhouse; paths are greenhouse-scoped so the same `greenhouse_id` keys MQTT topics, REST paths, and DB rows with no translation layer (RFC-007). MQTT carries telemetry only — setpoints reach the controller here, with Phase 2 as the single authority that calls this API (RFC-005). The API is unauthenticated: it is reachable only on the trusted local Docker network and protected by network isolation, not credentials (RFC-009). `info.version` is the contract version; its major bumps on a breaking change, which is then run side-by-side with the prior major and recorded in an ADR — the same discipline RFC-007 fixes for the MQTT contract. This document is split across files: each path is a file under `paths/`, and the shared schemas, parameters, and responses live under `components/`. Run `redocly bundle` to emit a single self-contained file for tools that want one."
+    "description": "The Phase 1 controller's REST configuration and control surface: runtime setpoint/threshold updates, irrigation-zone status, manual-override management, and system health (controller spec §11). One controller process serves exactly one greenhouse; paths are greenhouse-scoped so the same `greenhouse_id` keys MQTT topics, REST paths, and DB rows with no translation layer (RFC-007). MQTT carries telemetry only — setpoints reach the controller here, with Phase 2 as the single authority that calls this API (RFC-005). The API is **unauthenticated by default** — the local Docker network is the trust boundary — with an **optional per-controller bearer token** for a hardened, multi-host posture: when the controller config sets `[rest].auth_token`, the write endpoints (setpoint/threshold edits, override and sim-control writes) require a matching `Bearer` credential and reject unauthenticated writes with 401, while read endpoints stay open (RFC-011, a config-gated hardening mode that supersedes RFC-009 for this surface). `info.version` is the contract version; its major bumps on a breaking change, which is then run side-by-side with the prior major and recorded in an ADR — the same discipline RFC-007 fixes for the MQTT contract. This document is split across files: each path is a file under `paths/`, and the shared schemas, parameters, and responses live under `components/`. Run `redocly bundle` to emit a single self-contained file for tools that want one."
   },
   "servers": [
     {
       "url": "http://{controller_host}:{port}",
-      "description": "The controller's address on the local Docker network (or localhost when run standalone). No TLS and no auth (RFC-009).",
+      "description": "The controller's address on the local Docker network (or localhost when run standalone). No TLS; unauthenticated by default, with an optional per-controller bearer token gating the write endpoints (RFC-011, supersedes RFC-009).",
       "variables": {
         "controller_host": {
           "default": "localhost",
@@ -34,5 +34,14 @@
       "name": "simulation",
       "description": "Simulated-HAL-only diagnostic surface (controller HAL §7, §9): sensor-reading injection for creating fault/interlock conditions on demand, and the time-scale (speed) knob for running the simulated clock faster/slower than real-time. Not a production control path: a real-hardware backend returns 404, and the platform reaches these only as an explicit simulation-only exception. Additive to the contract; does not bump info.version major."
     }
-  ]
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Optional per-controller pre-shared token (RFC-011, supersedes RFC-009). Disabled by default; when the controller config sets `[rest].auth_token`, the write endpoints require a matching `Authorization: Bearer <token>` and reject unauthenticated writes with 401. Read endpoints are always open. The `security` on each write operation lists `{}` (anonymous) first, so the token is optional at the contract level — enforcement is gated on the controller's config."
+      }
+    }
+  }
 }

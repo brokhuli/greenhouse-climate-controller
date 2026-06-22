@@ -179,8 +179,17 @@ fn fuse_temperature(probes: &[f64], cfg: &Sensing, faults: &mut Vec<Fault>) -> O
         ));
         return None;
     }
-    // A single probe has no redundancy: trust it directly (still subject to interlocks).
+    // A single probe has no redundancy: trust it directly (still subject to interlocks), but raise
+    // the loss-of-redundancy alarm — there is no fusion left to correct or even detect a fault on it
+    // ([sensing §2], `P1-RESIL-1`).
     if probes.len() == 1 {
+        faults.push(Fault::new(
+            "temperature",
+            FaultType::RedundancyDegraded,
+            Severity::Alarm,
+            "running on a single temperature probe — no fusion redundancy",
+            "controlling on the sole probe; no single-fault tolerance",
+        ));
         return Some(probes[0]);
     }
 
@@ -344,6 +353,26 @@ mod tests {
                 .iter()
                 .any(|f| f.fault_type == FaultType::SensorDisagreement),
             "outlier should raise a disagreement warning"
+        );
+    }
+
+    #[test]
+    fn single_probe_trusts_but_alarms_loss_of_redundancy() {
+        // P1-RESIL-1: one configured probe → keep controlling on it, but raise redundancy_degraded.
+        let mut s = SensingState::new(&[]);
+        let mut faults = Vec::new();
+        let t = s.condition(&raw(vec![21.0]), &cfg(), &mut faults);
+        assert_eq!(
+            t.temperature,
+            Some(21.0),
+            "still controlling on the sole probe"
+        );
+        assert!(
+            faults
+                .iter()
+                .any(|f| f.fault_type == FaultType::RedundancyDegraded
+                    && f.severity == Severity::Alarm),
+            "a single probe must raise the loss-of-redundancy alarm"
         );
     }
 

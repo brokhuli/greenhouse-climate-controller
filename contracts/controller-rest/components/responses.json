@@ -14,5 +14,13 @@
         "schema": { "$ref": "./schemas/common.json#/ValidationError" }
       }
     }
+  },
+  "Unauthorized": {
+    "description": "The write endpoint requires authentication (the controller config set `[rest].auth_token`) and the request carried no matching `Authorization: Bearer` credential (RFC-011). Only returned when the optional token is enabled; otherwise writes are unauthenticated.",
+    "content": {
+      "application/json": {
+        "schema": { "$ref": "./schemas/common.json#/Error" }
+      }
+    }
   }
 }

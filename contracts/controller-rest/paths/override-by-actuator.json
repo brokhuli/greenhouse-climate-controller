@@ -7,6 +7,7 @@
     "operationId": "setOverride",
     "summary": "Force an actuator to a manual state",
     "description": "Creates or replaces the manual override on this actuator (controller spec §10). The forced value is used until the override is cleared or its TTL expires — a timeout so a forgotten override cannot strand the greenhouse. For the per-zone `irrigation_valve`, `zone_id` selects the zone. A `level_pct` outside 0–100 (or a non-null `level_pct` on a pure on/off actuator) is rejected with 422. The override cannot suppress a safety interlock.",
+    "security": [{}, { "bearerAuth": [] }],
     "requestBody": {
       "required": true,
       "content": {
@@ -24,6 +25,7 @@
           }
         }
       },
+      "401": { "$ref": "../components/responses.json#/Unauthorized" },
       "404": { "$ref": "../components/responses.json#/NotFound" },
       "422": { "$ref": "../components/responses.json#/ValidationFailed" }
     }
@@ -32,9 +34,11 @@
     "operationId": "clearOverride",
     "summary": "Clear an actuator's manual override",
     "description": "Removes the override and returns the actuator to its control loop (controller spec §10). For the per-zone `irrigation_valve`, pass `zone_id` to select the zone.",
+    "security": [{}, { "bearerAuth": [] }],
     "parameters": [{ "$ref": "../components/parameters.json#/ZoneIdQuery" }],
     "responses": {
       "204": { "description": "Override cleared (or none was active)." },
+      "401": { "$ref": "../components/responses.json#/Unauthorized" },
       "404": { "$ref": "../components/responses.json#/NotFound" }
     }
   }

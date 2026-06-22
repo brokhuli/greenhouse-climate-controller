@@ -3,9 +3,11 @@
 //! Shapes the resolved command to what real hardware can do: slew/ramp **rate limits** (motors and
 //! fans can't move instantly) and **min on/off / min-open dwell** (anti short-cycle). Applied last,
 //! so they shape whatever produced the command — loop, override, or interlock. One safety carve-out
-//! ([safety §3]): a *rate* limit still applies to an interlock move (it's a physical maximum), but
-//! a *dwell* constraint is **waived** for an actuator the interlock forced toward a safe state, so
-//! anti-short-cycle never delays the `P1-REL-1` one-tick safety response.
+//! ([safety §3/§4]): a *rate* limit still applies to a safety move (it's a physical maximum), but a
+//! *dwell* constraint is **waived** for an actuator forced toward a safe state — by an interlock, an
+//! actuator-health disable, or a control loop failing it closed on sensor loss (CO₂ injector /
+//! irrigation valve) — so anti-short-cycle never delays the safe response (the `P1-REL-1` one-tick
+//! interlock guarantee, and "never enrich/water blind" for fail-closed loops, [sensing §4]).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -52,8 +54,8 @@ impl ConstraintState {
         self.constraints.get(&actuator).cloned().unwrap_or_default()
     }
 
-    /// Shape every command in `cmd`. Dwell is waived for actuators in `waive_dwell` (those an
-    /// interlock or actuator-health disable forced toward safe).
+    /// Shape every command in `cmd`. Dwell is waived for actuators in `waive_dwell` (those forced
+    /// toward safe by an interlock, an actuator-health disable, or a loop-level fail-closed move).
     pub fn apply(&mut self, cmd: &mut Commands, waive_dwell: &BTreeSet<ActuatorId>) {
         for id in cmd.ids() {
             let desired = cmd.get(&id);

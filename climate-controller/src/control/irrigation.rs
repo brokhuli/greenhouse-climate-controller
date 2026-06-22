@@ -7,6 +7,8 @@
 //! independent — a fault or cycle in one never blocks another. A faulted soil sensor fails the
 //! valve closed (never water blind).
 
+use std::collections::BTreeSet;
+
 use crate::clock::Clock;
 use crate::config::Zone;
 use crate::domain::Slug;
@@ -40,18 +42,34 @@ impl IrrigationLoop {
         self.last_cycle_end_tick
     }
 
-    /// Compute the desired valve level for this zone and write it into `cmd`.
-    pub fn run(&mut self, zone: &Zone, soil: Option<f64>, clock: &Clock, cmd: &mut Commands) {
-        let level = self.compute(zone, soil, clock);
+    /// Compute the desired valve level for this zone and write it into `cmd`. A faulted soil sensor
+    /// fails the valve closed and records it in `fail_closed`, so the constraints stage waives the
+    /// valve's minimum-open dwell on the safe move (never water blind, [sensing §4]).
+    pub fn run(
+        &mut self,
+        zone: &Zone,
+        soil: Option<f64>,
+        clock: &Clock,
+        cmd: &mut Commands,
+        fail_closed: &mut BTreeSet<ActuatorId>,
+    ) {
+        let level = self.compute(zone, soil, clock, fail_closed);
         cmd.set(&ActuatorId::Valve(self.zone_id.clone()), level);
     }
 
-    fn compute(&mut self, zone: &Zone, soil: Option<f64>, clock: &Clock) -> f64 {
+    fn compute(
+        &mut self,
+        zone: &Zone,
+        soil: Option<f64>,
+        clock: &Clock,
+        fail_closed: &mut BTreeSet<ActuatorId>,
+    ) -> f64 {
         let soil = match soil {
             Some(s) => s,
             None => {
                 // No trusted soil reading: fail closed (never water blind).
                 self.irrigating = false;
+                fail_closed.insert(ActuatorId::Valve(self.zone_id.clone()));
                 return 0.0;
             }
         };
@@ -117,23 +135,25 @@ schedule = "06:00"
         let z = zone();
         let mut loop_ = IrrigationLoop::new(z.id.clone());
         let mut cmd = Commands::all_off(std::slice::from_ref(&z.id));
+        let mut fc = BTreeSet::new();
 
         // 05:59:59 — scheduled minute not reached: stays off even though dry.
         let before = Clock::starting_at_seconds(6 * 3600 - 1);
-        loop_.run(&z, Some(0.20), &before, &mut cmd);
+        loop_.run(&z, Some(0.20), &before, &mut cmd, &mut fc);
         assert_eq!(valve(&cmd, &z.id), 0.0);
 
         // 06:00:00 exactly, dry → starts.
         let at = Clock::starting_at_seconds(6 * 3600);
-        loop_.run(&z, Some(0.20), &at, &mut cmd);
+        loop_.run(&z, Some(0.20), &at, &mut cmd, &mut fc);
         assert_eq!(valve(&cmd, &z.id), 100.0);
 
         // Keeps running below the high threshold...
-        loop_.run(&z, Some(0.50), &at, &mut cmd);
+        loop_.run(&z, Some(0.50), &at, &mut cmd, &mut fc);
         assert_eq!(valve(&cmd, &z.id), 100.0);
         // ...and stops at/above it.
-        loop_.run(&z, Some(0.56), &at, &mut cmd);
+        loop_.run(&z, Some(0.56), &at, &mut cmd, &mut fc);
         assert_eq!(valve(&cmd, &z.id), 0.0);
+        assert!(fc.is_empty(), "normal control never marks fail-closed");
     }
 
     #[test]
@@ -142,18 +162,23 @@ schedule = "06:00"
         let mut loop_ = IrrigationLoop::new(z.id.clone());
         let mut cmd = Commands::all_off(std::slice::from_ref(&z.id));
         let noon = Clock::starting_at_seconds(12 * 3600);
-        loop_.run(&z, Some(0.10), &noon, &mut cmd);
+        loop_.run(&z, Some(0.10), &noon, &mut cmd, &mut BTreeSet::new());
         assert_eq!(valve(&cmd, &z.id), 0.0);
     }
 
     #[test]
-    fn soil_fault_fails_closed() {
+    fn soil_fault_fails_closed_and_waives_dwell() {
         let z = zone();
         let mut loop_ = IrrigationLoop::new(z.id.clone());
         let mut cmd = Commands::all_off(std::slice::from_ref(&z.id));
         let at = Clock::starting_at_seconds(6 * 3600);
-        loop_.run(&z, Some(0.20), &at, &mut cmd); // running
-        loop_.run(&z, None, &at, &mut cmd); // sensor lost
+        loop_.run(&z, Some(0.20), &at, &mut cmd, &mut BTreeSet::new()); // running
+        let mut fc = BTreeSet::new();
+        loop_.run(&z, None, &at, &mut cmd, &mut fc); // sensor lost
         assert_eq!(valve(&cmd, &z.id), 0.0);
+        assert!(
+            fc.contains(&ActuatorId::Valve(z.id.clone())),
+            "a faulted soil sensor must mark the valve fail-closed so min-open dwell is waived"
+        );
     }
 }

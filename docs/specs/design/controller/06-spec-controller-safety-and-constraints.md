@@ -125,11 +125,16 @@ Two consequences fall out of this order:
   maximum slew, not instantaneously. Safety chooses the *target*; constraints govern
   the *approach rate*. The distinction is load-bearing: a constraint may shape **how
   fast** a safety transition moves (slew/ramp) but may **never block or delay** a move
-  *toward* an interlock's safe state. In particular the **min on-time / off-time dwell
-  constraints are waived** for an interlock-commanded transition — a heater
+  *toward* a safe state. In particular the **min on-time / off-time dwell
+  constraints are waived** for such a transition — a heater
   de-energizes the tick a critical-temperature interlock fires even if its min-on
   window has not elapsed, because honoring an anti-short-cycle timer over a
-  crop-protection interlock would defeat the `P1-REL-1` one-tick guarantee.
+  crop-protection interlock would defeat the `P1-REL-1` one-tick guarantee. The same waiver
+  applies to a move toward safe driven by an **actuator-health disable** ([§5](#5-actuator-health-monitoring))
+  or by a **control loop failing an actuator closed** because its governing sensor became untrusted
+  (the CO₂ injector and irrigation valve fail closed — [sensing §4](./04-spec-controller-sensing.md#4-fault-detection-non-temperature-sensors)):
+  dwell must not hold a blind injector or valve on past the fault, or "never enrich/water blind"
+  would be violated for the length of the dwell.
 
 ---
 
@@ -153,11 +158,14 @@ tuning meaningless.
 
 One carve-out for safety: the **min on-time / off-time** and **valve minimum open
 time** rows are anti-short-cycle protections for *normal control* — they must not act
-as a brake on a safety transition. A rate limit (slew, ramp) still applies to an
-interlock-commanded move because it reflects a physical maximum; a *dwell* constraint
-(min on/off) is **waived** when the move is toward an interlock's safe state
-([§3](#3-priority--ordering-model)). Constraints may govern the approach rate of a
-safety response but never *block or delay* it.
+as a brake on a safety transition. A rate limit (slew, ramp) still applies to a
+safety-commanded move because it reflects a physical maximum; a *dwell* constraint
+(min on/off) is **waived** when the move is toward a safe state — whether forced by an
+interlock ([§3](#3-priority--ordering-model)), by an
+[actuator-health disable](#5-actuator-health-monitoring), or by a control loop failing an
+actuator closed on sensor loss (the CO₂ injector and irrigation valve fail closed —
+[sensing §4](./04-spec-controller-sensing.md#4-fault-detection-non-temperature-sensors)).
+Constraints may govern the approach rate of a safety response but never *block or delay* it.
 
 ---
 
