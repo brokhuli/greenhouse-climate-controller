@@ -223,13 +223,36 @@ struct SystemStateMsg<'a> {
     simulation: Option<SimulationBlock>,
 }
 
+/// Identity of an active fault for edge-triggered publishing: `(component, zone_id, fault_type)`.
+/// A persistent condition keeps the same key tick-to-tick, so its event is published once on the
+/// rising edge while the active fault still rides every tick in the retained system-state frame.
+pub type FaultKey = (String, Option<String>, FaultType);
+
+/// The key identifying one fault.
+fn fault_key(fault: &Fault) -> FaultKey {
+    (
+        fault.component.clone(),
+        fault.zone_id.as_ref().map(|z| z.as_str().to_string()),
+        fault.fault_type,
+    )
+}
+
+/// The set of faults active in this snapshot — the publisher carries this forward to distinguish a
+/// newly-occurring fault (publish an event) from one that simply persists.
+pub fn active_fault_keys(snapshot: &Snapshot) -> std::collections::BTreeSet<FaultKey> {
+    snapshot.faults.iter().map(fault_key).collect()
+}
+
 /// Build every telemetry frame for a tick: per-metric sensor readings, per-actuator state, fault
-/// events, and the retained consolidated system-state.
+/// events, and the retained consolidated system-state. A `gh/{id}/fault` event is emitted only for
+/// faults **not** in `previously_active` ([interfaces §2] — events publish "as they occur"; active
+/// faults live in the retained system-state). Pass an empty set to emit every active fault.
 pub fn telemetry_frames(
     snapshot: &Snapshot,
     greenhouse_id: &str,
     base: DateTime<Utc>,
     time_scale: f64,
+    previously_active: &std::collections::BTreeSet<FaultKey>,
 ) -> Vec<PublishFrame> {
     let ts = ts(base, snapshot.sim_seconds);
     let mut frames = Vec::new();
@@ -303,8 +326,11 @@ pub fn telemetry_frames(
         ));
     }
 
-    // ── Fault events (gh/{id}/fault). ──
+    // ── Fault events (gh/{id}/fault) — only on the rising edge (newly-active faults). ──
     for fault in &snapshot.faults {
+        if previously_active.contains(&fault_key(fault)) {
+            continue;
+        }
         let msg = FaultEventMsg {
             schema_version: SCHEMA_VERSION,
             greenhouse_id,
@@ -496,7 +522,7 @@ mod tests {
     #[test]
     fn builds_expected_frame_topics() {
         let snap = snapshot();
-        let frames = telemetry_frames(&snap, "gh-a", epoch(), 1.0);
+        let frames = telemetry_frames(&snap, "gh-a", epoch(), 1.0, &Default::default());
         // 7 house actuators + retained state are always present.
         assert!(
             frames
@@ -514,6 +540,35 @@ mod tests {
                 .iter()
                 .any(|f| f.topic == "gh/gh-a/sensor/temperature")
         );
+    }
+
+    #[test]
+    fn fault_events_fire_only_on_rising_edge() {
+        let mut snap = snapshot();
+        snap.faults.push(Fault::new(
+            "co2",
+            FaultType::Co2Ceiling,
+            Severity::Alarm,
+            "ceiling exceeded",
+            "vents open",
+        ));
+
+        // Rising edge (no prior active faults) → the event is published.
+        let frames = telemetry_frames(&snap, "gh-a", epoch(), 1.0, &Default::default());
+        assert!(
+            frames.iter().any(|f| f.topic == "gh/gh-a/fault"),
+            "a newly-active fault publishes its event"
+        );
+
+        // Same fault still active next tick → no duplicate event...
+        let prev = active_fault_keys(&snap);
+        let frames = telemetry_frames(&snap, "gh-a", epoch(), 1.0, &prev);
+        assert!(
+            !frames.iter().any(|f| f.topic == "gh/gh-a/fault"),
+            "a persisting fault is not re-emitted as a new event"
+        );
+        // ...but it still rides the retained system-state frame every tick.
+        assert!(frames.iter().any(|f| f.topic == "gh/gh-a/state"));
     }
 
     #[test]

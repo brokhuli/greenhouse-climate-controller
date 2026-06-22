@@ -19,7 +19,7 @@ use axum::routing::{get, put};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::config::{Setpoints, Zone};
+use crate::config::{Bounds, Setpoints, Zone};
 use crate::domain::{Actuator, Slug, TimeOfDay};
 use crate::faults::{FaultType, Mode, Severity};
 use crate::hal::ActuatorId;
@@ -297,6 +297,36 @@ pub struct ZoneQuery {
 
 // ───────────────────────────── app state + router ─────────────────────────────
 
+/// Per-metric plausibility bounds for rejecting implausible sensor injections (`422`, per the sim
+/// contract). Immutable startup config, so carried here rather than in the per-tick [`RuntimeView`].
+#[derive(Debug, Clone, Copy)]
+pub struct PlausibilityBounds {
+    /// Air temperature (°C).
+    pub temperature: Bounds,
+    /// Relative humidity (%RH).
+    pub humidity: Bounds,
+    /// CO₂ (ppm).
+    pub co2: Bounds,
+    /// PAR (µmol·m⁻²·s⁻¹).
+    pub par: Bounds,
+    /// Soil moisture (VWC).
+    pub soil_moisture: Bounds,
+}
+
+impl PlausibilityBounds {
+    /// The plausibility bound for an injectable metric (all injectable metrics have one).
+    fn for_metric(&self, metric: &str) -> Option<Bounds> {
+        match metric {
+            "temperature" => Some(self.temperature),
+            "humidity" => Some(self.humidity),
+            "co2" => Some(self.co2),
+            "par" => Some(self.par),
+            "soil_moisture" => Some(self.soil_moisture),
+            _ => None,
+        }
+    }
+}
+
 /// Shared REST state: the controller identity, the command channel, and the read-model receiver.
 #[derive(Clone)]
 pub struct AppState {
@@ -308,6 +338,8 @@ pub struct AppState {
     pub view: tokio::sync::watch::Receiver<RuntimeView>,
     /// Simulated-clock epoch for timestamps.
     pub base: DateTime<Utc>,
+    /// Per-metric plausibility bounds for sensor-injection validation.
+    pub bounds: PlausibilityBounds,
 }
 
 impl AppState {
@@ -376,6 +408,41 @@ fn unprocessable(violation: FieldViolation) -> Response {
 
 fn ok<T: Serialize>(body: T) -> Response {
     (StatusCode::OK, Json(body)).into_response()
+}
+
+// ───────────────────────────── shared write validation ─────────────────────────────
+
+/// Reject an explicit zero TTL (`minimum: 1` in the override/injection contracts). An absent TTL
+/// (`None` → use the configured default) is allowed.
+fn ttl_violation(ttl: Option<u64>) -> Option<FieldViolation> {
+    (ttl == Some(0)).then(|| FieldViolation::new("ttl_secs", "minimum 1", serde_json::json!(0)))
+}
+
+/// Reject a non-finite or out-of-plausibility sensor-injection value (controller-enforced 422, per
+/// the sim contract). Every injectable metric has a plausibility bound; the soil-moisture bound also
+/// enforces its `0..=1` VWC range.
+fn injection_value_violation(
+    metric: &str,
+    value: f64,
+    bounds: &PlausibilityBounds,
+) -> Option<FieldViolation> {
+    if !value.is_finite() {
+        return Some(FieldViolation::new(
+            "value",
+            "must be finite",
+            serde_json::Value::Null,
+        ));
+    }
+    if let Some(b) = bounds.for_metric(metric)
+        && !b.contains(value)
+    {
+        return Some(FieldViolation::new(
+            "value",
+            format!("[{}, {}]", b.min, b.max),
+            serde_json::json!(value),
+        ));
+    }
+    None
 }
 
 // ───────────────────────────── setpoints ─────────────────────────────
@@ -560,6 +627,10 @@ async fn put_override(
         return not_found("unknown actuator");
     };
 
+    if let Some(v) = ttl_violation(body.ttl_secs) {
+        return unprocessable(v);
+    }
+
     // Validate the output state against the actuator kind.
     if is_on_off(act) && body.state.level_pct.is_some() {
         return unprocessable(FieldViolation::new(
@@ -678,12 +749,12 @@ async fn put_injection(
     if !is_injectable_metric(&metric) {
         return not_found("unknown metric");
     }
-    if !body.value.is_finite() {
-        return unprocessable(FieldViolation::new(
-            "value",
-            "must be finite",
-            serde_json::Value::Null,
-        ));
+    if let Some(v) = ttl_violation(body.ttl_secs) {
+        return unprocessable(v);
+    }
+    // Finite + in-plausibility values only (controller-enforced 422, per the sim contract).
+    if let Some(v) = injection_value_violation(&metric, body.value, &s.bounds) {
+        return unprocessable(v);
     }
     let view = s.view();
     // probe_index is temperature-only and must be in range.
@@ -717,13 +788,6 @@ async fn put_injection(
                 "zone_id",
                 "unknown zone",
                 serde_json::json!(zone.as_str()),
-            ));
-        }
-        if !(0.0..=1.0).contains(&body.value) {
-            return unprocessable(FieldViolation::new(
-                "value",
-                "0..=1",
-                serde_json::json!(body.value),
             ));
         }
         Some(zone)
@@ -946,5 +1010,48 @@ dli_target_mol = 20.0
             assert!(parse_actuator(name).is_some(), "{name}");
         }
         assert!(parse_actuator("bogus").is_none());
+    }
+
+    fn bounds() -> PlausibilityBounds {
+        let s = crate::config::Sensing::default();
+        PlausibilityBounds {
+            temperature: s.temperature_bounds,
+            humidity: s.humidity_bounds,
+            co2: s.co2_bounds,
+            par: s.par_bounds,
+            soil_moisture: s.soil_moisture_bounds,
+        }
+    }
+
+    #[test]
+    fn zero_ttl_is_rejected_but_absent_is_allowed() {
+        assert!(ttl_violation(Some(0)).is_some());
+        assert!(ttl_violation(Some(1)).is_none());
+        assert!(ttl_violation(None).is_none(), "None means use the default");
+    }
+
+    #[test]
+    fn injection_value_plausibility_is_enforced_per_metric() {
+        let b = bounds();
+        // In-range values (including extremes that trip interlocks) are accepted.
+        assert!(injection_value_violation("temperature", 45.0, &b).is_none());
+        assert!(injection_value_violation("humidity", 50.0, &b).is_none());
+        assert!(injection_value_violation("soil_moisture", 0.3, &b).is_none());
+
+        // Out-of-plausibility values are rejected on the `value` field.
+        for (metric, value) in [
+            ("temperature", 1.0e6),
+            ("humidity", 500.0),
+            ("co2", -10.0),
+            ("par", 1.0e9),
+            ("soil_moisture", 2.0),
+        ] {
+            let v = injection_value_violation(metric, value, &b)
+                .unwrap_or_else(|| panic!("{metric}={value} should be rejected"));
+            assert_eq!(v.field, "value");
+        }
+
+        // Non-finite is rejected too.
+        assert!(injection_value_violation("temperature", f64::NAN, &b).is_some());
     }
 }

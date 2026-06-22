@@ -11,8 +11,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain::Slug;
 
-/// Why a fault was raised. Variant names match the MQTT `fault_type` enum.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// Why a fault was raised. Variant names match the MQTT `fault_type` enum. (`Ord`/`Hash` let a
+/// fault be keyed in a set for edge-triggered fault-event publishing, [telemetry].)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FaultType {
     /// A sensor reading is frozen.

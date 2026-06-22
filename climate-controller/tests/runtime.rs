@@ -24,7 +24,7 @@ async fn publishing_never_blocks_the_tick_when_broker_is_down() {
 
     // Nothing is listening on port 1 — the publisher's event loop retries on its own task while the
     // control loop keeps ticking and publishing through the bounded, non-blocking buffer.
-    let publisher = Publisher::connect("mqtt://127.0.0.1:1", "gh-a");
+    let mut publisher = Publisher::connect("mqtt://127.0.0.1:1", "gh-a");
 
     let start = Instant::now();
     for _ in 0..300 {

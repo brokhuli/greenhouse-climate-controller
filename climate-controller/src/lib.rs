@@ -6,8 +6,9 @@
 //! and [safety guardrails](safety), and drives the HAL — all on a deterministic [virtual clock](clock).
 //! The [configuration layer](config) is loaded and validated from TOML at startup.
 //!
-//! This crate currently implements the **deterministic pipeline core**; the MQTT publisher, REST
-//! server, and async scheduler are the next slice.
+//! The crate wires the **deterministic pipeline core** to its I/O edges: the [MQTT publisher](mqtt)
+//! (telemetry out), the [REST server](rest) (the sole inbound write path), and the
+//! [async runtime/scheduler](runtime) that drives the tick loop.
 
 pub mod clock;
 pub mod config;

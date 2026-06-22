@@ -182,7 +182,8 @@ fn frame_value(frames: &[climate_controller::telemetry::PublishFrame], topic: &s
 #[test]
 fn mqtt_frames_carry_required_schema_fields() {
     let snap = snapshot_with_fault();
-    let frames = telemetry_frames(&snap, "gh-a", epoch(), 1.0);
+    // Empty "previously active" set → every active fault publishes its event (rising edge).
+    let frames = telemetry_frames(&snap, "gh-a", epoch(), 1.0, &Default::default());
 
     // Envelope (RFC-007) — present on every message.
     let envelope = ["schema_version", "greenhouse_id", "zone_id", "ts"];

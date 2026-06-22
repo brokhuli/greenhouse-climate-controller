@@ -18,8 +18,8 @@ use crate::domain::Slug;
 use crate::hal::{ActuatorId, SensorChannel, SimControl, SimulatedHal};
 use crate::pipeline::Pipeline;
 use crate::rest::{
-    AppState, Command, FaultSummaryDto, HealthDto, InjectionKey, OverrideDto, RuntimeView,
-    SensorInjectionDto, ZoneStatusDto, router,
+    AppState, Command, FaultSummaryDto, HealthDto, InjectionKey, OverrideDto, PlausibilityBounds,
+    RuntimeView, SensorInjectionDto, ZoneStatusDto, router,
 };
 use crate::state::Snapshot;
 use crate::telemetry::{OutputState, actuator_name, epoch, instant_ts};
@@ -28,6 +28,12 @@ use crate::telemetry::{OutputState, actuator_name, epoch, instant_ts};
 const TICK_PERIOD_MS: f64 = 1000.0;
 /// Latched-command channel capacity.
 const COMMAND_CAP: usize = 64;
+
+/// The wall-clock interval between ticks at a given time-scale: `tick_period / scale`, never below
+/// 1 ms. Determinism is preserved because only the cadence changes, not the per-tick step.
+fn tick_interval(scale: f64) -> std::time::Duration {
+    std::time::Duration::from_millis((TICK_PERIOD_MS / scale).round().max(1.0) as u64)
+}
 
 /// Bookkeeping for an active sensor injection, for the REST DTO listing.
 struct InjectionRecord {
@@ -44,6 +50,13 @@ pub async fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let override_timeout = config.safety.override_timeout_secs;
     let injection_default_ttl = config.simulation.sensor_injection_timeout_secs;
     let probe_count = config.sensing.probe_count.max(1);
+    let plausibility = PlausibilityBounds {
+        temperature: config.sensing.temperature_bounds,
+        humidity: config.sensing.humidity_bounds,
+        co2: config.sensing.co2_bounds,
+        par: config.sensing.par_bounds,
+        soil_moisture: config.sensing.soil_moisture_bounds,
+    };
     let base = epoch();
 
     let mut time_scale = config.simulation.time_scale;
@@ -68,7 +81,7 @@ pub async fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let view0 = build_view(&pipeline, &snapshot, &meta, &injections);
     let (view_tx, view_rx) = watch::channel(view0);
 
-    let publisher = crate::mqtt::Publisher::connect(&broker_url, &greenhouse_id);
+    let mut publisher = crate::mqtt::Publisher::connect(&broker_url, &greenhouse_id);
     publisher.publish_snapshot(&snapshot, time_scale);
 
     // Serve REST on its own task.
@@ -77,6 +90,7 @@ pub async fn run(config: Config) -> Result<(), Box<dyn Error>> {
         tx: cmd_tx,
         view: view_rx,
         base,
+        bounds: plausibility,
     };
     let listener = TcpListener::bind(&bind_addr).await?;
     tracing::info!(%greenhouse_id, "REST listening on {bind_addr}; MQTT → {broker_url}");
@@ -86,12 +100,39 @@ pub async fn run(config: Config) -> Result<(), Box<dyn Error>> {
         }
     });
 
-    // The control loop.
+    // The control loop. The tick cadence is `tick_period / time_scale`; a time-scale change is
+    // accepted into scheduler state **immediately** — the wait deadline is recomputed from the last
+    // tick — rather than only taking effect after the current (possibly slow) interval elapses
+    // ([interfaces §3]).
+    let mut last_tick = tokio::time::Instant::now();
+    let mut next_tick = last_tick + tick_interval(time_scale);
     loop {
-        let interval_ms = (TICK_PERIOD_MS / time_scale).round().max(1.0) as u64;
-        tokio::time::sleep(std::time::Duration::from_millis(interval_ms)).await;
+        // Wait until the next tick is due, applying latched writes as they arrive. A write that
+        // changes the time-scale recomputes the deadline, so a speed-up takes effect now.
+        loop {
+            tokio::select! {
+                biased;
+                () = tokio::time::sleep_until(next_tick) => break,
+                Some(cmd) = cmd_rx.recv() => {
+                    let prev_scale = time_scale;
+                    apply_command(
+                        cmd,
+                        &mut pipeline,
+                        &mut time_scale,
+                        &mut time_scale_updated_at_seconds,
+                        &mut injections,
+                        injection_default_ttl,
+                        probe_count,
+                    );
+                    if time_scale != prev_scale {
+                        next_tick = last_tick + tick_interval(time_scale);
+                    }
+                }
+            }
+        }
 
-        // Drain latched writes, applying each before the tick runs.
+        // Drain any remaining latched writes that arrived right at the tick boundary, so every
+        // queued write is applied before this tick runs (latched, not mid-tick).
         while let Ok(cmd) = cmd_rx.try_recv() {
             apply_command(
                 cmd,
@@ -106,6 +147,8 @@ pub async fn run(config: Config) -> Result<(), Box<dyn Error>> {
         prune_injections(&mut injections, &mut pipeline, probe_count);
 
         let snapshot = pipeline.tick();
+        last_tick = tokio::time::Instant::now();
+        next_tick = last_tick + tick_interval(time_scale);
         let meta = ViewMeta {
             time_scale,
             time_scale_updated_at_seconds,
@@ -333,5 +376,57 @@ fn build_view(
         override_timeout_secs: meta.override_timeout,
         injection_default_ttl_secs: meta.injection_default_ttl,
         probe_count: meta.probe_count,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tick_interval_scales_inversely_with_speed() {
+        use std::time::Duration;
+        assert_eq!(tick_interval(1.0), Duration::from_millis(1000));
+        assert_eq!(tick_interval(2.0), Duration::from_millis(500));
+        assert_eq!(tick_interval(0.5), Duration::from_millis(2000));
+        assert_eq!(tick_interval(4.0), Duration::from_millis(250));
+        // Never zero, even at absurd speeds.
+        assert!(tick_interval(100_000.0) >= Duration::from_millis(1));
+    }
+
+    /// The control loop's scheduling primitive: a time-scale change recomputes the tick deadline
+    /// from the last tick, so a speed-up arriving mid-wait fires the next tick on the *new* cadence
+    /// immediately instead of waiting out the old slow interval ([interfaces §3]).
+    #[tokio::test(start_paused = true)]
+    async fn time_scale_speedup_shortens_the_pending_wait() {
+        let (tx, mut rx) = mpsc::channel::<f64>(4);
+        let last_tick = tokio::time::Instant::now();
+        let mut next_tick = last_tick + tick_interval(0.5); // 2000 ms at 0.5×
+
+        // 100 ms into the (would-be 2000 ms) wait, a speed-up to 4× arrives.
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            let _ = tx.send(4.0).await;
+        });
+
+        let fired_after;
+        loop {
+            tokio::select! {
+                biased;
+                () = tokio::time::sleep_until(next_tick) => {
+                    fired_after = last_tick.elapsed();
+                    break;
+                }
+                Some(scale) = rx.recv() => {
+                    next_tick = last_tick + tick_interval(scale); // recompute from the last tick
+                }
+            }
+        }
+
+        // 4× → 250 ms interval; the tick fires ~250 ms in, far short of the original 2000 ms.
+        assert!(
+            fired_after < std::time::Duration::from_millis(500),
+            "tick fired after {fired_after:?}; a speed-up must not wait out the old interval"
+        );
     }
 }

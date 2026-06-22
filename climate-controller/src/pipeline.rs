@@ -67,20 +67,24 @@ impl<H: Hal> Pipeline<H> {
 
         let mut faults = Vec::new();
 
-        // ① fuse + fault-detect (sensor side), then actuator-health (output side).
+        // ① fuse + fault-detect (sensor side).
         let trusted = self
             .sensing
             .condition(&raw, &self.config.sensing, &mut faults);
+
+        // ② resolve the active setpoints for this tick — needed by both the actuator-health
+        // no-response detection (below) and the control loops.
+        let resolved = control::resolve(&self.config.setpoints, &self.clock, trusted.temperature);
+
+        // ① (output side) actuator-health monitoring against last tick's command + this readback.
         self.health.monitor(
             self.prev_commanded.as_ref(),
             &observed_before,
             &trusted,
+            &resolved,
             &self.config,
             &mut faults,
         );
-
-        // ② resolve the active setpoints for this tick.
-        let resolved = control::resolve(&self.config.setpoints, &self.clock, trusted.temperature);
 
         // ③ control loops → desired actuator levels.
         let mut cmd = self
@@ -95,6 +99,13 @@ impl<H: Hal> Pipeline<H> {
         let mut forced =
             self.interlocks
                 .apply(&trusted, &self.config, &self.clock, &mut cmd, &mut faults);
+
+        // The command the controller *intended* (loops → override → interlocks), captured before
+        // the actuator-health fail-safe force overwrites disabled actuators. Used as the health
+        // comparison baseline below so a forced-off actuator keeps being judged against what was
+        // actually asked of it — otherwise comparing observed-off to a forced-off command would
+        // make a stuck-off/no-response actuator look healthy and the disable would flap.
+        let intended = cmd.clone();
 
         // Actuator-health disables: force the actuator off, waiving dwell like an interlock move.
         for id in self.health.disabled() {
@@ -123,7 +134,14 @@ impl<H: Hal> Pipeline<H> {
             mode,
         };
 
-        self.prev_commanded = Some(cmd);
+        // Next tick's health baseline: the command actually sent (so healthy/slewing actuators are
+        // judged against what they were given), except disabled actuators, which are judged against
+        // the intended command so their divergence persists and the disable stays sticky ([safety §5]).
+        let mut prev = cmd;
+        for id in self.health.disabled() {
+            prev.set(id, intended.get(id));
+        }
+        self.prev_commanded = Some(prev);
         self.clock.advance();
         snapshot
     }
@@ -184,7 +202,9 @@ impl<H: Hal> Pipeline<H> {
 mod tests {
     use super::*;
     use crate::config::Config;
-    use crate::hal::SimulatedHal;
+    use crate::domain::Actuator;
+    use crate::faults::FaultType;
+    use crate::hal::{ActuatorFaultKind, ActuatorId, SimControl, SimulatedHal};
 
     fn config() -> Config {
         Config::load(concat!(
@@ -213,6 +233,44 @@ mod tests {
         // No injected faults → nominal operation.
         assert!(snap.healthy(), "unexpected faults: {:?}", snap.faults);
         assert_eq!(snap.mode, Mode::Normal);
+    }
+
+    #[test]
+    fn actuator_health_disable_is_sticky() {
+        // Regression for the "disables flap" bug: once a stuck-off actuator is disabled, the
+        // disable + alarm must persist every tick (compared against the *intended* command), not
+        // recover the next tick because the controller forced it off and then compared off-to-off.
+        let mut p = pipeline();
+        let heater = ActuatorId::House(Actuator::Heater);
+
+        // Force the heater on every tick (intended = 100) and jam it stuck-off.
+        let clock = p.clock().clone();
+        p.overrides_mut()
+            .set(heater.clone(), 100.0, &clock, 100_000);
+        p.hal_mut()
+            .inject_actuator_fault(heater.clone(), ActuatorFaultKind::StuckOff, None);
+
+        let window = p.config().sensing.no_response_window_ticks;
+        let mut detected = false;
+        for _ in 0..(window + 25) {
+            let snap = p.tick();
+            let stuck_now = snap
+                .faults
+                .iter()
+                .any(|f| f.fault_type == FaultType::ActuatorStuck);
+            if detected {
+                assert!(
+                    stuck_now,
+                    "actuator_stuck must stay asserted once detected (sticky, not flapping)"
+                );
+                assert!(
+                    snap.commanded.get(&heater) == 0.0,
+                    "a disabled actuator stays forced off"
+                );
+            }
+            detected |= stuck_now;
+        }
+        assert!(detected, "a stuck-off heater should have been detected");
     }
 
     #[test]

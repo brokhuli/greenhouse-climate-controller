@@ -16,3 +16,7 @@ tokio = { version = "1.52.3", features = ["full"] }
 toml = "1.1.2"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
+
+[dev-dependencies]
+# `test-util` enables tokio's paused-clock test runtime for deterministic scheduling tests.
+tokio = { version = "1.52.3", features = ["test-util"] }

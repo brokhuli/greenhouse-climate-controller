@@ -8,11 +8,13 @@
 //! `gh/{id}/state` snapshot always carries the latest truth, re-priming any (re)connecting
 //! subscriber.
 
+use std::collections::BTreeSet;
+
 use chrono::{DateTime, Utc};
 use rumqttc::{AsyncClient, MqttOptions, QoS};
 
 use crate::state::Snapshot;
-use crate::telemetry::{epoch, telemetry_frames};
+use crate::telemetry::{FaultKey, active_fault_keys, epoch, telemetry_frames};
 
 /// Bounded outbound request buffer. When full (broker unreachable), `try_publish` errors and the
 /// frame is dropped — never queued unboundedly.
@@ -27,6 +29,9 @@ pub struct Publisher {
     client: AsyncClient,
     greenhouse_id: String,
     base: DateTime<Utc>,
+    /// Faults active as of the last publish, so a persisting fault isn't re-emitted as a new event
+    /// every tick ([interfaces §2]).
+    prev_faults: BTreeSet<FaultKey>,
 }
 
 impl Publisher {
@@ -53,13 +58,21 @@ impl Publisher {
             client,
             greenhouse_id: greenhouse_id.to_string(),
             base: epoch(),
+            prev_faults: BTreeSet::new(),
         }
     }
 
     /// Publish all telemetry frames for a committed snapshot. Non-blocking: a frame that cannot be
-    /// enqueued (broker backpressure) is dropped, never awaited.
-    pub fn publish_snapshot(&self, snapshot: &Snapshot, time_scale: f64) {
-        for frame in telemetry_frames(snapshot, &self.greenhouse_id, self.base, time_scale) {
+    /// enqueued (broker backpressure) is dropped, never awaited. Fault events fire only on the
+    /// rising edge; the set of currently-active faults is carried to the next call.
+    pub fn publish_snapshot(&mut self, snapshot: &Snapshot, time_scale: f64) {
+        for frame in telemetry_frames(
+            snapshot,
+            &self.greenhouse_id,
+            self.base,
+            time_scale,
+            &self.prev_faults,
+        ) {
             if let Err(err) =
                 self.client
                     .try_publish(frame.topic, QoS::AtLeastOnce, frame.retain, frame.payload)
@@ -68,6 +81,7 @@ impl Publisher {
                 tracing::trace!("dropping telemetry frame under backpressure: {err}");
             }
         }
+        self.prev_faults = active_fault_keys(snapshot);
     }
 }
 

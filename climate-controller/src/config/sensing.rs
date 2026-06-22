@@ -18,6 +18,10 @@ pub struct Sensing {
     pub probe_disagreement_c: f64,
     /// A reading unchanged for longer than this is flagged stuck (simulated seconds, `P1-REL-3`).
     pub stuck_window_secs: u64,
+    /// Air-temperature plausibility bounds (°C). Temperature fusion uses probe redundancy rather
+    /// than a bound, so this is used only to reject implausible **sensor injections** at the REST
+    /// surface; the envelope is wide enough to still inject past the critical-temperature interlock.
+    pub temperature_bounds: Bounds,
     /// Humidity plausibility bounds (%RH); a reading outside is out-of-range.
     pub humidity_bounds: Bounds,
     /// CO₂ plausibility bounds (ppm).
@@ -39,6 +43,7 @@ impl Default for Sensing {
             probe_count: 3,
             probe_disagreement_c: 2.0,
             stuck_window_secs: 5,
+            temperature_bounds: Bounds::new(-40.0, 100.0),
             humidity_bounds: Bounds::new(0.0, 100.0),
             co2_bounds: Bounds::new(200.0, 5000.0),
             par_bounds: Bounds::new(0.0, 2500.0),
@@ -65,6 +70,8 @@ impl Sensing {
             self.stuck_window_secs,
             1,
         );
+        self.temperature_bounds
+            .validate("sensing.temperature_bounds", violations);
         self.humidity_bounds
             .validate("sensing.humidity_bounds", violations);
         self.co2_bounds.validate("sensing.co2_bounds", violations);
@@ -150,6 +157,18 @@ mod tests {
         assert!(
             v.iter()
                 .any(|x| x.field == "sensing.co2_bounds.min" && x.bound == "must be < max")
+        );
+    }
+
+    #[test]
+    fn inverted_temperature_bounds_are_flagged() {
+        let mut s = Sensing::default();
+        s.temperature_bounds = Bounds::new(60.0, -40.0);
+        let mut v = Vec::new();
+        s.validate(&mut v);
+        assert!(
+            v.iter()
+                .any(|x| x.field == "sensing.temperature_bounds.min")
         );
     }
 

@@ -189,6 +189,7 @@ the maximum usable speed.
 | Temperature probe count | 3 | probes | TMR (`P1-REL-2`) |
 | Probe disagreement threshold | configurable (e.g. 2.0) | °C | Outlier exclusion |
 | Stuck-value window | configurable (e.g. 5) | s | Liveness check (`P1-REL-3`) |
+| Temperature plausibility bound | ~−40–100 | °C | Sensor-injection validation only (fusion uses redundancy, not a bound); wide enough to still inject past the critical-temperature interlock |
 | Humidity plausibility bound | 0–100 | % RH | Out-of-range |
 | CO₂ plausibility bound | ~200–5000 | ppm | Out-of-range |
 | Soil moisture bound | 0–1 | VWC | Out-of-range |
