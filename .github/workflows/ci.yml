@@ -1,0 +1,66 @@
+name: CI
+
+# Clean-environment gate (RFC-010 / spec-verification.md §6). Re-runs, away from a
+# developer's machine, the same gates the local .githooks/pre-commit hook fires —
+# the Rust gate and the contract-validation harness. Per-phase gates (Go/Python/
+# frontend/load) and coverage enforcement land with the phases they verify.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    name: Rust gate (climate-controller)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: climate-controller
+    steps:
+      - uses: actions/checkout@v4
+
+      # rustup (preinstalled on ubuntu-latest) honors climate-controller/rust-toolchain.toml,
+      # which pins channel 1.96.0 with the rustfmt + clippy components — no setup action needed.
+      - name: Cache cargo registry and build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            climate-controller/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('climate-controller/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Lint
+        run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: Typecheck
+        run: cargo check --all-targets
+      - name: Test
+        run: cargo test
+
+  contracts:
+    name: Contract conformance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install harness dependencies
+        run: npm ci
+      - name: Validate schemas + fixtures
+        run: npm run validate:contracts

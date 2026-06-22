@@ -6,6 +6,43 @@ A running log of decisions about the local development environment, tooling, and
 
 ---
 
+## 2026-06-22 — CI platform: GitHub Actions (clean-environment gate)
+
+**Decision:** Adopt **GitHub Actions** as the CI platform and wire a minimal v1 workflow
+([`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)) that re-runs, on push to `main` and on
+every PR, the two gates already defined locally: the **Rust gate** (`cargo fmt --check` / `clippy -D
+warnings` / `check` / `test`, in `climate-controller/`) and the **contract harness** (`npm ci && npm
+run validate:contracts`). Two parallel jobs on `ubuntu-latest`. This closes the deferred outer loop in
+[RFC-010](./request-for-comments.md#rfc-010-verification--continuous-integration-strategy) and the
+CI half of the original backlog item.
+
+**Why:**
+- The gates ran only locally via [`.githooks/pre-commit`](../../.githooks/pre-commit), which is opt-in
+  (`git config core.hooksPath .githooks` does not travel with a clone), `--no-verify`-bypassable, and
+  staged-path-scoped — so nothing guaranteed they ran on a clean checkout. CI makes that enforcement
+  real.
+- Phase 1 is complete and green (a clean baseline to lock in) and Phase 2 (Go) is next — the point at
+  which a clean-environment runner for the cross-component contract harness starts to matter.
+- GitHub Actions needs no infrastructure to stand up and is free at this scale; choosing it is what
+  satisfied RFC-010's "until a CI platform is adopted" condition.
+
+**Consequences / notes:**
+- **First-party actions only** (`actions/checkout`, `actions/setup-node`, `actions/cache`) — no
+  third-party action is introduced, honoring CLAUDE.md's dependency caution. Cargo build artifacts are
+  cached via `actions/cache` keyed on `Cargo.lock`; cold Rust builds are otherwise slow.
+- No rust-setup action: `ubuntu-latest` ships rustup, which honors
+  [`climate-controller/rust-toolchain.toml`](../../climate-controller/rust-toolchain.toml) (pins
+  `1.96.0` + `rustfmt`/`clippy`) and installs the toolchain automatically.
+- Both jobs are hermetic — no service containers. The Node 24 / Windows Redocly teardown quirk noted
+  in the 2026-06-18 entry does not apply on Linux CI.
+- **Deferred (by design):** CD/deployment (no remote target — the stack is local-only via
+  `deploy/docker-compose.yml`); Rust coverage enforcement (`cargo llvm-cov` vs `P1-TEST-1`); and the
+  Go/Python/frontend/load gates, each landing with its phase. Tracked in
+  [`docs/backlog.md`](../backlog.md); the full strategy is
+  [`spec-verification.md`](../specs/design/spec-verification.md).
+
+---
+
 ## 2026-06-18 — Contract-validation harness: Ajv + pinned Redocly, run via npm + pre-commit
 
 **Decision:** Wire the long-specified `contracts/` validation as a committed Node harness —

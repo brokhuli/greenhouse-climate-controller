@@ -1062,6 +1062,14 @@ Redocly, the `npm` script, the pre-commit gate) is recorded in
 [`local-environment-record.md`](./local-environment-record.md); the remaining CI-pipeline work is the
 open item in [`docs/backlog.md`](../backlog.md).
 
+**Update (2026-06-22):** the deferred CI pipeline landed. GitHub Actions
+([`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)) is the adopted platform; it re-runs
+the Rust gate and the contract harness in a clean environment on push/PR — the gates the pre-commit
+hook fires locally. Coverage enforcement (`cargo llvm-cov` vs `P1-TEST-1`) and the per-phase
+Go/Python/frontend/load gates remain per the [tooling matrix](../specs/design/spec-verification.md#4-tooling-matrix),
+now tracked by the narrowed item in [`docs/backlog.md`](../backlog.md). Platform-adoption rationale:
+[`local-environment-record.md` 2026-06-22](./local-environment-record.md).
+
 ---
 
 ## RFC-011: Service-to-Service Auth as a Config-Gated Hardening Mode (supersedes RFC-009)

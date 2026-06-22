@@ -76,10 +76,12 @@ The development loops, fastest → slowest. A change should fail at the earliest
 5. **Regression-baseline loop** *(slowest)* — captured performance baselines (NFR Performance
    Testing) and per-backend optimizer plan-variance baselines ([§07](./optimizer/07-spec-optimizer-evaluation.md))
    become the regression reference, re-captured **deliberately** on a model/prompt/config change.
-6. **CI loop** *(outer, clean environment — deferred)* — every gate above re-run on push/PR away from
-   the developer's machine. **Not yet built** (no CI platform adopted); the plan-of-record is §6 and
-   [RFC-010](../../decisions/request-for-comments.md#rfc-010-verification--continuous-integration-strategy),
-   tracked in [`docs/backlog.md`](../../backlog.md).
+6. **CI loop** *(outer, clean environment)* — every gate above re-run on push/PR away from the
+   developer's machine. **Built** ([`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml),
+   GitHub Actions): the Rust gate and the contract harness run today; coverage and the per-phase
+   Go/Python/frontend gates join as those phases land. Topology is §6 and
+   [RFC-010](../../decisions/request-for-comments.md#rfc-010-verification--continuous-integration-strategy);
+   remaining work is in [`docs/backlog.md`](../../backlog.md).
 
 ---
 
@@ -90,7 +92,7 @@ here so the strategy is complete, but is wired when that phase is implemented �
 
 | Surface | Tooling | Status |
 |---|---|---|
-| **Rust controller** (P1) | `cargo fmt` · `cargo clippy --all-targets --all-features -D warnings` · `cargo check` · `cargo test` | **Present** — pre-commit Rust gate |
+| **Rust controller** (P1) | `cargo fmt` · `cargo clippy --all-targets --all-features -D warnings` · `cargo check` · `cargo test` | **Present** — pre-commit Rust gate + CI |
 | Rust coverage (`P1-TEST-1` ≥ 90%) | `cargo llvm-cov` | To wire |
 | **Contracts** (all phases) | Ajv (Draft 2020-12) + `ajv-formats` for JSON Schema; `@redocly/cli` lint for OpenAPI; fixtures as pass/`*.bad-*`-fail cases — driven by [`scripts/validate-contracts.mjs`](../../../scripts/validate-contracts.mjs) (`npm run validate:contracts`) | **Present** — §5 |
 | **Go platform** (P2) | `gofmt` · `go vet` · `golangci-lint` · `go test`; testcontainers for the TimescaleDB up/down path (`P2-TEST-1`) | Lands with Phase 2 |
@@ -121,22 +123,24 @@ The cross-component oracle, now wired locally ([`scripts/validate-contracts.mjs`
   its path (the `https://greenhouse.local/…` base the MQTT/WS schemas embed); nothing hits the
   network.
 
-The harness runs in the **pre-commit contracts gate** and is the unit the deferred **CI loop** will
-re-run in a clean environment. A contract change is still versioned and ADR-recorded
+The harness runs in the **pre-commit contracts gate** and is the unit the **CI loop** (§6) re-runs in
+a clean environment on push/PR. A contract change is still versioned and ADR-recorded
 ([`contracts/README.md`](../../../contracts/README.md)) — the harness proves *conformance*, not that
 the change was *intended*.
 
 ---
 
-## 6. CI topology (plan of record, deferred)
+## 6. CI topology
 
-The repo has **no CI platform yet**; the outer loop is the one missing rung. When a platform is
-adopted, CI runs — in a clean environment, on push/PR — the exact gates already defined: the Rust
-gate, the contract harness, Rust coverage against `P1-TEST-1`, and (as each phase lands) the Go,
-Python, and frontend gates and the load suite. Until then those gates run locally via the pre-commit
-hook, which is deliberately gated by staged-path so it never blocks an unrelated commit. The decision
-and its scope are [RFC-010](../../decisions/request-for-comments.md#rfc-010-verification--continuous-integration-strategy);
-the open work is the CI-pipeline item in [`docs/backlog.md`](../../backlog.md).
+The CI platform is **GitHub Actions** ([`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml));
+it closes the outer loop, re-running gates in a clean environment on push/PR. **Running today:** the
+Rust gate (`fmt`/`clippy`/`check`/`test`, scoped to `climate-controller/`) and the contract harness —
+the same gates the pre-commit hook fires locally, now also enforced away from the developer's machine
+(the hook stays staged-path-scoped so it never blocks an unrelated commit). **Still to wire,** per the
+tooling matrix in §4: Rust coverage against `P1-TEST-1` (`cargo llvm-cov`), and — as each phase lands —
+the Go, Python, and frontend gates and the load suite. The decision and its scope are
+[RFC-010](../../decisions/request-for-comments.md#rfc-010-verification--continuous-integration-strategy);
+the remaining work is the CI item in [`docs/backlog.md`](../../backlog.md).
 
 ---
 

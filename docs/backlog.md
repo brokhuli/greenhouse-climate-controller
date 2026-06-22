@@ -10,14 +10,13 @@ the relevant ADR / RFC.
 
 | Item | Why | Blocked on / When | Reference |
 |---|---|---|---|
-| Stand up a CI pipeline (clean-environment gate) | The verification gates exist but run only locally — the pre-commit Rust gate and the contract harness (`npm run validate:contracts`) fire on a developer's machine, gated by staged paths. Nothing re-runs them in a clean environment on push/PR, and there is no coverage enforcement (`P1-TEST-1`). | When a CI platform is adopted — there is no CI in the repo yet. | [RFC-010](./decisions/request-for-comments.md#rfc-010-verification--continuous-integration-strategy); [`spec-verification.md §6`](./specs/design/spec-verification.md#6-ci-topology-plan-of-record-deferred) |
+| Extend CI: coverage + per-phase gates | The CI pipeline now re-runs the Rust gate and the contract harness on push/PR ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)), but coverage is not yet enforced (`P1-TEST-1`, `cargo llvm-cov`), and the Go, Python, frontend, and load gates are not wired. | Coverage is wireable now; the per-phase gates land with the phase they verify (Phase 2 Go, Phase 3 Python, frontend). | [RFC-010](./decisions/request-for-comments.md#rfc-010-verification--continuous-integration-strategy); [`spec-verification.md §4`](./specs/design/spec-verification.md#4-tooling-matrix), [`§6`](./specs/design/spec-verification.md#6-ci-topology) |
 
 ### Notes
 
-**CI pipeline scope.** When a CI platform lands it re-runs, in a clean environment on push/PR, the
-gates already defined: the Rust gate (`fmt`/`clippy`/`check`/`test`), the contract harness
-([`scripts/validate-contracts.mjs`](../scripts/validate-contracts.mjs)), Rust coverage against
-`P1-TEST-1` (`cargo llvm-cov`), and — as each phase lands — the Go, Python, and frontend gates and the
-load suite. The contract harness itself is **done** ([RFC-010](./decisions/request-for-comments.md#rfc-010-verification--continuous-integration-strategy),
-[local-environment-record 2026-06-18](./decisions/local-environment-record.md)); only the
-clean-environment runner is outstanding.
+**CI pipeline scope.** The clean-environment runner is **adopted** (GitHub Actions,
+[2026-06-22](./decisions/local-environment-record.md)): it re-runs, on push/PR, the Rust gate
+(`fmt`/`clippy`/`check`/`test`) and the contract harness
+([`scripts/validate-contracts.mjs`](../scripts/validate-contracts.mjs)) — the same gates the
+pre-commit hook fires locally. Still outstanding: Rust coverage against `P1-TEST-1`
+(`cargo llvm-cov`) and — as each phase lands — the Go, Python, and frontend gates and the load suite.
