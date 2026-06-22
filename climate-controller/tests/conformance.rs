@@ -7,6 +7,8 @@
 
 use std::path::PathBuf;
 
+use jsonschema::{Resource, Validator};
+
 use climate_controller::config::{Config, Setpoints};
 use climate_controller::hal::{SensorChannel, SimControl, SimulatedHal};
 use climate_controller::pipeline::Pipeline;
@@ -30,6 +32,89 @@ fn assert_keys(value: &Value, keys: &[&str]) {
     for key in keys {
         assert!(obj.contains_key(*key), "missing key `{key}` in {value}");
     }
+}
+
+// ───────────────────────────── full JSON-Schema validation of emitted payloads ─────────────────────────────
+// Beyond key-presence, validate the controller's *generated* JSON against the same `contracts/`
+// schemas the Node/Ajv harness checks (verification spec §4) — so wrong types, bad enums/units,
+// failed patterns, or stray fields fail here in-toolchain, not just in CI.
+
+const ID_BASE: &str = "https://greenhouse.local/";
+
+fn repo_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..")
+}
+
+/// Register every contract schema as a `jsonschema` resource keyed by its `$id` — embedded for the
+/// MQTT schemas, injected from the repo-relative path for the OpenAPI component fragments (which
+/// carry none). This mirrors the Node harness's `$id` registry ([validate-contracts.mjs]) so a
+/// validator built from any one schema resolves its cross-file `$ref`s (e.g. the shared envelope)
+/// offline.
+fn schema_resources() -> Vec<(String, Resource)> {
+    let root = repo_root();
+    let mut out = Vec::new();
+    for (rel_dir, inject_id) in [
+        ("contracts/mqtt", false),
+        ("contracts/controller-rest/components/schemas", true),
+    ] {
+        let dir = root.join(rel_dir);
+        for entry in std::fs::read_dir(&dir).unwrap_or_else(|e| panic!("read {dir:?}: {e}")) {
+            let path = entry.unwrap().path();
+            let Some(file) = path.file_name().and_then(|f| f.to_str()) else {
+                continue;
+            };
+            if !file.ends_with(".json") {
+                continue;
+            }
+            let mut schema: Value =
+                serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+            let id = if inject_id {
+                let id = format!("{ID_BASE}{rel_dir}/{file}");
+                schema["$id"] = Value::String(id.clone());
+                id
+            } else {
+                schema["$id"]
+                    .as_str()
+                    .unwrap_or_else(|| panic!("{file} should embed $id"))
+                    .to_string()
+            };
+            out.push((id, Resource::from_contents(schema).unwrap()));
+        }
+    }
+    out
+}
+
+/// A validator that resolves `reference` (an absolute `$id`, optionally with a `#/Component` pointer)
+/// against the full contract registry.
+fn validator_for(reference: &str) -> Validator {
+    jsonschema::options()
+        .with_resources(schema_resources().into_iter())
+        .build(&serde_json::json!({ "$ref": reference }))
+        .unwrap_or_else(|e| panic!("schema {reference} should compile: {e}"))
+}
+
+/// Validator for one MQTT message schema, by file name.
+fn mqtt_validator(file: &str) -> Validator {
+    validator_for(&format!("{ID_BASE}contracts/mqtt/{file}"))
+}
+
+/// Validator for one controller-rest component schema (`file` + `#/Component`).
+fn rest_validator(file: &str, component: &str) -> Validator {
+    validator_for(&format!(
+        "{ID_BASE}contracts/controller-rest/components/schemas/{file}#/{component}"
+    ))
+}
+
+fn assert_schema_valid(validator: &Validator, instance: &Value, label: &str) {
+    let errors: Vec<String> = validator
+        .iter_errors(instance)
+        .map(|e| e.to_string())
+        .collect();
+    assert!(
+        errors.is_empty(),
+        "{label} is not schema-valid:\n  {}\npayload: {instance}",
+        errors.join("\n  ")
+    );
 }
 
 // ───────────────────────────── REST request DTOs accept the fixtures ─────────────────────────────
@@ -88,6 +173,11 @@ fn setpoints_response_matches_controller_type() {
             "dli_target_mol",
         ],
     );
+    assert_schema_valid(
+        &rest_validator("setpoints.json", "Setpoints"),
+        &value,
+        "setpoints response",
+    );
 }
 
 #[test]
@@ -95,8 +185,9 @@ fn zone_status_response_roundtrips() {
     let dto: ZoneStatusDto = serde_json::from_str(&rest_fixture("zone-status.json"))
         .expect("ZoneStatusDto accepts the contract fixture");
     assert_eq!(dto.zone_id, "bench-a");
+    let value = serde_json::to_value(&dto).unwrap();
     assert_keys(
-        &serde_json::to_value(&dto).unwrap(),
+        &value,
         &[
             "zone_id",
             "moisture_low_threshold",
@@ -109,6 +200,11 @@ fn zone_status_response_roundtrips() {
             "last_cycle_ts",
         ],
     );
+    assert_schema_valid(
+        &rest_validator("zones.json", "ZoneStatus"),
+        &value,
+        "zone-status response",
+    );
 }
 
 #[test]
@@ -117,9 +213,12 @@ fn health_response_roundtrips() {
         .expect("HealthDto accepts the contract fixture");
     assert!(!dto.healthy);
     assert_eq!(dto.faults.len(), 2);
-    assert_keys(
-        &serde_json::to_value(&dto).unwrap(),
-        &["mode", "healthy", "faults", "ts"],
+    let value = serde_json::to_value(&dto).unwrap();
+    assert_keys(&value, &["mode", "healthy", "faults", "ts"]);
+    assert_schema_valid(
+        &rest_validator("health.json", "Health"),
+        &value,
+        "health response",
     );
 }
 
@@ -128,8 +227,9 @@ fn sensor_injection_response_roundtrips() {
     let dto: SensorInjectionDto = serde_json::from_str(&rest_fixture("sim-injection.json"))
         .expect("SensorInjectionDto accepts the contract fixture");
     assert_eq!(dto.metric, "temperature");
+    let value = serde_json::to_value(&dto).unwrap();
     assert_keys(
-        &serde_json::to_value(&dto).unwrap(),
+        &value,
         &[
             "metric",
             "value",
@@ -139,6 +239,11 @@ fn sensor_injection_response_roundtrips() {
             "expires_at",
         ],
     );
+    assert_schema_valid(
+        &rest_validator("sim.json", "SensorInjection"),
+        &value,
+        "sensor-injection response",
+    );
 }
 
 #[test]
@@ -146,9 +251,12 @@ fn time_scale_response_roundtrips() {
     let dto: TimeScaleDto = serde_json::from_str(&rest_fixture("sim-time-scale.json"))
         .expect("TimeScaleDto accepts the contract fixture");
     assert_eq!(dto.scale, 2.0);
-    assert_keys(
-        &serde_json::to_value(&dto).unwrap(),
-        &["scale", "tick_index", "updated_at"],
+    let value = serde_json::to_value(&dto).unwrap();
+    assert_keys(&value, &["scale", "tick_index", "updated_at"]);
+    assert_schema_valid(
+        &rest_validator("sim.json", "TimeScale"),
+        &value,
+        "time-scale response",
     );
 }
 
@@ -193,6 +301,19 @@ fn mqtt_frames_carry_required_schema_fields() {
     assert_keys(&sensor, &envelope);
     assert_keys(&sensor, &["metric", "value", "unit"]);
     assert_eq!(sensor["unit"], "°C");
+    assert_schema_valid(
+        &mqtt_validator("sensor-reading.schema.json"),
+        &sensor,
+        "sensor-reading frame",
+    );
+    // Guard the check is non-vacuous: the metric→unit conditional must reject a wrong unit, proving
+    // cross-file `$ref` (envelope) and `if/then` resolution are actually wired up.
+    let mut bad_unit = sensor.clone();
+    bad_unit["unit"] = Value::String("ppm".into());
+    assert!(
+        !mqtt_validator("sensor-reading.schema.json").is_valid(&bad_unit),
+        "a temperature reading with a non-°C unit must fail schema validation"
+    );
 
     // actuator-state.schema.json
     let actuator = frame_value(&frames, "gh/gh-a/actuator/heater/state");
@@ -202,6 +323,11 @@ fn mqtt_frames_carry_required_schema_fields() {
         &["actuator", "commanded", "observed", "health", "overridden"],
     );
     assert_keys(&actuator["commanded"], &["on", "level_pct"]);
+    assert_schema_valid(
+        &mqtt_validator("actuator-state.schema.json"),
+        &actuator,
+        "actuator-state frame",
+    );
 
     // fault-event.schema.json (the injected CO₂ out-of-range)
     let fault = frame_value(&frames, "gh/gh-a/fault");
@@ -209,6 +335,11 @@ fn mqtt_frames_carry_required_schema_fields() {
     assert_keys(
         &fault,
         &["component", "fault_type", "severity", "message", "response"],
+    );
+    assert_schema_valid(
+        &mqtt_validator("fault-event.schema.json"),
+        &fault,
+        "fault-event frame",
     );
 
     // system-state.schema.json (retained)
@@ -236,4 +367,9 @@ fn mqtt_frames_carry_required_schema_fields() {
         &["temperature", "humidity", "co2", "par", "vpd"],
     );
     assert_keys(&state["simulation"], &["time_scale", "tick_index"]);
+    assert_schema_valid(
+        &mqtt_validator("system-state.schema.json"),
+        &state,
+        "system-state frame",
+    );
 }

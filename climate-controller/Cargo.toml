@@ -20,3 +20,6 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
 [dev-dependencies]
 # `test-util` enables tokio's paused-clock test runtime for deterministic scheduling tests.
 tokio = { version = "1.52.3", features = ["test-util"] }
+# Schema-validates the controller's emitted MQTT/REST payloads against contracts/ in the conformance
+# test — the in-toolchain complement to the Node/Ajv harness (verification spec §4).
+jsonschema = "0.34"

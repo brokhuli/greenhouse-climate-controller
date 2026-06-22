@@ -56,6 +56,23 @@ impl Hal {
                     ));
                 }
             }
+
+            // Rate constraints feed the constraint shaper's clamp bounds: a non-positive or
+            // non-finite rate inverts those bounds and panics at runtime, so reject it here.
+            for (name, value) in [
+                ("slew_pct_per_s", model.constraints.slew_pct_per_s),
+                ("ramp_pct_per_s", model.constraints.ramp_pct_per_s),
+            ] {
+                if let Some(v) = value
+                    && (v <= 0.0 || !v.is_finite())
+                {
+                    violations.push(FieldViolation::new(
+                        format!("hal.actuators[{i}].constraints.{name}"),
+                        "> 0",
+                        serde_json::json!(v),
+                    ));
+                }
+            }
         }
     }
 }
@@ -242,5 +259,42 @@ mod tests {
             v.iter()
                 .any(|x| x.bound == "must declare at least one effect")
         );
+    }
+
+    #[test]
+    fn non_positive_or_non_finite_rate_constraint_is_flagged() {
+        // A negative slew rate would invert the constraint shaper's clamp bounds and panic; a
+        // NaN/infinite ramp rate would do the same. Both must fail config load instead.
+        for rate in [-5.0, f64::NAN, f64::INFINITY] {
+            let mut vents = heater();
+            vents.actuator = Actuator::RoofVents;
+            vents.constraints = Constraints {
+                slew_pct_per_s: Some(rate),
+                ..Constraints::default()
+            };
+            let mut fans = heater();
+            fans.actuator = Actuator::Fans;
+            fans.constraints = Constraints {
+                ramp_pct_per_s: Some(rate),
+                ..Constraints::default()
+            };
+            let hal = Hal {
+                time_constants: time_constants(),
+                disturbances: disturbances(),
+                actuators: vec![vents, fans],
+            };
+            let mut v = Vec::new();
+            hal.validate(&mut v);
+            assert!(
+                v.iter()
+                    .any(|x| x.field == "hal.actuators[0].constraints.slew_pct_per_s"),
+                "slew rate {rate} should be flagged: {v:?}"
+            );
+            assert!(
+                v.iter()
+                    .any(|x| x.field == "hal.actuators[1].constraints.ramp_pct_per_s"),
+                "ramp rate {rate} should be flagged: {v:?}"
+            );
+        }
     }
 }

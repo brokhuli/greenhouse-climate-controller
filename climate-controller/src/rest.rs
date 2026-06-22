@@ -649,17 +649,10 @@ async fn put_override(
         ));
     }
 
-    // Resolve the addressable actuator (irrigation_valve needs a zone).
+    // Resolve the addressable actuator (irrigation_valve needs a zone; house actuators forbid one).
     let view = s.view();
-    let id = match act {
-        Actuator::IrrigationValve => {
-            let Some(zone) = body.zone_id.as_deref().and_then(|z| z.parse::<Slug>().ok()) else {
-                return unprocessable(FieldViolation::new(
-                    "zone_id",
-                    "required for irrigation_valve",
-                    serde_json::Value::Null,
-                ));
-            };
+    let id = match override_zone_selector(act, body.zone_id.as_deref()) {
+        Ok(Some(zone)) => {
             if !view.zones.iter().any(|z| z.zone_id == zone.as_str()) {
                 return unprocessable(FieldViolation::new(
                     "zone_id",
@@ -669,7 +662,8 @@ async fn put_override(
             }
             ActuatorId::Valve(zone)
         }
-        other => ActuatorId::House(other),
+        Ok(None) => ActuatorId::House(act),
+        Err(v) => return unprocessable(v),
     };
 
     let level = override_level(act, &body.state);
@@ -774,25 +768,20 @@ async fn put_injection(
             serde_json::json!(p),
         ));
     }
-    // soil_moisture is zone-scoped and bounded 0..1; other metrics are house-level.
-    let zone_id = if metric == "soil_moisture" {
-        let Some(zone) = body.zone_id.as_deref().and_then(|z| z.parse::<Slug>().ok()) else {
-            return unprocessable(FieldViolation::new(
-                "zone_id",
-                "required for soil_moisture",
-                serde_json::Value::Null,
-            ));
-        };
-        if !view.zones.iter().any(|z| z.zone_id == zone.as_str()) {
-            return unprocessable(FieldViolation::new(
-                "zone_id",
-                "unknown zone",
-                serde_json::json!(zone.as_str()),
-            ));
+    // soil_moisture is zone-scoped and bounded 0..1; other metrics are house-level and reject a zone.
+    let zone_id = match injection_zone_selector(&metric, body.zone_id.as_deref()) {
+        Ok(Some(zone)) => {
+            if !view.zones.iter().any(|z| z.zone_id == zone.as_str()) {
+                return unprocessable(FieldViolation::new(
+                    "zone_id",
+                    "unknown zone",
+                    serde_json::json!(zone.as_str()),
+                ));
+            }
+            Some(zone)
         }
-        Some(zone)
-    } else {
-        None
+        Ok(None) => None,
+        Err(v) => return unprocessable(v),
     };
 
     let key = InjectionKey {
@@ -830,7 +819,12 @@ async fn delete_injection(
     if !is_injectable_metric(&metric) {
         return not_found("unknown metric");
     }
-    let zone_id = q.zone_id.and_then(|z| z.parse::<Slug>().ok());
+    // Same selector rule as the inject path: a soil_moisture clear needs its zone or it matches
+    // nothing; a house-level metric forbids one. Reject instead of silently clearing nothing.
+    let zone_id = match injection_zone_selector(&metric, q.zone_id.as_deref()) {
+        Ok(zone) => zone,
+        Err(v) => return unprocessable(v),
+    };
     let _ =
         s.tx.send(Command::ClearInjection(InjectionKey {
             metric,
@@ -910,6 +904,61 @@ fn is_injectable_metric(metric: &str) -> bool {
         metric,
         "temperature" | "humidity" | "co2" | "par" | "soil_moisture"
     )
+}
+
+/// Validate an override `zone_id` against the actuator kind: the per-zone irrigation valve requires
+/// one (existence is checked separately by the caller, which holds the zone list), every house-level
+/// actuator forbids one. Returns the parsed zone (`None` for house actuators) or the violated field.
+fn override_zone_selector(
+    act: Actuator,
+    zone_id: Option<&str>,
+) -> Result<Option<Slug>, FieldViolation> {
+    match act {
+        Actuator::IrrigationValve => match zone_id.and_then(|z| z.parse::<Slug>().ok()) {
+            Some(zone) => Ok(Some(zone)),
+            None => Err(FieldViolation::new(
+                "zone_id",
+                "required for irrigation_valve",
+                serde_json::Value::Null,
+            )),
+        },
+        _ if zone_id.is_some() => Err(FieldViolation::new(
+            "zone_id",
+            "must be null for a house-level actuator",
+            serde_json::json!(zone_id),
+        )),
+        _ => Ok(None),
+    }
+}
+
+/// Validate a sensor-injection `zone_id` against the metric: `soil_moisture` is zone-scoped and
+/// requires one (existence is checked separately by the PUT caller, which holds the zone list),
+/// every other metric is house-level and forbids one. Returns the parsed zone (`None` for
+/// house-level metrics) or the violated field. Shared by the inject and clear paths so both reject
+/// a missing/stray selector identically — without it, a clear keyed on the wrong zone silently
+/// matches nothing yet still reports success.
+fn injection_zone_selector(
+    metric: &str,
+    zone_id: Option<&str>,
+) -> Result<Option<Slug>, FieldViolation> {
+    if metric == "soil_moisture" {
+        match zone_id.and_then(|z| z.parse::<Slug>().ok()) {
+            Some(zone) => Ok(Some(zone)),
+            None => Err(FieldViolation::new(
+                "zone_id",
+                "required for soil_moisture",
+                serde_json::Value::Null,
+            )),
+        }
+    } else if zone_id.is_some() {
+        Err(FieldViolation::new(
+            "zone_id",
+            "only valid for soil_moisture",
+            serde_json::json!(zone_id),
+        ))
+    } else {
+        Ok(None)
+    }
 }
 
 fn parse_time(value: &str, field: &str) -> Result<TimeOfDay, FieldViolation> {
@@ -993,6 +1042,60 @@ dli_target_mol = 20.0
             level_pct: Some(30.0),
         };
         assert_eq!(override_level(Actuator::Fans, &half), 30.0);
+    }
+
+    #[test]
+    fn override_zone_selector_enforces_actuator_kind() {
+        // The per-zone valve requires a parseable zone.
+        let zone = override_zone_selector(Actuator::IrrigationValve, Some("bench-a")).unwrap();
+        assert_eq!(zone.unwrap().as_str(), "bench-a");
+        assert_eq!(
+            override_zone_selector(Actuator::IrrigationValve, None)
+                .unwrap_err()
+                .field,
+            "zone_id"
+        );
+        assert!(override_zone_selector(Actuator::IrrigationValve, Some("Bad Zone!")).is_err());
+
+        // House actuators forbid a zone; absent is fine, present is rejected.
+        assert!(
+            override_zone_selector(Actuator::Heater, None)
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(
+            override_zone_selector(Actuator::Heater, Some("bench-a"))
+                .unwrap_err()
+                .bound,
+            "must be null for a house-level actuator"
+        );
+    }
+
+    #[test]
+    fn injection_zone_selector_enforces_metric_scope() {
+        // soil_moisture is zone-scoped and requires a parseable zone.
+        let zone = injection_zone_selector("soil_moisture", Some("bench-a")).unwrap();
+        assert_eq!(zone.unwrap().as_str(), "bench-a");
+        assert_eq!(
+            injection_zone_selector("soil_moisture", None)
+                .unwrap_err()
+                .field,
+            "zone_id"
+        );
+        assert!(injection_zone_selector("soil_moisture", Some("Bad Zone!")).is_err());
+
+        // House-level metrics forbid a zone; absent is fine, present is rejected.
+        assert!(
+            injection_zone_selector("temperature", None)
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(
+            injection_zone_selector("temperature", Some("bench-a"))
+                .unwrap_err()
+                .bound,
+            "only valid for soil_moisture"
+        );
     }
 
     #[test]

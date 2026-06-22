@@ -56,10 +56,18 @@ These are crop/hardware-protection interlocks, distinct from the loop-level
 when fusion can no longer trust temperature, safety — not a loop — holds the state.
 
 The irrigation row is the zone-scoped instance of a general rule: an actuator whose
-command produces no effect is failed safe. That generalization — covering **every**
-actuator, plus stuck and saturated actuators — is
+command produces no effect is failed safe. That generalization — stuck, no-response,
+and saturated actuators — is
 [actuator health monitoring (§5)](#5-actuator-health-monitoring); the irrigation
-interlock above is the special case that predates it.
+interlock above is the special case that predates it. Its two detection halves have
+different reach: **stuck** detection (commanded-vs-observed) covers **every** actuator,
+while effect-based **no-response** detection covers only those with an unambiguous,
+single-direction, unmasked effect — the house *push* actuators (heater, misters,
+CO₂ injector, grow lights) and irrigation valves. A **bidirectional** actuator (fans,
+roof vents) has coupled, sign-ambiguous effects, and a routinely-**masked** one (the
+shade screen, idle whenever there is no sun to block) has no reliably observable effect
+on a given tick; inferring "no effect" for either would risk a dangerous false fail-safe,
+so their command-following is guarded by stuck detection alone.
 
 ### Assert and clear (re-arm hysteresis)
 
@@ -194,7 +202,11 @@ this section owns only its safety response (alarm, never disable).
   The effect half (no-response) additionally needs a sensed variable to move; an actuator
   whose effect is currently **masked** (a shade screen commanded at night, a heater already
   at setpoint) can't be effect-verified that tick — the monitor only fires when a commanded
-  change *should* produce a measurable response and none arrives.
+  change *should* produce a measurable response and none arrives. For the same reason,
+  no-response is evaluated only for actuators with a single-direction, unmaskable-enough
+  effect — the push actuators and irrigation valves; the bidirectional actuators (fans, roof
+  vents) and the routinely-masked shade screen are covered by stuck detection alone
+  ([§2](#2-safety-interlocks)).
 - **Recovery is automatic.** Like sensor faults, actuator-health flags are **sticky** and
   clear when the actuator tracks its command again (or the masked effect reappears); the
   affected loop then resumes ([architecture §7](./02-spec-controller-architecture.md#7-failure-modes--degradation)).
