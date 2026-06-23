@@ -1,0 +1,94 @@
+// Command api is the Phase 2 platform service: it migrates and opens TimescaleDB,
+// ingests controller telemetry off MQTT, serves the operator/fleet REST API plus the
+// WebSocket live channel, and relays setpoint edits down to controllers. Everything
+// runs in one process (the hub model, platform architecture §2).
+package main
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/api"
+	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/config"
+	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/ingest"
+	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/relay"
+	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/state"
+	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/store"
+	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/ws"
+)
+
+func main() {
+	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	if err := run(log); err != nil {
+		log.Error("fatal", "err", err)
+		os.Exit(1)
+	}
+}
+
+func run(log *slog.Logger) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// Migration-on-startup is the startup gate: a failed migration blocks boot
+	// (operations §2).
+	if err := store.Migrate(cfg.DatabaseURL); err != nil {
+		return fmt.Errorf("migrate: %w", err)
+	}
+	db, err := store.Open(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return fmt.Errorf("open store: %w", err)
+	}
+	defer db.Close()
+	if err := db.EnsureTimescale(ctx, cfg.RetentionDays); err != nil {
+		return fmt.Errorf("ensure timescale: %w", err)
+	}
+
+	fleet := state.NewFleet(cfg.OfflineAfter)
+	hub := ws.NewHub(log)
+	ing := ingest.New(db, fleet, hub, log, cfg.MQTTBrokerURL, cfg.IngestBufferSize, cfg.OfflineAfter)
+
+	// Seed the ingester's known-greenhouse set so existing registrations route on boot.
+	endpoints, err := db.ListEndpoints(ctx)
+	if err != nil {
+		return fmt.Errorf("load registry: %w", err)
+	}
+	topicRoots := make(map[string]string, len(endpoints))
+	for id, endpoint := range endpoints {
+		topicRoots[id] = endpoint.MQTTTopicRoot
+	}
+	ing.Seed(topicRoots)
+	if err := ing.Start(ctx); err != nil {
+		return fmt.Errorf("start ingester: %w", err)
+	}
+
+	server := api.New(db, fleet, ing, relay.New(cfg.RelayTimeout), hub, log)
+
+	serverErr := make(chan error, 1)
+	go func() { serverErr <- server.Start(cfg.HTTPAddr) }()
+	log.Info("platform started", "addr", cfg.HTTPAddr, "broker", cfg.MQTTBrokerURL, "retention_days", cfg.RetentionDays)
+
+	select {
+	case <-ctx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		log.Info("shutting down")
+		return server.Shutdown(shutdownCtx)
+	case err := <-serverErr:
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
+	}
+}

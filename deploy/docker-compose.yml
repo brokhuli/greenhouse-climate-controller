@@ -1,13 +1,20 @@
 # Local greenhouse stack — Docker Compose.
 #
-# Phase 1: the only LIVE service is `mqtt` (Mosquitto). The Phase 1 controller runs as a
-# native Windows binary (controller spec §13), not a container, and connects to the broker
-# at localhost:1883. The Phase 2 platform services below are commented-out placeholders —
-# the full topology is documented in 08-spec-platform-operations.md (§2 Deployment); they are activated when
-# Phase 2 begins (api/frontend need source + Dockerfiles that do not exist yet, and the rest
-# is Phase 2/2b infrastructure with nothing to serve until then).
+# Phase 2a brings up the telemetry pipeline: the MQTT broker, TimescaleDB, and the Go
+# platform API. The React SPA and its nginx `proxy` are a later slice, so the `api` is
+# exposed on a host port directly here instead of behind the proxy. The Phase 1
+# controllers are generated into docker-compose.override.yml by
+# `scripts/gen-controllers.sh N`; `docker compose up -d` reconciles platform + N
+# controllers in one command (operations §2).
 #
-# Run:  docker compose -f deploy/docker-compose.yml up -d
+# Run (from the repo root):
+#   cp deploy/.env.example deploy/.env            # set POSTGRES_PASSWORD
+#   bash deploy/scripts/gen-controllers.sh 2      # generate 2 controllers + register.sh
+#   docker compose --env-file deploy/.env \
+#       -f deploy/docker-compose.yml -f deploy/docker-compose.override.yml up -d --build
+#   bash deploy/controllers/register.sh           # register the greenhouses with the API
+#
+# (With an explicit -f the override is not auto-loaded, so pass both files.)
 name: greenhouse
 
 services:
@@ -16,7 +23,7 @@ services:
     container_name: greenhouse-mqtt
     restart: unless-stopped
     ports:
-      - "1883:1883" # MQTT — native controller connects here at localhost:1883
+      - "1883:1883" # MQTT — native controller (Phase 1 standalone) can still connect at localhost:1883
     volumes:
       - ./mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
       - mosquitto_data:/mosquitto/data # retained + in-flight QoS state (survives restarts)
@@ -29,24 +36,56 @@ services:
       retries: 3
       start_period: 5s
 
-  # --- Phase 2 platform services (placeholders — see 08-spec-platform-operations.md §2 Deployment) ---
-  # Uncomment and complete as each lands. Slice tags: (2a) MVP pipeline, (2b) auth + observability.
-  #
-  # db:          # (2a) TimescaleDB — relational registry + crop profiles + time-series telemetry
-  #   image: timescale/timescaledb:latest-pg16
-  #   environment:
-  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
-  #   volumes:
-  #     - db_data:/var/lib/postgresql/data
-  #
-  # api:         # (2a) Go + Echo — ingestion, fleet mgmt, setpoint relay, WS fan-out
-  #   build: ../climate-platform
-  #   depends_on: [db, mqtt]
-  #
-  # frontend:    # (2a) React SPA — built and served by the proxy
+  db: # (2a) TimescaleDB — relational registry + time-series telemetry
+    image: timescale/timescaledb:latest-pg16
+    container_name: greenhouse-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: greenhouse
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in deploy/.env}
+      POSTGRES_DB: greenhouse
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U greenhouse -d greenhouse"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+  api: # (2a) Go + Echo — ingestion, fleet mgmt, setpoint relay, WS fan-out
+    build: ../climate-platform
+    image: greenhouse-platform:latest
+    container_name: greenhouse-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      mqtt:
+        condition: service_healthy
+    environment:
+      PLATFORM_DATABASE_URL: postgres://greenhouse:${POSTGRES_PASSWORD:?set in deploy/.env}@db:5432/greenhouse?sslmode=disable
+      PLATFORM_MQTT_BROKER_URL: tcp://mqtt:1883
+      PLATFORM_HTTP_ADDR: ":8080"
+      PLATFORM_RETENTION_DAYS: "30"
+    ports:
+      - "8080:8080" # REST + WebSocket — proxied behind nginx once the SPA lands (2a frontend slice)
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256M
+
+  # --- Later slices (placeholders — see 08-spec-platform-operations.md §2 Deployment) ---
+  # frontend: # (2a frontend) React SPA — built and served by the proxy
   #   build: ../climate-platform/frontend
   #
-  # proxy:       # (2a) nginx — single entry point: serves the SPA, proxies /api (+ /auth in 2b)
+  # proxy:    # (2a frontend) nginx — single entry point: serves the SPA, proxies /api (+ /auth in 2b)
   #   image: nginx:stable
   #   depends_on: [api, frontend]
   #   ports:
@@ -65,4 +104,4 @@ services:
 volumes:
   mosquitto_data:
   mosquitto_log:
-  # db_data:   # (2a) uncomment with the db service above
+  db_data: # (2a) TimescaleDB data

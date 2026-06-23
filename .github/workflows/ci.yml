@@ -49,6 +49,55 @@ jobs:
       - name: Test
         run: cargo test
 
+  go:
+    name: Go gate (climate-platform)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: climate-platform
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache-dependency-path: climate-platform/go.sum
+
+      - name: Format
+        run: test -z "$(gofmt -l .)"
+      - name: Vet
+        run: go vet ./...
+      - name: Lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v2.12.2
+          working-directory: climate-platform
+      - name: Build
+        run: go build ./...
+      # Unit tests only; DB-backed integration tests are behind the `integration`
+      # build tag and run in their own job (Docker available) — see M6.
+      - name: Test
+        run: go test ./...
+
+  go-integration:
+    name: Go integration (TimescaleDB)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: climate-platform
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache-dependency-path: climate-platform/go.sum
+
+      # testcontainers spins up a real TimescaleDB (Docker is available on the runner)
+      # to verify migrations, the hypertable/retention setup, and the range/analytics SQL.
+      - name: Integration tests
+        run: go test -tags integration ./test/... -timeout 360s
+
   contracts:
     name: Contract conformance
     runs-on: ubuntu-latest

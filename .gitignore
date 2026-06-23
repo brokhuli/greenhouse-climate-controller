@@ -23,6 +23,10 @@ venv/
 .env.*
 !.env.example
 
+# Generated controller fleet (deploy/scripts/gen-controllers.sh)
+deploy/docker-compose.override.yml
+deploy/controllers/
+
 # OS / editor
 .DS_Store
 Thumbs.db
