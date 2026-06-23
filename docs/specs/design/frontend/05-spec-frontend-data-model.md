@@ -21,8 +21,9 @@
 
 > All schema snippets are **illustrative** — they show intent and field origin, not
 > final field names. The Zod schema in `src/api/schemas.ts` is the implementation
-> source of truth; this doc explains *why* each shape exists and *how* it maps to a
-> view.
+> source of truth (itself validated against [`contracts/`](../../../../contracts/), per
+> the source-of-truth note above); this doc explains *why* each shape exists and
+> *how* it maps to a view.
 
 ---
 
@@ -92,6 +93,28 @@ export const greenhouseSummary = z.object({
 
 export const fleet = z.array(greenhouseSummary);
 ```
+
+### Greenhouse registration (2a)
+
+The body an operator POSTs to register a greenhouse into the fleet (mirrors
+[`GreenhouseRegistration`](../../../../contracts/frontend-rest/components/schemas/greenhouses.json)):
+
+```ts
+export const greenhouseRegistration = z.object({
+  id: greenhouseId,                 // operator-chosen slug, reused across MQTT/REST/DB (RFC-007)
+  displayName: z.string().min(1),
+  crop: z.string().nullable().optional(),
+  controller: z.object({            // how the platform reaches this greenhouse's controller
+    restBaseUrl: z.string().url(),  // e.g. http://gh-a:8080 (local Docker network)
+    mqttTopicRoot: z.string(),      // e.g. gh/gh-a
+  }),
+});
+```
+
+> **Registration metadata, not zone topology.** The controller endpoint is
+> *registration-time* config the platform needs to reach the controller — the SPA never
+> speaks it directly. This is distinct from the zone-*topology* boundary below: the SPA
+> registers/retires greenhouses but never edits their zones.
 
 ### Setpoints / target bundle
 
@@ -203,24 +226,42 @@ One socket; frames are discriminated by `type`. Each is Zod-parsed before use.
 | `drift` *(2b)* | envelope + `{ drift: boolean }` | patch `greenhouseSummary.drift`; raise a drift event |
 | `event` | `eventEntry` | prepend to the activity feed cache; raise a toast if critical |
 
+Each frame is **flat** — the RFC-007 envelope, the `type` discriminator, and the
+payload all sit at the top level (the same layout as an MQTT message, no `data`
+wrapper). The Zod union mirrors that wire shape directly:
+
 ```ts
+// Envelope fields carried by every frame (RFC-007), spread into each member.
+const wsEnvelope = {
+  schema_version: z.number().int(),
+  greenhouse_id: greenhouseId,
+  zone_id: zoneId.nullable(),
+  ts: z.coerce.date(),
+};
+
 export const wsMessage = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("telemetry"), data: /* envelope + readings */ z.any() }),
-  z.object({ type: z.literal("status"),    data: z.object({ greenhouse_id: greenhouseId, status: connectivity }) }),
-  z.object({ type: z.literal("drift"),     data: z.object({ greenhouse_id: greenhouseId, drift: z.boolean() }) }),
-  z.object({ type: z.literal("event"),     data: eventEntry }),
+  z.object({ ...wsEnvelope, type: z.literal("telemetry"),
+             readings: z.array(z.object({ metric: z.string(), value: z.number(), unit: z.string() })),
+             actuators: z.array(actuatorState).optional() }),
+  z.object({ ...wsEnvelope, type: z.literal("status"),
+             status: connectivity, time_scale: z.number().optional() }),  // time_scale: sim-only
+  z.object({ ...wsEnvelope, type: z.literal("drift"),  drift: z.boolean() }),  // (2b)
+  z.object({ ...wsEnvelope, type: z.literal("event"),
+             kind: eventEntry.shape.kind, severity: eventEntry.shape.severity,
+             message: z.string(), source: z.string().optional() }),
 ]);
 ```
 
-`ws.ts` parses each frame, then routes telemetry to the ring buffer and the rest to
-Query-cache patches ([architecture §4](./03-spec-frontend-architecture.md#4-runtime-data-flow)).
+`ws.ts` parses each frame against this union, then routes telemetry to the ring
+buffer and the rest to Query-cache patches
+([architecture §4](./03-spec-frontend-architecture.md#4-runtime-data-flow)).
 Unknown `type` values are ignored (forward-compatible).
 
-> The final wire shapes are owned by the WebSocket contract (catalog #5).
-> The `{ type, data }` snippet above is **illustrative**: on the wire each frame is
-> *flat* — the RFC-007 envelope (`schema_version`, `greenhouse_id`, `zone_id`, `ts`), the `type`
-> discriminator, and the payload all at the top level, the same layout as an MQTT message. `ws.ts`
-> maps those frames onto the client union above.
+> The final wire shapes are owned by the WebSocket contract (catalog #5,
+> [`contracts/frontend-ws/`](../../../../contracts/frontend-ws/)); the union above mirrors
+> it field-for-field. The `event` frame's `greenhouse_id`/`ts` come from the envelope (the
+> REST `eventEntry` embeds them inline because REST bodies carry no envelope). Any per-channel
+> shape `ws.ts` derives *after* parsing is an **internal adapter type**, not the wire.
 
 ---
 
@@ -243,8 +284,11 @@ Strategy:
   refetch stays cheap.
 - **Live patches beat refetch.** A `status`/`drift`/`event` frame updates the cache
   in place rather than refetching, keeping fan-out within `P2-PERF-2` (< 1 s).
-- **Mutations** (setpoint edit, profile assign) optimistically patch then settle on
-  the server response; on error they roll back ([interactions](./08-spec-frontend-interactions.md)).
+- **Mutations** (setpoint edit, profile assign, greenhouse register/retire)
+  optimistically patch then settle on the server response; on error they roll back
+  ([interactions](./08-spec-frontend-interactions.md)). **Register**
+  (`POST /api/greenhouses`) and **retire** (`DELETE /api/greenhouses/:id`) both
+  invalidate `["fleet"]`; retire also drops `["greenhouse", id]`.
 - **Backfill** after a WS gap re-runs the affected `["telemetry", id, range]` query
   ([architecture §4](./03-spec-frontend-architecture.md#4-runtime-data-flow)).
 
@@ -262,9 +306,9 @@ Every REST response and WS frame is parsed through its Zod schema in
 - **`schema_version` mismatch** (RFC-007) is logged and surfaced as a non-blocking
   "data format changed — update the dashboard" notice.
 
-This is the client's runtime enforcement point while the Go-API-to-SPA REST and WebSocket
-contracts are being authored. Once those contracts land under `contracts/`, these Zod schemas
-must validate against them rather than remaining a parallel source of truth.
+This is the client's runtime enforcement point. The Go-API-to-SPA REST and WebSocket contracts
+are authored under [`contracts/`](../../../../contracts/) (`frontend-rest/`, `frontend-ws/`), so
+these Zod schemas validate against them rather than standing as a parallel source of truth.
 
 ---
 

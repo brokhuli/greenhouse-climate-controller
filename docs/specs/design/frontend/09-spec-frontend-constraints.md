@@ -56,8 +56,9 @@ frontend terms.
 - **Why:** `contracts/` + [RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)
   are the single source of truth.
 - **Forces:** Client schemas mirror the platform's shapes and validate at runtime
-  ([data-model](./05-spec-frontend-data-model.md)); when the Go-API↔SPA contract is
-  formalized in `contracts/`, the client schemas validate against it.
+  ([data-model](./05-spec-frontend-data-model.md)); the client schemas validate
+  against the authored Go-API↔SPA contract in `contracts/` (`frontend-rest/`,
+  `frontend-ws/`).
 - **Forbids:** Inventing payload shapes the API doesn't emit; silently tolerating a
   `schema_version` mismatch.
 
@@ -157,8 +158,11 @@ frontend terms.
 ### Modern evergreen browsers; responsive to operator screens
 
 - **Why:** Operators use current Chrome/Firefox/Safari/Edge, sometimes on tablets.
-- **Forces:** Layout reflows from wide control screens down to tablet; touch targets
-  ≥ 44 px; the sidenav collapses below `--bp-md`.
+- **Forces:** Layout reflows from wide control screens down to tablet; interactive
+  **hit areas** ≥ 44 px on coarse pointers (the dense `--size-control-*` *visual* sizes are
+  preserved — the tap target expands separately via `--size-touch-target`,
+  [tokens §5](./07-spec-frontend-design-tokens.md#5-spacing-radii-shadows)); the sidenav
+  collapses below `--bp-md`.
 - **Forbids:** Desktop-only fixed layouts; features without ≥ 95% browser support and
   no graceful fallback.
 

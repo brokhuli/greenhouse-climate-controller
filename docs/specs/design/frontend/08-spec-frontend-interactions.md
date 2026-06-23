@@ -95,7 +95,7 @@ the operator's trust signal that what they're seeing is *live*.
 |---|---|---|
 | **live** | socket open, frames flowing | quiet "Live" + last-update time |
 | **reconnecting** | socket dropped | amber "Reconnecting…"; charts keep showing buffered data with a **gap marker** at the leading edge |
-| **polling** | socket can't be established | "Live updates degraded — polling"; values refresh on the fallback REST cadence |
+| **polling** | socket can't be established | "Live updates degraded — polling"; values refresh on the fallback REST cadence ([architecture §4 — polling fallback](./03-spec-frontend-architecture.md#polling-fallback) owns cadence/scope) |
 | **offline** | repeated failures / network down | "Disconnected"; data marked stale; a manual "Retry" appears |
 
 - **Reconnect** uses exponential backoff (cap a few seconds).
@@ -114,11 +114,16 @@ These are distinct and must not be conflated:
 - **Socket/platform offline** → `ConnectionStatus` reflects it (§5); *all* live data
   is suspect.
 - **One controller offline** (telemetry absence / staleness) → only that greenhouse
-  is marked **offline** (`--color-status-offline`, muted): its card dims, its detail
-  charts show last-known data + a gap, and its **edit affordances disable** with the
-  reason "controller offline — change will apply on reconnect" (offline edits are
-  held by the platform in 2b,
-  [platform crop profiles](../platform/05-spec-platform-crop-profiles.md)).
+  is marked **offline** (`--color-status-offline`, muted): its card dims and its detail
+  charts show last-known data + a gap. Edit behavior **differs by slice**, because the
+  write path does:
+  - **2a (thin relay):** edits **disable** with the reason "controller offline — edits
+    unavailable until it reconnects." A 2a edit is a direct relay to the controller's REST
+    API, which is unreachable while offline, so there is nothing to queue.
+  - **2b (sticky intended state):** edits **stay enabled**; submitting records the change as
+    the greenhouse's intended state and the confirm/toast notes "queued — applies on
+    reconnect." The platform holds it and reconciles when the controller returns
+    ([platform crop profiles](../platform/05-spec-platform-crop-profiles.md)).
 
 ---
 

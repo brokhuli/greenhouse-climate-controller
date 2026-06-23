@@ -190,7 +190,29 @@ the historical query re-runs; the live buffer is untouched.
 - **Backfill on reconnect.** After a gap, re-run the relevant range query to fill
   what the socket missed, then resume appending — no silent holes.
 - **Polling fallback.** If the socket cannot be established, fall back to periodic
-  REST polling at a reduced cadence and surface "degraded live updates."
+  REST polling at a reduced cadence and surface "degraded live updates" (detailed
+  below).
+
+### Polling fallback
+
+When the WebSocket can't be established (connect timeout / repeated failures), the SPA
+keeps the views live-ish over REST instead of going dark. `ConnectionStatus` shows
+**polling** ([interactions §5](./08-spec-frontend-interactions.md#5-connection-status-reconnect--backfill)).
+
+- **Cadence.** A fixed reduced interval — default **~10 s** (tunable), far below the live
+  ≥ 1 Hz target — implemented as TanStack Query `refetchInterval` on the in-view queries.
+  The interval is chosen to stay within `P2-PERF-3` (API p95 < 200 ms) at fleet scale.
+- **Endpoints.** Reuses the existing REST GETs — fleet list (`["fleet"]`), greenhouse
+  snapshot (`["greenhouse", id]`), and the telemetry range (`["telemetry", id, range]`).
+  No polling-only endpoints; the contract surface is unchanged.
+- **Scope (fleet-scale).** Polls only what's **in view** — the fleet list + status on the
+  overview, the single visible greenhouse on detail — never a per-greenhouse fan-out across
+  the whole fleet. Background/unfocused queries don't poll.
+- **Cache & buffer path.** Refetches land in the **Query cache**, the same path REST seeding
+  and backfill already use ([§4](#4-runtime-data-flow)) — so no parallel code path. The
+  telemetry range query advances the chart's *historical* portion while live ring-buffer
+  appends are paused; the chart renders from the refreshed range. When the socket returns,
+  normal WS appends resume after a backfill range query — **no silent holes**.
 
 ---
 
@@ -321,7 +343,7 @@ can go wrong, how it's caught, and how the UI behaves:
 |---|---|---|
 | WebSocket drops | `ws.ts` close/error | `ConnectionStatus` → "reconnecting"; backoff reconnect; backfill range query on resume ([§4](#4-runtime-data-flow)) |
 | WebSocket never connects | connect timeout | Fall back to REST polling at reduced cadence; banner "live updates degraded" |
-| Controller offline | API status / WS status frame | Greenhouse marked **offline** in fleet + detail; charts show last-known + a gap; edits disabled with reason |
+| Controller offline | API status / WS status frame | Greenhouse marked **offline** in fleet + detail; charts show last-known + a gap; **2a** edits disabled (relay can't reach it), **2b** edits stay enabled and are held as intended state, applied on reconnect ([interactions §6](./08-spec-frontend-interactions.md#6-controller-offline-vs-platformsocket-offline)) |
 | Stale data | query staleness + WS silence | "data may be stale" affordance; auto-refetch on focus/reconnect |
 | Setpoint drift (2b) | API drift signal | Drift badge in fleet/detail; activity entry; non-blocking |
 | REST 4xx (validation) | `client.ts` | Inline form error from the API message; no retry |

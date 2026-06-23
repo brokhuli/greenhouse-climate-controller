@@ -87,13 +87,15 @@ route in [architecture §3](./03-spec-frontend-architecture.md#3-route-tree).
 - **Purpose:** The landing view — every greenhouse at a glance + a site rollup.
 - **Data:** `useFleet()` (`["fleet"]`), patched live by `status`/`drift` frames.
 - **Renders:** a `FleetSummaryBar` (status rollup derivation) + a grid of
-  `GreenhouseCard`. When any greenhouse is simulated, a `FleetTimeScaleControl` in the
+  `GreenhouseCard`. A **Register** CTA in the view toolbar opens
+  `RegisterGreenhouseDialog`. When any greenhouse is simulated, a `FleetTimeScaleControl` in the
   view toolbar sets the speed for the whole fleet at once (fan-out of independent
   per-controller writes — [interactions §7](./08-spec-frontend-interactions.md#7-writes--setpoint-edits--profile-apply)).
 - **States:** loading → `Skeleton` grid; empty → `EmptyState` ("no greenhouses
-  registered" + register CTA); error → `ErrorState` with retry; per-card offline
-  handled by `GreenhouseCard`.
-- **Role-gating (2b):** register/retire actions operator-only.
+  registered") whose CTA opens the same `RegisterGreenhouseDialog`; error → `ErrorState`
+  with retry; per-card offline handled by `GreenhouseCard`.
+- **Role-gating (2b):** register/retire actions operator-only (the toolbar/empty-state CTA
+  renders disabled with a reason for viewers).
 
 ### `GreenhouseCard` *(2a)*
 
@@ -123,8 +125,9 @@ route in [architecture §3](./03-spec-frontend-architecture.md#3-route-tree).
 - **Purpose:** Deep view of one greenhouse.
 - **Data:** `useGreenhouse(id)` (snapshot + current setpoints), `useTelemetryRange(id, range)`
   (history), and a live subscription for the streaming edge.
-- **Renders:** header (`StatusBadge`, crop, profile chip in 2b, and — on a simulated
-  controller — a `TimeScaleControl` live speed knob + `TimeScaleIndicator`); a stack of
+- **Renders:** header (`StatusBadge`, crop, profile chip in 2b, a `RetireGreenhouseAction`
+  in the header overflow, and — on a simulated controller — a `TimeScaleControl` live speed knob +
+  `TimeScaleIndicator`); a stack of
   `TimeSeriesChart` (readings vs setpoint bands, plotted on simulated time); `ActuatorStatePanel`;
   `EventList`; the `SetpointEditForm` entry point; a `RangePicker`.
 - **States:** loading → skeleton charts; offline → charts show history + a live gap
@@ -233,12 +236,39 @@ Reused across views; typed props; zero domain knowledge.
 - **Interaction:** validate against crop-safe ranges; **confirmation dialog** before
   submit; optimistic pending → confirmed/failed ([interactions](./08-spec-frontend-interactions.md)).
   **No actuator forcing** — setpoints only ([constraints](./09-spec-frontend-constraints.md)).
+- **Offline:** when the controller is offline, **2a** disables the form ("edits unavailable
+  until it reconnects" — the relay can't reach it) while **2b** keeps it enabled and queues
+  the edit as intended state, applied on reconnect ([interactions §6](./08-spec-frontend-interactions.md#6-controller-offline-vs-platformsocket-offline)).
 - **Role-gating (2b):** operator-only; rendered disabled with a tooltip for viewers.
 
 ### `RangePicker`
 
 - **Purpose:** Choose the historical window for the detail charts.
 - **Props:** `value`, `onChange` (writes the `range` query param).
+
+### `RegisterGreenhouseDialog` *(2a)*
+
+- **Purpose:** Add a greenhouse to the fleet (view 1 register action) — a modal form, not a
+  separate route (writes are in-view affordances, [architecture §3](./03-spec-frontend-architecture.md#3-route-tree)).
+- **Props:** `open`, `onClose`.
+- **Data:** `react-hook-form` + the `greenhouseRegistration` Zod schema
+  ([data-model §3](./05-spec-frontend-data-model.md#3-relational-shapes-config--metadata)); submit →
+  register mutation (`POST /api/greenhouses`).
+- **Interaction:** validate the slug/display-name/controller-endpoint fields; submit → optimistic
+  pending; **422** maps to inline field errors (the API names the violated field); success invalidates
+  `["fleet"]`, toasts, and closes ([interactions §7](./08-spec-frontend-interactions.md#7-writes--setpoint-edits--profile-apply)).
+- **States:** idle / submitting / field-error; dirty-guard on close.
+- **Role-gating (2b):** operator-only.
+
+### `RetireGreenhouseAction` *(2a)*
+
+- **Purpose:** Remove a greenhouse from the fleet (view 1 retire action) — a `danger` confirm
+  `Dialog`, summarizing what is removed (registry entry only; history is retained).
+- **Props:** `greenhouseId`, `displayName`.
+- **Data:** retire mutation (`DELETE /api/greenhouses/:id`).
+- **Interaction:** explicit confirm → on success invalidate `["fleet"]`, drop `["greenhouse", id]`,
+  toast, and navigate to `/`; on failure, error toast, no removal.
+- **Role-gating (2b):** operator-only.
 
 ### `TimeScaleControl` / `TimeScaleIndicator` *(2a, simulation-only)*
 
@@ -267,7 +297,9 @@ Reused across views; typed props; zero domain knowledge.
 - **Visual:** controls are compact and utilitarian. Icon-only buttons use
   `--size-icon-button`; segmented controls and pills use `--size-control-sm` or
   `--size-control-md`; primary actions use the inverse/accent treatment from the
-  token spec rather than oversized hero-style buttons.
+  token spec rather than oversized hero-style buttons. These are *visual* sizes; on
+  coarse pointers each control's *hit area* expands to `--size-touch-target` (44px)
+  without changing its rendered size ([tokens §5](./07-spec-frontend-design-tokens.md#5-spacing-radii-shadows)).
 - **a11y:** `Dialog` traps focus, `Esc` closes; `Button` renders `<a>` vs `<button>`
   correctly; disabled write buttons keep an accessible reason.
 
@@ -282,8 +314,8 @@ Reused across views; typed props; zero domain knowledge.
 
 | View / route | Components |
 |---|---|
-| `/` Fleet overview | `FleetOverview` → `FleetSummaryBar`, `FleetTimeScaleControl` (sim-only), `GreenhouseCard` → `StatusBadge`, `MetricTile`, `TimeScaleIndicator` (sim-only) |
-| `/greenhouses/:id` Detail | `GreenhouseDetail` → `TimeSeriesChart`, `MetricTile`, `ActuatorStatePanel`, `EventList`, `SetpointEditForm`, `RangePicker`, `TimeScaleControl`/`TimeScaleIndicator` (sim-only) |
+| `/` Fleet overview | `FleetOverview` → `FleetSummaryBar`, `RegisterGreenhouseDialog`, `FleetTimeScaleControl` (sim-only), `GreenhouseCard` → `StatusBadge`, `MetricTile`, `TimeScaleIndicator` (sim-only) |
+| `/greenhouses/:id` Detail | `GreenhouseDetail` → `TimeSeriesChart`, `MetricTile`, `ActuatorStatePanel`, `EventList`, `SetpointEditForm`, `RetireGreenhouseAction`, `RangePicker`, `TimeScaleControl`/`TimeScaleIndicator` (sim-only) |
 | `/profiles` (2b) | `ProfileLibrary` → profile cards, assignment panel |
 | `/profiles/:id` (2b) | `ProfileEditor` → `SetpointFields`, stage selector |
 | `/activity` | `ActivityFeed` → `EventList` |

@@ -69,7 +69,8 @@ actions**, **role**.
   current-climate-vs-target readout. Site-wide rollup of how many greenhouses are
   healthy vs need attention. On simulated controllers, each card also shows its
   current **simulation speed** (time-scale) when it is not 1×.
-- **Primary actions:** open a greenhouse; (2a) register / retire a greenhouse;
+- **Primary actions:** open a greenhouse; (2a) register / retire a greenhouse
+  (`RegisterGreenhouseDialog` / `RetireGreenhouseAction`, [components §3](./06-spec-frontend-components.md#3-primitives-components));
   *(2a, simulation-only)* set the simulation speed for the **whole fleet** at once
   (a convenience that fans out as independent per-controller writes — there is no
   shared clock; see [interactions §7](./08-spec-frontend-interactions.md#7-writes--setpoint-edits--profile-apply)).

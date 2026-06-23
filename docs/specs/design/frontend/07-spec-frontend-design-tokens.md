@@ -174,12 +174,19 @@ Per [constraints](./09-spec-frontend-constraints.md) (WCAG 2.1 AA):
 ## 3. Chart & diagram tokens
 
 Charts read **chart tokens**, not status colors directly, so a palette change
-can't silently alter chart meaning. Series colors are distinct and colorblind-
-aware.
+can't silently alter chart meaning. The decoupling holds at the *definition* layer
+too: a chart series token carries its **own literal value** rather than aliasing a
+`--color-status-*` token — otherwise re-tuning, say, the "online" green would
+silently shift the temperature series. (Series tokens are also theme-agnostic so a
+metric keeps its identity across dark/light.) The deliberate exceptions are
+non-status chrome — `--chart-setpoint`/`--chart-axis`/`--chart-grid` intentionally
+track `--color-fg-muted`/`--color-divider`, since axis and reference lines should
+follow text/divider color and carry no status meaning. Series colors are distinct
+and colorblind-aware.
 
 ```css
 :root {
-  --chart-temperature: var(--color-status-online);
+  --chart-temperature: #9ccc65;   /* own value — NOT var(--color-status-online) */
   --chart-humidity: #6ea8ff;
   --chart-co2: #8b5cf6;
   --chart-par: #ff8a00;
@@ -274,6 +281,7 @@ inline styles, so the pattern can be updated in one place.
   --size-control-md: 36px;
   --size-icon-button: 36px;
   --size-status-dot: 10px;
+  --size-touch-target: 44px;   /* minimum interactive hit area (constraints §a11y) */
 }
 
 [data-theme="dark"] {
@@ -290,6 +298,14 @@ Cards are bordered first and shadowed second. Use `--shadow-sm` for raised
 controls/popovers and `--shadow-md` only for overlays or detached panels; ordinary
 dashboard cards use a 1px border and no visible drop shadow. Off-scale spacing
 means the design is wrong, not the scale.
+
+**Visual size vs hit area.** The compact `--size-control-*` values are the *visual*
+control heights that keep the operator console dense. The *interactive* hit area is a
+separate concern: on coarse pointers (`@media (pointer: coarse)`) every actionable
+control expands its tap target to `--size-touch-target` (44px) — via padding or an
+invisible expanded hit region — without changing its rendered size. This satisfies the
+≥44px touch-target rule ([constraints §accessibility](./09-spec-frontend-constraints.md))
+while preserving the dense desktop layout.
 
 ---
 

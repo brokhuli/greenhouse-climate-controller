@@ -79,10 +79,11 @@ composed via `allOf` — the same envelope the [MQTT](../mqtt/) frames carry, on
 | `zone_id` | string \| null | Set on zone-scoped telemetry; `null` otherwise. |
 | `ts` | string | RFC 3339 / ISO 8601, UTC, millisecond precision. For telemetry, the sample instant. From the controller's injected clock — wall-clock on real hardware / 1×, the simulated instant under an accelerated run, so the SPA plots on simulated time directly. |
 
-`schema_version` is an **integer** per RFC-007 — the illustrative `z.string()` in
-[data model §2](../../docs/specs/design/frontend/05-spec-frontend-data-model.md#2-shared-primitives)
-is a sketch, not the wire shape. Unlike the REST contracts, frames **do** carry this envelope (like
-MQTT); the contract version is `schema_version`, not an `info.version`.
+`schema_version` is an **integer** per RFC-007, matching the illustrative
+`z.number().int()` envelope in
+[data model §2](../../docs/specs/design/frontend/05-spec-frontend-data-model.md#2-shared-primitives).
+Unlike the REST contracts, frames **do** carry this envelope (like MQTT); the contract version is
+`schema_version`, not an `info.version`.
 
 ## Frame structure
 
