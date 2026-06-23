@@ -85,7 +85,7 @@ actions**, **role**.
   history. Active faults and interlock activations are raised prominently. Charts
   plot on **simulated time** (the controller's clock), and on a simulated controller
   a **speed indicator** shows the current time-scale.
-- **Primary actions:** edit setpoints (see view 4); change the historical time
+- **Primary actions:** edit setpoints (see view 3); change the historical time
   range; *(2a, simulation-only)* adjust the controller's **simulation speed**
   (0.5×/1×/2×/4×) as a **live** control; (2b) view/assign the crop profile.
 - **Role:** Viewer (read) / Operator (edits, speed).

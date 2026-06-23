@@ -51,7 +51,8 @@ document in this set tags sections **(2a)** / **(2b)** to match.
 | OIDC login + viewer/operator role-gating of write actions | **2b** |
 
 In 2a the SPA runs **unauthenticated** on the trusted local Docker network
-([RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries));
+([RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009),
+superseding [RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries));
 a setpoint edit is a thin relay to the controller's REST API. 2b layers in
 crop-profile authority, reconciliation/drift, and Keycloak auth — changing no
 committed interface.

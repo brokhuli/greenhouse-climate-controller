@@ -20,10 +20,20 @@
 > [data model](../platform/03-spec-platform-data-model.md) so the mapping stays thin.
 
 > All schema snippets are **illustrative** — they show intent and field origin, not
-> final field names. The Zod schema in `src/api/schemas.ts` is the implementation
-> source of truth (itself validated against [`contracts/`](../../../../contracts/), per
+> final field names. The Zod schemas in `src/api/schemas.ts` are the implementation
+> source of truth (themselves validated against [`contracts/`](../../../../contracts/), per
 > the source-of-truth note above); this doc explains *why* each shape exists and
 > *how* it maps to a view.
+
+> **Two layers — wire vs view-model.** The `Wire*Schema` Zod parsers in
+> `src/api/schemas.ts` validate the **snake_case** wire shapes exactly as authored in
+> [`contracts/`](../../../../contracts/) — same field names, requiredness, and bounds.
+> Thin **adapter** functions in `src/api/` then map a parsed wire object into the
+> **camelCase** view-model (VM) type the components consume; the pure
+> [view-model derivations](#8-view-model-derivations) in `src/lib/` operate on those VMs.
+> Snippets below are tagged *(wire)* or *(view-model)* — the casing flip at the adapter
+> is intentional, **not** a contract discrepancy. Components and the rest of these specs
+> reference the camelCase VM (e.g. `greenhouseSummary.timeScale`).
 
 ---
 
@@ -42,7 +52,7 @@ REST seeds and backfills; WS carries the live edge.
 
 ## 2. Shared primitives
 
-Defined once in `src/api/schemas.ts` and reused (illustrative):
+Defined once in `src/api/schemas.ts` and reused *(wire — snake_case, per RFC-007)*:
 
 ```ts
 import { z } from "zod";
@@ -76,37 +86,60 @@ Mirror the platform's relational model
 
 ### Fleet & greenhouse (2a)
 
+*(wire)* — mirrors [`GreenhouseSummary`](../../../../contracts/frontend-rest/components/schemas/greenhouses.json):
+
 ```ts
-export const greenhouseSummary = z.object({
+export const wireGreenhouseSummary = z.object({
   id: greenhouseId,
-  displayName: z.string(),
-  crop: z.string().nullable(),           // assigned crop (label only in 2a)
+  display_name: z.string(),
+  crop: z.string().nullable(),                      // assigned crop (label only in 2a)
   status: connectivity,
-  drift: z.boolean().default(false),     // (2b) intended ≠ reported setpoints
-  timeScale: z.number().nullable(),      // sim-only: simulated-clock speed (1 = real-time); null on real hardware
+  drift: z.boolean().default(false),               // (2b) intended ≠ reported setpoints
+  time_scale: z.number().nullable().optional(),    // sim-only: simulated-clock speed (1 = real-time); null/absent on real hardware
   // compact current-vs-target readout for the fleet card
   climate: z.object({
     temperature: z.number().nullable(),
-    setpointTemperature: z.number().nullable(),
-  }).partial(),
+    setpoint_temperature: z.number().nullable(),
+  }).partial().optional(),
 });
 
-export const fleet = z.array(greenhouseSummary);
+export const wireFleet = z.array(wireGreenhouseSummary);
+```
+
+*(view-model)* — the adapter flips casing into the shape components render; this is the
+single representative example, the same pattern applies to every wire schema below:
+
+```ts
+export type GreenhouseSummary = {
+  id: string; displayName: string; crop: string | null;
+  status: Connectivity; drift: boolean; timeScale: number | null;
+  climate: { temperature?: number | null; setpointTemperature?: number | null };
+};
+
+export const toGreenhouseSummary =
+  (w: z.infer<typeof wireGreenhouseSummary>): GreenhouseSummary => ({
+    id: w.id, displayName: w.display_name, crop: w.crop,
+    status: w.status, drift: w.drift, timeScale: w.time_scale ?? null,
+    climate: {
+      temperature: w.climate?.temperature,
+      setpointTemperature: w.climate?.setpoint_temperature,
+    },
+  });
 ```
 
 ### Greenhouse registration (2a)
 
-The body an operator POSTs to register a greenhouse into the fleet (mirrors
-[`GreenhouseRegistration`](../../../../contracts/frontend-rest/components/schemas/greenhouses.json)):
+The body an operator POSTs to register a greenhouse into the fleet *(wire)* — mirrors
+[`GreenhouseRegistration`](../../../../contracts/frontend-rest/components/schemas/greenhouses.json):
 
 ```ts
-export const greenhouseRegistration = z.object({
-  id: greenhouseId,                 // operator-chosen slug, reused across MQTT/REST/DB (RFC-007)
-  displayName: z.string().min(1),
+export const wireGreenhouseRegistration = z.object({
+  id: greenhouseId,                    // operator-chosen slug, reused across MQTT/REST/DB (RFC-007)
+  display_name: z.string().min(1),
   crop: z.string().nullable().optional(),
-  controller: z.object({            // how the platform reaches this greenhouse's controller
-    restBaseUrl: z.string().url(),  // e.g. http://gh-a:8080 (local Docker network)
-    mqttTopicRoot: z.string(),      // e.g. gh/gh-a
+  controller: z.object({               // registry metadata the platform needs to reach the controller
+    rest_base_url: z.string().url(),   // e.g. http://gh-a:8080 (local Docker network)
+    mqtt_topic_root: z.string(),       // e.g. gh/gh-a
   }),
 });
 ```
@@ -118,45 +151,55 @@ export const greenhouseRegistration = z.object({
 
 ### Setpoints / target bundle
 
-Mirrors the controller's runtime-adjustable
-[`[setpoints]`](../platform/03-spec-platform-data-model.md) plus per-zone irrigation,
-so a profile resolves by direct mapping:
+*(wire)* — mirrors the contract's
+[`Setpoints`](../../../../contracts/frontend-rest/components/schemas/setpoints.json) field
+for field, which in turn mirrors the controller's runtime-adjustable
+[`[setpoints]`](../platform/03-spec-platform-data-model.md) plus per-zone irrigation, so a
+profile resolves by direct mapping. Every field is required (the contract's `Setpoints`
+is a complete bundle; partial edits use `SetpointsPatch` — see [§6 mutations](#6-query-keys--cache-strategy)):
 
 ```ts
-export const setpoints = z.object({
-  temperatureDay: z.number(),
-  temperatureNight: z.number(),
-  humidityMin: z.number(),
-  humidityMax: z.number(),
-  vpd: z.number().optional(),
-  dli: z.number().optional(),
-  co2: z.number().optional(),
+export const wireSetpoints = z.object({
+  temperature_day_c: z.number(),
+  temperature_night_c: z.number(),
+  day_start: z.string(),                          // day-window start, HH:MM (24h)
+  day_end: z.string(),                            // day-window end, HH:MM; must be after day_start (else 422)
+  humidity_low_pct: z.number(),                   // lower RH safety bound; the VPD-derived target clamps to [low, high]
+  humidity_high_pct: z.number(),                  // upper RH safety bound
+  humidity_deadband_pct: z.number(),              // hysteresis band width around the RH target
+  co2_target_ppm: z.number().int(),               // enrichment target
+  co2_vent_interlock_threshold_pct: z.number(),   // vent-open % above which CO₂ injection is interlocked off
+  vpd_target_kpa: z.number(),                     // primary humidity input; RH target derived by inverting VPD
+  dli_target_mol: z.number(),                     // daily light integral target driving supplemental lighting
   zones: z.array(z.object({
-    zoneId,
-    soilMoistureMin: z.number(),
-    soilMoistureMax: z.number(),
-    // watering schedule mirrors the controller's runtime config
-    schedule: z.string(), // comma-separated HH:MM triggers, e.g. "06:00,14:00"
+    zone_id: zoneId,
+    moisture_low_threshold: z.number(),           // VWC 0–1; irrigate below
+    moisture_high_threshold: z.number(),          // VWC 0–1; stop above
+    drain_period_secs: z.number().int(),          // min gap between cycles (anti-saturation)
+    schedule: z.string(),                         // comma-separated HH:MM triggers, e.g. "06:00,14:00"
   })),
 });
 ```
 
 ### Crop profiles & assignment (2b)
 
+*(wire)* — mirror [`CropProfile`](../../../../contracts/frontend-rest/components/schemas/profiles.json#L15)
+and [`Assignment`](../../../../contracts/frontend-rest/components/schemas/profiles.json#L49):
+
 ```ts
-export const cropProfile = z.object({
+export const wireCropProfile = z.object({
   id: z.string(),
   name: z.string(),
   crop: z.string(),
   stages: z.array(z.object({
-    stage: z.string(),          // propagation / vegetative / fruiting / …
-    targets: setpoints,         // the stage-aware target bundle
-  })),
+    stage: z.string(),            // propagation / vegetative / fruiting / …
+    targets: wireSetpoints,       // the stage-aware target bundle
+  })).min(1),
 });
 
-export const assignment = z.object({
-  greenhouseId,
-  profileId: z.string(),
+export const wireAssignment = z.object({
+  greenhouse_id: greenhouseId,
+  profile_id: z.string(),
   stage: z.string(),
 });
 ```
@@ -171,16 +214,35 @@ export const assignment = z.object({
 
 ## 4. Time-series shapes (telemetry & events)
 
-High-volume, append-only. Fetched as range queries and streamed live.
+High-volume, append-only. Fetched as range queries and streamed live *(wire)*.
 
 ```ts
-// A range query result for one greenhouse over [from, to].
+// A range query result for one greenhouse over [from, to] — raw samples.
 export const telemetryRange = z.object({
   greenhouse_id: greenhouseId,
   series: z.array(z.object({
     metric: z.enum(["temperature", "humidity", "co2", "par", "vpd", "soil_moisture"]),
     zone_id: zoneId.nullable(),
     readings: z.array(reading),
+  })), // one entry per metric/scope pair
+});
+
+// Aggregated counterpart for long ranges — time-bucketed min/max/avg per metric/scope.
+// Mirrors contracts/frontend-rest AnalyticsResponse; the chart switches to this past a
+// range threshold (architecture §4 "Historical + live merge").
+export const analyticsResponse = z.object({
+  greenhouse_id: greenhouseId,
+  from: z.coerce.date(),
+  to: z.coerce.date(),
+  interval: z.enum(["5m", "15m", "1h", "6h", "1d"]),
+  series: z.array(z.object({
+    metric: z.enum(["temperature", "humidity", "co2", "par", "vpd", "soil_moisture"]),
+    zone_id: zoneId.nullable(),
+    buckets: z.array(z.object({
+      bucket_start: z.coerce.date(),
+      min: z.number(), max: z.number(), avg: z.number(),
+      count: z.number().int(),
+    })),
   })), // one entry per metric/scope pair
 });
 
@@ -274,7 +336,8 @@ entries:
 |---|---|---|
 | `["fleet"]` | `GET /api/greenhouses` | patched by `status` / `drift` frames |
 | `["greenhouse", id]` | `GET /api/greenhouses/:id` | snapshot incl. current setpoints |
-| `["telemetry", id, range]` | `GET /api/greenhouses/:id/telemetry?from&to` | historical half of the chart |
+| `["telemetry", id, range]` | `GET /api/greenhouses/:id/telemetry?from&to` | historical half of the chart (raw samples, short ranges) |
+| `["analytics", id, range, interval]` | `GET /api/greenhouses/:id/analytics?from&to&interval` | aggregated long-range chart series (replaces raw telemetry past the range threshold — [architecture §4](./03-spec-frontend-architecture.md#4-runtime-data-flow)) |
 | `["events", scope]` | `GET /api/events?…` | activity feed; prepended by `event` frames |
 | `["profiles"]` / `["profile", id]` *(2b)* | `GET /api/profiles…` | profile library + editor |
 
@@ -321,7 +384,8 @@ unit-tested and never embedded in components:
 |---|---|---|
 | **Reading-vs-setpoint delta** | current reading + setpoint | detail metric tiles, fleet card |
 | **Status rollup** | per-greenhouse `status` + `drift` | fleet site-wide summary (e.g. "3 online, 1 degraded, 1 drift") |
-| **Series merge** | history range + live ring buffer | the continuous detail chart (de-dup on `ts` at the seam) |
+| **Range-tier selection** | requested range vs threshold | picks raw `telemetry` vs `analytics` aggregates and the bucket `interval` (architecture §4) |
+| **Series merge** | history range (raw **or** analytics buckets) + live ring buffer | the continuous detail chart (de-dup on `ts` at the seam) |
 | **Event severity grouping** | event stream | activity feed ordering + toast triggering |
 | **In-band / out-of-band band** | reading vs humidity/temperature band | chart threshold shading (chart tokens) |
 | **Simulated-time axis** | series `ts` + `timeScale` | the detail chart's x-axis (plots on simulated time) + the speed indicator label |

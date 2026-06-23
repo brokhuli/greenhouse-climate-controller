@@ -46,10 +46,19 @@ frontend terms.
   ([platform ingestion](../platform/04-spec-platform-ingestion.md),
   [interfaces](../platform/09-spec-platform-interfaces.md)); the
   SPA is a pure API client ([architecture §1](./03-spec-frontend-architecture.md#1-system-boundaries)).
-- **Forces:** All data access via `src/api/` (REST + the one WebSocket); the client
-  holds no MQTT or controller knowledge.
+- **Forces:** All *runtime* data access via `src/api/` (REST + the one WebSocket); the
+  client holds no MQTT or controller knowledge **as a transport** — it never derives a
+  controller address or topic to talk to one directly.
 - **Forbids:** Connecting to the MQTT broker from the browser; calling a controller's
-  REST API directly; embedding topic maps or controller URLs in the SPA.
+  REST API directly; using controller registry metadata as a runtime channel, or
+  hardcoding a topic map / controller URL into the SPA.
+
+> **Carve-out — registry metadata, not transport.** Collecting a controller's
+> `rest_base_url` / `mqtt_topic_root` on the *registration* form and forwarding them to
+> the Go API is allowed: that is registry metadata the **platform** consumes to reach the
+> controller, never a channel the SPA speaks
+> ([data-model §3](./05-spec-frontend-data-model.md#3-relational-shapes-config--metadata)).
+> The rule is *may collect and forward, may not use as a runtime transport.*
 
 ### Binds to the API contract; never redefines wire formats
 
@@ -111,7 +120,8 @@ frontend terms.
 ### 2a is unauthenticated; 2b is OIDC with two roles
 
 - **Why:** 2a runs on the trusted local Docker network
-  ([RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries));
+  ([RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009),
+  superseding [RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries));
   2b delegates identity to Keycloak with viewer/operator roles
   ([platform authentication](../platform/07-spec-platform-security.md),
   `P2-SEC-1`).

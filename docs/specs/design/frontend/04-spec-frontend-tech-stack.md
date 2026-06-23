@@ -167,10 +167,11 @@
   ([platform authentication](../platform/07-spec-platform-security.md),
   `P2-SEC-1`); the SPA only needs to perform the login redirect, hold tokens, and
   expose the role. These libraries do exactly that with no custom crypto.
-- **How:** `AuthProvider` wraps the app; `/auth/callback` consumes the code; the
+- **How:** `AuthProvider` wraps the app; `/login/callback` consumes the code; the
   access token is attached by `api/client.ts`; `useRole()` drives write-action
   gating. **In 2a this is absent** — the SPA runs unauthenticated on the trusted
-  Docker network ([RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)).
+  Docker network ([RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009),
+  superseding [RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)).
 
 ---
 

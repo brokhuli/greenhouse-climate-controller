@@ -120,7 +120,7 @@ path so deep links resolve (SPA fallback,
 | `/profiles` | Crop-profile library | 2b | Operator-gated edits |
 | `/profiles/:profileId` | Profile editor | 2b | Stage-aware target bundle |
 | `/activity` | Activity / health feed | 2a | Drift entries appear in 2b |
-| `/auth/callback` | OIDC redirect handler | 2b | Consumes Keycloak code, then redirects |
+| `/login/callback` | OIDC redirect handler | 2b | Client-owned (not under `/auth`); consumes Keycloak code, then redirects |
 | `*` | 404 | 2a | On-brand not-found |
 
 Write **actions** (setpoint edit, profile assign/apply) are not separate routes —
@@ -179,6 +179,18 @@ timestamp at the seam — the **simulated-time `ts`**, so the seam is consistent
 regardless of the controller's current speed. When the user changes the range, only
 the historical query re-runs; the live buffer is untouched.
 
+**Raw vs aggregates by range.** The historical portion is **raw telemetry** for short
+ranges and time-bucketed **analytics aggregates**
+([`/analytics`](../platform/09-spec-platform-interfaces.md#3-api-surface-inventory), data-model
+[§4](./05-spec-frontend-data-model.md#4-time-series-shapes-telemetry--events)) for long ones — a
+pure [range-tier derivation](./05-spec-frontend-data-model.md#8-view-model-derivations) picks the
+tier from the requested range (default switch **~24 h**, tunable) and, for aggregates, an `interval`
+that keeps the bucket count bounded (target ~300–500 points). Either way the live WS ring buffer
+(raw) still appends at the tail; the chart renders the historical tier then the live edge, seamed at
+the latest bucket boundary. The query key reflects the tier
+(`["telemetry", id, range]` vs `["analytics", id, range, interval]`), so changing range re-runs only
+the relevant historical query.
+
 ### WebSocket lifecycle
 
 - **Subscribe on view focus.** Detail view subscribes to its one greenhouse;
@@ -203,8 +215,9 @@ keeps the views live-ish over REST instead of going dark. `ConnectionStatus` sho
   ≥ 1 Hz target — implemented as TanStack Query `refetchInterval` on the in-view queries.
   The interval is chosen to stay within `P2-PERF-3` (API p95 < 200 ms) at fleet scale.
 - **Endpoints.** Reuses the existing REST GETs — fleet list (`["fleet"]`), greenhouse
-  snapshot (`["greenhouse", id]`), and the telemetry range (`["telemetry", id, range]`).
-  No polling-only endpoints; the contract surface is unchanged.
+  snapshot (`["greenhouse", id]`), and whichever chart query is in view: the telemetry range
+  (`["telemetry", id, range]`) or, on a long range, the analytics aggregates
+  (`["analytics", id, range, interval]`). No polling-only endpoints; the contract surface is unchanged.
 - **Scope (fleet-scale).** Polls only what's **in view** — the fleet list + status on the
   overview, the single visible greenhouse on detail — never a per-greenhouse fan-out across
   the whole fleet. Background/unfocused queries don't poll.
@@ -311,8 +324,10 @@ Full inventory in [`06-spec-frontend-components.md`](./06-spec-frontend-componen
 
 ## 8. Theming architecture
 
-The visual system follows the light/dark mockups in `research/frontend mockups/`:
-a dense operator console, not a landing page. Desktop layout is a fixed left
+The visual system draws on the set of light- and dark-mode mockups in
+`research/frontend mockups/` — reference material for styling, color, and layout
+rather than pixel-exact specs. They depict a dense operator console, not a
+landing page. Desktop layout is a fixed left
 rail plus a scrolling content canvas; the main area fills the viewport and uses
 responsive grids for rollups, greenhouse cards, charts, and side panels. Mobile
 keeps the same information hierarchy but moves navigation into the top-bar

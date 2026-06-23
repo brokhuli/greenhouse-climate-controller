@@ -142,6 +142,11 @@ auth edge are added in **2b** with authentication
 ([security](./07-spec-platform-security.md)). The proxy applies gzip and cache headers to
 static assets to meet the dashboard's initial-load target (`P2-USE-1`).
 
+Everything under `/auth/*` belongs to Keycloak; the SPA owns **no** path there. Its OIDC
+redirect therefore lands on the client-side `/login/callback` route (resolved by the
+`index.html` fallback), never under `/auth`
+([frontend route tree](../frontend/03-spec-frontend-architecture.md#3-route-tree)).
+
 **Out of scope locally:** TLS termination and certificate management. The stack runs
 on a trusted local Docker network on a single host
 ([RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009),

@@ -226,7 +226,7 @@ Consistent across views via shared primitives
 ## 11. Authentication (2b)
 
 - **Login:** unauthenticated access to a gated route redirects to Keycloak; after
-  login, `/auth/callback` consumes the code and returns the operator to the
+  login, `/login/callback` consumes the code and returns the operator to the
   originally requested route (preserved across the redirect).
 - **Role gating:** viewers see a fully functional **read-only** dashboard; write
   affordances render **disabled** with a tooltip ("operator role required") rather
@@ -235,7 +235,8 @@ Consistent across views via shared primitives
   non-destructive "session expired — sign in again" prompt appears and the current
   route is preserved. In-flight unsaved form input is not lost to an expiry.
 - **2a:** none of this exists — the SPA is open on the trusted Docker network
-  ([RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)).
+  ([RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009),
+  superseding [RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)).
 
 ---
 
