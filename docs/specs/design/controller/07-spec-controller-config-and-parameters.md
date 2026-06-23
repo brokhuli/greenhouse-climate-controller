@@ -210,7 +210,7 @@ the maximum usable speed.
 | Stuck-value window | configurable (e.g. 5) | s | Liveness check (`P1-REL-3`) |
 | Temperature plausibility bound | ~−40–100 | °C | Sensor-injection validation only (fusion uses redundancy, not a bound); wide enough to still inject past the critical-temperature interlock |
 | Humidity plausibility bound | 0–100 | % RH | Out-of-range |
-| CO₂ plausibility bound | ~200–5000 | ppm | Out-of-range |
+| CO₂ plausibility bound | ~200–6000 | ppm | Out-of-range; wide enough to still inject past the CO₂-ceiling interlock |
 | Soil moisture bound | 0–1 | VWC | Out-of-range |
 
 ### Control loops ([control loops](./05-spec-controller-control-loops.md))

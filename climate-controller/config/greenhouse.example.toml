@@ -148,10 +148,11 @@ stuck_window_secs = 5        # a frozen reading is flagged stuck after this
 commanded_vs_observed_tol = 5.0 # stuck-actuator divergence tolerance
 no_response_window_ticks = 5 # ticks a commanded change may show no effect before no-response
 # Plausibility bounds reject implausible sensor injections at the REST surface (422). The
-# temperature envelope is wide enough to still inject past the critical-temperature interlock.
+# temperature and CO₂ envelopes are wide enough to still inject past their safety interlocks
+# (critical-temperature 40 °C; CO₂ ceiling 5000 ppm).
 temperature_bounds = { min = -40.0, max = 100.0 }
 humidity_bounds = { min = 0.0, max = 100.0 }
-co2_bounds = { min = 200.0, max = 5000.0 }
+co2_bounds = { min = 200.0, max = 6000.0 }
 par_bounds = { min = 0.0, max = 2500.0 }
 soil_moisture_bounds = { min = 0.0, max = 1.0 }
 
@@ -174,7 +175,8 @@ co2_ppm = 420.0
 soil_moisture = 0.5
 
 [simulation.noise] # seeded Gaussian sensor noise σ per channel (0 = off; small keeps live
-# channels jittering so equilibrium is never mistaken for a stuck sensor)
+# channels jittering so a mid-range equilibrium is never mistaken for a stuck sensor — a reading
+# resting on a physical rail, e.g. PAR at 0 in darkness, is exempt from stuck detection instead)
 temperature_c = 0.02
 humidity_pct = 0.1
 co2_ppm = 1.0

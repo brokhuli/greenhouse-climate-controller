@@ -244,6 +244,38 @@ fn co2_vent_interlock_suppresses_enrichment() {
     assert_eq!(injector(&s), 0.0, "no enrichment while venting");
 }
 
+/// CO₂-ceiling safety interlock (crop protection): an injected CO₂ reading above the ceiling but
+/// within plausibility trips the interlock — vents open, injector disabled, mode Interlock. Guards
+/// that the plausibility envelope leaves headroom above the ceiling so the interlock is reachable.
+#[test]
+fn co2_ceiling_interlock_opens_vents_and_disables_injector() {
+    let cfg = config();
+    let ceiling = f64::from(cfg.safety.co2_ceiling_ppm);
+    let mut p = pipeline_at(cfg, Clock::starting_at("02:00".parse().unwrap()));
+    for _ in 0..30 {
+        p.tick();
+    }
+    // Above the 5000 ppm ceiling, still inside the (now 6000 ppm) plausibility bound.
+    let injected = ceiling + 500.0;
+    p.hal_mut()
+        .inject_sensor(SensorChannel::Co2, injected, Some(50));
+    let s = p.tick();
+    assert_eq!(
+        s.trusted.co2,
+        Some(injected),
+        "an in-plausibility reading above the ceiling is trusted (not rejected as out-of-range)"
+    );
+    assert!(
+        s.faults
+            .iter()
+            .any(|f| f.fault_type == FaultType::Co2Ceiling),
+        "CO₂ above the ceiling must assert the ceiling interlock"
+    );
+    assert!(vents(&s) > 0.0, "vents open under the CO₂ ceiling");
+    assert_eq!(injector(&s), 0.0, "injector disabled under the CO₂ ceiling");
+    assert_eq!(s.mode, Mode::Interlock);
+}
+
 /// Manual override auto-expiry: a forgotten override releases after its timeout (`P1-RESIL-2`).
 #[test]
 fn manual_override_auto_expires() {

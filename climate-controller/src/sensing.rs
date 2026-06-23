@@ -256,7 +256,11 @@ fn classify(
         ));
         return None;
     }
-    if unchanged >= stuck_window {
+    // A reading frozen *within* its range is a stuck sensor; one resting exactly on a physical
+    // rail (PAR at 0 in darkness, RH at 100 at saturation) is expected, not frozen — the noise
+    // floor-clamp produces genuine constant runs there ([sensing §4]). Out-of-range already covers
+    // values beyond the rails, so exempt only values sitting *on* a rail.
+    if unchanged >= stuck_window && value > bounds.min && value < bounds.max {
         faults.push(scoped_fault(
             component,
             zone,
@@ -426,6 +430,27 @@ mod tests {
             }
         }
         panic!("CO₂ stuck fault was never raised (last trusted: {last:?})");
+    }
+
+    #[test]
+    fn reading_resting_on_a_physical_rail_is_not_stuck() {
+        // PAR resting at its plausibility floor (0 in darkness) must stay trusted, not be flagged
+        // stuck — the noise floor-clamp produces genuine constant 0.0 runs every night.
+        let mut s = SensingState::new(&[]);
+        let mut last = None;
+        for _ in 0..(cfg().stuck_window_secs + 5) {
+            let mut faults = Vec::new();
+            let mut r = raw(vec![20.0, 20.05, 19.95]);
+            r.par = 0.0; // floor of par_bounds [0, 2500]
+            last = Some(s.condition(&r, &cfg(), &mut faults).par);
+            assert!(
+                !faults
+                    .iter()
+                    .any(|f| f.component == "par" && f.fault_type == FaultType::Stuck),
+                "a reading pinned at its physical floor must not be flagged stuck"
+            );
+        }
+        assert_eq!(last, Some(Some(0.0)), "floor reading stays trusted");
     }
 
     #[test]

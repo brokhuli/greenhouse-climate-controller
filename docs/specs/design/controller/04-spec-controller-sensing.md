@@ -97,7 +97,10 @@ Temperature fault handling is the fusion step above. **Every other sensor** runs
 two detectors each tick (`P1-REL-3`, within a configurable detection window):
 
 - **Stuck value** — reading unchanged beyond a configurable duration (sensor
-  frozen).
+  frozen). A reading resting *on* a physical plausibility rail is exempt: a PAR
+  sensor reads a constant 0 in darkness and a humidity sensor a constant 100 at
+  saturation, so a value pinned at a bound is expected, not frozen (out-of-range
+  already covers values *beyond* the rails).
 - **Out-of-range** — reading outside physical plausibility bounds.
 
 On fault, the controller applies a **fail-safe** response — biased toward the action
@@ -108,7 +111,7 @@ over MQTT, and reflects it in the REST `/health` surface
 | Sensor | Out-of-range bound | Fail-safe response |
 |---|---|---|
 | Humidity | 0–100 % RH | Disable misters (no RH feedback to close the loop); suspend VPD observation + feedforward; alarm |
-| CO₂ | ~200–5000 ppm | Disable injector (fail-closed — never enrich blind); alarm |
+| CO₂ | ~200–6000 ppm | Disable injector (fail-closed — never enrich blind); alarm |
 | PAR | sensor range | Fall back to time-based lighting schedule; alarm |
 | Soil moisture (per zone) | 0–1 VWC | Disable that zone's irrigation (fail-closed — never water blind); alarm |
 

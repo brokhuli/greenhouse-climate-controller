@@ -6,6 +6,6 @@
   "component": "co2",
   "fault_type": "out_of_range",
   "severity": "alarm",
-  "message": "CO₂ sensor reading 6200 ppm exceeds plausibility bound (~200–5000 ppm)",
+  "message": "CO₂ sensor reading 6200 ppm exceeds plausibility bound (~200–6000 ppm)",
   "response": "disabled injector (fail-closed)"
 }

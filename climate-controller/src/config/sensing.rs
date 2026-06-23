@@ -24,7 +24,8 @@ pub struct Sensing {
     pub temperature_bounds: Bounds,
     /// Humidity plausibility bounds (%RH); a reading outside is out-of-range.
     pub humidity_bounds: Bounds,
-    /// CO₂ plausibility bounds (ppm).
+    /// CO₂ plausibility bounds (ppm). Like `temperature_bounds`, the envelope is wide enough to
+    /// still inject past the CO₂-ceiling interlock (`safety.co2_ceiling_ppm`).
     pub co2_bounds: Bounds,
     /// PAR plausibility bounds (µmol·m⁻²·s⁻¹).
     pub par_bounds: Bounds,
@@ -45,7 +46,7 @@ impl Default for Sensing {
             stuck_window_secs: 5,
             temperature_bounds: Bounds::new(-40.0, 100.0),
             humidity_bounds: Bounds::new(0.0, 100.0),
-            co2_bounds: Bounds::new(200.0, 5000.0),
+            co2_bounds: Bounds::new(200.0, 6000.0),
             par_bounds: Bounds::new(0.0, 2500.0),
             soil_moisture_bounds: Bounds::new(0.0, 1.0),
             commanded_vs_observed_tol: 5.0,

@@ -309,8 +309,8 @@ mod tests {
             );
         }
 
-        // CO₂ reads out-of-range (6000 > co2_bounds max 5000) → trusted CO₂ is lost this tick.
-        p.hal_mut().inject_sensor(SensorChannel::Co2, 6000.0, None);
+        // CO₂ reads out-of-range (7000 > co2_bounds max 6000) → trusted CO₂ is lost this tick.
+        p.hal_mut().inject_sensor(SensorChannel::Co2, 7000.0, None);
         let snap = p.tick();
 
         assert!(

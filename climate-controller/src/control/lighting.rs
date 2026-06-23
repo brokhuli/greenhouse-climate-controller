@@ -2,9 +2,10 @@
 //!
 //! Accumulates the Daily Light Integral (mol·m⁻²·day⁻¹) by integrating PAR over the day. If the
 //! `dli_target_mol` is behind pace by midday, supplemental **grow lights** engage for the
-//! afternoon; the **shade screen** sheds excess once the target is met. The accumulator resets at
-//! each simulated midnight. A faulted PAR sensor falls back to a time-based photoperiod (lights on
-//! during the crop's day window), [sensing §4].
+//! afternoon; the **shade screen** sheds excess once the target is met, but only during the crop
+//! day (idle at night — no sun to block). The accumulator resets at each simulated midnight. A
+//! faulted PAR sensor falls back to a time-based photoperiod (lights on during the crop's day
+//! window), [sensing §4].
 
 use crate::clock::{Clock, DT_SECS};
 use crate::config::Config;
@@ -81,8 +82,10 @@ impl LightingLoop {
                 } else {
                     0.0
                 };
-                // Shed excess solar once the day's target is already met.
-                let shade = if self.accumulated_mol >= target {
+                // Shed excess solar once the day's target is already met — but only during the
+                // crop day; at night there is no sun to block, so the screen stays idle (the
+                // controller can't see the hidden solar disturbance, so it gates on the photoperiod).
+                let shade = if self.accumulated_mol >= target && in_day {
                     100.0
                 } else {
                     0.0
@@ -167,6 +170,43 @@ mod tests {
             &mut cmd,
         );
         assert_eq!(cmd.get(&ActuatorId::House(Actuator::ShadeScreen)), 100.0);
+    }
+
+    #[test]
+    fn shade_stays_idle_at_night_even_with_target_met() {
+        // The DLI target is long since met, but at night there is no sun to block: the shade must
+        // stay idle rather than apply a spurious cooling/PAR pull until the midnight reset.
+        let cfg = config();
+        let mut loop_ = LightingLoop::new();
+        let shade = ActuatorId::House(Actuator::ShadeScreen);
+
+        // Bank well past a tiny target during the day → shade deploys.
+        let noon = Clock::starting_at_seconds(12 * 3600);
+        let mut cmd = Commands::all_off(&[]);
+        loop_.run(
+            &trusted(Some(800.0)),
+            &resolved(0.0001),
+            &noon,
+            &cfg,
+            &mut cmd,
+        );
+        assert_eq!(cmd.get(&shade), 100.0, "shade deploys during the day");
+
+        // Same accumulator, now after sunset (22:00): shade idle despite target met.
+        let night = Clock::starting_at_seconds(22 * 3600);
+        let mut cmd = Commands::all_off(&[]);
+        loop_.run(
+            &trusted(Some(0.0)),
+            &resolved(0.0001),
+            &night,
+            &cfg,
+            &mut cmd,
+        );
+        assert_eq!(
+            cmd.get(&shade),
+            0.0,
+            "shade idle at night — no sun to block"
+        );
     }
 
     #[test]
