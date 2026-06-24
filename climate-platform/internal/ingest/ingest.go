@@ -8,6 +8,7 @@ import (
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 
+	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/domain"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/state"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/ws"
 )
@@ -138,20 +139,36 @@ func (ing *Ingester) handleMessage(_ mqtt.Client, msg mqtt.Message) {
 	now := time.Now()
 	switch info.kind {
 	case topicSensorHouse, topicSensorZone:
-		ing.onReading(msg.Payload(), now)
+		ing.onReading(msg.Payload(), info.greenhouseID, now)
 	case topicActuator:
-		ing.onActuator(msg.Payload(), now)
+		ing.onActuator(msg.Payload(), info.greenhouseID, now)
 	case topicFault:
-		ing.onFault(msg.Payload(), now)
+		ing.onFault(msg.Payload(), info.greenhouseID, now)
 	case topicState:
-		ing.onState(msg.Payload(), now)
+		ing.onState(msg.Payload(), info.greenhouseID, now)
 	}
 }
 
-func (ing *Ingester) onReading(payload []byte, now time.Time) {
+// mismatched drops (and logs) telemetry whose envelope greenhouse_id disagrees with the
+// topic it arrived on — topic and payload are one identity, no translation layer
+// (contracts/mqtt; ingestion §2). Routing is by the registry-validated topic id, so a
+// payload claiming a different (or empty) id is rejected rather than silently stored.
+func (ing *Ingester) mismatched(topicID, payloadID string) bool {
+	if payloadID == topicID {
+		return false
+	}
+	ing.log.Warn("ingest: dropping telemetry, payload greenhouse_id disagrees with topic",
+		"topic_id", topicID, "payload_id", payloadID)
+	return true
+}
+
+func (ing *Ingester) onReading(payload []byte, topicID string, now time.Time) {
 	reading, err := decodeReading(payload)
 	if err != nil {
 		ing.log.Warn("ingest: bad sensor reading", "err", err)
+		return
+	}
+	if ing.mismatched(topicID, reading.GreenhouseID) {
 		return
 	}
 	ing.buf.push(record{reading: &reading})
@@ -166,10 +183,13 @@ func (ing *Ingester) onReading(payload []byte, now time.Time) {
 	}
 }
 
-func (ing *Ingester) onActuator(payload []byte, now time.Time) {
+func (ing *Ingester) onActuator(payload []byte, topicID string, now time.Time) {
 	sample, err := decodeActuator(payload)
 	if err != nil {
 		ing.log.Warn("ingest: bad actuator state", "err", err)
+		return
+	}
+	if ing.mismatched(topicID, sample.GreenhouseID) {
 		return
 	}
 	ing.buf.push(record{actuator: &sample})
@@ -180,10 +200,13 @@ func (ing *Ingester) onActuator(payload []byte, now time.Time) {
 	}
 }
 
-func (ing *Ingester) onFault(payload []byte, now time.Time) {
+func (ing *Ingester) onFault(payload []byte, topicID string, now time.Time) {
 	event, err := decodeFault(payload)
 	if err != nil {
 		ing.log.Warn("ingest: bad fault event", "err", err)
+		return
+	}
+	if ing.mismatched(topicID, event.GreenhouseID) {
 		return
 	}
 	ing.buf.push(record{event: &event})
@@ -194,10 +217,13 @@ func (ing *Ingester) onFault(payload []byte, now time.Time) {
 	}
 }
 
-func (ing *Ingester) onState(payload []byte, now time.Time) {
+func (ing *Ingester) onState(payload []byte, topicID string, now time.Time) {
 	snapshot, ts, err := decodeSystemState(payload)
 	if err != nil {
 		ing.log.Warn("ingest: bad system state", "err", err)
+		return
+	}
+	if ing.mismatched(topicID, snapshot.GreenhouseID) {
 		return
 	}
 	var scale *float64
@@ -217,12 +243,24 @@ func (ing *Ingester) onState(payload []byte, now time.Time) {
 	}
 }
 
-func (ing *Ingester) runLiveness(ctx context.Context) {
-	interval := ing.offlineAfter / 2
-	if interval < time.Second {
-		interval = time.Second
+// minSweepInterval floors the liveness cadence so a tiny offlineAfter can't spin the
+// sweep into a busy loop.
+const minSweepInterval = 250 * time.Millisecond
+
+// sweepInterval sizes the liveness sweep to the fastest accepted clock: an N×
+// greenhouse's effective offline horizon is offlineAfter/N (state.effectiveOffline), so
+// sweeping at offlineAfter/(2·MaxTimeScale) marks even an 8× greenhouse offline within
+// ~one cadence of its horizon instead of lagging the 1× cadence (ingestion §4).
+func sweepInterval(offlineAfter time.Duration) time.Duration {
+	interval := time.Duration(float64(offlineAfter) / (2 * domain.MaxTimeScale))
+	if interval < minSweepInterval {
+		interval = minSweepInterval
 	}
-	ticker := time.NewTicker(interval)
+	return interval
+}
+
+func (ing *Ingester) runLiveness(ctx context.Context) {
+	ticker := time.NewTicker(sweepInterval(ing.offlineAfter))
 	defer ticker.Stop()
 	for {
 		select {

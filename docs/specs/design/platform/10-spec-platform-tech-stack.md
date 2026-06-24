@@ -46,21 +46,26 @@
   a time-based retention policy handle the append-only telemetry
   ([ingestion §5](./04-spec-platform-ingestion.md#5-retention--downsampling)).
 
-### `pgx` + `sqlc`, `golang-migrate` ⚑
+### `pgx` + `golang-migrate` ⚑
 
-- **What:** `pgx` is the PostgreSQL driver; `sqlc` generates type-safe Go from SQL;
+- **What:** `pgx` is the PostgreSQL driver; queries are **hand-written SQL** on `pgx`;
   `golang-migrate` applies versioned schema migrations.
-- **Why:** Raw SQL with generated types keeps the queries explicit and fast and the
-  Go layer type-checked, without an ORM's hidden query behavior — which matters for the
+- **Why:** Hand-written SQL keeps the queries explicit and fast and the Go layer
+  type-checked at the driver, without an ORM's hidden query behavior — which matters for the
   range/aggregate queries behind the dashboard (`P2-PERF-3`). Migrations are versioned
   files so schema changes are reviewable and reproducible in the container.
-- **How:** Queries live in `.sql` files compiled by `sqlc`; migrations run on `api`
-  startup. The TimescaleDB-specific DDL (hypertables, policies) lives in migrations.
-- **⚑ Alternatives & trip-wire:** **GORM / ent** (faster to scaffold, but obscure the
-  generated SQL and fight TimescaleDB-specific features); **plain `database/sql`**
-  (loses pgx's performance and Postgres type support). Revisit only if the query
-  surface grows enough that hand-written SQL becomes the bottleneck rather than the
-  schema.
+- **How:** Queries live next to their Go callers; migrations run on `api` startup and
+  create the tables, while the TimescaleDB-specific setup — hypertable conversion plus the
+  **env-tunable** retention policy — is applied at startup *after* migrating, so a
+  deploy-time retention change takes effect without a new migration.
+- **⚑ Alternatives & trip-wire:** **`sqlc`** (generates type-safe Go from *static* SQL) was
+  considered and dropped: TimescaleDB's `time_bucket` / `create_hypertable` and the dynamic
+  analytics query (runtime bucket interval + optional metric filter) fit its static-query
+  codegen poorly, and it adds a build-time tool — hand-written `pgx` keeps the same raw,
+  explicit, no-ORM discipline without it. **GORM / ent** (faster to scaffold, but obscure the
+  SQL and fight TimescaleDB-specific features); **plain `database/sql`** (loses pgx's
+  performance and Postgres type support). Revisit `sqlc` only if the query surface grows
+  large *and* stays static.
 
 ---
 
@@ -179,8 +184,8 @@ Recorded so the choice isn't re-litigated:
   `net/http` is enough; Fiber's non-`net/http` base complicates WS proxying and
   standard middleware.
 - **An ORM as the default (GORM / ent)** — obscures the SQL behind the perf-sensitive
-  range/aggregate queries and fights TimescaleDB features; `pgx` + `sqlc` is explicit
-  and type-safe.
+  range/aggregate queries and fights TimescaleDB features; `pgx` with hand-written SQL is
+  explicit and type-safe.
 - **A separate time-series database (InfluxDB) alongside Postgres** — rejected by
   [RFC-002](../../../decisions/request-for-comments.md#rfc-002-phase-2-persistence-layer);
   one TimescaleDB instance serves both shapes.

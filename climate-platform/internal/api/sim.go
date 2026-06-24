@@ -10,6 +10,8 @@ import (
 	"sync"
 
 	"github.com/labstack/echo/v4"
+
+	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/domain"
 )
 
 // getTimeScale relays the controller's current simulated-clock speed (sim-only). The
@@ -119,7 +121,7 @@ func readScale(c echo.Context) (*float64, *valError) {
 	}
 	var patch timeScalePatchDTO
 	if err := json.Unmarshal(raw, &patch); err != nil {
-		return nil, &valError{Field: "scale", Bound: "number 0.25..8.0", Value: nil}
+		return nil, &valError{Field: "scale", Bound: fmt.Sprintf("number %g..%g", domain.MinTimeScale, domain.MaxTimeScale), Value: nil}
 	}
 	if verr := validateScale(patch.Scale); verr != nil {
 		return nil, verr

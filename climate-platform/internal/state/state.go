@@ -67,8 +67,8 @@ func (f *Fleet) effectiveOffline(ent *entry) time.Duration {
 	if ent.timeScale != nil && *ent.timeScale > 0 {
 		scale = *ent.timeScale
 	}
-	if scale < 0.25 {
-		scale = 0.25
+	if scale < domain.MinTimeScale {
+		scale = domain.MinTimeScale
 	}
 	return time.Duration(float64(f.offlineAfter) / scale)
 }

@@ -168,5 +168,5 @@ func validateScale(scale *float64) *valError {
 	if scale == nil {
 		return &valError{Field: "scale", Bound: "required", Value: nil}
 	}
-	return rangeF("scale", scale, 0.25, 8.0)
+	return rangeF("scale", scale, domain.MinTimeScale, domain.MaxTimeScale)
 }

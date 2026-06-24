@@ -15,7 +15,8 @@
           }
         }
       },
-      "404": { "$ref": "../components/responses.json#/NotFound" }
+      "404": { "$ref": "../components/responses.json#/NotFound" },
+      "503": { "$ref": "../components/responses.json#/ServiceUnavailable" }
     }
   },
   "delete": {

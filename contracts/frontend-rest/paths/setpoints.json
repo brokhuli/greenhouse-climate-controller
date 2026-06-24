@@ -24,7 +24,8 @@
         }
       },
       "404": { "$ref": "../components/responses.json#/NotFound" },
-      "422": { "$ref": "../components/responses.json#/ValidationFailed" }
+      "422": { "$ref": "../components/responses.json#/ValidationFailed" },
+      "503": { "$ref": "../components/responses.json#/ServiceUnavailable" }
     }
   }
 }

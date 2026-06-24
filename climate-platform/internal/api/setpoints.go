@@ -1,9 +1,11 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -30,8 +32,11 @@ func (s *Server) editSetpoints(c echo.Context) error {
 	if err != nil {
 		return respondError(c, http.StatusBadRequest, "could not read body")
 	}
-	var patch setpointsPatchDTO
-	if err := json.Unmarshal(raw, &patch); err != nil {
+	patch, err := decodeSetpointsPatch(raw)
+	if err != nil {
+		if field, ok := unknownFieldName(err); ok {
+			return respondValidation(c, &valError{Field: field, Bound: "unknown field not permitted"})
+		}
 		return respondError(c, http.StatusBadRequest, "invalid JSON body")
 	}
 	if patchIsEmpty(patch) {
@@ -61,6 +66,26 @@ func (s *Server) editSetpoints(c echo.Context) error {
 		s.log.Info("setpoint edit relayed", "id", id, "status", resp.Status)
 	}
 	return c.JSONBlob(resp.Status, resp.Body)
+}
+
+// decodeSetpointsPatch parses the patch body, rejecting unknown fields to honor the
+// SetpointsPatch contract's additionalProperties:false (frontend-rest setpoints.json).
+// DisallowUnknownFields applies to nested zones[] objects too.
+func decodeSetpointsPatch(raw []byte) (setpointsPatchDTO, error) {
+	var patch setpointsPatchDTO
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	return patch, dec.Decode(&patch)
+}
+
+// unknownFieldName pulls the offending field out of a DisallowUnknownFields decode error
+// (Go reports `json: unknown field "x"`); ok is false for any other decode error.
+func unknownFieldName(err error) (string, bool) {
+	const prefix = "json: unknown field "
+	if msg := err.Error(); strings.HasPrefix(msg, prefix) {
+		return strings.Trim(strings.TrimPrefix(msg, prefix), `"`), true
+	}
+	return "", false
 }
 
 func patchIsEmpty(patch setpointsPatchDTO) bool {

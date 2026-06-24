@@ -19,6 +19,14 @@ var slugPattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 // ValidSlug reports whether s is a well-formed RFC-007 identity slug.
 func ValidSlug(s string) bool { return slugPattern.MatchString(s) }
 
+// MinTimeScale and MaxTimeScale bound the accepted simulation time-scale (controller
+// HAL §7): the sim REST surface accepts edits in this range and telemetry reports
+// within it. Liveness sizes its sweep cadence to MaxTimeScale (the fastest clock).
+const (
+	MinTimeScale = 0.25
+	MaxTimeScale = 8.0
+)
+
 // Connectivity is a greenhouse's controller connectivity as the platform derives it
 // from ingestion: online = fresh telemetry, degraded = a non-critical fault or stale
 // stream, offline = no contact. Offline is data absence, not a fault.
