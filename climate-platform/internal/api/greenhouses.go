@@ -72,12 +72,25 @@ func (s *Server) getGreenhouse(c echo.Context) error {
 	// 2a thin relay: the platform does not own setpoints (that is the 2b intended-state
 	// layer), so the detail snapshot reads the controller's current bundle live. A
 	// controller that is unreachable yields 503 rather than a stale guess.
-	resp, err := s.relay.Do(ctx, http.MethodGet, endpoint.RESTBaseURL, "/setpoints", endpoint.BearerToken, nil)
+	resp, err := s.relay.Do(ctx, http.MethodGet, endpoint.RESTBaseURL, controllerPath(id, "/setpoints"), endpoint.BearerToken, nil)
 	if err != nil {
 		return respondError(c, http.StatusServiceUnavailable, "controller unreachable")
 	}
 	if resp.Status != http.StatusOK {
 		return respondError(c, http.StatusServiceUnavailable, "controller did not return setpoints")
+	}
+	// The frontend-rest Setpoints bundle also carries per-zone targets, which the controller serves
+	// as a separate resource; aggregate /zones into the setpoints the SPA receives.
+	zonesResp, err := s.relay.Do(ctx, http.MethodGet, endpoint.RESTBaseURL, controllerPath(id, "/zones"), endpoint.BearerToken, nil)
+	if err != nil {
+		return respondError(c, http.StatusServiceUnavailable, "controller unreachable")
+	}
+	if zonesResp.Status != http.StatusOK {
+		return respondError(c, http.StatusServiceUnavailable, "controller did not return zones")
+	}
+	setpoints, err := mergeSetpointsZones(resp.Body, zonesResp.Body)
+	if err != nil {
+		return s.fail(c, err)
 	}
 	status, timeScale, _ := s.liveFields(id)
 	return c.JSON(http.StatusOK, greenhouseDetailDTO{
@@ -87,7 +100,7 @@ func (s *Server) getGreenhouse(c echo.Context) error {
 		Status:      status,
 		Drift:       false,
 		TimeScale:   timeScale,
-		Setpoints:   resp.Body,
+		Setpoints:   setpoints,
 	})
 }
 

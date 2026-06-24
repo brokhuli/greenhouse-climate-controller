@@ -1,11 +1,11 @@
 import { Radio, RefreshCw, Wifi, WifiOff } from "lucide-react";
+import type { ConnectionState } from "./connection";
 
 /**
  * Live indicator of the WebSocket health — the single most important trust signal on a real-time
  * dashboard (components spec §1). Never color-only: each state pairs an icon and a text label
- * (constraints §a11y). In 2a, with no socket wired yet, the shell renders "offline".
+ * (constraints §a11y). `TopBar` feeds it the live `StreamClient` state via `connectionStateFromWs`.
  */
-export type ConnectionState = "live" | "reconnecting" | "polling" | "offline";
 
 const STATE_META: Record<ConnectionState, { label: string; color: string; Icon: typeof Wifi }> = {
   live: { label: "Live", color: "var(--color-status-online)", Icon: Wifi },

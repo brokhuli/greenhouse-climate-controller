@@ -26,7 +26,7 @@ func (s *Server) getTimeScale(c echo.Context) error {
 	if !found {
 		return respondNotFound(c, "greenhouse not found")
 	}
-	resp, err := s.relay.Do(ctx, http.MethodGet, endpoint.RESTBaseURL, "/sim/time-scale", endpoint.BearerToken, nil)
+	resp, err := s.relay.Do(ctx, http.MethodGet, endpoint.RESTBaseURL, controllerPath(id, "/sim/time-scale"), endpoint.BearerToken, nil)
 	if err != nil {
 		return respondError(c, http.StatusServiceUnavailable, "controller unreachable")
 	}
@@ -50,7 +50,7 @@ func (s *Server) setTimeScale(c echo.Context) error {
 		return respondValidation(c, verr)
 	}
 	body, _ := json.Marshal(map[string]float64{"scale": *scale})
-	resp, err := s.relay.Do(ctx, http.MethodPut, endpoint.RESTBaseURL, "/sim/time-scale", endpoint.BearerToken, body)
+	resp, err := s.relay.Do(ctx, http.MethodPut, endpoint.RESTBaseURL, controllerPath(id, "/sim/time-scale"), endpoint.BearerToken, body)
 	if err != nil {
 		return respondError(c, http.StatusServiceUnavailable, "controller unreachable")
 	}
@@ -92,7 +92,7 @@ func (s *Server) setFleetTimeScale(c echo.Context) error {
 
 func (s *Server) relayFleetScale(ctx context.Context, id, baseURL string, token *string, body []byte) fleetTimeScaleEntryDTO {
 	entry := fleetTimeScaleEntryDTO{GreenhouseID: id}
-	resp, err := s.relay.Do(ctx, http.MethodPut, baseURL, "/sim/time-scale", token, body)
+	resp, err := s.relay.Do(ctx, http.MethodPut, baseURL, controllerPath(id, "/sim/time-scale"), token, body)
 	switch {
 	case err != nil:
 		entry.Detail = strPtr("offline")

@@ -77,6 +77,23 @@
     -webkit-font-smoothing: antialiased;
     font-variant-numeric: tabular-nums;
   }
+
+  /* One shared keyboard focus ring; mouse clicks don't show it (interactions §2). */
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  /* Functional motion only — suppress non-essential transitions (interactions §1). */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
 }
 
 @layer components {
