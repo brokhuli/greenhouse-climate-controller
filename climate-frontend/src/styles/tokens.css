@@ -1,0 +1,161 @@
+/*
+ * Design tokens — the single source of truth for the dashboard's visual atoms.
+ * Values are transcribed from docs/specs/design/frontend/07-spec-frontend-design-tokens.md.
+ * Theme-agnostic atoms live under :root; color + shadow values are theme-switched via
+ * [data-theme="dark"] (default) and [data-theme="light"]. Components reference these tokens
+ * (directly or through the Tailwind theme wired in global.css) — never raw hex.
+ */
+
+:root {
+  /* --- Chart & diagram tokens (theme-agnostic so a metric keeps its identity) --- */
+  --chart-temperature: #9ccc65; /* own value — NOT var(--color-status-online) */
+  --chart-humidity: #6ea8ff;
+  --chart-co2: #8b5cf6;
+  --chart-par: #ff8a00;
+  --chart-soil-moisture: #ff6b00;
+
+  --chart-setpoint: var(--color-fg-muted); /* dashed reference line */
+  --chart-band-ok: rgba(156, 204, 101, 0.12);
+  --chart-band-warn: rgba(255, 176, 32, 0.14);
+  --chart-band-fault: rgba(255, 77, 61, 0.14);
+  --chart-axis: var(--color-fg-muted);
+  --chart-grid: var(--color-divider);
+  --chart-gap: var(--color-border-strong); /* live-data gap marker */
+  --chart-stroke-width: 1.5px;
+  --chart-reference-width: 1px;
+  --chart-fill-opacity: 0.1;
+  --chart-plot-height: 180px;
+  --chart-sparkline-height: 40px;
+
+  /* --- Typography --- */
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* --- Spacing (4px linear scale) --- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+
+  /* --- Radii --- */
+  --radius-sm: 4px; /* pills, inputs */
+  --radius-md: 6px; /* buttons, segmented controls */
+  --radius-lg: 8px; /* cards and panels */
+  --radius-full: 9999px;
+
+  /* --- Control sizes --- */
+  --size-control-sm: 28px;
+  --size-control-md: 36px;
+  --size-icon-button: 36px;
+  --size-status-dot: 10px;
+  --size-touch-target: 44px; /* minimum interactive hit area */
+
+  /* --- Motion --- */
+  --motion-instant: 80ms;
+  --motion-quick: 150ms;
+  --motion-base: 220ms;
+  --ease-out: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-in-out: cubic-bezier(0.45, 0, 0.55, 1);
+
+  /* --- Z-index --- */
+  --z-base: 0;
+  --z-sticky: 30; /* sticky table headers, TopBar */
+  --z-drawer: 40; /* mobile nav drawer */
+  --z-popover: 100; /* ConnectionStatus popover */
+  --z-dialog: 110; /* confirmation dialogs */
+  --z-toast: 120;
+
+  /* --- Layout --- */
+  --layout-max-width: none; /* operations console fills the viewport */
+  --layout-sidenav-width: 240px;
+  --layout-detail-nav-width: 230px;
+  --layout-side-panel-width: 320px;
+  --layout-topbar-height: 64px;
+  --layout-gutter: 24px;
+  --layout-section-gap: 16px;
+  --layout-card-gap: 16px;
+
+  /* --- Breakpoints (referenced by JS / Tailwind config; --bp-md is the sidenav cutoff) --- */
+  --bp-sm: 640px;
+  --bp-md: 900px;
+  --bp-lg: 1280px;
+  --bp-xl: 1536px;
+}
+
+/* --- Dark (default) --- */
+:root,
+[data-theme="dark"] {
+  --color-bg: #151515;
+  --color-shell: #111211;
+  --color-surface-1: #1b1b1a;
+  --color-surface-2: #20201f;
+  --color-surface-3: #2a2927;
+  --color-surface-raised: #242321;
+
+  --color-fg-default: #f5f0e7;
+  --color-fg-muted: #c7bfb3;
+  --color-fg-subtle: #8d867d;
+  --color-fg-on-accent: #111211;
+  --color-fg-inverse: #111211;
+
+  --color-accent: #f1dfc2;
+  --color-accent-hover: #ead2ad;
+
+  --color-border: #343330;
+  --color-border-strong: #4a4741;
+  --color-divider: rgba(245, 240, 231, 0.1);
+
+  --color-status-online: #9ccc65;
+  --color-status-degraded: #ff8a00;
+  --color-status-offline: #6b7585; /* muted, not alarming */
+  --color-status-drift: #8b5cf6;
+  --color-fault: #ff4d3d;
+  --color-warning: #ffb020;
+  --color-info: #6ea8ff;
+
+  --shadow-sm: 0 1px 1px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.28);
+}
+
+/* --- Light (warm, earthy) --- */
+[data-theme="light"] {
+  --color-bg: #f7f2ea;
+  --color-shell: #f2eadf;
+  --color-surface-1: #fffdf8;
+  --color-surface-2: #f5efe6;
+  --color-surface-3: #ece4d8;
+  --color-surface-raised: #f9f4ec;
+
+  --color-fg-default: #111111;
+  --color-fg-muted: #4f4a43;
+  --color-fg-subtle: #8a8175;
+  --color-fg-on-accent: #ffffff;
+  --color-fg-inverse: #fffdf8;
+
+  --color-accent: #111111;
+  --color-accent-hover: #2a2927;
+
+  --color-border: #ded6ca;
+  --color-border-strong: #c8bdae;
+  --color-divider: rgba(17, 17, 17, 0.1);
+
+  --color-status-online: #111111;
+  --color-status-degraded: #ff6b00;
+  --color-status-offline: #8a8175; /* muted */
+  --color-status-drift: #5b2bbd;
+  --color-fault: #e11900;
+  --color-warning: #d97706;
+  --color-info: #2563eb;
+
+  --shadow-sm: 0 1px 1px rgba(32, 24, 16, 0.04);
+  --shadow-md: 0 8px 24px rgba(32, 24, 16, 0.08);
+}

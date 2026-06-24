@@ -83,7 +83,7 @@ services:
 
   # --- Later slices (placeholders — see 08-spec-platform-operations.md §2 Deployment) ---
   # frontend: # (2a frontend) React SPA — built and served by the proxy
-  #   build: ../climate-platform/frontend
+  #   build: ../climate-frontend
   #
   # proxy:    # (2a frontend) nginx — single entry point: serves the SPA, proxies /api (+ /auth in 2b)
   #   image: nginx:stable

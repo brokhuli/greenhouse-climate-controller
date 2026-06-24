@@ -1,0 +1,91 @@
+@import "tailwindcss";
+@import "./tokens.css";
+
+/*
+ * Expose the semantic tokens to Tailwind so components can write utilities like
+ * `bg-surface-1`, `text-fg-default`, `border-border`, `text-status-online`, `font-sans`,
+ * `rounded-lg` — never raw hex (design-tokens spec §8). `inline` keeps the var reference
+ * in the generated utility so a `[data-theme]` swap re-themes everything without Tailwind
+ * re-emitting (and shadowing) the theme-switched custom properties from tokens.css.
+ */
+@theme inline {
+  --color-bg: var(--color-bg);
+  --color-shell: var(--color-shell);
+  --color-surface-1: var(--color-surface-1);
+  --color-surface-2: var(--color-surface-2);
+  --color-surface-3: var(--color-surface-3);
+  --color-surface-raised: var(--color-surface-raised);
+
+  --color-fg-default: var(--color-fg-default);
+  --color-fg-muted: var(--color-fg-muted);
+  --color-fg-subtle: var(--color-fg-subtle);
+  --color-fg-on-accent: var(--color-fg-on-accent);
+  --color-fg-inverse: var(--color-fg-inverse);
+
+  --color-accent: var(--color-accent);
+  --color-accent-hover: var(--color-accent-hover);
+
+  --color-border: var(--color-border);
+  --color-border-strong: var(--color-border-strong);
+  --color-divider: var(--color-divider);
+
+  --color-status-online: var(--color-status-online);
+  --color-status-degraded: var(--color-status-degraded);
+  --color-status-offline: var(--color-status-offline);
+  --color-status-drift: var(--color-status-drift);
+  --color-fault: var(--color-fault);
+  --color-warning: var(--color-warning);
+  --color-info: var(--color-info);
+
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-full: var(--radius-full);
+
+  /* Type scale (size / line-height) — design-tokens spec §4. */
+  --text-xs: 11px;
+  --text-xs--line-height: 1.4;
+  --text-sm: 12px;
+  --text-sm--line-height: 1.45;
+  --text-base: 14px;
+  --text-base--line-height: 1.45;
+  --text-md: 16px;
+  --text-md--line-height: 1.35;
+  --text-lg: 20px;
+  --text-lg--line-height: 1.25;
+  --text-xl: 24px;
+  --text-xl--line-height: 1.2;
+  --text-2xl: 32px;
+  --text-2xl--line-height: 1.1;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-bg);
+    color: var(--color-fg-default);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  /* Shared section-heading style (e.g. "GREENHOUSES", "ACTIVE ALERTS") — spec §4. */
+  .section-label {
+    font-size: var(--text-xs);
+    font-weight: var(--font-weight-medium);
+    text-transform: uppercase;
+    letter-spacing: 0;
+    color: var(--color-fg-muted);
+  }
+}

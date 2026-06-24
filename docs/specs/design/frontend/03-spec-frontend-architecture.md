@@ -27,7 +27,7 @@
 │    ├─ REST client  ── GET history, profiles; PATCH/POST edits  │
 │    └─ WS client    ── live telemetry, status, drift, events    │
 └───────────────┬───────────────────────────────┬──────────────┘
-                │ HTTP (/api, /auth)              │ WS (/api/ws)
+                │ HTTP (/api, /auth)              │ WS (/api/stream)
                 ▼                                 ▼
         ┌───────────────────────────────────────────────┐
         │             Reverse proxy (nginx)              │
