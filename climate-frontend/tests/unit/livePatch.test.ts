@@ -40,7 +40,10 @@ const eventFrame: EventFrame = {
 const telemetryFrame: TelemetryFrame = {
   ...base,
   type: "telemetry",
-  readings: [{ metric: "temperature", value: 25, unit: "°C" }],
+  readings: [
+    { metric: "temperature", value: 25, unit: "°C" },
+    { metric: "humidity", value: 61, unit: "%RH" },
+  ],
 };
 
 describe("pure frame transforms", () => {
@@ -53,9 +56,13 @@ describe("pure frame transforms", () => {
     expect(applyStatusToSummary(next, statusFrame)).toBe(next);
   });
 
-  it("updates the card temperature from a house-level reading and ignores zone readings", () => {
-    const summary = sampleSummary({ climate: { temperature: 20, setpointTemperature: 24 } });
-    expect(applyTelemetryToSummary(summary, telemetryFrame).climate.temperature).toBe(25);
+  it("updates the card temperature + humidity from house-level readings and ignores zone readings", () => {
+    const summary = sampleSummary({
+      climate: { temperature: 20, humidity: 50, setpointTemperature: 24 },
+    });
+    const next = applyTelemetryToSummary(summary, telemetryFrame);
+    expect(next.climate.temperature).toBe(25);
+    expect(next.climate.humidity).toBe(61);
     const zoneFrame: TelemetryFrame = { ...telemetryFrame, zone_id: "bench-a" };
     expect(applyTelemetryToSummary(summary, zoneFrame)).toBe(summary);
   });

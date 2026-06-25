@@ -92,14 +92,14 @@ func (s *Server) getGreenhouse(c echo.Context) error {
 	if err != nil {
 		return s.fail(c, err)
 	}
-	status, timeScale, _ := s.liveFields(id)
+	live := s.liveFields(id)
 	return c.JSON(http.StatusOK, greenhouseDetailDTO{
 		ID:          greenhouse.ID,
 		DisplayName: greenhouse.DisplayName,
 		Crop:        greenhouse.Crop,
-		Status:      status,
+		Status:      live.Status,
 		Drift:       false,
-		TimeScale:   timeScale,
+		TimeScale:   live.TimeScale,
 		Setpoints:   setpoints,
 	})
 }
@@ -121,26 +121,38 @@ func (s *Server) retireGreenhouse(c echo.Context) error {
 
 // summaryOf overlays the in-memory live state onto a registry row.
 func (s *Server) summaryOf(greenhouse store.Greenhouse) greenhouseSummaryDTO {
-	status, timeScale, temperature := s.liveFields(greenhouse.ID)
+	live := s.liveFields(greenhouse.ID)
 	return greenhouseSummaryDTO{
 		ID:          greenhouse.ID,
 		DisplayName: greenhouse.DisplayName,
 		Crop:        greenhouse.Crop,
-		Status:      status,
+		Status:      live.Status,
 		Drift:       false,
-		TimeScale:   timeScale,
-		Climate:     climateDTO{Temperature: temperature, SetpointTemperature: nil},
+		TimeScale:   live.TimeScale,
+		Climate:     climateDTO{Temperature: live.Temperature, Humidity: live.Humidity, SetpointTemperature: nil},
 	}
 }
 
-// liveFields returns a greenhouse's derived status, time-scale, and latest temperature,
-// defaulting to offline when no telemetry has been seen yet.
-func (s *Server) liveFields(id string) (status string, timeScale, temperature *float64) {
+// liveSummary is the live state a fleet summary reads: derived status (offline when no
+// telemetry has been seen yet), simulation time-scale, and the latest house readings.
+type liveSummary struct {
+	Status      string
+	TimeScale   *float64
+	Temperature *float64
+	Humidity    *float64
+}
+
+func (s *Server) liveFields(id string) liveSummary {
 	live, ok := s.fleet.Get(id)
 	if !ok {
-		return string(domain.StatusOffline), nil, nil
+		return liveSummary{Status: string(domain.StatusOffline)}
 	}
-	return string(live.Status), live.TimeScale, live.Temperature
+	return liveSummary{
+		Status:      string(live.Status),
+		TimeScale:   live.TimeScale,
+		Temperature: live.Temperature,
+		Humidity:    live.Humidity,
+	}
 }
 
 func (s *Server) fail(c echo.Context, err error) error {

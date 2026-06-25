@@ -77,7 +77,7 @@ export const sampleSummary = (overrides: Partial<GreenhouseSummary> = {}): Green
   status: "online",
   drift: false,
   timeScale: null,
-  climate: { temperature: 22.4, setpointTemperature: 24 },
+  climate: { temperature: 22.4, humidity: 58, setpointTemperature: 24 },
   ...overrides,
 });
 

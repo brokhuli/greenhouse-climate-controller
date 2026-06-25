@@ -121,6 +121,7 @@ export const wireSetpointsPatch = wireSetpoints
 const wireClimate = z
   .object({
     temperature: z.number().nullable(),
+    humidity: z.number().nullable(),
     setpoint_temperature: z.number().nullable(),
   })
   .partial();
@@ -362,6 +363,7 @@ export type SetpointsPatch = Partial<Setpoints>;
 
 export type GreenhouseClimate = {
   temperature?: number | null;
+  humidity?: number | null;
   setpointTemperature?: number | null;
 };
 
@@ -483,6 +485,7 @@ export const toGreenhouseSummary = (
   timeScale: w.time_scale ?? null,
   climate: {
     temperature: w.climate?.temperature ?? null,
+    humidity: w.climate?.humidity ?? null,
     setpointTemperature: w.climate?.setpoint_temperature ?? null,
   },
 });

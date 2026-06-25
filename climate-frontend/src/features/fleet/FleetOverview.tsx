@@ -45,7 +45,7 @@ export default function FleetOverview() {
       {fleet.isLoading ? (
         <div className={GRID}>
           {Array.from({ length: 6 }).map((_, index) => (
-            <Skeleton key={index} height={168} />
+            <Skeleton key={index} height={288} />
           ))}
         </div>
       ) : fleet.isError ? (
