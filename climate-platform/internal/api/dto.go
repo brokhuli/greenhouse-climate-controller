@@ -135,6 +135,20 @@ type analyticsResponseDTO struct {
 	Series       []analyticsSeriesDTO `json:"series"`
 }
 
+// --- fleet sparklines ---
+
+type greenhouseSparklineDTO struct {
+	GreenhouseID string       `json:"greenhouse_id"`
+	Readings     []readingDTO `json:"readings"`
+}
+
+type fleetSparklinesDTO struct {
+	From   string                   `json:"from"`
+	To     string                   `json:"to"`
+	Metric string                   `json:"metric"`
+	Series []greenhouseSparklineDTO `json:"series"`
+}
+
 // --- events ---
 
 type eventEntryDTO struct {

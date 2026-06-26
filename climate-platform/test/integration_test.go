@@ -117,3 +117,81 @@ func TestStoreRoundTrip(t *testing.T) {
 		t.Fatalf("retire found=%v err=%v", found, err)
 	}
 }
+
+func TestFleetSparklines(t *testing.T) {
+	ctx := context.Background()
+	dsn := newTimescale(t)
+
+	if err := store.Migrate(dsn); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	st, err := store.Open(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer st.Close()
+	if err := st.EnsureTimescale(ctx, 30); err != nil {
+		t.Fatalf("ensure timescale: %v", err)
+	}
+
+	// Two greenhouses whose simulated clocks are 3h apart: the window must anchor to each
+	// greenhouse's own latest reading, not a single fleet-wide span (which couldn't cover both).
+	bench := "bench-a"
+	aLatest := time.Date(2026, 1, 1, 1, 0, 0, 0, time.UTC)
+	bLatest := aLatest.Add(3 * time.Hour)
+	reading := func(id string, ts time.Time) domain.Reading {
+		return domain.Reading{GreenhouseID: id, Metric: "temperature", Value: 21, Unit: "°C", TS: ts}
+	}
+	var readings []domain.Reading
+	// gh-a: 90 min of history, so its oldest 30 min fall outside the resolved 1h window.
+	for m := 90; m >= 0; m -= 2 {
+		readings = append(readings, reading("gh-a", aLatest.Add(-time.Duration(m)*time.Minute)))
+	}
+	// gh-b: 30 min of history, ending 3h after gh-a's latest reading.
+	for m := 30; m >= 0; m -= 2 {
+		readings = append(readings, reading("gh-b", bLatest.Add(-time.Duration(m)*time.Minute)))
+	}
+	// A zone-scoped reading that must NOT leak into the house-level sparkline.
+	readings = append(readings, domain.Reading{
+		GreenhouseID: "gh-a", Metric: "soil_moisture", ZoneID: &bench, Value: 0.42, Unit: "%", TS: aLatest,
+	})
+	if err := st.InsertReadings(ctx, readings); err != nil {
+		t.Fatalf("insert readings: %v", err)
+	}
+
+	rows, err := st.FleetSparklines(ctx, "3600 seconds", "temperature", "60 seconds")
+	if err != nil {
+		t.Fatalf("fleet sparklines: %v", err)
+	}
+	byID := map[string][]time.Time{}
+	for _, row := range rows {
+		byID[row.GreenhouseID] = append(byID[row.GreenhouseID], row.BucketStart.UTC())
+	}
+	if len(byID) != 2 {
+		t.Fatalf("want exactly 2 greenhouses (zone reading excluded), got %v", byID)
+	}
+	// Each greenhouse's buckets fall within its own (latest-1h, latest] — proving per-greenhouse anchoring.
+	for _, gh := range []struct {
+		id     string
+		latest time.Time
+	}{{"gh-a", aLatest}, {"gh-b", bLatest}} {
+		buckets := byID[gh.id]
+		if len(buckets) == 0 {
+			t.Fatalf("%s: no buckets in its anchored window", gh.id)
+		}
+		floor := gh.latest.Add(-time.Hour)
+		for _, b := range buckets {
+			if !b.After(floor) || b.After(gh.latest) {
+				t.Fatalf("%s: bucket %s outside anchored window (%s, %s]", gh.id, b, floor, gh.latest)
+			}
+		}
+	}
+
+	// LatestReadingTS anchors to stored time per greenhouse; unknown greenhouses report no data.
+	if ts, ok, err := st.LatestReadingTS(ctx, "gh-b"); err != nil || !ok || !ts.UTC().Equal(bLatest) {
+		t.Fatalf("LatestReadingTS(gh-b)=%v ok=%v err=%v, want %v ok=true", ts, ok, err, bLatest)
+	}
+	if _, ok, err := st.LatestReadingTS(ctx, "ghost"); err != nil || ok {
+		t.Fatalf("LatestReadingTS(unknown) ok=%v err=%v, want ok=false", ok, err)
+	}
+}

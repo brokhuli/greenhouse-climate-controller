@@ -51,6 +51,7 @@ func (s *Server) routes(router *echo.Echo) {
 	api := router.Group("/api")
 	api.GET("/greenhouses", s.listGreenhouses)
 	api.POST("/greenhouses", s.registerGreenhouse)
+	api.GET("/greenhouses/sparklines", s.getFleetSparklines) // static segment resolves before :id
 	api.GET("/greenhouses/:id", s.getGreenhouse)
 	api.DELETE("/greenhouses/:id", s.retireGreenhouse)
 	api.PATCH("/greenhouses/:id/setpoints", s.editSetpoints)

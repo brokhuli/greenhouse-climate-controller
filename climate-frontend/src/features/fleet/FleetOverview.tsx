@@ -1,11 +1,16 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Plus } from "lucide-react";
 import { useFleet } from "../../api/queries/greenhouses";
+import { useFleetSparklines } from "../../api/queries/fleet";
 import { statusRollup } from "../../lib/derivations";
 import { Button } from "../../components/ui/Button";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ErrorState } from "../../components/ui/ErrorState";
 import { Skeleton } from "../../components/ui/Skeleton";
+import { isRangeKey, rangeMs, type RangeKey } from "../greenhouse/range";
+import { RangePicker } from "../greenhouse/RangePicker";
+import { historyFor, indexFleetHistory } from "./fleetHistory";
 import { FleetSummaryBar } from "./FleetSummaryBar";
 import { FleetTimeScaleControl } from "./FleetTimeScaleControl";
 import { GreenhouseCard } from "./GreenhouseCard";
@@ -21,6 +26,24 @@ const GRID = "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-
 export default function FleetOverview() {
   const fleet = useFleet();
   const [registerOpen, setRegisterOpen] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // The card window is a deep-linkable ?window= choice (default 1h), independent of the detail view's
+  // ?range=. Both pickers share the same option set (range.ts).
+  const windowKey: RangeKey = isRangeKey(searchParams.get("window"))
+    ? (searchParams.get("window") as RangeKey)
+    : "1h";
+  const setWindow = (key: RangeKey) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("window", key);
+    setSearchParams(next, { replace: true });
+  };
+
+  // One batched history fetch seeds every card's chart with the selected window (refreshed on an
+  // interval inside the hook); the live WebSocket tail keeps the leading edge current between refreshes.
+  const sparklines = useFleetSparklines(windowKey);
+  const history = useMemo(() => indexFleetHistory(sparklines.data), [sparklines.data]);
+  const windowMs = rangeMs(windowKey);
 
   const summaries = fleet.data ?? [];
   const anySim = summaries.some((summary) => summary.timeScale != null);
@@ -33,8 +56,19 @@ export default function FleetOverview() {
     <div className="flex flex-col" style={{ gap: "var(--layout-section-gap)" }}>
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-fg-default text-lg font-semibold">Fleet overview</h2>
-        <div className="flex items-center gap-3">
-          {anySim ? <FleetTimeScaleControl currentScale={commonScale} /> : null}
+        <div className="flex flex-wrap items-center gap-3">
+          {anySim ? (
+            <>
+              <span className="text-fg-muted text-sm">Speed</span>
+              <FleetTimeScaleControl currentScale={commonScale} />
+            </>
+          ) : null}
+          {summaries.length > 0 ? (
+            <>
+              <span className="text-fg-muted text-sm">Timescale</span>
+              <RangePicker value={windowKey} onChange={setWindow} />
+            </>
+          ) : null}
           <Button variant="primary" onClick={() => setRegisterOpen(true)}>
             <Plus size={16} aria-hidden />
             Register
@@ -69,7 +103,12 @@ export default function FleetOverview() {
           <FleetSummaryBar rollup={statusRollup(summaries)} />
           <div className={GRID}>
             {summaries.map((summary) => (
-              <GreenhouseCard key={summary.id} summary={summary} />
+              <GreenhouseCard
+                key={summary.id}
+                summary={summary}
+                history={historyFor(history, summary.id)}
+                windowMs={windowMs}
+              />
             ))}
           </div>
         </>

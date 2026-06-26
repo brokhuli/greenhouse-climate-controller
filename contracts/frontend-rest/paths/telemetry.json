@@ -1,13 +1,12 @@
 {
   "parameters": [
     { "$ref": "../components/parameters.json#/GreenhouseId" },
-    { "$ref": "../components/parameters.json#/From" },
-    { "$ref": "../components/parameters.json#/To" }
+    { "$ref": "../components/parameters.json#/Window" }
   ],
   "get": {
     "operationId": "getTelemetryRange",
     "summary": "Historical telemetry range query",
-    "description": "Sensor series and actuator states for one greenhouse over [from, to] — the historical seed the SPA caches and merges with the live WebSocket edge (frontend data model §4, §6, key [\"telemetry\", id, range]). An invalid window (e.g. from after to) is rejected with 422.",
+    "description": "Sensor series and actuator states for one greenhouse over the trailing `window` — the historical seed the SPA caches and merges with the live WebSocket edge (frontend data model §4, §6, key [\"telemetry\", id, range]). The window is resolved server-side against the greenhouse's latest stored (simulated) timestamp; the response `from`/`to` report the resolved span. An unknown window is rejected with 422.",
     "x-slice": "2a",
     "security": [],
     "responses": {

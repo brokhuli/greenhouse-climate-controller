@@ -180,6 +180,18 @@ export const wireTelemetryRange = z.object({
   actuators: z.array(wireActuatorState),
 });
 
+export const wireFleetSparklineSeries = z.object({
+  greenhouse_id: slug,
+  readings: z.array(wireReading),
+});
+
+export const wireFleetSparklines = z.object({
+  from: isoTimestamp,
+  to: isoTimestamp,
+  metric: metricSchema,
+  series: z.array(wireFleetSparklineSeries),
+});
+
 export const wireAnalyticsBucket = z.object({
   bucket_start: isoTimestamp,
   min: z.number(),
@@ -411,6 +423,14 @@ export type TelemetryRange = {
   actuators: ActuatorState[];
 };
 
+export type FleetSparklineSeries = { greenhouseId: string; readings: Reading[] };
+export type FleetSparklines = {
+  from: Date;
+  to: Date;
+  metric: Metric;
+  series: FleetSparklineSeries[];
+};
+
 export type AnalyticsBucket = {
   bucketStart: Date;
   min: number;
@@ -525,6 +545,20 @@ export const toTelemetryRange = (w: z.infer<typeof wireTelemetryRange>): Telemet
   to: new Date(w.to),
   series: w.series.map(toTelemetrySeries),
   actuators: w.actuators.map(toActuatorState),
+});
+
+export const toFleetSparklineSeries = (
+  w: z.infer<typeof wireFleetSparklineSeries>,
+): FleetSparklineSeries => ({
+  greenhouseId: w.greenhouse_id,
+  readings: w.readings.map(toReading),
+});
+
+export const toFleetSparklines = (w: z.infer<typeof wireFleetSparklines>): FleetSparklines => ({
+  from: new Date(w.from),
+  to: new Date(w.to),
+  metric: w.metric,
+  series: w.series.map(toFleetSparklineSeries),
 });
 
 export const toAnalyticsBucket = (w: z.infer<typeof wireAnalyticsBucket>): AnalyticsBucket => ({

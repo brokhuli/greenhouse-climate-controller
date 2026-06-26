@@ -3,7 +3,9 @@ import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
 import type { SeriesPoint } from "../../lib/derivations";
 import { withAlpha } from "../../lib/color";
+import { wholeNumberBounds } from "../../lib/chartScale";
 import { formatClockSeconds, formatClockTime, formatTimestamp } from "../../lib/timeFormat";
+import { useTheme } from "../../hooks/theme";
 
 /**
  * The live + historical line chart (components §3), rendered with uPlot's canvas so a moving window
@@ -133,6 +135,7 @@ export function TimeSeriesChart({
   height?: number;
   unit?: string;
 }) {
+  const { theme } = useTheme();
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<uPlot | null>(null);
   const [canvasReady, setCanvasReady] = useState(false);
@@ -155,6 +158,7 @@ export function TimeSeriesChart({
   // Recreate the plot only when its *structure* changes (variant/height/series/refs config), not
   // when points stream in — those go through setData below.
   const structureKey = JSON.stringify({
+    theme,
     variant,
     plotHeight,
     seriesLabel: series.label,
@@ -189,17 +193,23 @@ export function TimeSeriesChart({
       })),
     ];
 
-    const axisStroke = resolveColor("var(--color-fg-muted)");
-    const gridStroke = resolveColor("var(--color-divider)");
+    const axisStroke = resolveColor(isCard ? "var(--color-fg-subtle)" : "var(--color-fg-muted)");
+    const gridStroke = resolveColor(isCard ? "var(--color-border)" : "var(--color-divider)");
     // Frame the plot area (left + bottom axis lines) to match the metric tiles' border exactly:
     // same token (--color-border) and 1px weight (Tailwind `border`). Sparkline stays bare.
     const axisBorder: uPlot.Axis.Border | undefined = isSparkline
       ? undefined
-      : { show: true, stroke: resolveColor("var(--color-border)"), width: 1 };
+      : {
+          show: true,
+          stroke: resolveColor(isCard ? "var(--color-border)" : "var(--color-divider)"),
+          width: 1,
+        };
     const padding: uPlot.Padding = isSparkline
       ? [2, 2, 2, 2]
       : isCard
-        ? [4, 0, 0, 0]
+        ? // Top padding clears the topmost y-axis label (its upper half overflows the plot area);
+          // 4px clipped it, so match the detail view's proven 8px.
+          [8, 0, 0, 0]
         : [8, 8, 0, 0];
     const opts: uPlot.Options = {
       width,
@@ -214,7 +224,12 @@ export function TimeSeriesChart({
               isCard ? formatClockSeconds : formatTimestamp,
             ),
           ],
-      scales: { x: { time: true } },
+      scales: {
+        x: { time: true },
+        // Card y-axis allows only integer ticks; snap the range out to whole-number bounds so at
+        // least the min/max labels always render even when the data sits between two integers.
+        ...(isCard ? { y: { range: (_u, min, max) => wholeNumberBounds(min, max) } } : {}),
+      },
       padding,
       axes: isSparkline
         ? [{ show: false }, { show: false }]

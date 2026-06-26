@@ -27,7 +27,7 @@ export function SideNav() {
           className={({ isActive }) =>
             `flex items-center gap-3 rounded-md px-3 py-2 text-base ${
               isActive
-                ? "bg-surface-3 text-fg-default"
+                ? "bg-accent text-fg-on-accent hover:bg-accent-hover"
                 : "text-fg-muted hover:bg-surface-3 hover:text-fg-default"
             }`
           }

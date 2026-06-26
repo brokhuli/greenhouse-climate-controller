@@ -13,19 +13,16 @@
     "description": "Crop-profile identity, unique within the site.",
     "schema": { "$ref": "./schemas/common.json#/Slug" }
   },
-  "From": {
-    "name": "from",
+  "Window": {
+    "name": "window",
     "in": "query",
-    "required": true,
-    "description": "Start of the telemetry window (RFC 3339 UTC). Must be at or before `to`.",
-    "schema": { "type": "string", "format": "date-time" }
-  },
-  "To": {
-    "name": "to",
-    "in": "query",
-    "required": true,
-    "description": "End of the telemetry window (RFC 3339 UTC). Must be at or after `from`.",
-    "schema": { "type": "string", "format": "date-time" }
+    "required": false,
+    "description": "Trailing history window. Resolved server-side against each greenhouse's latest stored (simulated) timestamp — `[latest − window, latest]` — not the caller's wall clock, since telemetry is timestamped on the simulated clock. Defaults to 1h when omitted.",
+    "schema": {
+      "type": "string",
+      "enum": ["15m", "30m", "1h", "6h", "24h"],
+      "default": "1h"
+    }
   },
   "Metric": {
     "name": "metric",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import FleetOverview from "../../src/features/fleet/FleetOverview";
 import { queryKeys } from "../../src/api/queries/keys";
 import { makeClient, renderWithProviders, sampleSummary } from "../utils";
@@ -26,6 +26,22 @@ describe("FleetOverview", () => {
     // "Online" surfaces as a card connectivity badge; "Offline" as both a badge and a rollup tile.
     expect(screen.getAllByText("Online").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Offline").length).toBeGreaterThan(0);
+  });
+
+  it("offers the shared range options and reflects the selection", () => {
+    const client = makeClient();
+    client.setQueryData(queryKeys.fleet(), [sampleSummary({ id: "gh-a" })]);
+    renderWithProviders(<FleetOverview />, { client });
+
+    for (const option of ["15m", "30m", "1h", "6h", "24h"]) {
+      expect(screen.getByRole("radio", { name: option })).toBeInTheDocument();
+    }
+    // Defaults to 1h; selecting another option moves the checked state.
+    expect(screen.getByRole("radio", { name: "1h" })).toHaveAttribute("aria-checked", "true");
+
+    fireEvent.click(screen.getByRole("radio", { name: "15m" }));
+    expect(screen.getByRole("radio", { name: "15m" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("radio", { name: "1h" })).toHaveAttribute("aria-checked", "false");
   });
 
   it("renders the fleet summary bar with its labeled rollup tiles", () => {

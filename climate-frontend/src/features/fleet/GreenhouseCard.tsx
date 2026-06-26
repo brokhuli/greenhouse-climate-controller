@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { Link } from "react-router-dom";
 import { ChevronRight } from "lucide-react";
-import type { Connectivity, GreenhouseSummary } from "../../api/schemas";
+import type { Connectivity, GreenhouseSummary, Reading } from "../../api/schemas";
 import { liveSeriesKey, useLiveSeries } from "../../hooks/useLiveSeries";
 import { mergeReadings } from "../../lib/derivations";
 import { MetricTile } from "../../components/ui/MetricTile";
@@ -10,12 +10,13 @@ import { TimeScaleIndicator } from "../../components/ui/TimeScaleControl";
 import { TimeSeriesChart } from "../../components/ui/TimeSeriesChart";
 
 const CHART_HEIGHT = 80;
+const TEMPERATURE_CHART_COLOR = "var(--chart-temperature)";
+
+const NO_HISTORY: readonly Reading[] = [];
 
 /**
- * The per-card accent (status dot + trend stroke): connectivity color, with drift taking over an
- * otherwise-online card. Offline and degraded outrank drift since they're the more pressing signal.
- * This intentionally overrides the metric-identity chart color so the trend reads as the card's
- * health at a glance (per the fleet mockup).
+ * The per-card accent for status UI: connectivity color, with drift taking over an otherwise-online
+ * card. Offline and degraded outrank drift since they're the more pressing signal.
  */
 function accentColor(status: Connectivity, drift: boolean): string {
   if (status === "offline") return "var(--color-status-offline)";
@@ -29,9 +30,21 @@ function accentColor(status: Connectivity, drift: boolean): string {
  * offline greenhouse mutes without changing the card's anatomy (stable min-height so the grid
  * doesn't reflow). Memoized so a frame for greenhouse B doesn't re-render greenhouse A's card.
  */
-function GreenhouseCardImpl({ summary }: { summary: GreenhouseSummary }) {
+function GreenhouseCardImpl({
+  summary,
+  history = NO_HISTORY,
+  windowMs,
+}: {
+  summary: GreenhouseSummary;
+  history?: readonly Reading[];
+  /** Visible span (ms), from the fleet range picker — keeps the merge bound matched to the fetched window. */
+  windowMs: number;
+}) {
   const live = useLiveSeries(summary.id);
-  const points = mergeReadings(live.get(liveSeriesKey("temperature")) ?? [], []);
+  // History (batched REST seed) is the base; the live WebSocket tail wins on timestamp collisions.
+  const points = mergeReadings(history, live.get(liveSeriesKey("temperature")) ?? [], {
+    windowMs,
+  });
   const offline = summary.status === "offline";
   const showSpeed = summary.timeScale != null && summary.timeScale !== 1;
   const accent = accentColor(summary.status, summary.drift);
@@ -89,7 +102,7 @@ function GreenhouseCardImpl({ summary }: { summary: GreenhouseSummary }) {
             variant="card"
             height={CHART_HEIGHT}
             unit="°C"
-            series={{ label: "Temperature", color: accent, points }}
+            series={{ label: "Temperature", color: TEMPERATURE_CHART_COLOR, points }}
           />
         ) : (
           <div

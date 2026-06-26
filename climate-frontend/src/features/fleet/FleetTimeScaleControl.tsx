@@ -12,9 +12,7 @@ export function FleetTimeScaleControl({ currentScale }: { currentScale: number |
   const mutation = useSetFleetTimeScale();
 
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-fg-muted text-sm">Set all speed</span>
-      <TimeScaleControl
+    <TimeScaleControl
         value={currentScale}
         pending={mutation.isPending}
         label="Fleet simulation speed"
@@ -40,7 +38,6 @@ export function FleetTimeScaleControl({ currentScale }: { currentScale: number |
               }),
           })
         }
-      />
-    </div>
+    />
   );
 }

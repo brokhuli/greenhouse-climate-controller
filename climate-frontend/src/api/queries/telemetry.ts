@@ -19,14 +19,14 @@ const query = (params: Record<string, string | undefined>): string => {
   return encoded ? `?${encoded}` : "";
 };
 
-/** Raw historical telemetry over [from, to] — the chart's historical portion for short ranges. */
+/** Raw historical telemetry over the trailing window — the chart's historical portion for short ranges. */
 export function useTelemetry(id: string, range: RangeParams) {
   return useQuery({
     queryKey: queryKeys.telemetry(id, range),
     queryFn: async () =>
       toTelemetryRange(
         await apiClient.get(
-          `/greenhouses/${id}/telemetry${query({ from: range.from, to: range.to })}`,
+          `/greenhouses/${id}/telemetry${query({ window: range.window })}`,
           wireTelemetryRange,
         ),
       ),
@@ -34,7 +34,7 @@ export function useTelemetry(id: string, range: RangeParams) {
   });
 }
 
-/** Time-bucketed aggregates over [from, to] — the chart's historical portion for long ranges. */
+/** Time-bucketed aggregates over the trailing window — the chart's historical portion for long ranges. */
 export function useAnalytics(
   id: string,
   range: RangeParams,
@@ -46,7 +46,7 @@ export function useAnalytics(
     queryFn: async () =>
       toAnalyticsResponse(
         await apiClient.get(
-          `/greenhouses/${id}/analytics${query({ from: range.from, to: range.to, interval, metric })}`,
+          `/greenhouses/${id}/analytics${query({ window: range.window, interval, metric })}`,
           wireAnalyticsResponse,
         ),
       ),

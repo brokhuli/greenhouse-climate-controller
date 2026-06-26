@@ -95,11 +95,9 @@ export default function GreenhouseDetail() {
   };
 
   const windowMs = rangeMs(rangeKey);
-  const historyWindow = useMemo(() => {
-    const to = new Date();
-    const from = new Date(to.getTime() - windowMs);
-    return { from: from.toISOString(), to: to.toISOString() };
-  }, [windowMs]);
+  // The server resolves this window against the greenhouse's latest stored (simulated) timestamp,
+  // so the seed lands on the same sim-time axis as the live edge (not the browser's wall clock).
+  const historyWindow = useMemo(() => ({ window: rangeKey }), [rangeKey]);
   const tier = rangeTierSelection(windowMs);
   const isRaw = tier.tier === "raw";
 
@@ -156,8 +154,12 @@ export default function GreenhouseDetail() {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           {detail.timeScale != null ? (
-            <GreenhouseTimeScaleControl greenhouseId={id} scale={detail.timeScale} />
+            <>
+              <span className="text-fg-muted text-sm">Speed</span>
+              <GreenhouseTimeScaleControl greenhouseId={id} scale={detail.timeScale} />
+            </>
           ) : null}
+          <span className="text-fg-muted text-sm">Timescale</span>
           <RangePicker value={rangeKey} onChange={setRange} />
           <RetireGreenhouseAction greenhouseId={id} displayName={detail.displayName} />
         </div>

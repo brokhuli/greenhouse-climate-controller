@@ -1,15 +1,14 @@
 {
   "parameters": [
     { "$ref": "../components/parameters.json#/GreenhouseId" },
-    { "$ref": "../components/parameters.json#/From" },
-    { "$ref": "../components/parameters.json#/To" },
+    { "$ref": "../components/parameters.json#/Window" },
     { "$ref": "../components/parameters.json#/Metric" },
     { "$ref": "../components/parameters.json#/Interval" }
   ],
   "get": {
     "operationId": "getAnalytics",
     "summary": "Aggregated telemetry (derived series)",
-    "description": "Time-bucketed min/max/avg/count aggregates per metric for one greenhouse over [from, to] — the derived series the dashboard charts for trends, distinct from the raw telemetry range query (platform interfaces §3 analytics surface; data model §4). `interval` sets the bucket size (default 1h); `metric` optionally restricts to one metric. An invalid window (from after to) or unknown interval/metric is rejected with 422.",
+    "description": "Time-bucketed min/max/avg/count aggregates per metric for one greenhouse over the trailing `window` — the derived series the dashboard charts for trends, distinct from the raw telemetry range query (platform interfaces §3 analytics surface; data model §4). The window is resolved server-side against the greenhouse's latest stored (simulated) timestamp; the response `from`/`to` report the resolved span. `interval` sets the bucket size (default 1h); `metric` optionally restricts to one metric. An unknown window, interval, or metric is rejected with 422.",
     "x-slice": "2a",
     "security": [],
     "responses": {

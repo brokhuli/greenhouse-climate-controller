@@ -61,14 +61,14 @@ export function FleetSummaryBar({ rollup }: { rollup: StatusRollup }) {
         value={rollup.total}
         caption="All sites"
         Icon={Activity}
-        color="var(--color-status-online)"
+        color="var(--chart-temperature)"
       />
       <Stat
         label="Healthy"
         value={rollup.online}
         caption="Reporting normally"
         Icon={CircleCheck}
-        color="var(--color-status-online)"
+        color="var(--chart-temperature)"
       />
       <Stat
         label="Attention Needed"

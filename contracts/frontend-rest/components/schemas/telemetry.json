@@ -99,5 +99,43 @@
     },
     "required": ["greenhouse_id", "from", "to", "series", "actuators"],
     "additionalProperties": false
+  },
+  "FleetSparklineSeries": {
+    "type": "object",
+    "description": "One greenhouse's recent house-level readings for the fleet sparkline batch.",
+    "properties": {
+      "greenhouse_id": { "$ref": "./common.json#/Slug" },
+      "readings": {
+        "type": "array",
+        "description": "Downsampled samples for the requested metric, ordered by timestamp.",
+        "items": { "$ref": "#/Reading" }
+      }
+    },
+    "required": ["greenhouse_id", "readings"],
+    "additionalProperties": false
+  },
+  "FleetSparklines": {
+    "type": "object",
+    "description": "Recent house-level history for every greenhouse in one batched query, used to seed the fleet-overview cards' charts on init instead of one telemetry request per card. Readings are server-downsampled (bucketed averages) to a few dozen points per greenhouse.",
+    "properties": {
+      "from": {
+        "type": "string",
+        "format": "date-time",
+        "description": "Start of the returned window (RFC 3339 UTC, ms)."
+      },
+      "to": {
+        "type": "string",
+        "format": "date-time",
+        "description": "End of the returned window (RFC 3339 UTC, ms)."
+      },
+      "metric": { "$ref": "#/Metric" },
+      "series": {
+        "type": "array",
+        "description": "One entry per greenhouse that has readings in the window; greenhouses without data are omitted.",
+        "items": { "$ref": "#/FleetSparklineSeries" }
+      }
+    },
+    "required": ["from", "to", "metric", "series"],
+    "additionalProperties": false
   }
 }
