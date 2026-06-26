@@ -1,14 +1,14 @@
 import { useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
 import { Plus } from "lucide-react";
 import { useFleet } from "../../api/queries/greenhouses";
 import { useFleetSparklines } from "../../api/queries/fleet";
+import { usePersistentRange } from "../../hooks/usePersistentRange";
 import { statusRollup } from "../../lib/derivations";
 import { Button } from "../../components/ui/Button";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ErrorState } from "../../components/ui/ErrorState";
 import { Skeleton } from "../../components/ui/Skeleton";
-import { isRangeKey, rangeMs, type RangeKey } from "../greenhouse/range";
+import { rangeMs } from "../greenhouse/range";
 import { RangePicker } from "../greenhouse/RangePicker";
 import { historyFor, indexFleetHistory } from "./fleetHistory";
 import { FleetSummaryBar } from "./FleetSummaryBar";
@@ -26,18 +26,11 @@ const GRID = "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-
 export default function FleetOverview() {
   const fleet = useFleet();
   const [registerOpen, setRegisterOpen] = useState(false);
-  const [searchParams, setSearchParams] = useSearchParams();
 
   // The card window is a deep-linkable ?window= choice (default 1h), independent of the detail view's
-  // ?range=. Both pickers share the same option set (range.ts).
-  const windowKey: RangeKey = isRangeKey(searchParams.get("window"))
-    ? (searchParams.get("window") as RangeKey)
-    : "1h";
-  const setWindow = (key: RangeKey) => {
-    const next = new URLSearchParams(searchParams);
-    next.set("window", key);
-    setSearchParams(next, { replace: true });
-  };
+  // ?range=. Both pickers share the same option set (range.ts). The last pick persists across
+  // remounts via localStorage, so navigating away and back keeps the chosen window.
+  const [windowKey, setWindow] = usePersistentRange("window", "fleet:window");
 
   // One batched history fetch seeds every card's chart with the selected window (refreshed on an
   // interval inside the hook); the live WebSocket tail keeps the leading edge current between refreshes.

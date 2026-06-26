@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import type { ActuatorName, ActuatorState, Metric, Setpoints } from "../../api/schemas";
 import { useGreenhouse } from "../../api/queries/greenhouses";
 import { useEvents } from "../../api/queries/events";
@@ -17,11 +17,12 @@ import { StatusBadge } from "../../components/ui/StatusBadge";
 import { TimeSeriesChart, type ReferenceLine } from "../../components/ui/TimeSeriesChart";
 import { ActuatorStatePanel, type ActuatorReading } from "./ActuatorStatePanel";
 import { analyticsReadings, telemetryReadings } from "./chartData";
+import { usePersistentRange } from "../../hooks/usePersistentRange";
 import { GreenhouseTimeScaleControl } from "./GreenhouseTimeScaleControl";
 import { RangePicker } from "./RangePicker";
 import { RetireGreenhouseAction } from "./RetireGreenhouseAction";
 import { SetpointEditForm } from "./SetpointEditForm";
-import { isRangeKey, rangeMs, type RangeKey } from "./range";
+import { rangeMs } from "./range";
 
 const HOUSE_METRICS: { metric: Metric; label: string; color: string; unit: string }[] = [
   { metric: "temperature", label: "Temperature", color: "var(--chart-temperature)", unit: "°C" },
@@ -84,15 +85,9 @@ const format = (value: number): string =>
 
 export default function GreenhouseDetail() {
   const { id = "" } = useParams<{ id: string }>();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const rangeParam = searchParams.get("range");
-  const rangeKey: RangeKey = isRangeKey(rangeParam) ? rangeParam : "1h";
-
-  const setRange = (key: RangeKey) => {
-    const next = new URLSearchParams(searchParams);
-    next.set("range", key);
-    setSearchParams(next, { replace: true });
-  };
+  // The chart range is a deep-linkable ?range= choice (default 1h). The last pick persists across
+  // remounts via localStorage, so moving between greenhouses keeps the chosen range.
+  const [rangeKey, setRange] = usePersistentRange("range", "detail:range");
 
   const windowMs = rangeMs(rangeKey);
   // The server resolves this window against the greenhouse's latest stored (simulated) timestamp,
