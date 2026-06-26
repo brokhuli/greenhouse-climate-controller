@@ -15,7 +15,7 @@ import (
 )
 
 // editSetpoints is the 2a thin relay: validate the partial edit, forward it to the
-// controller's REST PATCH /setpoints, and return the controller's response verbatim so
+// controller's REST PATCH /greenhouses/{id}/setpoints, and return the response verbatim so
 // its 200/404/422 propagates unchanged (RFC-005). A successful edit is recorded as a
 // change-attribution audit event and pushed live.
 func (s *Server) editSetpoints(c echo.Context) error {
@@ -46,7 +46,14 @@ func (s *Server) editSetpoints(c echo.Context) error {
 		return respondValidation(c, verr)
 	}
 
-	resp, err := s.relay.Do(ctx, http.MethodPatch, endpoint.RESTBaseURL, "/setpoints", endpoint.BearerToken, raw)
+	// Zone targets are a separate controller resource; the controller's /setpoints PATCH owns only
+	// the global setpoints, so strip zones from the relayed body (the platform still accepts them in
+	// the frontend-rest patch — zone-target editing is not wired through this path in 2a).
+	relayBody, err := stripZones(raw)
+	if err != nil {
+		return respondError(c, http.StatusBadRequest, "invalid JSON body")
+	}
+	resp, err := s.relay.Do(ctx, http.MethodPatch, endpoint.RESTBaseURL, controllerPath(id, "/setpoints"), endpoint.BearerToken, relayBody)
 	if err != nil {
 		return respondError(c, http.StatusServiceUnavailable, "controller unreachable")
 	}

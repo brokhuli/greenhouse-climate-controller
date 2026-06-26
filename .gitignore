@@ -12,6 +12,12 @@ node_modules/
 dist/
 *.log
 
+# Playwright (e2e) artifacts
+**/test-results/
+**/playwright-report/
+**/blob-report/
+**/.playwright/
+
 # Python
 __pycache__/
 *.py[cod]

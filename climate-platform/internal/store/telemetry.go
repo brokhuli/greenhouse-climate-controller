@@ -162,6 +162,68 @@ func (s *Store) Analytics(ctx context.Context, greenhouseID string, from, to tim
 	return aggregates, rows.Err()
 }
 
+// LatestReadingTS returns the most recent reading timestamp for one greenhouse, anchoring a
+// history window to stored (simulated) time rather than the caller's wall clock. ok is false when
+// the greenhouse has no readings yet.
+func (s *Store) LatestReadingTS(ctx context.Context, greenhouseID string) (time.Time, bool, error) {
+	var latest pgtype.Timestamptz
+	err := s.pool.QueryRow(ctx,
+		`SELECT max(ts) FROM sensor_readings WHERE greenhouse_id=$1`, greenhouseID).Scan(&latest)
+	if err != nil {
+		return time.Time{}, false, err
+	}
+	if !latest.Valid {
+		return time.Time{}, false, nil
+	}
+	return latest.Time, true, nil
+}
+
+// FleetSparklineRow is one greenhouse's bucketed average for a single house-level metric, used to
+// seed the fleet-overview cards' charts in one query instead of one per card.
+type FleetSparklineRow struct {
+	GreenhouseID string
+	BucketStart  time.Time
+	Avg          float64
+}
+
+// FleetSparklines returns time-bucketed averages of one house-level metric (zone_id IS NULL) for
+// every greenhouse, anchored per greenhouse to its own latest reading: the trailing windowSQL up to
+// that greenhouse's max(ts). Anchoring to stored (simulated) time — not a wall-clock window — is
+// what lets the fleet cards seed their charts from data the simulation clock has actually produced.
+// windowSQL and intervalSQL are PostgreSQL interval literals (e.g. "3600 seconds", "90 seconds").
+// Rows are ordered by greenhouse for grouping into per-greenhouse series.
+func (s *Store) FleetSparklines(ctx context.Context, windowSQL, metric, intervalSQL string) ([]FleetSparklineRow, error) {
+	rows, err := s.pool.Query(ctx,
+		`WITH latest AS (
+		        SELECT greenhouse_id, max(ts) AS max_ts
+		        FROM sensor_readings
+		        WHERE metric=$2 AND zone_id IS NULL
+		        GROUP BY greenhouse_id)
+		 SELECT r.greenhouse_id,
+		        time_bucket($1::interval, r.ts) AS bucket_start,
+		        avg(r.value) AS avg
+		 FROM sensor_readings r
+		 JOIN latest l USING (greenhouse_id)
+		 WHERE r.metric=$2 AND r.zone_id IS NULL
+		   AND r.ts > l.max_ts - $3::interval AND r.ts <= l.max_ts
+		 GROUP BY r.greenhouse_id, bucket_start
+		 ORDER BY r.greenhouse_id, bucket_start`,
+		intervalSQL, metric, windowSQL)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var sparklines []FleetSparklineRow
+	for rows.Next() {
+		var row FleetSparklineRow
+		if err := rows.Scan(&row.GreenhouseID, &row.BucketStart, &row.Avg); err != nil {
+			return nil, err
+		}
+		sparklines = append(sparklines, row)
+	}
+	return sparklines, rows.Err()
+}
+
 // EventFilter narrows the activity feed. All fields are optional.
 type EventFilter struct {
 	GreenhouseID *string

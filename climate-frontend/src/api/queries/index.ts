@@ -7,5 +7,6 @@ export {
   useSetpointEdit,
 } from "./greenhouses";
 export { useAnalytics, useTelemetry } from "./telemetry";
+export { useFleetSparklines } from "./fleet";
 export { useEvents } from "./events";
 export { useSetFleetTimeScale, useSetTimeScale } from "./sim";

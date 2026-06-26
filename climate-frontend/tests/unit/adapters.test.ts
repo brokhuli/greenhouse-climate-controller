@@ -25,6 +25,8 @@ describe("wire → view-model adapters", () => {
   it("maps a greenhouse summary to camelCase", () => {
     const vm = toGreenhouseSummary(parse(wireGreenhouseSummary, "greenhouse-summary.json"));
     expect(vm).toMatchObject({ id: "gh-a", displayName: "Greenhouse A", timeScale: 2 });
+    expect(vm.climate.temperature).toBe(23.4);
+    expect(vm.climate.humidity).toBe(58);
     expect(vm.climate.setpointTemperature).toBe(24);
   });
 

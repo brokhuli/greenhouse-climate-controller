@@ -121,6 +121,7 @@ export const wireSetpointsPatch = wireSetpoints
 const wireClimate = z
   .object({
     temperature: z.number().nullable(),
+    humidity: z.number().nullable(),
     setpoint_temperature: z.number().nullable(),
   })
   .partial();
@@ -177,6 +178,18 @@ export const wireTelemetryRange = z.object({
   to: isoTimestamp,
   series: z.array(wireTelemetrySeries),
   actuators: z.array(wireActuatorState),
+});
+
+export const wireFleetSparklineSeries = z.object({
+  greenhouse_id: slug,
+  readings: z.array(wireReading),
+});
+
+export const wireFleetSparklines = z.object({
+  from: isoTimestamp,
+  to: isoTimestamp,
+  metric: metricSchema,
+  series: z.array(wireFleetSparklineSeries),
 });
 
 export const wireAnalyticsBucket = z.object({
@@ -362,6 +375,7 @@ export type SetpointsPatch = Partial<Setpoints>;
 
 export type GreenhouseClimate = {
   temperature?: number | null;
+  humidity?: number | null;
   setpointTemperature?: number | null;
 };
 
@@ -407,6 +421,14 @@ export type TelemetryRange = {
   to: Date;
   series: TelemetrySeries[];
   actuators: ActuatorState[];
+};
+
+export type FleetSparklineSeries = { greenhouseId: string; readings: Reading[] };
+export type FleetSparklines = {
+  from: Date;
+  to: Date;
+  metric: Metric;
+  series: FleetSparklineSeries[];
 };
 
 export type AnalyticsBucket = {
@@ -483,6 +505,7 @@ export const toGreenhouseSummary = (
   timeScale: w.time_scale ?? null,
   climate: {
     temperature: w.climate?.temperature ?? null,
+    humidity: w.climate?.humidity ?? null,
     setpointTemperature: w.climate?.setpoint_temperature ?? null,
   },
 });
@@ -522,6 +545,20 @@ export const toTelemetryRange = (w: z.infer<typeof wireTelemetryRange>): Telemet
   to: new Date(w.to),
   series: w.series.map(toTelemetrySeries),
   actuators: w.actuators.map(toActuatorState),
+});
+
+export const toFleetSparklineSeries = (
+  w: z.infer<typeof wireFleetSparklineSeries>,
+): FleetSparklineSeries => ({
+  greenhouseId: w.greenhouse_id,
+  readings: w.readings.map(toReading),
+});
+
+export const toFleetSparklines = (w: z.infer<typeof wireFleetSparklines>): FleetSparklines => ({
+  from: new Date(w.from),
+  to: new Date(w.to),
+  metric: w.metric,
+  series: w.series.map(toFleetSparklineSeries),
 });
 
 export const toAnalyticsBucket = (w: z.infer<typeof wireAnalyticsBucket>): AnalyticsBucket => ({

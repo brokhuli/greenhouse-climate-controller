@@ -1,4 +1,4 @@
-import type { AnalyticsInterval, Connectivity, GreenhouseSummary } from "../api/schemas";
+import type { AnalyticsInterval, Connectivity, GreenhouseSummary, Reading } from "../api/schemas";
 
 /**
  * Pure view-model derivations (data-model spec §8). They turn raw API data into what the UI shows,
@@ -83,4 +83,42 @@ export function rangeTierSelection(rangeMs: number, options: RangeTierOptions = 
     if (rangeSeconds / seconds <= maxBuckets) return { tier: "aggregate", interval };
   }
   return { tier: "aggregate", interval: "1d" };
+}
+
+// ---------------------------------------------------------------------------
+// Series merge (historical query data + live ring buffer → chart points)
+// ---------------------------------------------------------------------------
+
+/** A chart point in uPlot's native units: `t` is epoch *seconds*, `v` the value. */
+export type SeriesPoint = { t: number; v: number };
+
+export type MergeOptions = {
+  /** Drop points older than this many ms behind the newest point (the visible window). */
+  windowMs?: number;
+};
+
+/**
+ * Merge a metric's historical readings with its live ring buffer into a single ascending,
+ * timestamp-deduplicated point list (architecture §4: history from the Query cache, the live edge
+ * from `ws.ts`). Live readings win on an exact-timestamp collision. Memoize the call site so a
+ * frame for one greenhouse doesn't recompute another's chart (components §5).
+ */
+export function mergeReadings(
+  historical: readonly Reading[],
+  live: readonly Reading[],
+  options: MergeOptions = {},
+): SeriesPoint[] {
+  const byMillis = new Map<number, number>();
+  for (const reading of historical) byMillis.set(reading.ts.getTime(), reading.value);
+  for (const reading of live) byMillis.set(reading.ts.getTime(), reading.value);
+
+  let points = Array.from(byMillis, ([millis, value]) => ({ t: millis / 1000, v: value })).sort(
+    (a, b) => a.t - b.t,
+  );
+
+  if (options.windowMs !== undefined && points.length > 0) {
+    const cutoff = points[points.length - 1].t - options.windowMs / 1000;
+    points = points.filter((point) => point.t >= cutoff);
+  }
+  return points;
 }

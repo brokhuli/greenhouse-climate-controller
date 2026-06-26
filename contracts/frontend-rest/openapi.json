@@ -27,6 +27,7 @@
   },
   "paths": {
     "/api/greenhouses": { "$ref": "./paths/greenhouses.json" },
+    "/api/greenhouses/sparklines": { "$ref": "./paths/greenhouses-sparklines.json" },
     "/api/greenhouses/{greenhouse_id}": { "$ref": "./paths/greenhouse-by-id.json" },
     "/api/greenhouses/{greenhouse_id}/setpoints": { "$ref": "./paths/setpoints.json" },
     "/api/greenhouses/{greenhouse_id}/telemetry": { "$ref": "./paths/telemetry.json" },

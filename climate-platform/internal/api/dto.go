@@ -33,6 +33,7 @@ type registrationDTO struct {
 
 type climateDTO struct {
 	Temperature         *float64 `json:"temperature"`
+	Humidity            *float64 `json:"humidity"`
 	SetpointTemperature *float64 `json:"setpoint_temperature"`
 }
 
@@ -132,6 +133,20 @@ type analyticsResponseDTO struct {
 	To           string               `json:"to"`
 	Interval     string               `json:"interval"`
 	Series       []analyticsSeriesDTO `json:"series"`
+}
+
+// --- fleet sparklines ---
+
+type greenhouseSparklineDTO struct {
+	GreenhouseID string       `json:"greenhouse_id"`
+	Readings     []readingDTO `json:"readings"`
+}
+
+type fleetSparklinesDTO struct {
+	From   string                   `json:"from"`
+	To     string                   `json:"to"`
+	Metric string                   `json:"metric"`
+	Series []greenhouseSparklineDTO `json:"series"`
 }
 
 // --- events ---

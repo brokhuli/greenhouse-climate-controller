@@ -49,6 +49,10 @@
             "type": ["number", "null"],
             "description": "Latest air-temperature reading (°C), or null when unavailable."
           },
+          "humidity": {
+            "type": ["number", "null"],
+            "description": "Latest relative-humidity reading (%RH), or null when unavailable."
+          },
           "setpoint_temperature": {
             "type": ["number", "null"],
             "description": "Currently-resolved temperature setpoint (°C), or null when unavailable."

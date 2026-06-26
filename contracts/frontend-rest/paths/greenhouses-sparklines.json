@@ -1,0 +1,24 @@
+{
+  "parameters": [
+    { "$ref": "../components/parameters.json#/Window" },
+    { "$ref": "../components/parameters.json#/Metric" }
+  ],
+  "get": {
+    "operationId": "getFleetSparklines",
+    "summary": "Batched fleet history (card sparklines)",
+    "description": "Recent house-level history for every greenhouse in one request — the batched seed the fleet-overview cards merge with the live WebSocket edge, instead of one telemetry query per card (avoids an N+1 across the fleet). The trailing `window` is resolved per greenhouse against its own latest stored (simulated) timestamp, so each card seeds with data the simulation clock has actually produced. Readings are server-downsampled (bucketed averages, ~a few dozen points per greenhouse); the bucket width is chosen from the window, so there is no interval parameter. `metric` optionally selects the house-level metric (default temperature). The response `from`/`to` report the bounding span of the returned points. An unknown window or metric is rejected with 422.",
+    "x-slice": "2a",
+    "security": [],
+    "responses": {
+      "200": {
+        "description": "Recent history for every greenhouse with data in the window.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "../components/schemas/telemetry.json#/FleetSparklines" }
+          }
+        }
+      },
+      "422": { "$ref": "../components/responses.json#/ValidationFailed" }
+    }
+  }
+}

@@ -17,6 +17,7 @@ type Live struct {
 	Status      domain.Connectivity
 	TimeScale   *float64
 	Temperature *float64
+	Humidity    *float64
 	LastSeen    time.Time
 }
 
@@ -24,6 +25,7 @@ type entry struct {
 	lastSeen    time.Time
 	timeScale   *float64
 	temperature *float64
+	humidity    *float64
 	degraded    bool // a non-critical fault / unhealthy controller is active
 	status      domain.Connectivity
 }
@@ -74,7 +76,7 @@ func (f *Fleet) effectiveOffline(ent *entry) time.Duration {
 }
 
 func snapshot(ent *entry) Live {
-	return Live{Status: ent.status, TimeScale: ent.timeScale, Temperature: ent.temperature, LastSeen: ent.lastSeen}
+	return Live{Status: ent.status, TimeScale: ent.timeScale, Temperature: ent.temperature, Humidity: ent.humidity, LastSeen: ent.lastSeen}
 }
 
 // Observe records that a message arrived for a greenhouse at time ts and recomputes
@@ -122,6 +124,14 @@ func (f *Fleet) SetTemperature(id string, temperature *float64) {
 	defer f.mu.Unlock()
 	ent := f.ensure(id)
 	ent.temperature = temperature
+}
+
+// SetHumidity updates a greenhouse's latest house humidity (for the fleet card).
+func (f *Fleet) SetHumidity(id string, humidity *float64) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	ent := f.ensure(id)
+	ent.humidity = humidity
 }
 
 // applyLocked recomputes status and reports whether it changed. Caller holds the lock.

@@ -171,6 +171,7 @@ type systemStatePayload struct {
 	} `json:"controller"`
 	Sensors struct {
 		Temperature *stateReading `json:"temperature"`
+		Humidity    *stateReading `json:"humidity"`
 	} `json:"sensors"`
 	Simulation *struct {
 		TimeScale float64 `json:"time_scale"`

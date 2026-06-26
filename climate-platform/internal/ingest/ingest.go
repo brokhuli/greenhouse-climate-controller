@@ -172,9 +172,15 @@ func (ing *Ingester) onReading(payload []byte, topicID string, now time.Time) {
 		return
 	}
 	ing.buf.push(record{reading: &reading})
-	if reading.Metric == "temperature" && reading.ZoneID == nil {
-		temperature := reading.Value
-		ing.fleet.SetTemperature(reading.GreenhouseID, &temperature)
+	if reading.ZoneID == nil {
+		switch reading.Metric {
+		case "temperature":
+			temperature := reading.Value
+			ing.fleet.SetTemperature(reading.GreenhouseID, &temperature)
+		case "humidity":
+			humidity := reading.Value
+			ing.fleet.SetHumidity(reading.GreenhouseID, &humidity)
+		}
 	}
 	live, changed := ing.fleet.Observe(reading.GreenhouseID, now)
 	ing.hub.Broadcast(ws.NewTelemetryReading(reading))
@@ -235,6 +241,10 @@ func (ing *Ingester) onState(payload []byte, topicID string, now time.Time) {
 	if snapshot.Sensors.Temperature != nil {
 		temperature := snapshot.Sensors.Temperature.Value
 		ing.fleet.SetTemperature(snapshot.GreenhouseID, &temperature)
+	}
+	if snapshot.Sensors.Humidity != nil {
+		humidity := snapshot.Sensors.Humidity.Value
+		ing.fleet.SetHumidity(snapshot.GreenhouseID, &humidity)
 	}
 	degraded := !snapshot.Controller.Healthy || snapshot.Controller.Mode != "normal"
 	live, statusChanged := ing.fleet.SetDegraded(snapshot.GreenhouseID, degraded, now)

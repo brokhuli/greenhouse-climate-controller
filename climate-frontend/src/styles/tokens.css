@@ -91,15 +91,15 @@
   --bp-xl: 1536px;
 }
 
-/* --- Dark (default) --- */
+/* --- Dark (default, warm/earthy to match the fleet mockup) --- */
 :root,
 [data-theme="dark"] {
-  --color-bg: #151515;
-  --color-shell: #111211;
-  --color-surface-1: #1b1b1a;
-  --color-surface-2: #20201f;
-  --color-surface-3: #2a2927;
-  --color-surface-raised: #242321;
+  --color-bg: #1a1813;
+  --color-shell: #15140f;
+  --color-surface-1: #201e18;
+  --color-surface-2: #252319;
+  --color-surface-3: #302d23;
+  --color-surface-raised: #272419;
 
   --color-fg-default: #f5f0e7;
   --color-fg-muted: #c7bfb3;
@@ -110,8 +110,8 @@
   --color-accent: #f1dfc2;
   --color-accent-hover: #ead2ad;
 
-  --color-border: #343330;
-  --color-border-strong: #4a4741;
+  --color-border: #3a362c;
+  --color-border-strong: #524d3f;
   --color-divider: rgba(245, 240, 231, 0.1);
 
   --color-status-online: #9ccc65;

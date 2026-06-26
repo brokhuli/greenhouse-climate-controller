@@ -53,13 +53,18 @@ func TestDegradedTransitions(t *testing.T) {
 	}
 }
 
-func TestTemperatureAndRemove(t *testing.T) {
+func TestTemperatureHumidityAndRemove(t *testing.T) {
 	f := NewFleet(10 * time.Second)
 	t0 := time.Date(2026, 6, 22, 12, 0, 0, 0, time.UTC)
 	f.Observe("gh-a", t0)
 	f.SetTemperature("gh-a", fp(21.5))
-	if live, _ := f.Get("gh-a"); live.Temperature == nil || *live.Temperature != 21.5 {
+	f.SetHumidity("gh-a", fp(58))
+	live, _ := f.Get("gh-a")
+	if live.Temperature == nil || *live.Temperature != 21.5 {
 		t.Fatalf("temperature not recorded: %+v", live)
+	}
+	if live.Humidity == nil || *live.Humidity != 58 {
+		t.Fatalf("humidity not recorded: %+v", live)
 	}
 	f.Remove("gh-a")
 	if _, ok := f.Get("gh-a"); ok {
