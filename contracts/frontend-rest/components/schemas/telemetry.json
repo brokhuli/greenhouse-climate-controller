@@ -100,23 +100,37 @@
     "required": ["greenhouse_id", "from", "to", "series", "actuators"],
     "additionalProperties": false
   },
-  "FleetSparklineSeries": {
+  "MetricSparkline": {
     "type": "object",
-    "description": "One greenhouse's recent house-level readings for the fleet sparkline batch.",
+    "description": "One house-level metric's downsampled recent readings for a greenhouse's fleet-card sparkline.",
     "properties": {
-      "greenhouse_id": { "$ref": "./common.json#/Slug" },
+      "metric": { "$ref": "#/Metric" },
       "readings": {
         "type": "array",
-        "description": "Downsampled samples for the requested metric, ordered by timestamp.",
+        "description": "Downsampled samples for this metric, ordered by timestamp.",
         "items": { "$ref": "#/Reading" }
       }
     },
-    "required": ["greenhouse_id", "readings"],
+    "required": ["metric", "readings"],
+    "additionalProperties": false
+  },
+  "FleetSparklineSeries": {
+    "type": "object",
+    "description": "One greenhouse's recent house-level readings for the fleet sparkline batch, one entry per requested metric.",
+    "properties": {
+      "greenhouse_id": { "$ref": "./common.json#/Slug" },
+      "metrics": {
+        "type": "array",
+        "description": "One entry per requested metric that has readings in the window for this greenhouse.",
+        "items": { "$ref": "#/MetricSparkline" }
+      }
+    },
+    "required": ["greenhouse_id", "metrics"],
     "additionalProperties": false
   },
   "FleetSparklines": {
     "type": "object",
-    "description": "Recent house-level history for every greenhouse in one batched query, used to seed the fleet-overview cards' charts on init instead of one telemetry request per card. Readings are server-downsampled (bucketed averages) to a few dozen points per greenhouse.",
+    "description": "Recent house-level history for every greenhouse in one batched query, used to seed the fleet-overview cards' charts on init instead of one telemetry request per (card, metric). Readings are server-downsampled (bucketed averages) to a few dozen points per metric per greenhouse.",
     "properties": {
       "from": {
         "type": "string",
@@ -128,14 +142,18 @@
         "format": "date-time",
         "description": "End of the returned window (RFC 3339 UTC, ms)."
       },
-      "metric": { "$ref": "#/Metric" },
+      "metrics": {
+        "type": "array",
+        "description": "The requested house-level metrics, echoed back (defaults to temperature, humidity, co2, par).",
+        "items": { "$ref": "#/Metric" }
+      },
       "series": {
         "type": "array",
         "description": "One entry per greenhouse that has readings in the window; greenhouses without data are omitted.",
         "items": { "$ref": "#/FleetSparklineSeries" }
       }
     },
-    "required": ["from", "to", "metric", "series"],
+    "required": ["from", "to", "metrics", "series"],
     "additionalProperties": false
   }
 }

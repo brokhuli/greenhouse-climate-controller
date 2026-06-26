@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 	"time"
 
@@ -74,20 +75,53 @@ func TestSparklineBucketSQL(t *testing.T) {
 
 func TestGroupFleetSparklines(t *testing.T) {
 	base := time.Date(2026, 6, 22, 12, 0, 0, 0, time.UTC)
+	// Rows arrive ordered by (greenhouse, metric, bucket); a change in either field opens a new group.
 	rows := []store.FleetSparklineRow{
-		{GreenhouseID: "gh-a", BucketStart: base, Avg: 20.5},
-		{GreenhouseID: "gh-a", BucketStart: base.Add(30 * time.Second), Avg: 21.0},
-		{GreenhouseID: "gh-b", BucketStart: base, Avg: 18.2},
+		{GreenhouseID: "gh-a", Metric: "temperature", BucketStart: base, Avg: 20.5},
+		{GreenhouseID: "gh-a", Metric: "temperature", BucketStart: base.Add(30 * time.Second), Avg: 21.0},
+		{GreenhouseID: "gh-a", Metric: "humidity", BucketStart: base, Avg: 58.0},
+		{GreenhouseID: "gh-b", Metric: "temperature", BucketStart: base, Avg: 18.2},
 	}
 	series := groupFleetSparklines(rows)
 	if len(series) != 2 {
-		t.Fatalf("want 2 series, got %d", len(series))
+		t.Fatalf("want 2 greenhouses, got %d", len(series))
 	}
-	if series[0].GreenhouseID != "gh-a" || len(series[0].Readings) != 2 || series[0].Readings[0].Value != 20.5 {
+	if series[0].GreenhouseID != "gh-a" || len(series[0].Metrics) != 2 {
 		t.Fatalf("gh-a series wrong: %+v", series[0])
 	}
-	if series[1].GreenhouseID != "gh-b" || len(series[1].Readings) != 1 {
+	if series[0].Metrics[0].Metric != "temperature" || len(series[0].Metrics[0].Readings) != 2 || series[0].Metrics[0].Readings[0].Value != 20.5 {
+		t.Fatalf("gh-a temperature wrong: %+v", series[0].Metrics[0])
+	}
+	if series[0].Metrics[1].Metric != "humidity" || len(series[0].Metrics[1].Readings) != 1 {
+		t.Fatalf("gh-a humidity wrong: %+v", series[0].Metrics[1])
+	}
+	if series[1].GreenhouseID != "gh-b" || len(series[1].Metrics) != 1 || series[1].Metrics[0].Metric != "temperature" {
 		t.Fatalf("gh-b series wrong: %+v", series[1])
+	}
+}
+
+func TestParseSparklineMetrics(t *testing.T) {
+	e := echo.New()
+	parse := func(raw string) ([]string, *valError) {
+		target := "/"
+		if raw != "" {
+			target = "/?metrics=" + raw
+		}
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		return parseSparklineMetrics(e.NewContext(req, httptest.NewRecorder()))
+	}
+
+	if got, verr := parse(""); verr != nil || !reflect.DeepEqual(got, defaultSparklineMetrics) {
+		t.Fatalf("omitted metrics = %v (verr %v), want default %v", got, verr, defaultSparklineMetrics)
+	}
+	if got, verr := parse("co2,par"); verr != nil || !reflect.DeepEqual(got, []string{"co2", "par"}) {
+		t.Fatalf("metrics co2,par = %v (verr %v)", got, verr)
+	}
+	if got, verr := parse("temperature,temperature,humidity"); verr != nil || !reflect.DeepEqual(got, []string{"temperature", "humidity"}) {
+		t.Fatalf("dedupe = %v (verr %v), want [temperature humidity]", got, verr)
+	}
+	if _, verr := parse("temperature,bogus"); verr == nil || verr.Field != "metrics" {
+		t.Fatalf("unknown metric: want valError on field \"metrics\", got %+v", verr)
 	}
 }
 

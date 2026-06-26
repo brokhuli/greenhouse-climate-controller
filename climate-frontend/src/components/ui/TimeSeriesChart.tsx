@@ -182,7 +182,9 @@ export function TimeSeriesChart({
         stroke: strokeColor,
         width: 1.5,
         points: { show: false },
-        ...(isSparkline ? {} : { fill: areaFill(strokeColor) }),
+        // A faint tint under the line on every variant, including the bare sparkline (its subtle glow
+        // in the fleet cards).
+        fill: areaFill(strokeColor),
       },
       ...references.map<uPlot.Series>((reference) => ({
         label: reference.label,

@@ -34,6 +34,17 @@
       "enum": ["temperature", "humidity", "co2", "par", "vpd", "soil_moisture"]
     }
   },
+  "SparklineMetrics": {
+    "name": "metrics",
+    "in": "query",
+    "required": false,
+    "description": "Comma-separated house-level metrics to seed the fleet cards with (e.g. `temperature,humidity,co2,par`). Unknown metrics are rejected with 422. Defaults to temperature, humidity, co2, par when omitted.",
+    "schema": {
+      "type": "string",
+      "pattern": "^(temperature|humidity|co2|par|vpd|soil_moisture)(,(temperature|humidity|co2|par|vpd|soil_moisture))*$"
+    },
+    "example": "temperature,humidity,co2,par"
+  },
   "Interval": {
     "name": "interval",
     "in": "query",

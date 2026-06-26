@@ -1,12 +1,12 @@
 {
   "parameters": [
     { "$ref": "../components/parameters.json#/Window" },
-    { "$ref": "../components/parameters.json#/Metric" }
+    { "$ref": "../components/parameters.json#/SparklineMetrics" }
   ],
   "get": {
     "operationId": "getFleetSparklines",
     "summary": "Batched fleet history (card sparklines)",
-    "description": "Recent house-level history for every greenhouse in one request — the batched seed the fleet-overview cards merge with the live WebSocket edge, instead of one telemetry query per card (avoids an N+1 across the fleet). The trailing `window` is resolved per greenhouse against its own latest stored (simulated) timestamp, so each card seeds with data the simulation clock has actually produced. Readings are server-downsampled (bucketed averages, ~a few dozen points per greenhouse); the bucket width is chosen from the window, so there is no interval parameter. `metric` optionally selects the house-level metric (default temperature). The response `from`/`to` report the bounding span of the returned points. An unknown window or metric is rejected with 422.",
+    "description": "Recent house-level history for every greenhouse in one request — the batched seed the fleet-overview cards merge with the live WebSocket edge, instead of one telemetry query per (card, metric) (avoids an N+1 across fleet × metric). The trailing `window` is resolved per (greenhouse, metric) against its own latest stored (simulated) timestamp, so each card sparkline seeds with data the simulation clock has actually produced. Readings are server-downsampled (bucketed averages, ~a few dozen points per metric per greenhouse); the bucket width is chosen from the window, so there is no interval parameter. `metrics` optionally selects the comma-separated house-level metrics (default temperature, humidity, co2, par). The response `from`/`to` report the bounding span of the returned points. An unknown window or metric is rejected with 422.",
     "x-slice": "2a",
     "security": [],
     "responses": {

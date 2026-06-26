@@ -10,7 +10,7 @@ import { ErrorState } from "../../components/ui/ErrorState";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { rangeMs } from "../greenhouse/range";
 import { RangePicker } from "../greenhouse/RangePicker";
-import { historyFor, indexFleetHistory } from "./fleetHistory";
+import { historyForGreenhouse, indexFleetHistory } from "./fleetHistory";
 import { FleetSummaryBar } from "./FleetSummaryBar";
 import { FleetTimeScaleControl } from "./FleetTimeScaleControl";
 import { GreenhouseCard } from "./GreenhouseCard";
@@ -99,7 +99,7 @@ export default function FleetOverview() {
               <GreenhouseCard
                 key={summary.id}
                 summary={summary}
-                history={historyFor(history, summary.id)}
+                history={historyForGreenhouse(history, summary.id)}
                 windowMs={windowMs}
               />
             ))}

@@ -7,8 +7,10 @@ import { ToastProvider } from "../src/components/ui/ToastProvider";
 import { ThemeProvider } from "../src/hooks/ThemeProvider";
 import type {
   EventEntry,
+  FleetSparklines,
   GreenhouseDetail,
   GreenhouseSummary,
+  Metric,
   Setpoints,
 } from "../src/api/schemas";
 
@@ -90,6 +92,25 @@ export const sampleDetail = (overrides: Partial<GreenhouseDetail> = {}): Greenho
   timeScale: null,
   setpoints: sampleSetpoints(),
   ...overrides,
+});
+
+/**
+ * A batched fleet-sparkline view-model: one entry per greenhouse, each carrying a single reading per
+ * named metric (enough for a card to show that metric's latest value and a one-point sparkline).
+ */
+export const sampleSparklines = (
+  series: { greenhouseId: string; values: Partial<Record<Metric, number>> }[],
+): FleetSparklines => ({
+  from: new Date("2026-06-17T00:00:00.000Z"),
+  to: new Date("2026-06-17T00:01:00.000Z"),
+  metrics: ["temperature", "humidity", "co2", "par"],
+  series: series.map((entry) => ({
+    greenhouseId: entry.greenhouseId,
+    metrics: (Object.entries(entry.values) as [Metric, number][]).map(([metric, value]) => ({
+      metric,
+      readings: [{ value, ts: new Date("2026-06-17T00:01:00.000Z") }],
+    })),
+  })),
 });
 
 export const sampleEvent = (overrides: Partial<EventEntry> = {}): EventEntry => ({

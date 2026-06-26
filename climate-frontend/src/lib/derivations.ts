@@ -122,3 +122,8 @@ export function mergeReadings(
   }
   return points;
 }
+
+/** The most recent value in an ascending point list (a card's current reading), or null when empty. */
+export function latestValue(points: readonly SeriesPoint[]): number | null {
+  return points.length > 0 ? points[points.length - 1].v : null;
+}

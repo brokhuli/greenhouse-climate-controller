@@ -100,16 +100,19 @@ route in [architecture §3](./03-spec-frontend-architecture.md#3-route-tree).
 ### `GreenhouseCard` *(2a)*
 
 - **Purpose:** One greenhouse in the fleet grid.
-- **Props:** a `greenhouseSummary`.
-- **Renders:** name, crop, `StatusBadge`, a compact reading-vs-setpoint `MetricTile`
-  (or two), drift badge (2b), and a `TimeScaleIndicator` speed badge when the greenhouse
-  reports a non-1× `timeScale` (sim-only).
+- **Props:** a `greenhouseSummary` plus its seeded per-metric history.
+- **Renders:** name, crop, `StatusBadge`, a `TimeScaleIndicator` speed badge when the
+  greenhouse reports a non-1× `timeScale` (sim-only), drift badge (2b), and four
+  `MetricSparklineRow`s — temperature, humidity, CO₂, PAR — each `name value unit  ┄sparkline┄`
+  on its own line.
 - **Interaction:** whole card links to `/greenhouses/:id`.
-- **Visual:** fixed card anatomy: status row, title/crop row, metric pair, then a
-  compact sparkline. Cards keep a stable min-height so online/offline states do
-  not reshape the fleet grid. Offline/no-data cards show a muted empty state in
-  the metric area, not a different card layout.
-- **States:** offline → muted styling + "offline" badge, last-known values dimmed.
+- **Visual:** fixed card anatomy: status row, title/crop row, then four metric rows.
+  Each row's value is the latest point of that metric's merged series (batched REST seed +
+  live WebSocket tail); the compact sparkline is a bare line (no axes) with a faint area fill.
+  The line is green while in range — out-of-range banding is a later change. Cards keep a
+  stable min-height so online/offline states do not reshape the fleet grid.
+- **States:** offline → muted styling + "offline" badge, values shown as "—" and the
+  sparkline area replaced by a muted placeholder.
 
 ### `FleetSummaryBar` *(2a)*
 
@@ -314,7 +317,7 @@ Reused across views; typed props; zero domain knowledge.
 
 | View / route | Components |
 |---|---|
-| `/` Fleet overview | `FleetOverview` → `FleetSummaryBar`, `RegisterGreenhouseDialog`, `FleetTimeScaleControl` (sim-only), `GreenhouseCard` → `StatusBadge`, `MetricTile`, `TimeScaleIndicator` (sim-only) |
+| `/` Fleet overview | `FleetOverview` → `FleetSummaryBar`, `RegisterGreenhouseDialog`, `FleetTimeScaleControl` (sim-only), `GreenhouseCard` → `StatusBadge`, `MetricSparklineRow` → `TimeSeriesChart`, `TimeScaleIndicator` (sim-only) |
 | `/greenhouses/:id` Detail | `GreenhouseDetail` → `TimeSeriesChart`, `MetricTile`, `ActuatorStatePanel`, `EventList`, `SetpointEditForm`, `RetireGreenhouseAction`, `RangePicker`, `TimeScaleControl`/`TimeScaleIndicator` (sim-only) |
 | `/profiles` (2b) | `ProfileLibrary` → profile cards, assignment panel |
 | `/profiles/:id` (2b) | `ProfileEditor` → `SetpointFields`, stage selector |

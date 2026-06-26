@@ -180,15 +180,20 @@ export const wireTelemetryRange = z.object({
   actuators: z.array(wireActuatorState),
 });
 
+export const wireMetricSparkline = z.object({
+  metric: metricSchema,
+  readings: z.array(wireReading),
+});
+
 export const wireFleetSparklineSeries = z.object({
   greenhouse_id: slug,
-  readings: z.array(wireReading),
+  metrics: z.array(wireMetricSparkline),
 });
 
 export const wireFleetSparklines = z.object({
   from: isoTimestamp,
   to: isoTimestamp,
-  metric: metricSchema,
+  metrics: z.array(metricSchema),
   series: z.array(wireFleetSparklineSeries),
 });
 
@@ -423,11 +428,12 @@ export type TelemetryRange = {
   actuators: ActuatorState[];
 };
 
-export type FleetSparklineSeries = { greenhouseId: string; readings: Reading[] };
+export type MetricSparkline = { metric: Metric; readings: Reading[] };
+export type FleetSparklineSeries = { greenhouseId: string; metrics: MetricSparkline[] };
 export type FleetSparklines = {
   from: Date;
   to: Date;
-  metric: Metric;
+  metrics: Metric[];
   series: FleetSparklineSeries[];
 };
 
@@ -547,17 +553,22 @@ export const toTelemetryRange = (w: z.infer<typeof wireTelemetryRange>): Telemet
   actuators: w.actuators.map(toActuatorState),
 });
 
+export const toMetricSparkline = (w: z.infer<typeof wireMetricSparkline>): MetricSparkline => ({
+  metric: w.metric,
+  readings: w.readings.map(toReading),
+});
+
 export const toFleetSparklineSeries = (
   w: z.infer<typeof wireFleetSparklineSeries>,
 ): FleetSparklineSeries => ({
   greenhouseId: w.greenhouse_id,
-  readings: w.readings.map(toReading),
+  metrics: w.metrics.map(toMetricSparkline),
 });
 
 export const toFleetSparklines = (w: z.infer<typeof wireFleetSparklines>): FleetSparklines => ({
   from: new Date(w.from),
   to: new Date(w.to),
-  metric: w.metric,
+  metrics: w.metrics,
   series: w.series.map(toFleetSparklineSeries),
 });
 

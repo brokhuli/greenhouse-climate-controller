@@ -137,16 +137,21 @@ type analyticsResponseDTO struct {
 
 // --- fleet sparklines ---
 
+type metricSparklineDTO struct {
+	Metric   string       `json:"metric"`
+	Readings []readingDTO `json:"readings"`
+}
+
 type greenhouseSparklineDTO struct {
-	GreenhouseID string       `json:"greenhouse_id"`
-	Readings     []readingDTO `json:"readings"`
+	GreenhouseID string               `json:"greenhouse_id"`
+	Metrics      []metricSparklineDTO `json:"metrics"`
 }
 
 type fleetSparklinesDTO struct {
-	From   string                   `json:"from"`
-	To     string                   `json:"to"`
-	Metric string                   `json:"metric"`
-	Series []greenhouseSparklineDTO `json:"series"`
+	From    string                   `json:"from"`
+	To      string                   `json:"to"`
+	Metrics []string                 `json:"metrics"`
+	Series  []greenhouseSparklineDTO `json:"series"`
 }
 
 // --- events ---

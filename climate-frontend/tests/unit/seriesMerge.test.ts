@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mergeReadings } from "../../src/lib/derivations";
+import { latestValue, mergeReadings } from "../../src/lib/derivations";
 import type { Reading } from "../../src/api/schemas";
 
 const reading = (millis: number, value: number): Reading => ({ value, ts: new Date(millis) });
@@ -21,5 +21,13 @@ describe("mergeReadings", () => {
 
   it("returns an empty list when there are no readings", () => {
     expect(mergeReadings([], [])).toEqual([]);
+  });
+});
+
+describe("latestValue", () => {
+  it("returns the most recent point's value, or null when empty", () => {
+    const points = mergeReadings([reading(1000, 10), reading(2000, 20)], [reading(3000, 30)]);
+    expect(latestValue(points)).toBe(30);
+    expect(latestValue([])).toBeNull();
   });
 });

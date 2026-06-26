@@ -1,10 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
+import type { Metric } from "../schemas";
 import { apiClient } from "../client";
 import { toFleetSparklines, wireFleetSparklines } from "../schemas";
 import { queryKeys } from "./keys";
 
 /** How often the batched history is refreshed so the trailing edge stays current (live covers the gap between refreshes). */
 const FLEET_CARD_REFRESH_MS = 60 * 1000;
+
+/** The house-level metrics each fleet card renders, fetched together so one request seeds all four sparklines. */
+export const CARD_METRICS: readonly Metric[] = ["temperature", "humidity", "co2", "par"];
 
 const query = (params: Record<string, string | undefined>): string => {
   const search = new URLSearchParams();
@@ -27,7 +31,10 @@ export function useFleetSparklines(window: string) {
     queryKey: queryKeys.fleetSparklines(window),
     queryFn: async () =>
       toFleetSparklines(
-        await apiClient.get(`/greenhouses/sparklines${query({ window })}`, wireFleetSparklines),
+        await apiClient.get(
+          `/greenhouses/sparklines${query({ window, metrics: CARD_METRICS.join(",") })}`,
+          wireFleetSparklines,
+        ),
       ),
     refetchInterval: FLEET_CARD_REFRESH_MS,
   });

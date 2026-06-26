@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { fireEvent, screen } from "@testing-library/react";
 import FleetOverview from "../../src/features/fleet/FleetOverview";
 import { queryKeys } from "../../src/api/queries/keys";
-import { makeClient, renderWithProviders, sampleSummary } from "../utils";
+import { makeClient, renderWithProviders, sampleSparklines, sampleSummary } from "../utils";
 
 describe("FleetOverview", () => {
   it("shows the empty state with a register CTA when no greenhouses exist", () => {
@@ -57,22 +57,29 @@ describe("FleetOverview", () => {
     }
   });
 
-  it("renders temperature and humidity tiles, each with a Setpoint readout", () => {
+  it("renders a row per card metric with its latest seeded value", () => {
     const client = makeClient();
     client.setQueryData(queryKeys.fleet(), [
-      sampleSummary({
-        id: "gh-a",
-        displayName: "Greenhouse A",
-        climate: { temperature: 23.4, humidity: 58, setpointTemperature: 24 },
-      }),
+      sampleSummary({ id: "gh-a", displayName: "Greenhouse A", status: "online" }),
     ]);
-    renderWithProviders(<FleetOverview />, { client });
+    // The displayed value is the latest point of each metric's merged series, seeded from the
+    // batched sparkline cache (no longer summary.climate).
+    client.setQueryData(
+      queryKeys.fleetSparklines("1h"),
+      sampleSparklines([
+        { greenhouseId: "gh-a", values: { temperature: 23.4, humidity: 58, co2: 842, par: 320 } },
+      ]),
+    );
+    // Pin the window via the URL (it outranks any localStorage left by a prior test) so the seeded
+    // ["fleet-sparklines", "1h"] cache entry is the one the card reads.
+    renderWithProviders(<FleetOverview />, { client, route: "/?window=1h" });
 
-    expect(screen.getByText("Temperature")).toBeInTheDocument();
-    expect(screen.getByText("Humidity")).toBeInTheDocument();
+    for (const label of ["Temperature", "Humidity", "CO₂", "PAR"]) {
+      expect(screen.getByText(label)).toBeInTheDocument();
+    }
     expect(screen.getByText("23.4")).toBeInTheDocument();
     expect(screen.getByText("58")).toBeInTheDocument();
-    // Both tiles carry the "Setpoint" sub-line (temperature populated, humidity placeholder).
-    expect(screen.getAllByText("Setpoint").length).toBe(2);
+    expect(screen.getByText("842")).toBeInTheDocument();
+    expect(screen.getByText("320")).toBeInTheDocument();
   });
 });

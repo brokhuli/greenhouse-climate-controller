@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -106,6 +107,10 @@ func (s *Server) getAnalytics(c echo.Context) error {
 	})
 }
 
+// defaultSparklineMetrics is the house-level set the fleet cards render — one compact sparkline per
+// metric — fetched together so a card seeds all four without an N+1 across (fleet × metric).
+var defaultSparklineMetrics = []string{"temperature", "humidity", "co2", "par"}
+
 // getFleetSparklines returns recent house-level history for every greenhouse in one batched query,
 // so the fleet-overview cards can seed their charts on init without N requests (one per card).
 func (s *Server) getFleetSparklines(c echo.Context) error {
@@ -114,24 +119,47 @@ func (s *Server) getFleetSparklines(c echo.Context) error {
 	if verr != nil {
 		return respondValidation(c, verr)
 	}
-	metric := c.QueryParam("metric")
-	if metric == "" {
-		metric = "temperature"
+	metrics, verr := parseSparklineMetrics(c)
+	if verr != nil {
+		return respondValidation(c, verr)
 	}
-	if !domain.Metrics[metric] {
-		return respondValidation(c, &valError{Field: "metric", Bound: "known metric", Value: metric})
-	}
-	rows, err := s.store.FleetSparklines(ctx, intervalLiteral(window), metric, sparklineBucketSQL(window))
+	rows, err := s.store.FleetSparklines(ctx, intervalLiteral(window), metrics, sparklineBucketSQL(window))
 	if err != nil {
 		return s.fail(c, err)
 	}
 	from, to := sparklineBounds(rows)
 	return c.JSON(http.StatusOK, fleetSparklinesDTO{
-		From:   fmtTS(from),
-		To:     fmtTS(to),
-		Metric: metric,
-		Series: groupFleetSparklines(rows),
+		From:    fmtTS(from),
+		To:      fmtTS(to),
+		Metrics: metrics,
+		Series:  groupFleetSparklines(rows),
 	})
+}
+
+// parseSparklineMetrics reads the optional comma-separated `metrics` param, defaulting to the fleet
+// cards' set. Each entry must be a known metric; duplicates are dropped, preserving first-seen order.
+func parseSparklineMetrics(c echo.Context) ([]string, *valError) {
+	raw := c.QueryParam("metrics")
+	if raw == "" {
+		return defaultSparklineMetrics, nil
+	}
+	seen := make(map[string]bool)
+	metrics := make([]string, 0, len(defaultSparklineMetrics))
+	for _, metric := range strings.Split(raw, ",") {
+		metric = strings.TrimSpace(metric)
+		if !domain.Metrics[metric] {
+			return nil, &valError{Field: "metrics", Bound: "comma-separated known metrics", Value: metric}
+		}
+		if seen[metric] {
+			continue
+		}
+		seen[metric] = true
+		metrics = append(metrics, metric)
+	}
+	if len(metrics) == 0 {
+		return nil, &valError{Field: "metrics", Bound: "comma-separated known metrics", Value: raw}
+	}
+	return metrics, nil
 }
 
 // sparklineBucketSQL picks a time_bucket width targeting ~40 points across the window, clamped to
@@ -149,16 +177,23 @@ func sparklineBucketSQL(window time.Duration) string {
 	return strconv.Itoa(seconds) + " seconds"
 }
 
-// groupFleetSparklines collapses the store's greenhouse-ordered rows into per-greenhouse series.
+// groupFleetSparklines collapses the store's (greenhouse, metric)-ordered rows into per-greenhouse
+// series, each nesting one entry per metric. Rows are ordered by greenhouse then metric, so a change
+// in either field opens a new group.
 func groupFleetSparklines(rows []store.FleetSparklineRow) []greenhouseSparklineDTO {
 	series := make([]greenhouseSparklineDTO, 0)
-	current := -1
+	gh, metric := -1, -1
 	for _, row := range rows {
-		if current < 0 || series[current].GreenhouseID != row.GreenhouseID {
-			series = append(series, greenhouseSparklineDTO{GreenhouseID: row.GreenhouseID, Readings: []readingDTO{}})
-			current = len(series) - 1
+		if gh < 0 || series[gh].GreenhouseID != row.GreenhouseID {
+			series = append(series, greenhouseSparklineDTO{GreenhouseID: row.GreenhouseID, Metrics: []metricSparklineDTO{}})
+			gh = len(series) - 1
+			metric = -1
 		}
-		series[current].Readings = append(series[current].Readings, readingDTO{Value: row.Avg, TS: fmtTS(row.BucketStart)})
+		if metric < 0 || series[gh].Metrics[metric].Metric != row.Metric {
+			series[gh].Metrics = append(series[gh].Metrics, metricSparklineDTO{Metric: row.Metric, Readings: []readingDTO{}})
+			metric = len(series[gh].Metrics) - 1
+		}
+		series[gh].Metrics[metric].Readings = append(series[gh].Metrics[metric].Readings, readingDTO{Value: row.Avg, TS: fmtTS(row.BucketStart)})
 	}
 	return series
 }
