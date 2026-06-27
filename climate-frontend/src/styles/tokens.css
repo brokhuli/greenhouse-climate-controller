@@ -80,9 +80,10 @@
   --layout-detail-nav-width: 230px;
   --layout-side-panel-width: 320px;
   --layout-topbar-height: 64px;
-  --layout-gutter: 24px;
-  --layout-section-gap: 16px;
-  --layout-card-gap: 16px;
+  --layout-gutter: 16px;
+  --layout-section-gap: 8px;
+  --layout-card-gap: 8px;
+  --layout-toolbar-gap: 8px;
 
   /* --- Breakpoints (referenced by JS / Tailwind config; --bp-md is the sidenav cutoff) --- */
   --bp-sm: 640px;

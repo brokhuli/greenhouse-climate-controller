@@ -24,6 +24,10 @@ import { RetireGreenhouseAction } from "./RetireGreenhouseAction";
 import { SetpointEditForm } from "./SetpointEditForm";
 import { rangeMs } from "./range";
 
+const SECTION_STYLE = { gap: "var(--layout-section-gap)" };
+const CARD_GRID_STYLE = { gap: "var(--layout-card-gap)" };
+const TOOLBAR_STYLE = { gap: "var(--layout-toolbar-gap)" };
+
 const HOUSE_METRICS: { metric: Metric; label: string; color: string; unit: string }[] = [
   { metric: "temperature", label: "Temperature", color: "var(--chart-temperature)", unit: "°C" },
   { metric: "humidity", label: "Humidity", color: "var(--chart-humidity)", unit: "%RH" },
@@ -115,9 +119,9 @@ export default function GreenhouseDetail() {
 
   if (greenhouse.isLoading) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col" style={SECTION_STYLE}>
         <Skeleton height={48} />
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="grid grid-cols-1 lg:grid-cols-2" style={CARD_GRID_STYLE}>
           {Array.from({ length: 4 }).map((_, index) => (
             <Skeleton key={index} height={220} />
           ))}
@@ -140,14 +144,14 @@ export default function GreenhouseDetail() {
   const soilZones = detail.setpoints.zones;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col" style={SECTION_STYLE}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <h2 className="text-fg-default text-lg font-semibold">{detail.displayName}</h2>
           <StatusBadge status={detail.status} drift={detail.drift} />
           {detail.crop ? <Pill>{detail.crop}</Pill> : null}
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center" style={TOOLBAR_STYLE}>
           {detail.timeScale != null ? (
             <>
               <span className="text-fg-muted text-sm">Speed</span>
@@ -160,7 +164,7 @@ export default function GreenhouseDetail() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 lg:grid-cols-2" style={CARD_GRID_STYLE}>
         {HOUSE_METRICS.map(({ metric, label, color, unit }) => {
           const historical = isRaw
             ? telemetryReadings(telemetry.data, metric, null)
@@ -215,7 +219,7 @@ export default function GreenhouseDetail() {
         })}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 lg:grid-cols-2" style={CARD_GRID_STYLE}>
         <Card>
           <PanelHeader title="Actuators" />
           <ActuatorStatePanel actuators={actuatorReadings} />

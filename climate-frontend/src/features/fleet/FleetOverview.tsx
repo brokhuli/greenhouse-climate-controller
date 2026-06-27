@@ -16,7 +16,9 @@ import { FleetTimeScaleControl } from "./FleetTimeScaleControl";
 import { GreenhouseCard } from "./GreenhouseCard";
 import { RegisterGreenhouseDialog } from "./RegisterGreenhouseDialog";
 
-const GRID = "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";
+const GRID = "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";
+const GRID_STYLE = { gap: "var(--layout-card-gap)" };
+const TOOLBAR_STYLE = { gap: "var(--layout-toolbar-gap)" };
 
 /**
  * The landing view (components §2): a site rollup + a grid of greenhouse cards, patched live by
@@ -49,7 +51,7 @@ export default function FleetOverview() {
     <div className="flex flex-col" style={{ gap: "var(--layout-section-gap)" }}>
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-fg-default text-lg font-semibold">Fleet overview</h2>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center" style={TOOLBAR_STYLE}>
           {anySim ? (
             <>
               <span className="text-fg-muted text-sm">Speed</span>
@@ -70,7 +72,7 @@ export default function FleetOverview() {
       </div>
 
       {fleet.isLoading ? (
-        <div className={GRID}>
+        <div className={GRID} style={GRID_STYLE}>
           {Array.from({ length: 6 }).map((_, index) => (
             <Skeleton key={index} height={288} />
           ))}
@@ -94,7 +96,7 @@ export default function FleetOverview() {
       ) : (
         <>
           <FleetSummaryBar rollup={statusRollup(summaries)} />
-          <div className={GRID}>
+          <div className={GRID} style={GRID_STYLE}>
             {summaries.map((summary) => (
               <GreenhouseCard
                 key={summary.id}
