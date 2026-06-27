@@ -85,15 +85,16 @@ function GreenhouseCardImpl({
         <StatusBadge status={summary.status} drift={summary.drift} />
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-2">
         <MetricTile
           label="Temperature"
           value={summary.climate.temperature}
-          setpoint={summary.climate.setpointTemperature}
           unit="°C"
           dim={offline}
         />
         <MetricTile label="Humidity" value={summary.climate.humidity} unit="%" dim={offline} />
+        <MetricTile label="CO₂" value={summary.climate.co2} unit="ppm" dim={offline} />
+        <MetricTile label="PAR" value={summary.climate.par} unit="µmol·m⁻²·s⁻¹" dim={offline} />
       </div>
 
       <div className="mt-auto">

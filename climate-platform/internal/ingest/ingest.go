@@ -180,6 +180,12 @@ func (ing *Ingester) onReading(payload []byte, topicID string, now time.Time) {
 		case "humidity":
 			humidity := reading.Value
 			ing.fleet.SetHumidity(reading.GreenhouseID, &humidity)
+		case "co2":
+			co2 := reading.Value
+			ing.fleet.SetCO2(reading.GreenhouseID, &co2)
+		case "par":
+			par := reading.Value
+			ing.fleet.SetPAR(reading.GreenhouseID, &par)
 		}
 	}
 	live, changed := ing.fleet.Observe(reading.GreenhouseID, now)
@@ -245,6 +251,14 @@ func (ing *Ingester) onState(payload []byte, topicID string, now time.Time) {
 	if snapshot.Sensors.Humidity != nil {
 		humidity := snapshot.Sensors.Humidity.Value
 		ing.fleet.SetHumidity(snapshot.GreenhouseID, &humidity)
+	}
+	if snapshot.Sensors.CO2 != nil {
+		co2 := snapshot.Sensors.CO2.Value
+		ing.fleet.SetCO2(snapshot.GreenhouseID, &co2)
+	}
+	if snapshot.Sensors.PAR != nil {
+		par := snapshot.Sensors.PAR.Value
+		ing.fleet.SetPAR(snapshot.GreenhouseID, &par)
 	}
 	degraded := !snapshot.Controller.Healthy || snapshot.Controller.Mode != "normal"
 	live, statusChanged := ing.fleet.SetDegraded(snapshot.GreenhouseID, degraded, now)
