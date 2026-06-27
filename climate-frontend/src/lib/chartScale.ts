@@ -4,14 +4,18 @@
  */
 
 /**
- * Snap a data range out to whole-number bounds so an integer y-tick always falls inside the visible
- * range (the card y-axis only allows integer increments, which otherwise renders blank when the data
- * sits between two integers, e.g. 8.4–8.8). Flat integer data is widened so the bounds never collapse
- * to a zero-height range.
+ * Fit a sparkline's y-range tightly to its data with a little headroom on each side, so the line
+ * uses the tile's height instead of floating against a wide range (the card chart has no y labels,
+ * so there's no reason to snap out to round numbers). Flat data falls back to a small symmetric span
+ * so the bounds never collapse to a zero-height range.
  */
-export function wholeNumberBounds(dataMin: number, dataMax: number): [number, number] {
+export function sparklineBounds(dataMin: number, dataMax: number): [number, number] {
   if (!Number.isFinite(dataMin) || !Number.isFinite(dataMax)) return [dataMin, dataMax];
-  const low = Math.floor(dataMin);
-  const high = Math.ceil(dataMax);
-  return low === high ? [low - 1, high + 1] : [low, high];
+  const span = dataMax - dataMin;
+  if (span < 1e-9) {
+    const pad = Math.max(Math.abs(dataMin) * 0.05, 0.5);
+    return [dataMin - pad, dataMax + pad];
+  }
+  const pad = span * 0.15;
+  return [dataMin - pad, dataMax + pad];
 }

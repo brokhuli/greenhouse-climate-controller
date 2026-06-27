@@ -9,7 +9,7 @@ import { StatusBadge } from "../../components/ui/StatusBadge";
 import { TimeScaleIndicator } from "../../components/ui/TimeScaleControl";
 import { TimeSeriesChart } from "../../components/ui/TimeSeriesChart";
 
-const CHART_HEIGHT = 80;
+const CHART_HEIGHT = 48;
 const TEMPERATURE_CHART_COLOR = "var(--chart-temperature)";
 
 const NO_HISTORY: readonly Reading[] = [];
