@@ -173,8 +173,9 @@ type systemStatePayload struct {
 		Temperature *stateReading `json:"temperature"`
 		Humidity    *stateReading `json:"humidity"`
 		CO2         *stateReading `json:"co2"`
-		PAR         *stateReading `json:"par"`
 	} `json:"sensors"`
+	// DLI is a derived value carried alongside (not inside) sensors; it drives the fleet card.
+	DLI        *stateReading `json:"dli"`
 	Simulation *struct {
 		TimeScale float64 `json:"time_scale"`
 		TickIndex int64   `json:"tick_index"`

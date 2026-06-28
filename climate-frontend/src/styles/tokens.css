@@ -25,6 +25,7 @@
   --chart-reference-width: 1px;
   --chart-fill-opacity: 0.1;
   --chart-plot-height: 180px;
+  --chart-stacked-height: 400px; /* combined climate-overview chart (stacked bands) */
   --chart-sparkline-height: 40px;
 
   /* --- Typography --- */

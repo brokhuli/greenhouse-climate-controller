@@ -123,7 +123,7 @@ const wireClimate = z
     temperature: z.number().nullable(),
     humidity: z.number().nullable(),
     co2: z.number().nullable(),
-    par: z.number().nullable(),
+    dli: z.number().nullable(),
     setpoint_temperature: z.number().nullable(),
   })
   .partial();
@@ -379,7 +379,7 @@ export type GreenhouseClimate = {
   temperature?: number | null;
   humidity?: number | null;
   co2?: number | null;
-  par?: number | null;
+  dli?: number | null;
   setpointTemperature?: number | null;
 };
 
@@ -511,7 +511,7 @@ export const toGreenhouseSummary = (
     temperature: w.climate?.temperature ?? null,
     humidity: w.climate?.humidity ?? null,
     co2: w.climate?.co2 ?? null,
-    par: w.climate?.par ?? null,
+    dli: w.climate?.dli ?? null,
     setpointTemperature: w.climate?.setpoint_temperature ?? null,
   },
 });

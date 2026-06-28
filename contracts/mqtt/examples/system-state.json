@@ -14,6 +14,7 @@
     "par": { "value": 412.0, "unit": "µmol·m⁻²·s⁻¹" },
     "vpd": { "value": 0.95, "unit": "kPa" }
   },
+  "dli": { "value": 12.6, "unit": "mol·m⁻²·d⁻¹" },
   "zones": [
     {
       "zone_id": "bench-a",

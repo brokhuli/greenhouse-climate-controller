@@ -215,6 +215,8 @@ struct SystemStateMsg<'a> {
     ts: &'a str,
     controller: Controller,
     sensors: Sensors,
+    /// Derived daily light integral (always present), distinct from the sensed `par` reading.
+    dli: ReadingVu,
     zones: Vec<ZoneEntry>,
     actuators: Vec<ActuatorEntry>,
     faults: Vec<FaultSummary>,
@@ -474,6 +476,10 @@ fn system_state<'a>(
             healthy: snapshot.healthy(),
         },
         sensors,
+        dli: ReadingVu {
+            value: snapshot.dli_mol,
+            unit: "mol·m⁻²·d⁻¹",
+        },
         zones,
         actuators,
         faults,
@@ -583,6 +589,9 @@ mod tests {
         assert!(v["controller"]["mode"].is_string());
         assert_eq!(v["simulation"]["time_scale"], 2.0);
         assert!(v["sensors"].is_object());
+        // The derived DLI rides the snapshot as a top-level {value, unit} pair, not under sensors.
+        assert!(v["dli"]["value"].is_number());
+        assert_eq!(v["dli"]["unit"], "mol·m⁻²·d⁻¹");
         assert!(v["actuators"].is_array());
         assert_eq!(v["actuators"].as_array().unwrap().len(), 7);
         assert_eq!(v["zones"].as_array().unwrap().len(), 2);

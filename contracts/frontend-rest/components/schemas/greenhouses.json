@@ -57,9 +57,9 @@
             "type": ["number", "null"],
             "description": "Latest CO₂ reading (ppm), or null when unavailable."
           },
-          "par": {
+          "dli": {
             "type": ["number", "null"],
-            "description": "Latest PAR reading (µmol·m⁻²·s⁻¹), or null when unavailable."
+            "description": "Latest accumulated Daily Light Integral (mol·m⁻²·d⁻¹) for the current crop day, or null when unavailable. A derived value; the underlying instantaneous PAR remains available as a sensor metric on the telemetry endpoints."
           },
           "setpoint_temperature": {
             "type": ["number", "null"],

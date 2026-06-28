@@ -44,7 +44,9 @@ The same surface the controller publishes
   per-zone soil moisture).
 - **Actuator states** — commanded and observed positions.
 - **Fault / state events** — faults, safety-interlock activations, and the
-  consolidated system state — which, on a simulated controller, also carries the optional
+  consolidated system state — which carries the derived **Daily Light Integral**
+  (`dli`, `mol·m⁻²·d⁻¹`) that drives the fleet card's light tile (shown in place of the
+  instantaneous PAR), and, on a simulated controller, also carries the optional
   **simulation time-scale** (`time_scale`, `tick_index`,
   [controller HAL §7](../controller/03-spec-controller-hal-simulation.md#time-scale-speed-without-breaking-determinism)).
   Ingestion stores it with the rest of the snapshot and fans the current speed out to the dashboard;

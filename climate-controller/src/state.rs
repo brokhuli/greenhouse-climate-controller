@@ -35,6 +35,9 @@ pub struct Snapshot {
     pub faults: Vec<Fault>,
     /// The controller mode derived from the active faults.
     pub mode: Mode,
+    /// The day's accumulated Daily Light Integral (mol·m⁻²·d⁻¹) from the lighting loop; resets at
+    /// simulated midnight. A derived value (not a sensor reading) carried in the system-state frame.
+    pub dli_mol: f64,
 }
 
 impl Snapshot {

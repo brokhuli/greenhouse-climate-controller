@@ -19,7 +19,7 @@ type Live struct {
 	Temperature *float64
 	Humidity    *float64
 	CO2         *float64
-	PAR         *float64
+	DLI         *float64
 	LastSeen    time.Time
 }
 
@@ -29,7 +29,7 @@ type entry struct {
 	temperature *float64
 	humidity    *float64
 	co2         *float64
-	par         *float64
+	dli         *float64
 	degraded    bool // a non-critical fault / unhealthy controller is active
 	status      domain.Connectivity
 }
@@ -80,7 +80,7 @@ func (f *Fleet) effectiveOffline(ent *entry) time.Duration {
 }
 
 func snapshot(ent *entry) Live {
-	return Live{Status: ent.status, TimeScale: ent.timeScale, Temperature: ent.temperature, Humidity: ent.humidity, CO2: ent.co2, PAR: ent.par, LastSeen: ent.lastSeen}
+	return Live{Status: ent.status, TimeScale: ent.timeScale, Temperature: ent.temperature, Humidity: ent.humidity, CO2: ent.co2, DLI: ent.dli, LastSeen: ent.lastSeen}
 }
 
 // Observe records that a message arrived for a greenhouse at time ts and recomputes
@@ -146,12 +146,12 @@ func (f *Fleet) SetCO2(id string, co2 *float64) {
 	ent.co2 = co2
 }
 
-// SetPAR updates a greenhouse's latest house PAR (for the fleet card).
-func (f *Fleet) SetPAR(id string, par *float64) {
+// SetDLI updates a greenhouse's latest accumulated Daily Light Integral (for the fleet card).
+func (f *Fleet) SetDLI(id string, dli *float64) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	ent := f.ensure(id)
-	ent.par = par
+	ent.dli = dli
 }
 
 // applyLocked recomputes status and reports whether it changed. Caller holds the lock.

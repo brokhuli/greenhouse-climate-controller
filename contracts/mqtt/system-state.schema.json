@@ -35,6 +35,13 @@
       "required": ["value", "unit"],
       "additionalProperties": false
     },
+    "dli_reading": {
+      "type": "object",
+      "description": "Derived Daily Light Integral accumulated so far for the current crop day, reset at midnight. Always present (not null): unlike the sensors it is a computed control value, not a reading that can be lost.",
+      "properties": { "value": { "type": "number" }, "unit": { "const": "mol·m⁻²·d⁻¹" } },
+      "required": ["value", "unit"],
+      "additionalProperties": false
+    },
     "soil_moisture_reading": {
       "type": ["object", "null"],
       "properties": { "value": { "type": "number" }, "unit": { "const": "VWC" } },
@@ -156,6 +163,7 @@
         },
         "controller": { "$ref": "#/$defs/controller" },
         "sensors": { "$ref": "#/$defs/sensors" },
+        "dli": { "$ref": "#/$defs/dli_reading" },
         "zones": {
           "type": "array",
           "description": "Per-zone irrigation state, one entry per configured zone.",
@@ -178,7 +186,7 @@
         },
         "simulation": { "$ref": "#/$defs/simulation" }
       },
-      "required": ["controller", "sensors", "zones", "actuators", "faults", "overrides"]
+      "required": ["controller", "sensors", "dli", "zones", "actuators", "faults", "overrides"]
     }
   ],
   "unevaluatedProperties": false

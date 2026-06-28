@@ -122,3 +122,29 @@ export function mergeReadings(
   }
   return points;
 }
+
+/**
+ * Align several already-merged metric series onto one shared, ascending x axis. uPlot's
+ * `AlignedData` requires every series to share the x row, but the stacked climate chart merges each
+ * metric independently (and live points can land on differing timestamps). This builds the sorted
+ * union of timestamps and fills each series with `null` where it has no sample at that x — uPlot
+ * renders the nulls as line breaks rather than interpolating across a gap.
+ */
+export function alignSeries(seriesList: readonly (readonly SeriesPoint[])[]): {
+  xs: number[];
+  ys: (number | null)[][];
+} {
+  const timestamps = new Set<number>();
+  for (const series of seriesList) {
+    for (const point of series) timestamps.add(point.t);
+  }
+  const xs = [...timestamps].sort((a, b) => a - b);
+  const indexByX = new Map(xs.map((x, index) => [x, index]));
+
+  const ys = seriesList.map((series) => {
+    const row: (number | null)[] = new Array(xs.length).fill(null);
+    for (const point of series) row[indexByX.get(point.t)!] = point.v;
+    return row;
+  });
+  return { xs, ys };
+}

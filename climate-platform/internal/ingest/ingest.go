@@ -183,9 +183,6 @@ func (ing *Ingester) onReading(payload []byte, topicID string, now time.Time) {
 		case "co2":
 			co2 := reading.Value
 			ing.fleet.SetCO2(reading.GreenhouseID, &co2)
-		case "par":
-			par := reading.Value
-			ing.fleet.SetPAR(reading.GreenhouseID, &par)
 		}
 	}
 	live, changed := ing.fleet.Observe(reading.GreenhouseID, now)
@@ -256,9 +253,9 @@ func (ing *Ingester) onState(payload []byte, topicID string, now time.Time) {
 		co2 := snapshot.Sensors.CO2.Value
 		ing.fleet.SetCO2(snapshot.GreenhouseID, &co2)
 	}
-	if snapshot.Sensors.PAR != nil {
-		par := snapshot.Sensors.PAR.Value
-		ing.fleet.SetPAR(snapshot.GreenhouseID, &par)
+	if snapshot.DLI != nil {
+		dli := snapshot.DLI.Value
+		ing.fleet.SetDLI(snapshot.GreenhouseID, &dli)
 	}
 	degraded := !snapshot.Controller.Healthy || snapshot.Controller.Mode != "normal"
 	live, statusChanged := ing.fleet.SetDegraded(snapshot.GreenhouseID, degraded, now)
