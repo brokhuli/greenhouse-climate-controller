@@ -16,7 +16,7 @@ export function TopBar() {
   const greenhouseId = detailMatch?.params.id ?? "";
   const greenhouse = useGreenhouse(greenhouseId);
 
-  let title = "Greenhouse Site";
+  let title = "Fleet Overview";
   let subtitle = "Fleet operations console";
   if (greenhouseId) {
     title = greenhouse.data?.displayName ?? `Greenhouse ${greenhouseId}`;

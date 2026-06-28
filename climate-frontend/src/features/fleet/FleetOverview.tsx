@@ -49,8 +49,7 @@ export default function FleetOverview() {
 
   return (
     <div className="flex flex-col" style={{ gap: "var(--layout-section-gap)" }}>
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-fg-default text-lg font-semibold">Fleet overview</h2>
+      <div className="flex items-center justify-end gap-3">
         <div className="flex flex-wrap items-center" style={TOOLBAR_STYLE}>
           {anySim ? (
             <>
