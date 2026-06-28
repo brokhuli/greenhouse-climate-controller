@@ -129,7 +129,7 @@ func (s *Server) summaryOf(greenhouse store.Greenhouse) greenhouseSummaryDTO {
 		Status:      live.Status,
 		Drift:       false,
 		TimeScale:   live.TimeScale,
-		Climate:     climateDTO{Temperature: live.Temperature, Humidity: live.Humidity, CO2: live.CO2, PAR: live.PAR, SetpointTemperature: nil},
+		Climate:     climateDTO{Temperature: live.Temperature, Humidity: live.Humidity, CO2: live.CO2, DLI: live.DLI, SetpointTemperature: nil},
 	}
 }
 
@@ -141,7 +141,7 @@ type liveSummary struct {
 	Temperature *float64
 	Humidity    *float64
 	CO2         *float64
-	PAR         *float64
+	DLI         *float64
 }
 
 func (s *Server) liveFields(id string) liveSummary {
@@ -155,7 +155,7 @@ func (s *Server) liveFields(id string) liveSummary {
 		Temperature: live.Temperature,
 		Humidity:    live.Humidity,
 		CO2:         live.CO2,
-		PAR:         live.PAR,
+		DLI:         live.DLI,
 	}
 }
 

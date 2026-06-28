@@ -57,6 +57,12 @@ impl LightingLoop {
         cmd.set(&ActuatorId::House(Actuator::ShadeScreen), shade);
     }
 
+    /// The Daily Light Integral accumulated so far today (mol·m⁻²·d⁻¹); resets at simulated
+    /// midnight. Surfaced in the system-state telemetry so the fleet view can show it.
+    pub fn accumulated_dli(&self) -> f64 {
+        self.accumulated_mol
+    }
+
     /// Returns `(grow_lights_level, shade_screen_level)`.
     fn decide(
         &self,

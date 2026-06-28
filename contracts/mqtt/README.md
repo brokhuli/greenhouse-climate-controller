@@ -78,6 +78,11 @@ Carried explicitly in sensor payloads; each metric is **bound to its unit** in t
 `metric` and `actuator` names are **closed enums** — adding one is a contract change (see
 Versioning).
 
+The **Daily Light Integral** (`dli`, `mol·m⁻²·d⁻¹`) is a *derived* control value — the light
+accumulated so far for the current crop day — not a per-tick sensor metric. It is carried only in
+the consolidated [`system-state`](./system-state.schema.json) snapshot (always present), so there
+is no `gh/{id}/sensor/dli` topic; the underlying light it integrates is the `par` reading.
+
 ## Examples
 
 [`examples/`](./examples/) holds fixtures used as tests. Positive fixtures must validate

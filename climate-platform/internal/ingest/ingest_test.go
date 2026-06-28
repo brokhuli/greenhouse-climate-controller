@@ -66,7 +66,7 @@ func TestHouseReadingsDriveFleetTiles(t *testing.T) {
 	ing.onReading([]byte(readingMatch), "gh-a", now)    // temperature 21.5
 	ing.onReading([]byte(readingHumidity), "gh-a", now) // humidity 58
 	ing.onReading([]byte(readingCO2), "gh-a", now)      // co2 820
-	ing.onReading([]byte(readingPAR), "gh-a", now)      // par 412
+	ing.onReading([]byte(readingPAR), "gh-a", now)      // par 412 — ingested for history/WS, not a house tile
 	live, ok := ing.fleet.Get("gh-a")
 	if !ok || live.Temperature == nil || *live.Temperature != 21.5 {
 		t.Fatalf("house temperature not recorded: %+v", live)
@@ -77,8 +77,10 @@ func TestHouseReadingsDriveFleetTiles(t *testing.T) {
 	if live.CO2 == nil || *live.CO2 != 820 {
 		t.Fatalf("house co2 not recorded: %+v", live)
 	}
-	if live.PAR == nil || *live.PAR != 412 {
-		t.Fatalf("house par not recorded: %+v", live)
+	// PAR is a per-tick sensor (history + live stream) but is no longer a fleet tile; the card's
+	// light metric is DLI, which arrives via the system-state snapshot (see TestStateSnapshotRecordsHouseSensors).
+	if live.DLI != nil {
+		t.Fatalf("a per-tick par reading must not set a fleet tile: %+v", live)
 	}
 }
 
@@ -92,7 +94,7 @@ func TestZoneReadingDoesNotDriveHouseTiles(t *testing.T) {
 
 const stateMatch = `{"schema_version":1,"greenhouse_id":"gh-a","zone_id":null,"ts":"2026-06-07T14:03:00.000Z","controller":{"mode":"normal","healthy":true},"sensors":{"temperature":{"value":21.5}}}`
 const stateOtherID = `{"schema_version":1,"greenhouse_id":"gh-b","zone_id":null,"ts":"2026-06-07T14:03:00.000Z","controller":{"mode":"normal","healthy":true},"sensors":{"temperature":{"value":21.5}}}`
-const stateWithHumidity = `{"schema_version":1,"greenhouse_id":"gh-a","zone_id":null,"ts":"2026-06-07T14:03:00.000Z","controller":{"mode":"normal","healthy":true},"sensors":{"temperature":{"value":21.5},"humidity":{"value":62.0},"co2":{"value":840.0},"par":{"value":355.0}}}`
+const stateWithHumidity = `{"schema_version":1,"greenhouse_id":"gh-a","zone_id":null,"ts":"2026-06-07T14:03:00.000Z","controller":{"mode":"normal","healthy":true},"sensors":{"temperature":{"value":21.5},"humidity":{"value":62.0},"co2":{"value":840.0},"par":{"value":355.0}},"dli":{"value":18.2,"unit":"mol·m⁻²·d⁻¹"}}`
 
 func TestStateRejectsPayloadTopicMismatch(t *testing.T) {
 	now := time.Now()
@@ -122,8 +124,8 @@ func TestStateSnapshotRecordsHouseSensors(t *testing.T) {
 	if live.CO2 == nil || *live.CO2 != 840 {
 		t.Fatalf("state snapshot co2 not recorded: %+v", live)
 	}
-	if live.PAR == nil || *live.PAR != 355 {
-		t.Fatalf("state snapshot par not recorded: %+v", live)
+	if live.DLI == nil || *live.DLI != 18.2 {
+		t.Fatalf("state snapshot dli not recorded: %+v", live)
 	}
 }
 

@@ -72,12 +72,15 @@ func TestDecodeFault_GenericWarning(t *testing.T) {
 }
 
 func TestDecodeSystemState(t *testing.T) {
-	p, ts, err := decodeSystemState([]byte(`{"schema_version":1,"greenhouse_id":"gh-a","zone_id":null,"ts":"2026-06-07T14:03:00.000Z","controller":{"mode":"normal","healthy":true},"sensors":{"temperature":{"value":21.5,"unit":"°C"},"humidity":null,"co2":null,"par":null,"vpd":null},"zones":[],"actuators":[],"faults":[],"overrides":[],"simulation":{"time_scale":2.0,"tick_index":42}}`))
+	p, ts, err := decodeSystemState([]byte(`{"schema_version":1,"greenhouse_id":"gh-a","zone_id":null,"ts":"2026-06-07T14:03:00.000Z","controller":{"mode":"normal","healthy":true},"sensors":{"temperature":{"value":21.5,"unit":"°C"},"humidity":null,"co2":null,"par":null,"vpd":null},"dli":{"value":12.6,"unit":"mol·m⁻²·d⁻¹"},"zones":[],"actuators":[],"faults":[],"overrides":[],"simulation":{"time_scale":2.0,"tick_index":42}}`))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if ts.IsZero() || p.Sensors.Temperature == nil || p.Sensors.Temperature.Value != 21.5 {
 		t.Fatalf("temperature not parsed: %+v", p)
+	}
+	if p.DLI == nil || p.DLI.Value != 12.6 {
+		t.Fatalf("dli not parsed: %+v", p)
 	}
 	if p.Simulation == nil || p.Simulation.TimeScale != 2.0 {
 		t.Fatalf("simulation not parsed: %+v", p.Simulation)

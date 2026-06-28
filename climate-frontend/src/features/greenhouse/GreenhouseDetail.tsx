@@ -15,6 +15,10 @@ import { Pill } from "../../components/ui/Pill";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { StatusBadge } from "../../components/ui/StatusBadge";
 import { TimeSeriesChart, type ReferenceLine } from "../../components/ui/TimeSeriesChart";
+import {
+  StackedTimeSeriesChart,
+  type StackedBand,
+} from "../../components/ui/StackedTimeSeriesChart";
 import { ActuatorStatePanel, type ActuatorReading } from "./ActuatorStatePanel";
 import { analyticsReadings, telemetryReadings } from "./chartData";
 import { usePersistentRange } from "../../hooks/usePersistentRange";
@@ -121,11 +125,7 @@ export default function GreenhouseDetail() {
     return (
       <div className="flex flex-col" style={SECTION_STYLE}>
         <Skeleton height={48} />
-        <div className="grid grid-cols-1 lg:grid-cols-2" style={CARD_GRID_STYLE}>
-          {Array.from({ length: 4 }).map((_, index) => (
-            <Skeleton key={index} height={220} />
-          ))}
-        </div>
+        <Skeleton height={460} />
       </div>
     );
   }
@@ -143,11 +143,27 @@ export default function GreenhouseDetail() {
   const offline = detail.status === "offline";
   const soilZones = detail.setpoints.zones;
 
+  // The four house climate metrics, merged (history + live) into one set of stacked-chart bands.
+  const climateBands: StackedBand[] = HOUSE_METRICS.map(({ metric, label, color, unit }) => {
+    const historical = isRaw
+      ? telemetryReadings(telemetry.data, metric, null)
+      : analyticsReadings(analytics.data, metric, null);
+    const liveReadings = isRaw ? (live.get(liveSeriesKey(metric, null)) ?? []) : [];
+    const points = mergeReadings(historical, liveReadings, { windowMs });
+    return {
+      key: metric,
+      label,
+      color,
+      unit,
+      points,
+      references: houseReferences(metric, detail.setpoints),
+    };
+  });
+
   return (
     <div className="flex flex-col" style={SECTION_STYLE}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <h2 className="text-fg-default text-lg font-semibold">{detail.displayName}</h2>
           <StatusBadge status={detail.status} drift={detail.drift} />
           {detail.crop ? <Pill>{detail.crop}</Pill> : null}
         </div>
@@ -164,29 +180,12 @@ export default function GreenhouseDetail() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2" style={CARD_GRID_STYLE}>
-        {HOUSE_METRICS.map(({ metric, label, color, unit }) => {
-          const historical = isRaw
-            ? telemetryReadings(telemetry.data, metric, null)
-            : analyticsReadings(analytics.data, metric, null);
-          const liveReadings = isRaw ? (live.get(liveSeriesKey(metric, null)) ?? []) : [];
-          const points = mergeReadings(historical, liveReadings, { windowMs });
-          const latest = points.at(-1)?.v;
-          return (
-            <Card key={metric}>
-              <PanelHeader
-                title={label}
-                value={latest !== undefined ? `${format(latest)} ${unit}` : "—"}
-              />
-              <TimeSeriesChart
-                series={{ label, color, points }}
-                references={houseReferences(metric, detail.setpoints)}
-                unit={unit}
-              />
-            </Card>
-          );
-        })}
+      <Card>
+        <PanelHeader title="Climate overview" sectionLabel />
+        <StackedTimeSeriesChart bands={climateBands} />
+      </Card>
 
+      <div className="grid grid-cols-1 lg:grid-cols-2" style={CARD_GRID_STYLE}>
         {soilZones.map((zone) => {
           const historical = isRaw
             ? telemetryReadings(telemetry.data, "soil_moisture", zone.zoneId)

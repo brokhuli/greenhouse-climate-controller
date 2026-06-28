@@ -144,6 +144,7 @@ impl<H: Hal> Pipeline<H> {
             overrides: self.overrides.active().clone(),
             faults,
             mode,
+            dli_mol: self.control.accumulated_dli(),
         };
 
         // Next tick's health baseline: the command actually sent (so healthy/slewing actuators are

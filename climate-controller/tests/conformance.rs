@@ -354,6 +354,7 @@ fn mqtt_frames_carry_required_schema_fields() {
         &[
             "controller",
             "sensors",
+            "dli",
             "zones",
             "actuators",
             "faults",
@@ -366,6 +367,8 @@ fn mqtt_frames_carry_required_schema_fields() {
         &state["sensors"],
         &["temperature", "humidity", "co2", "par", "vpd"],
     );
+    assert_keys(&state["dli"], &["value", "unit"]);
+    assert_eq!(state["dli"]["unit"], "mol·m⁻²·d⁻¹");
     assert_keys(&state["simulation"], &["time_scale", "tick_index"]);
     assert_schema_valid(
         &mqtt_validator("system-state.schema.json"),

@@ -146,6 +146,11 @@ the afternoon; the **shade screen** sheds excess solar heat/light. Lights also
 extend the photoperiod for day-length-sensitive crops. Because DLI integrates over
 the day, the loop is adaptive: a bright morning reduces the afternoon supplement.
 
+The accumulated DLI (`mol·m⁻²·d⁻¹`) is surfaced as a derived value in the consolidated
+[system-state telemetry](./08-spec-controller-interfaces.md#2-mqtt--telemetry-out) — distinct
+from the instantaneous `par` sensor reading — so the platform's fleet view can show light as the
+day's integral rather than a momentary flux.
+
 ---
 
 ## Coupling-aware behavior

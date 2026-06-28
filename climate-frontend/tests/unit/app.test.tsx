@@ -14,9 +14,11 @@ const renderApp = () =>
 describe("App shell", () => {
   it("renders the console chrome and the lazy fleet landing view", async () => {
     renderApp();
-    expect(screen.getByText("Greenhouse Site")).toBeInTheDocument();
+    // The fleet scope title now lives in the top bar chrome (it was moved off the landing view).
+    expect(screen.getByText("Fleet Overview")).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "Primary" })).toBeInTheDocument();
-    expect(await screen.findByText("Fleet overview")).toBeInTheDocument();
+    // The lazy landing view resolved: its always-present Register CTA is in the document.
+    expect(await screen.findByRole("button", { name: "Register" })).toBeInTheDocument();
   });
 
   it("toggles the theme via the topbar control", async () => {

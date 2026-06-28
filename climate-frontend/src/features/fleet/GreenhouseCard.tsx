@@ -94,7 +94,7 @@ function GreenhouseCardImpl({
         />
         <MetricTile label="Humidity" value={summary.climate.humidity} unit="%" dim={offline} />
         <MetricTile label="CO₂" value={summary.climate.co2} unit="ppm" dim={offline} />
-        <MetricTile label="PAR" value={summary.climate.par} unit="µmol·m⁻²·s⁻¹" dim={offline} />
+        <MetricTile label="DLI" value={summary.climate.dli} unit="mol·m⁻²·d⁻¹" dim={offline} />
       </div>
 
       <div className="mt-auto">

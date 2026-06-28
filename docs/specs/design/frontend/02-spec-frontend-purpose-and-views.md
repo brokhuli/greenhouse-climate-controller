@@ -66,7 +66,9 @@ actions**, **role**.
 - **Purpose:** the landing view — the whole site at a glance.
 - **Shows:** every greenhouse as a card/row with its crop, connectivity status
   (online / degraded / offline; **drift** added in 2b), and a compact
-  current-climate-vs-target readout. Site-wide rollup of how many greenhouses are
+  current-climate-vs-target readout (temperature, humidity, CO₂, and **DLI** — the day's
+  accumulated light, rather than the instantaneous PAR, which the detail view still charts).
+  Site-wide rollup of how many greenhouses are
   healthy vs need attention. On simulated controllers, each card also shows its
   current **simulation speed** (time-scale) when it is not 1×.
 - **Primary actions:** open a greenhouse; (2a) register / retire a greenhouse

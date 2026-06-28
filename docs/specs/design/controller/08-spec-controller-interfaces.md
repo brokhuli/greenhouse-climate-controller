@@ -40,7 +40,9 @@ Every tick, the controller publishes a consistent post-tick snapshot
 sensor readings, actuator states (both the **commanded** value and the **observed**
 readback from the [HAL](./03-spec-controller-hal-simulation.md#8-observed-actuator-state-and-fault-injection)),
 and the consolidated system state (active setpoints, overrides, sensor and actuator
-health). Fault and interlock events are published as they occur — including the
+health, and the derived **Daily Light Integral** `dli` in `mol·m⁻²·d⁻¹` — the day's
+accumulated light, carried alongside the instantaneous `par` sensor reading). Fault and
+interlock events are published as they occur — including the
 [actuator-health faults](./06-spec-controller-safety-and-constraints.md#5-actuator-health-monitoring)
 (`actuator_stuck`, `actuator_no_response`, `setpoint_unreachable`).
 
@@ -204,7 +206,8 @@ What the controller publishes (the shapes the
 [frontend data model](../frontend/05-spec-frontend-data-model.md) ultimately consumes,
 via the platform): per-metric readings (temperature, humidity, CO₂, PAR, per-zone
 soil moisture), actuator states (commanded vs observed, plus a per-actuator health
-flag), fault/interlock events, and the consolidated system state — which, on the
+flag), fault/interlock events, and the consolidated system state — which carries the
+derived `dli` (accumulated Daily Light Integral, `mol·m⁻²·d⁻¹`) and, on the
 simulated HAL, also carries the
 [time-scale](./03-spec-controller-hal-simulation.md#time-scale-speed-without-breaking-determinism)
 (`time_scale`, `tick_index`) so observers can show the current simulation speed.

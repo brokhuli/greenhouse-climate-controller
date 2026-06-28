@@ -12,11 +12,11 @@ func TestSummaryOfIncludesLiveClimate(t *testing.T) {
 	fleet := state.NewFleet(10 * time.Second)
 	now := time.Now()
 	fleet.Observe("gh-a", now)
-	temp, hum, co2, par := 23.4, 58.0, 820.0, 412.0
+	temp, hum, co2, dli := 23.4, 58.0, 820.0, 12.6
 	fleet.SetTemperature("gh-a", &temp)
 	fleet.SetHumidity("gh-a", &hum)
 	fleet.SetCO2("gh-a", &co2)
-	fleet.SetPAR("gh-a", &par)
+	fleet.SetDLI("gh-a", &dli)
 
 	s := &Server{fleet: fleet}
 	summary := s.summaryOf(store.Greenhouse{ID: "gh-a", DisplayName: "Greenhouse A"})
@@ -30,8 +30,8 @@ func TestSummaryOfIncludesLiveClimate(t *testing.T) {
 	if summary.Climate.CO2 == nil || *summary.Climate.CO2 != 820 {
 		t.Fatalf("co2 not in summary: %+v", summary.Climate)
 	}
-	if summary.Climate.PAR == nil || *summary.Climate.PAR != 412 {
-		t.Fatalf("par not in summary: %+v", summary.Climate)
+	if summary.Climate.DLI == nil || *summary.Climate.DLI != 12.6 {
+		t.Fatalf("dli not in summary: %+v", summary.Climate)
 	}
 	// Setpoints are not wired into the fleet summary yet (deferred).
 	if summary.Climate.SetpointTemperature != nil {

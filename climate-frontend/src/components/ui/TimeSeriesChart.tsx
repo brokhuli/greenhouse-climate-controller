@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
 import type { SeriesPoint } from "../../lib/derivations";
-import { withAlpha } from "../../lib/color";
 import { sparklineBounds } from "../../lib/chartScale";
+import { areaFill, resolveColor } from "../../lib/chartStyle";
 import { formatClockSeconds, formatTimestamp } from "../../lib/timeFormat";
 import { useTheme } from "../../hooks/theme";
 
@@ -20,31 +20,10 @@ export type ChartVariant = "full" | "sparkline" | "card";
 
 const FULL_HEIGHT = 180;
 const SPARKLINE_HEIGHT = 40;
-const FALLBACK_COLOR = "#888888";
 const NO_REFERENCES: ReferenceLine[] = [];
-
-/** Resolve a leaf `var(--token)` to its computed value (uPlot strokes are canvas colors, not CSS). */
-function resolveColor(value: string): string {
-  const match = value.match(/^var\((--[\w-]+)\)$/);
-  if (!match) return value;
-  if (typeof getComputedStyle === "undefined") return FALLBACK_COLOR;
-  const resolved = getComputedStyle(document.documentElement).getPropertyValue(match[1]).trim();
-  return resolved || FALLBACK_COLOR;
-}
 
 const format = (value: number): string =>
   Number.isInteger(value) ? String(value) : value.toFixed(1);
-
-/** Faint accent tint under a series line, fading to transparent at the baseline. */
-function areaFill(color: string): uPlot.Series.Fill {
-  return (self) => {
-    const { ctx, bbox } = self;
-    const gradient = ctx.createLinearGradient(0, bbox.top, 0, bbox.top + bbox.height);
-    gradient.addColorStop(0, withAlpha(color, 0.2));
-    gradient.addColorStop(1, withAlpha(color, 0));
-    return gradient;
-  };
-}
 
 /**
  * Floating hover readout: a small box pinned to the focused point showing its value and time (the

@@ -112,6 +112,11 @@ impl ControlState {
         self.zones.get(zone)
     }
 
+    /// The day's accumulated Daily Light Integral (mol·m⁻²·d⁻¹) from the lighting loop, for telemetry.
+    pub fn accumulated_dli(&self) -> f64 {
+        self.lighting.accumulated_dli()
+    }
+
     /// Run every loop in dependency order, returning the desired actuator commands for this tick.
     /// Actuators a loop drives to their fail-safe state because the governing sensor became
     /// untrusted (CO₂ injector, irrigation valve) are recorded in `fail_closed` so the constraints
