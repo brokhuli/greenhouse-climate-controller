@@ -27,6 +27,8 @@ describe("wire → view-model adapters", () => {
     expect(vm).toMatchObject({ id: "gh-a", displayName: "Greenhouse A", timeScale: 2 });
     expect(vm.climate.temperature).toBe(23.4);
     expect(vm.climate.humidity).toBe(58);
+    expect(vm.climate.co2).toBe(820);
+    expect(vm.climate.par).toBe(412);
     expect(vm.climate.setpointTemperature).toBe(24);
   });
 

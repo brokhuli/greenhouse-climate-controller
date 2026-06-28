@@ -57,22 +57,26 @@ describe("FleetOverview", () => {
     }
   });
 
-  it("renders temperature and humidity tiles, each with a Setpoint readout", () => {
+  it("renders the temperature, humidity, CO₂, and PAR quadrant with their values", () => {
     const client = makeClient();
     client.setQueryData(queryKeys.fleet(), [
       sampleSummary({
         id: "gh-a",
         displayName: "Greenhouse A",
-        climate: { temperature: 23.4, humidity: 58, setpointTemperature: 24 },
+        climate: { temperature: 23.4, humidity: 58, co2: 820, par: 412, setpointTemperature: 24 },
       }),
     ]);
     renderWithProviders(<FleetOverview />, { client });
 
     expect(screen.getByText("Temperature")).toBeInTheDocument();
     expect(screen.getByText("Humidity")).toBeInTheDocument();
+    expect(screen.getByText("CO₂")).toBeInTheDocument();
+    expect(screen.getByText("PAR")).toBeInTheDocument();
     expect(screen.getByText("23.4")).toBeInTheDocument();
     expect(screen.getByText("58")).toBeInTheDocument();
-    // Both tiles carry the "Setpoint" sub-line (temperature populated, humidity placeholder).
-    expect(screen.getAllByText("Setpoint").length).toBe(2);
+    expect(screen.getByText("820")).toBeInTheDocument();
+    expect(screen.getByText("412")).toBeInTheDocument();
+    // The setpoint readout was removed from the tiles (data path undecided).
+    expect(screen.queryByText("Setpoint")).not.toBeInTheDocument();
   });
 });

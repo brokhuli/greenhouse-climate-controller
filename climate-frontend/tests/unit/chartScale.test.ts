@@ -1,28 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { wholeNumberBounds } from "../../src/lib/chartScale";
+import { sparklineBounds } from "../../src/lib/chartScale";
 
-describe("wholeNumberBounds", () => {
-  it("expands a between-integers range out to whole numbers", () => {
-    expect(wholeNumberBounds(8.4, 8.8)).toEqual([8, 9]);
+describe("sparklineBounds", () => {
+  it("pads a range by a fraction of its span on each side", () => {
+    expect(sparklineBounds(10, 20)).toEqual([8.5, 21.5]); // 15% of a span of 10
   });
 
-  it("keeps already-whole bounds", () => {
-    expect(wholeNumberBounds(21, 23)).toEqual([21, 23]);
+  it("keeps the line off the top and bottom edges", () => {
+    const [low, high] = sparklineBounds(16.7, 16.95);
+    expect(low).toBeLessThan(16.7);
+    expect(high).toBeGreaterThan(16.95);
   });
 
-  it("floors the min and ceils the max", () => {
-    expect(wholeNumberBounds(21.2, 22.9)).toEqual([21, 23]);
+  it("widens flat data so the range never collapses to zero height", () => {
+    const [low, high] = sparklineBounds(22, 22);
+    expect(high).toBeGreaterThan(low);
   });
 
-  it("widens flat integer data so the range never collapses", () => {
-    expect(wholeNumberBounds(22, 22)).toEqual([21, 23]);
-  });
-
-  it("gives flat between-integers data a unit span", () => {
-    expect(wholeNumberBounds(8.5, 8.5)).toEqual([8, 9]);
+  it("gives flat data near zero a usable span", () => {
+    expect(sparklineBounds(0, 0)).toEqual([-0.5, 0.5]);
   });
 
   it("passes non-finite inputs through unchanged", () => {
-    expect(wholeNumberBounds(NaN, 5)).toEqual([NaN, 5]);
+    expect(sparklineBounds(NaN, 5)).toEqual([NaN, 5]);
   });
 });

@@ -1,6 +1,8 @@
 import { Activity, Ban, CircleCheck, Target, TriangleAlert, type LucideIcon } from "lucide-react";
 import type { StatusRollup } from "../../lib/derivations";
 
+const GRID_STYLE = { gap: "var(--layout-card-gap)" };
+
 /**
  * One site-level rollup card (components §2): a tinted circular Lucide icon beside the label, a
  * large default-foreground number, and a short caption — the status color lives in the icon badge
@@ -55,7 +57,7 @@ function Stat({
  */
 export function FleetSummaryBar({ rollup }: { rollup: StatusRollup }) {
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5" style={GRID_STYLE}>
       <Stat
         label="Total Greenhouses"
         value={rollup.total}

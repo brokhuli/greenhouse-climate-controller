@@ -3,8 +3,8 @@ import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
 import type { SeriesPoint } from "../../lib/derivations";
 import { withAlpha } from "../../lib/color";
-import { wholeNumberBounds } from "../../lib/chartScale";
-import { formatClockSeconds, formatClockTime, formatTimestamp } from "../../lib/timeFormat";
+import { sparklineBounds } from "../../lib/chartScale";
+import { formatClockSeconds, formatTimestamp } from "../../lib/timeFormat";
 import { useTheme } from "../../hooks/theme";
 
 /**
@@ -193,24 +193,16 @@ export function TimeSeriesChart({
       })),
     ];
 
-    const axisStroke = resolveColor(isCard ? "var(--color-fg-subtle)" : "var(--color-fg-muted)");
-    const gridStroke = resolveColor(isCard ? "var(--color-border)" : "var(--color-divider)");
-    // Frame the plot area (left + bottom axis lines) to match the metric tiles' border exactly:
-    // same token (--color-border) and 1px weight (Tailwind `border`). Sparkline stays bare.
-    const axisBorder: uPlot.Axis.Border | undefined = isSparkline
-      ? undefined
-      : {
-          show: true,
-          stroke: resolveColor(isCard ? "var(--color-border)" : "var(--color-divider)"),
-          width: 1,
-        };
-    const padding: uPlot.Padding = isSparkline
-      ? [2, 2, 2, 2]
-      : isCard
-        ? // Top padding clears the topmost y-axis label (its upper half overflows the plot area);
-          // 4px clipped it, so match the detail view's proven 8px.
-          [8, 0, 0, 0]
-        : [8, 8, 0, 0];
+    const axisStroke = resolveColor("var(--color-fg-muted)");
+    const gridStroke = resolveColor("var(--color-divider)");
+    // Only the detail (full) chart draws axes; the card and sparkline are bare. The full chart's
+    // left + bottom axis lines frame the plot area at a 1px divider weight.
+    const axisBorder: uPlot.Axis.Border | undefined =
+      isSparkline || isCard
+        ? undefined
+        : { show: true, stroke: resolveColor("var(--color-divider)"), width: 1 };
+    // The card and sparkline drop their axes, so the line + gradient fill the tile (minimal inset).
+    const padding: uPlot.Padding = isSparkline || isCard ? [2, 2, 2, 2] : [8, 8, 0, 0];
     const opts: uPlot.Options = {
       width,
       height: plotHeight,
@@ -226,37 +218,30 @@ export function TimeSeriesChart({
           ],
       scales: {
         x: { time: true },
-        // Card y-axis allows only integer ticks; snap the range out to whole-number bounds so at
-        // least the min/max labels always render even when the data sits between two integers.
-        ...(isCard ? { y: { range: (_u, min, max) => wholeNumberBounds(min, max) } } : {}),
+        // The card's sparkline fits its y-range tightly to the data so the line uses the tile height
+        // instead of floating near the top of a wide round-number range.
+        ...(isCard ? { y: { range: (_u, min, max) => sparklineBounds(min, max) } } : {}),
       },
       padding,
-      axes: isSparkline
-        ? [{ show: false }, { show: false }]
-        : [
-            {
-              // Only the card overrides the x-axis size; the detail view keeps uPlot's default
-              // (passing `size: undefined` would collapse the axis and hide the time labels).
-              ...(isCard ? { size: 24 } : {}),
-              stroke: axisStroke,
-              grid: { stroke: gridStroke, width: 1 },
-              ticks: { show: false },
-              border: axisBorder,
-              // Fixed "HH:MM" ticks for the card's short live window (the detail view keeps
-              // uPlot's range-adaptive labels).
-              ...(isCard ? { values: (_self, splits) => splits.map(formatClockTime) } : {}),
-            },
-            {
-              stroke: axisStroke,
-              grid: { stroke: gridStroke, width: 1 },
-              ticks: { show: false },
-              size: isCard ? 30 : 44,
-              border: axisBorder,
-              // Integer increments → whole-number labels (the card only charts °C; the detail
-              // view keeps uPlot's default increments for its fractional metrics).
-              ...(isCard ? { incrs: [1, 2, 5, 10, 20, 50, 100] } : {}),
-            },
-          ],
+      // Only the detail (full) chart draws axes + grid; the card and sparkline are bare.
+      axes:
+        isSparkline || isCard
+          ? [{ show: false }, { show: false }]
+          : [
+              {
+                stroke: axisStroke,
+                grid: { stroke: gridStroke, width: 1 },
+                ticks: { show: false },
+                border: axisBorder,
+              },
+              {
+                stroke: axisStroke,
+                grid: { stroke: gridStroke, width: 1 },
+                ticks: { show: false },
+                size: 44,
+                border: axisBorder,
+              },
+            ],
       series: seriesConfig,
     };
 

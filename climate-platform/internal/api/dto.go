@@ -34,6 +34,8 @@ type registrationDTO struct {
 type climateDTO struct {
 	Temperature         *float64 `json:"temperature"`
 	Humidity            *float64 `json:"humidity"`
+	CO2                 *float64 `json:"co2"`
+	PAR                 *float64 `json:"par"`
 	SetpointTemperature *float64 `json:"setpoint_temperature"`
 }
 

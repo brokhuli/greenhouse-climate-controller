@@ -53,6 +53,14 @@
             "type": ["number", "null"],
             "description": "Latest relative-humidity reading (%RH), or null when unavailable."
           },
+          "co2": {
+            "type": ["number", "null"],
+            "description": "Latest CO₂ reading (ppm), or null when unavailable."
+          },
+          "par": {
+            "type": ["number", "null"],
+            "description": "Latest PAR reading (µmol·m⁻²·s⁻¹), or null when unavailable."
+          },
           "setpoint_temperature": {
             "type": ["number", "null"],
             "description": "Currently-resolved temperature setpoint (°C), or null when unavailable."

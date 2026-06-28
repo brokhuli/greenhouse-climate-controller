@@ -35,6 +35,8 @@ const readingOtherID = `{"schema_version":1,"greenhouse_id":"gh-b","zone_id":nul
 const readingNoID = `{"schema_version":1,"greenhouse_id":"","zone_id":null,"ts":"2026-06-07T14:03:00.000Z","metric":"temperature","value":21.5,"unit":"°C"}`
 const readingHumidity = `{"schema_version":1,"greenhouse_id":"gh-a","zone_id":null,"ts":"2026-06-07T14:03:00.000Z","metric":"humidity","value":58.0,"unit":"%RH"}`
 const readingHumidityZone = `{"schema_version":1,"greenhouse_id":"gh-a","zone_id":"bench-a","ts":"2026-06-07T14:03:00.000Z","metric":"humidity","value":58.0,"unit":"%RH"}`
+const readingCO2 = `{"schema_version":1,"greenhouse_id":"gh-a","zone_id":null,"ts":"2026-06-07T14:03:00.000Z","metric":"co2","value":820.0,"unit":"ppm"}`
+const readingPAR = `{"schema_version":1,"greenhouse_id":"gh-a","zone_id":null,"ts":"2026-06-07T14:03:00.000Z","metric":"par","value":412.0,"unit":"µmol·m⁻²·s⁻¹"}`
 
 func TestReadingRejectsPayloadTopicMismatch(t *testing.T) {
 	now := time.Now()
@@ -63,12 +65,20 @@ func TestHouseReadingsDriveFleetTiles(t *testing.T) {
 	now := time.Now()
 	ing.onReading([]byte(readingMatch), "gh-a", now)    // temperature 21.5
 	ing.onReading([]byte(readingHumidity), "gh-a", now) // humidity 58
+	ing.onReading([]byte(readingCO2), "gh-a", now)      // co2 820
+	ing.onReading([]byte(readingPAR), "gh-a", now)      // par 412
 	live, ok := ing.fleet.Get("gh-a")
 	if !ok || live.Temperature == nil || *live.Temperature != 21.5 {
 		t.Fatalf("house temperature not recorded: %+v", live)
 	}
 	if live.Humidity == nil || *live.Humidity != 58 {
 		t.Fatalf("house humidity not recorded: %+v", live)
+	}
+	if live.CO2 == nil || *live.CO2 != 820 {
+		t.Fatalf("house co2 not recorded: %+v", live)
+	}
+	if live.PAR == nil || *live.PAR != 412 {
+		t.Fatalf("house par not recorded: %+v", live)
 	}
 }
 
@@ -82,7 +92,7 @@ func TestZoneReadingDoesNotDriveHouseTiles(t *testing.T) {
 
 const stateMatch = `{"schema_version":1,"greenhouse_id":"gh-a","zone_id":null,"ts":"2026-06-07T14:03:00.000Z","controller":{"mode":"normal","healthy":true},"sensors":{"temperature":{"value":21.5}}}`
 const stateOtherID = `{"schema_version":1,"greenhouse_id":"gh-b","zone_id":null,"ts":"2026-06-07T14:03:00.000Z","controller":{"mode":"normal","healthy":true},"sensors":{"temperature":{"value":21.5}}}`
-const stateWithHumidity = `{"schema_version":1,"greenhouse_id":"gh-a","zone_id":null,"ts":"2026-06-07T14:03:00.000Z","controller":{"mode":"normal","healthy":true},"sensors":{"temperature":{"value":21.5},"humidity":{"value":62.0}}}`
+const stateWithHumidity = `{"schema_version":1,"greenhouse_id":"gh-a","zone_id":null,"ts":"2026-06-07T14:03:00.000Z","controller":{"mode":"normal","healthy":true},"sensors":{"temperature":{"value":21.5},"humidity":{"value":62.0},"co2":{"value":840.0},"par":{"value":355.0}}}`
 
 func TestStateRejectsPayloadTopicMismatch(t *testing.T) {
 	now := time.Now()
@@ -102,12 +112,18 @@ func TestStateRejectsPayloadTopicMismatch(t *testing.T) {
 	}
 }
 
-func TestStateSnapshotRecordsHumidity(t *testing.T) {
+func TestStateSnapshotRecordsHouseSensors(t *testing.T) {
 	ing, _ := newTestIngester("gh-a")
 	ing.onState([]byte(stateWithHumidity), "gh-a", time.Now())
 	live, ok := ing.fleet.Get("gh-a")
 	if !ok || live.Humidity == nil || *live.Humidity != 62 {
 		t.Fatalf("state snapshot humidity not recorded: %+v", live)
+	}
+	if live.CO2 == nil || *live.CO2 != 840 {
+		t.Fatalf("state snapshot co2 not recorded: %+v", live)
+	}
+	if live.PAR == nil || *live.PAR != 355 {
+		t.Fatalf("state snapshot par not recorded: %+v", live)
 	}
 }
 
