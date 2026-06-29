@@ -5,6 +5,7 @@ import { Route, Routes } from "react-router-dom";
 // the detail view (frontend tech-stack §Vite, components §5).
 const FleetOverview = lazy(() => import("../features/fleet/FleetOverview"));
 const GreenhouseDetail = lazy(() => import("../features/greenhouse/GreenhouseDetail"));
+const SetpointsView = lazy(() => import("../features/greenhouse/SetpointsView"));
 const ActivityFeed = lazy(() => import("../features/activity/ActivityFeed"));
 const NotFound = lazy(() => import("../features/NotFound"));
 
@@ -14,6 +15,7 @@ export function AppRoutes() {
     <Routes>
       <Route path="/" element={<FleetOverview />} />
       <Route path="/greenhouses/:id" element={<GreenhouseDetail />} />
+      <Route path="/greenhouses/:id/setpoints" element={<SetpointsView />} />
       <Route path="/activity" element={<ActivityFeed />} />
       <Route path="*" element={<NotFound />} />
     </Routes>

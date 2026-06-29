@@ -1,5 +1,6 @@
 import { useMemo } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
+import { SlidersHorizontal } from "lucide-react";
 import type { ActuatorName, ActuatorState, Metric, Setpoints } from "../../api/schemas";
 import { useFleet, useGreenhouse } from "../../api/queries/greenhouses";
 import { useEvents } from "../../api/queries/events";
@@ -7,6 +8,7 @@ import { useAnalytics, useTelemetry } from "../../api/queries/telemetry";
 import { liveSeriesKey, useLiveSeries } from "../../hooks/useLiveSeries";
 import { useLiveActuators, type LiveActuators } from "../../hooks/useLiveActuators";
 import { activeFaultCount, mergeReadings, rangeTierSelection } from "../../lib/derivations";
+import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/Card";
 import { ErrorState } from "../../components/ui/ErrorState";
 import { EventList } from "../../components/ui/EventList";
@@ -26,7 +28,6 @@ import { usePersistentRange } from "../../hooks/usePersistentRange";
 import { GreenhouseTimeScaleControl } from "./GreenhouseTimeScaleControl";
 import { RangePicker } from "./RangePicker";
 import { RetireGreenhouseAction } from "./RetireGreenhouseAction";
-import { SetpointEditForm } from "./SetpointEditForm";
 import { rangeMs } from "./range";
 
 const SECTION_STYLE = { gap: "var(--layout-section-gap)" };
@@ -94,6 +95,7 @@ const format = (value: number): string =>
 
 export default function GreenhouseDetail() {
   const { id = "" } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   // The chart range is a deep-linkable ?range= choice (default 1h). The last pick persists across
   // remounts via localStorage, so moving between greenhouses keeps the chosen range.
   const [rangeKey, setRange] = usePersistentRange("range", "detail:range");
@@ -142,7 +144,6 @@ export default function GreenhouseDetail() {
     );
   }
 
-  const offline = detail.status === "offline";
   const soilZones = detail.setpoints.zones;
 
   // The four house climate metrics, merged (history + live) into one set of stacked-chart bands.
@@ -182,9 +183,7 @@ export default function GreenhouseDetail() {
     const historical = isRaw
       ? telemetryReadings(telemetry.data, "soil_moisture", zone.zoneId)
       : analyticsReadings(analytics.data, "soil_moisture", zone.zoneId);
-    const liveReadings = isRaw
-      ? (live.get(liveSeriesKey("soil_moisture", zone.zoneId)) ?? [])
-      : [];
+    const liveReadings = isRaw ? (live.get(liveSeriesKey("soil_moisture", zone.zoneId)) ?? []) : [];
     const points = mergeReadings(historical, liveReadings, { windowMs });
     const latest = points.at(-1)?.v;
     return (
@@ -225,6 +224,10 @@ export default function GreenhouseDetail() {
           ) : null}
           <span className="text-fg-muted text-sm">Timescale</span>
           <RangePicker value={rangeKey} onChange={setRange} />
+          <Button variant="primary" onClick={() => navigate(`/greenhouses/${id}/setpoints`)}>
+            <SlidersHorizontal size={16} aria-hidden />
+            Edit Setpoints
+          </Button>
           <RetireGreenhouseAction greenhouseId={id} displayName={detail.displayName} />
         </div>
       </div>
@@ -266,8 +269,6 @@ export default function GreenhouseDetail() {
           </Card>
         </div>
       </div>
-
-      <SetpointEditForm greenhouseId={id} setpoints={detail.setpoints} offline={offline} />
     </div>
   );
 }
