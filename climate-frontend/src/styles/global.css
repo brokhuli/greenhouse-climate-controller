@@ -105,4 +105,8 @@
     letter-spacing: 0;
     color: var(--color-fg-muted);
   }
+
+  .section-label-lg {
+    font-size: var(--text-sm);
+  }
 }

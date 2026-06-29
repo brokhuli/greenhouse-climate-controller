@@ -178,6 +178,36 @@ export default function GreenhouseDetail() {
   // DLI lives on the fleet snapshot (it's a derived accumulator, not a detail-endpoint field).
   const dli = fleet.data?.find((summary) => summary.id === id)?.climate.dli ?? null;
   const faultCount = activeFaultCount(events.data ?? []);
+  const soilMoistureCards = soilZones.map((zone) => {
+    const historical = isRaw
+      ? telemetryReadings(telemetry.data, "soil_moisture", zone.zoneId)
+      : analyticsReadings(analytics.data, "soil_moisture", zone.zoneId);
+    const liveReadings = isRaw
+      ? (live.get(liveSeriesKey("soil_moisture", zone.zoneId)) ?? [])
+      : [];
+    const points = mergeReadings(historical, liveReadings, { windowMs });
+    const latest = points.at(-1)?.v;
+    return (
+      <Card key={`soil-${zone.zoneId}`}>
+        <PanelHeader
+          title={`Soil moisture · ${zone.zoneId}`}
+          value={latest !== undefined ? `${format(latest)} VWC` : "—"}
+        />
+        <TimeSeriesChart
+          series={{
+            label: `Soil moisture (${zone.zoneId})`,
+            color: "var(--chart-soil-moisture)",
+            points,
+          }}
+          references={[
+            { label: "Low", value: zone.moistureLowThreshold },
+            { label: "High", value: zone.moistureHighThreshold },
+          ]}
+          unit="VWC"
+        />
+      </Card>
+    );
+  });
 
   return (
     <div className="flex flex-col" style={SECTION_STYLE}>
@@ -208,57 +238,33 @@ export default function GreenhouseDetail() {
         faultCount={faultCount}
       />
 
-      <Card>
-        <PanelHeader title="Climate overview" sectionLabel />
-        <StackedTimeSeriesChart bands={climateBands} />
-      </Card>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2" style={CARD_GRID_STYLE}>
-        {soilZones.map((zone) => {
-          const historical = isRaw
-            ? telemetryReadings(telemetry.data, "soil_moisture", zone.zoneId)
-            : analyticsReadings(analytics.data, "soil_moisture", zone.zoneId);
-          const liveReadings = isRaw
-            ? (live.get(liveSeriesKey("soil_moisture", zone.zoneId)) ?? [])
-            : [];
-          const points = mergeReadings(historical, liveReadings, { windowMs });
-          const latest = points.at(-1)?.v;
-          return (
-            <Card key={`soil-${zone.zoneId}`}>
-              <PanelHeader
-                title={`Soil moisture · ${zone.zoneId}`}
-                value={latest !== undefined ? `${format(latest)} VWC` : "—"}
-              />
-              <TimeSeriesChart
-                series={{
-                  label: `Soil moisture (${zone.zoneId})`,
-                  color: "var(--chart-soil-moisture)",
-                  points,
-                }}
-                references={[
-                  { label: "Low", value: zone.moistureLowThreshold },
-                  { label: "High", value: zone.moistureHighThreshold },
-                ]}
-                unit="VWC"
-              />
-            </Card>
-          );
-        })}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2" style={CARD_GRID_STYLE}>
-        <Card>
-          <PanelHeader title="Actuators" />
-          <ActuatorStatePanel actuators={actuatorReadings} />
-        </Card>
-        <Card>
-          <PanelHeader title="Recent activity" />
-          {events.isLoading ? (
-            <Skeleton height={120} />
-          ) : (
-            <EventList events={events.data ?? []} showGreenhouse={false} />
-          )}
-        </Card>
+      <div
+        className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]"
+        style={CARD_GRID_STYLE}
+      >
+        <div className="flex flex-col" style={CARD_GRID_STYLE}>
+          <Card>
+            <PanelHeader title="Climate overview" sectionLabel titleSize="large" />
+            <StackedTimeSeriesChart bands={climateBands} />
+          </Card>
+          <div className="grid grid-cols-1 xl:grid-cols-2" style={CARD_GRID_STYLE}>
+            {soilMoistureCards}
+          </div>
+        </div>
+        <div className="flex flex-col" style={CARD_GRID_STYLE}>
+          <Card>
+            <PanelHeader title="Actuator states" sectionLabel titleSize="large" />
+            <ActuatorStatePanel actuators={actuatorReadings} />
+          </Card>
+          <Card>
+            <PanelHeader title="Recent Activity" sectionLabel titleSize="large" />
+            {events.isLoading ? (
+              <Skeleton height={120} />
+            ) : (
+              <EventList events={events.data ?? []} showGreenhouse={false} />
+            )}
+          </Card>
+        </div>
       </div>
 
       <SetpointEditForm greenhouseId={id} setpoints={detail.setpoints} offline={offline} />

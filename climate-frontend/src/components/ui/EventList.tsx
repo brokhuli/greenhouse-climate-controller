@@ -14,10 +14,14 @@ const SEVERITY_COLOR: Record<EventSeverity, string> = {
 
 const SEVERITY_ORDER: EventSeverity[] = ["critical", "warning", "info"];
 
-const formatTime = (date: Date): string =>
-  date.toLocaleString(undefined, {
+const formatEventDate = (date: Date): string =>
+  date.toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
+  });
+
+const formatEventTime = (date: Date): string =>
+  date.toLocaleTimeString(undefined, {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
@@ -26,8 +30,9 @@ const formatTime = (date: Date): string =>
 function EventRow({ event, showGreenhouse }: { event: EventEntry; showGreenhouse: boolean }) {
   return (
     <li className="border-divider flex items-start gap-3 border-b py-2 last:border-b-0">
-      <span className="text-fg-subtle mt-0.5 w-32 shrink-0 font-mono text-xs tabular-nums">
-        {formatTime(event.ts)}
+      <span className="text-fg-subtle mt-0.5 flex w-20 shrink-0 flex-col font-mono text-xs tabular-nums">
+        <span>{formatEventDate(event.ts)}</span>
+        <span className="whitespace-nowrap">{formatEventTime(event.ts)}</span>
       </span>
       <span
         className="mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full"
