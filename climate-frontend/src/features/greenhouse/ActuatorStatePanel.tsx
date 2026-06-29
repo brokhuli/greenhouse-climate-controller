@@ -1,3 +1,14 @@
+import {
+  Blinds,
+  Cloud,
+  Droplet,
+  Droplets,
+  Fan,
+  Flame,
+  Lightbulb,
+  Wind,
+  type LucideIcon,
+} from "lucide-react";
 import type { ActuatorName } from "../../api/schemas";
 
 /**
@@ -21,32 +32,66 @@ const LABELS: Record<ActuatorName, string> = {
   irrigation_valve: "Irrigation valve",
 };
 
+// CO₂ reuses the Cloud glyph the climate summary already uses for the metric, so the two views read
+// consistently; the rest map an actuator to its closest physical-action icon.
+const ICONS: Record<ActuatorName, LucideIcon> = {
+  heater: Flame,
+  fans: Fan,
+  roof_vents: Wind,
+  misters: Droplets,
+  co2_injector: Cloud,
+  grow_lights: Lightbulb,
+  shade_screen: Blinds,
+  irrigation_valve: Droplet,
+};
+
 const clamp = (value: number): number => Math.max(0, Math.min(100, value));
+
+/** Filled On/Off chip: tinted green when running, neutral when idle. Text carries the state so it
+ *  is never color-only (constraints §a11y). */
+function StatePill({ on }: { on: boolean }) {
+  return on ? (
+    <span
+      className="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium"
+      style={{
+        backgroundColor: "color-mix(in srgb, var(--color-status-online) 18%, transparent)",
+        color: "var(--color-status-online)",
+      }}
+    >
+      On
+    </span>
+  ) : (
+    <span className="bg-surface-3 text-fg-subtle shrink-0 rounded-full px-2 py-0.5 text-xs font-medium">
+      Off
+    </span>
+  );
+}
 
 export function ActuatorStatePanel({ actuators }: { actuators: ActuatorReading[] }) {
   if (actuators.length === 0) {
     return <p className="text-fg-subtle text-sm">No actuator data in range.</p>;
   }
   return (
-    <div className="flex flex-col gap-3">
-      {actuators.map((entry) => (
-        <div key={entry.actuator} className="flex items-center gap-3">
-          <span className="text-fg-default w-28 shrink-0 text-sm">{LABELS[entry.actuator]}</span>
-          <div className="bg-surface-3 h-2 flex-1 overflow-hidden rounded-full">
-            <div
-              className="h-full rounded-full"
-              style={{
-                width: `${clamp(entry.commanded)}%`,
-                backgroundColor: "var(--color-accent)",
-              }}
-            />
+    <div className="flex flex-col">
+      {actuators.map((entry) => {
+        const Icon = ICONS[entry.actuator];
+        const commanded = clamp(entry.commanded);
+        return (
+          <div
+            key={entry.actuator}
+            className="border-divider flex items-center gap-3 border-b py-2 last:border-b-0"
+          >
+            <Icon size={16} className="text-fg-muted shrink-0" aria-hidden />
+            <span className="text-fg-default min-w-0 flex-1 truncate text-sm">
+              {LABELS[entry.actuator]}
+            </span>
+            <span className="text-fg-muted shrink-0 font-mono text-sm tabular-nums">
+              {Math.round(commanded)} %
+            </span>
+            <StatePill on={commanded > 0} />
           </div>
-          <span className="text-fg-muted w-28 shrink-0 text-right font-mono text-xs tabular-nums">
-            cmd {Math.round(entry.commanded)}% · obs{" "}
-            {entry.observed == null ? "—" : `${Math.round(entry.observed)}%`}
-          </span>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

@@ -1,5 +1,6 @@
-import { Activity, LayoutGrid, Leaf } from "lucide-react";
+import { Activity, LayoutGrid } from "lucide-react";
 import { NavLink } from "react-router-dom";
+import { useTheme } from "../hooks/theme";
 
 const NAV_ITEMS = [
   { to: "/", label: "Fleet", icon: LayoutGrid, end: true },
@@ -8,6 +9,9 @@ const NAV_ITEMS = [
 
 /** Primary navigation rail (architecture §8). Profiles (2b) is intentionally absent in 2a. */
 export function SideNav() {
+  const { theme } = useTheme();
+  const brandIcon = theme === "dark" ? "/favicon-dark.svg" : "/favicon-light.svg";
+
   return (
     <nav
       aria-label="Primary"
@@ -15,8 +19,8 @@ export function SideNav() {
       style={{ width: "var(--layout-sidenav-width)", padding: "var(--space-5)" }}
     >
       <div className="text-fg-default mb-4 flex items-center gap-2">
-        <Leaf size={20} aria-hidden />
-        <span className="font-semibold">Greenhouse</span>
+        <img src={brandIcon} alt="" aria-hidden className="size-8 shrink-0" />
+        <span className="font-semibold">Verdant</span>
       </div>
 
       {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (

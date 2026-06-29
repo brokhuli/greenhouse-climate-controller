@@ -47,6 +47,21 @@ curl -X PATCH localhost:8080/api/sim/time-scale \
 `gen-controllers.sh N` is the lever for **performance testing** under different greenhouse counts
 (operations §2). Generated files (`docker-compose.override.yml`, `controllers/`) are git-ignored.
 
+## Inject demo faults
+
+To populate the dashboard's Recent Activity feed (and trip the fleet "degraded" state) without
+waiting for the simulation to fault on its own, publish a demo set of faults to the broker:
+
+```sh
+bash deploy/scripts/inject-faults.sh            # demo set on gh-a
+bash deploy/scripts/inject-faults.sh gh-a gh-b  # demo set on each given greenhouse
+```
+
+It publishes to `gh/{id}/fault` through the broker container (no host MQTT client needed), spanning
+both event kinds (fault/interlock) and all three severities. The target greenhouse must already be
+registered. Note the "degraded" state is transient — a healthy controller's next `gh/{id}/state`
+clears it — but the events themselves persist.
+
 The standalone Phase 1 controller can still run as a native binary against the broker at
 `localhost:1883`; broker config is [`mosquitto/config/mosquitto.conf`](./mosquitto/config/mosquitto.conf)
 (anonymous auth + persistence per RFC-001).

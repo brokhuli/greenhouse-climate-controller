@@ -1,4 +1,10 @@
-import type { AnalyticsInterval, Connectivity, GreenhouseSummary, Reading } from "../api/schemas";
+import type {
+  AnalyticsInterval,
+  Connectivity,
+  EventEntry,
+  GreenhouseSummary,
+  Reading,
+} from "../api/schemas";
 
 /**
  * Pure view-model derivations (data-model spec §8). They turn raw API data into what the UI shows,
@@ -45,6 +51,23 @@ export function statusRollup(summaries: readonly GreenhouseSummary[]): StatusRol
     if (summary.drift) rollup.drift += 1;
   }
   return rollup;
+}
+
+// ---------------------------------------------------------------------------
+// Active faults
+// ---------------------------------------------------------------------------
+
+/**
+ * How many of a greenhouse's recent events are faults (the detail summary's Status tile). The feed
+ * carries no resolved/active flag, so this counts fault-kind entries in the current window — a close
+ * enough proxy for "active faults" while a greenhouse is degraded.
+ */
+export function activeFaultCount(events: readonly EventEntry[]): number {
+  let count = 0;
+  for (const event of events) {
+    if (event.kind === "fault") count += 1;
+  }
+  return count;
 }
 
 // ---------------------------------------------------------------------------

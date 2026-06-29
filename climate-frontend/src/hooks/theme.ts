@@ -19,6 +19,9 @@ export function useTheme(): ThemeContextValue {
 /** Apply a theme to the document and remember it (mirrors the pre-paint script in index.html). */
 export function applyTheme(theme: ThemeName): void {
   document.documentElement.setAttribute("data-theme", theme);
+  document
+    .getElementById("favicon")
+    ?.setAttribute("href", theme === "light" ? "/favicon-light.svg" : "/favicon-dark.svg");
   try {
     localStorage.setItem("theme", theme);
   } catch {

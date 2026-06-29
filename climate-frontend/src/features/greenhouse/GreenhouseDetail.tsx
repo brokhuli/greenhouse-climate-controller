@@ -1,12 +1,14 @@
 import { useMemo } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
+import { SlidersHorizontal } from "lucide-react";
 import type { ActuatorName, ActuatorState, Metric, Setpoints } from "../../api/schemas";
-import { useGreenhouse } from "../../api/queries/greenhouses";
+import { useFleet, useGreenhouse } from "../../api/queries/greenhouses";
 import { useEvents } from "../../api/queries/events";
 import { useAnalytics, useTelemetry } from "../../api/queries/telemetry";
 import { liveSeriesKey, useLiveSeries } from "../../hooks/useLiveSeries";
 import { useLiveActuators, type LiveActuators } from "../../hooks/useLiveActuators";
-import { mergeReadings, rangeTierSelection } from "../../lib/derivations";
+import { activeFaultCount, mergeReadings, rangeTierSelection } from "../../lib/derivations";
+import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/Card";
 import { ErrorState } from "../../components/ui/ErrorState";
 import { EventList } from "../../components/ui/EventList";
@@ -20,12 +22,12 @@ import {
   type StackedBand,
 } from "../../components/ui/StackedTimeSeriesChart";
 import { ActuatorStatePanel, type ActuatorReading } from "./ActuatorStatePanel";
+import { GreenhouseSummaryBar, type SummaryReadings } from "./GreenhouseSummaryBar";
 import { analyticsReadings, telemetryReadings } from "./chartData";
 import { usePersistentRange } from "../../hooks/usePersistentRange";
 import { GreenhouseTimeScaleControl } from "./GreenhouseTimeScaleControl";
 import { RangePicker } from "./RangePicker";
 import { RetireGreenhouseAction } from "./RetireGreenhouseAction";
-import { SetpointEditForm } from "./SetpointEditForm";
 import { rangeMs } from "./range";
 
 const SECTION_STYLE = { gap: "var(--layout-section-gap)" };
@@ -93,6 +95,7 @@ const format = (value: number): string =>
 
 export default function GreenhouseDetail() {
   const { id = "" } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   // The chart range is a deep-linkable ?range= choice (default 1h). The last pick persists across
   // remounts via localStorage, so moving between greenhouses keeps the chosen range.
   const [rangeKey, setRange] = usePersistentRange("range", "detail:range");
@@ -114,6 +117,7 @@ export default function GreenhouseDetail() {
   const events = useEvents({ greenhouseId: id });
   const live = useLiveSeries(id);
   const liveActuators = useLiveActuators(id);
+  const fleet = useFleet();
 
   const detail = greenhouse.data;
   const actuatorReadings = useMemo(
@@ -140,7 +144,6 @@ export default function GreenhouseDetail() {
     );
   }
 
-  const offline = detail.status === "offline";
   const soilZones = detail.setpoints.zones;
 
   // The four house climate metrics, merged (history + live) into one set of stacked-chart bands.
@@ -160,6 +163,51 @@ export default function GreenhouseDetail() {
     };
   });
 
+  // Summary tiles reuse the already-merged house bands; VPD isn't stacked, so merge it on its own.
+  const latestBand = (metric: Metric): number | undefined =>
+    climateBands.find((band) => band.key === metric)?.points.at(-1)?.v;
+  const vpdHistorical = isRaw
+    ? telemetryReadings(telemetry.data, "vpd", null)
+    : analyticsReadings(analytics.data, "vpd", null);
+  const vpdLive = isRaw ? (live.get(liveSeriesKey("vpd", null)) ?? []) : [];
+  const summaryReadings: SummaryReadings = {
+    temperature: latestBand("temperature"),
+    humidity: latestBand("humidity"),
+    co2: latestBand("co2"),
+    vpd: mergeReadings(vpdHistorical, vpdLive, { windowMs }).at(-1)?.v,
+  };
+  // DLI lives on the fleet snapshot (it's a derived accumulator, not a detail-endpoint field).
+  const dli = fleet.data?.find((summary) => summary.id === id)?.climate.dli ?? null;
+  const faultCount = activeFaultCount(events.data ?? []);
+  const soilMoistureCards = soilZones.map((zone) => {
+    const historical = isRaw
+      ? telemetryReadings(telemetry.data, "soil_moisture", zone.zoneId)
+      : analyticsReadings(analytics.data, "soil_moisture", zone.zoneId);
+    const liveReadings = isRaw ? (live.get(liveSeriesKey("soil_moisture", zone.zoneId)) ?? []) : [];
+    const points = mergeReadings(historical, liveReadings, { windowMs });
+    const latest = points.at(-1)?.v;
+    return (
+      <Card key={`soil-${zone.zoneId}`}>
+        <PanelHeader
+          title={`Soil moisture · ${zone.zoneId}`}
+          value={latest !== undefined ? `${format(latest)} VWC` : "—"}
+        />
+        <TimeSeriesChart
+          series={{
+            label: `Soil moisture (${zone.zoneId})`,
+            color: "var(--chart-soil-moisture)",
+            points,
+          }}
+          references={[
+            { label: "Low", value: zone.moistureLowThreshold },
+            { label: "High", value: zone.moistureHighThreshold },
+          ]}
+          unit="VWC"
+        />
+      </Card>
+    );
+  });
+
   return (
     <div className="flex flex-col" style={SECTION_STYLE}>
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -176,64 +224,51 @@ export default function GreenhouseDetail() {
           ) : null}
           <span className="text-fg-muted text-sm">Timescale</span>
           <RangePicker value={rangeKey} onChange={setRange} />
+          <Button variant="primary" onClick={() => navigate(`/greenhouses/${id}/setpoints`)}>
+            <SlidersHorizontal size={16} aria-hidden />
+            Edit Setpoints
+          </Button>
           <RetireGreenhouseAction greenhouseId={id} displayName={detail.displayName} />
         </div>
       </div>
 
-      <Card>
-        <PanelHeader title="Climate overview" sectionLabel />
-        <StackedTimeSeriesChart bands={climateBands} />
-      </Card>
+      <GreenhouseSummaryBar
+        status={detail.status}
+        drift={detail.drift}
+        setpoints={detail.setpoints}
+        readings={summaryReadings}
+        dli={dli}
+        faultCount={faultCount}
+      />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2" style={CARD_GRID_STYLE}>
-        {soilZones.map((zone) => {
-          const historical = isRaw
-            ? telemetryReadings(telemetry.data, "soil_moisture", zone.zoneId)
-            : analyticsReadings(analytics.data, "soil_moisture", zone.zoneId);
-          const liveReadings = isRaw
-            ? (live.get(liveSeriesKey("soil_moisture", zone.zoneId)) ?? [])
-            : [];
-          const points = mergeReadings(historical, liveReadings, { windowMs });
-          const latest = points.at(-1)?.v;
-          return (
-            <Card key={`soil-${zone.zoneId}`}>
-              <PanelHeader
-                title={`Soil moisture · ${zone.zoneId}`}
-                value={latest !== undefined ? `${format(latest)} VWC` : "—"}
-              />
-              <TimeSeriesChart
-                series={{
-                  label: `Soil moisture (${zone.zoneId})`,
-                  color: "var(--chart-soil-moisture)",
-                  points,
-                }}
-                references={[
-                  { label: "Low", value: zone.moistureLowThreshold },
-                  { label: "High", value: zone.moistureHighThreshold },
-                ]}
-                unit="VWC"
-              />
-            </Card>
-          );
-        })}
+      <div
+        className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]"
+        style={CARD_GRID_STYLE}
+      >
+        <div className="flex flex-col" style={CARD_GRID_STYLE}>
+          <Card>
+            <PanelHeader title="Climate overview" sectionLabel titleSize="large" />
+            <StackedTimeSeriesChart bands={climateBands} />
+          </Card>
+          <div className="grid grid-cols-1 xl:grid-cols-2" style={CARD_GRID_STYLE}>
+            {soilMoistureCards}
+          </div>
+        </div>
+        <div className="flex flex-col" style={CARD_GRID_STYLE}>
+          <Card>
+            <PanelHeader title="Actuator states" sectionLabel titleSize="large" />
+            <ActuatorStatePanel actuators={actuatorReadings} />
+          </Card>
+          <Card>
+            <PanelHeader title="Recent Activity" sectionLabel titleSize="large" />
+            {events.isLoading ? (
+              <Skeleton height={120} />
+            ) : (
+              <EventList events={events.data ?? []} showGreenhouse={false} />
+            )}
+          </Card>
+        </div>
       </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2" style={CARD_GRID_STYLE}>
-        <Card>
-          <PanelHeader title="Actuators" />
-          <ActuatorStatePanel actuators={actuatorReadings} />
-        </Card>
-        <Card>
-          <PanelHeader title="Recent activity" />
-          {events.isLoading ? (
-            <Skeleton height={120} />
-          ) : (
-            <EventList events={events.data ?? []} showGreenhouse={false} />
-          )}
-        </Card>
-      </div>
-
-      <SetpointEditForm greenhouseId={id} setpoints={detail.setpoints} offline={offline} />
     </div>
   );
 }

@@ -12,15 +12,16 @@ import { ThemeToggle } from "./ThemeToggle";
 export function TopBar() {
   const { connectionState } = useStream();
   const detailMatch = useMatch("/greenhouses/:id");
+  const setpointsMatch = useMatch("/greenhouses/:id/setpoints");
   const activityMatch = useMatch("/activity");
-  const greenhouseId = detailMatch?.params.id ?? "";
+  const greenhouseId = detailMatch?.params.id ?? setpointsMatch?.params.id ?? "";
   const greenhouse = useGreenhouse(greenhouseId);
 
   let title = "Fleet Overview";
   let subtitle = "Fleet operations console";
   if (greenhouseId) {
     title = greenhouse.data?.displayName ?? `Greenhouse ${greenhouseId}`;
-    subtitle = greenhouse.data?.crop ?? "Greenhouse detail";
+    subtitle = setpointsMatch ? "Edit setpoints" : (greenhouse.data?.crop ?? "Greenhouse detail");
   } else if (activityMatch) {
     title = "Activity";
     subtitle = "Faults, interlocks & operator writes";
