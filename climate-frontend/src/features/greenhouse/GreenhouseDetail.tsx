@@ -1,12 +1,12 @@
 import { useMemo } from "react";
 import { useParams } from "react-router-dom";
 import type { ActuatorName, ActuatorState, Metric, Setpoints } from "../../api/schemas";
-import { useGreenhouse } from "../../api/queries/greenhouses";
+import { useFleet, useGreenhouse } from "../../api/queries/greenhouses";
 import { useEvents } from "../../api/queries/events";
 import { useAnalytics, useTelemetry } from "../../api/queries/telemetry";
 import { liveSeriesKey, useLiveSeries } from "../../hooks/useLiveSeries";
 import { useLiveActuators, type LiveActuators } from "../../hooks/useLiveActuators";
-import { mergeReadings, rangeTierSelection } from "../../lib/derivations";
+import { activeFaultCount, mergeReadings, rangeTierSelection } from "../../lib/derivations";
 import { Card } from "../../components/Card";
 import { ErrorState } from "../../components/ui/ErrorState";
 import { EventList } from "../../components/ui/EventList";
@@ -20,6 +20,7 @@ import {
   type StackedBand,
 } from "../../components/ui/StackedTimeSeriesChart";
 import { ActuatorStatePanel, type ActuatorReading } from "./ActuatorStatePanel";
+import { GreenhouseSummaryBar, type SummaryReadings } from "./GreenhouseSummaryBar";
 import { analyticsReadings, telemetryReadings } from "./chartData";
 import { usePersistentRange } from "../../hooks/usePersistentRange";
 import { GreenhouseTimeScaleControl } from "./GreenhouseTimeScaleControl";
@@ -114,6 +115,7 @@ export default function GreenhouseDetail() {
   const events = useEvents({ greenhouseId: id });
   const live = useLiveSeries(id);
   const liveActuators = useLiveActuators(id);
+  const fleet = useFleet();
 
   const detail = greenhouse.data;
   const actuatorReadings = useMemo(
@@ -160,6 +162,23 @@ export default function GreenhouseDetail() {
     };
   });
 
+  // Summary tiles reuse the already-merged house bands; VPD isn't stacked, so merge it on its own.
+  const latestBand = (metric: Metric): number | undefined =>
+    climateBands.find((band) => band.key === metric)?.points.at(-1)?.v;
+  const vpdHistorical = isRaw
+    ? telemetryReadings(telemetry.data, "vpd", null)
+    : analyticsReadings(analytics.data, "vpd", null);
+  const vpdLive = isRaw ? (live.get(liveSeriesKey("vpd", null)) ?? []) : [];
+  const summaryReadings: SummaryReadings = {
+    temperature: latestBand("temperature"),
+    humidity: latestBand("humidity"),
+    co2: latestBand("co2"),
+    vpd: mergeReadings(vpdHistorical, vpdLive, { windowMs }).at(-1)?.v,
+  };
+  // DLI lives on the fleet snapshot (it's a derived accumulator, not a detail-endpoint field).
+  const dli = fleet.data?.find((summary) => summary.id === id)?.climate.dli ?? null;
+  const faultCount = activeFaultCount(events.data ?? []);
+
   return (
     <div className="flex flex-col" style={SECTION_STYLE}>
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -179,6 +198,15 @@ export default function GreenhouseDetail() {
           <RetireGreenhouseAction greenhouseId={id} displayName={detail.displayName} />
         </div>
       </div>
+
+      <GreenhouseSummaryBar
+        status={detail.status}
+        drift={detail.drift}
+        setpoints={detail.setpoints}
+        readings={summaryReadings}
+        dli={dli}
+        faultCount={faultCount}
+      />
 
       <Card>
         <PanelHeader title="Climate overview" sectionLabel />

@@ -5,7 +5,7 @@ export function Card({ title, children }: { title?: string; children?: ReactNode
   return (
     <section
       className="border-border bg-surface-1 rounded-lg border"
-      style={{ padding: "var(--space-5)" }}
+      style={{ padding: "var(--space-4)" }}
     >
       {title ? (
         <h2

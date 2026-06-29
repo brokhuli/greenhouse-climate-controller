@@ -13,6 +13,7 @@
   --chart-co2: #8b5cf6;
   --chart-par: #ff8a00;
   --chart-soil-moisture: #ff6b00;
+  --chart-vpd: #2dd4bf; /* teal — distinct from the lime temperature line it derives from */
 
   --chart-setpoint: var(--color-fg-muted); /* dashed reference line */
   --chart-band-ok: rgba(156, 204, 101, 0.12);

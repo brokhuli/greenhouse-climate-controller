@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { Connectivity, GreenhouseSummary } from "../../src/api/schemas";
+import type { Connectivity, EventEntry, GreenhouseSummary } from "../../src/api/schemas";
 import {
+  activeFaultCount,
   rangeTierSelection,
   readingVsSetpointDelta,
   statusRollup,
@@ -14,6 +15,14 @@ const summary = (status: Connectivity, drift = false): GreenhouseSummary => ({
   drift,
   timeScale: null,
   climate: {},
+});
+
+const event = (kind: EventEntry["kind"]): EventEntry => ({
+  greenhouseId: "x",
+  ts: new Date("2026-06-24T00:00:00.000Z"),
+  kind,
+  severity: "warning",
+  message: "x",
 });
 
 describe("readingVsSetpointDelta", () => {
@@ -38,6 +47,17 @@ describe("statusRollup", () => {
       summary("offline"),
     ]);
     expect(rollup).toMatchObject({ total: 4, online: 2, degraded: 1, offline: 1, drift: 1 });
+  });
+});
+
+describe("activeFaultCount", () => {
+  it("counts only fault-kind events in the feed", () => {
+    expect(activeFaultCount([event("fault"), event("setpoint_edit"), event("fault")])).toBe(2);
+  });
+
+  it("is zero for an empty or fault-free feed", () => {
+    expect(activeFaultCount([])).toBe(0);
+    expect(activeFaultCount([event("drift"), event("interlock")])).toBe(0);
   });
 });
 
