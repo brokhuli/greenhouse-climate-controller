@@ -164,6 +164,8 @@ export default function GreenhouseDetail() {
   });
 
   // Summary tiles reuse the already-merged house bands; VPD isn't stacked, so merge it on its own.
+  const latestBandPoint = (metric: Metric) =>
+    climateBands.find((band) => band.key === metric)?.points.at(-1);
   const latestBand = (metric: Metric): number | undefined =>
     climateBands.find((band) => band.key === metric)?.points.at(-1)?.v;
   const vpdHistorical = isRaw
@@ -172,6 +174,7 @@ export default function GreenhouseDetail() {
   const vpdLive = isRaw ? (live.get(liveSeriesKey("vpd", null)) ?? []) : [];
   const summaryReadings: SummaryReadings = {
     temperature: latestBand("temperature"),
+    temperaturePoint: latestBandPoint("temperature"),
     humidity: latestBand("humidity"),
     co2: latestBand("co2"),
     vpd: mergeReadings(vpdHistorical, vpdLive, { windowMs }).at(-1)?.v,

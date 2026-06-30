@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Connectivity, EventEntry, GreenhouseSummary } from "../../src/api/schemas";
 import {
+  activeTemperatureSetpoint,
   activeFaultCount,
   rangeTierSelection,
   readingVsSetpointDelta,
@@ -25,6 +26,21 @@ const event = (kind: EventEntry["kind"]): EventEntry => ({
   message: "x",
 });
 
+const setpoints = {
+  temperatureDayC: 24,
+  temperatureNightC: 18,
+  dayStart: "06:00",
+  dayEnd: "20:00",
+  humidityLowPct: 50,
+  humidityHighPct: 85,
+  humidityDeadbandPct: 5,
+  co2TargetPpm: 1000,
+  co2VentInterlockThresholdPct: 15,
+  vpdTargetKpa: 1,
+  dliTargetMol: 20,
+  zones: [],
+};
+
 describe("readingVsSetpointDelta", () => {
   it("computes the signed delta and direction", () => {
     expect(readingVsSetpointDelta(23.4, 24)).toMatchObject({ direction: "below" });
@@ -35,6 +51,30 @@ describe("readingVsSetpointDelta", () => {
   it("returns unknown when either value is missing", () => {
     expect(readingVsSetpointDelta(null, 24)).toEqual({ delta: null, direction: "unknown" });
     expect(readingVsSetpointDelta(23, undefined)).toEqual({ delta: null, direction: "unknown" });
+  });
+});
+
+describe("activeTemperatureSetpoint", () => {
+  it("resolves the day setpoint inside the configured UTC day window", () => {
+    expect(activeTemperatureSetpoint(setpoints, new Date("2026-01-01T19:00:00.000Z"))).toEqual({
+      label: "Day",
+      value: 24,
+    });
+  });
+
+  it("resolves the night setpoint outside the configured UTC day window", () => {
+    expect(activeTemperatureSetpoint(setpoints, new Date("2026-01-01T21:00:00.000Z"))).toEqual({
+      label: "Night",
+      value: 18,
+    });
+  });
+
+  it("supports day windows that wrap around midnight", () => {
+    const wrapped = { ...setpoints, dayStart: "20:00", dayEnd: "06:00" };
+    expect(activeTemperatureSetpoint(wrapped, new Date("2026-01-01T23:00:00.000Z"))).toEqual({
+      label: "Day",
+      value: 24,
+    });
   });
 });
 

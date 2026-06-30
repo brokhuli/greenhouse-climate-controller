@@ -124,10 +124,10 @@ constraints = { min_open_secs = 10 }
 saturation_window_secs = 300 # sustained saturation before `setpoint_unreachable` is raised
 
 [control.temperature_pid]
-kp = 15.0
-ki = 0.4
+kp = 18.0
+ki = 0.5
 kd = 0.0
-integral_clamp = 80.0 # anti-windup bound on the integral term
+integral_clamp = 100.0 # anti-windup bound on the integral term
 
 # --- Safety interlocks & override (spec §6) ------------------------------------------------
 [safety]

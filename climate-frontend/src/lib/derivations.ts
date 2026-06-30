@@ -4,6 +4,7 @@ import type {
   EventEntry,
   GreenhouseSummary,
   Reading,
+  Setpoints,
 } from "../api/schemas";
 
 /**
@@ -31,6 +32,33 @@ export function readingVsSetpointDelta(
   const delta = reading - setpoint;
   const direction = delta > 0 ? "above" : delta < 0 ? "below" : "equal";
   return { delta, direction };
+}
+
+/** Resolve the active day/night temperature setpoint for a simulated timestamp. */
+export function activeTemperatureSetpoint(
+  setpoints: Setpoints,
+  instant: Date | null | undefined,
+): { label: "Day" | "Night"; value: number } {
+  if (!instant) return { label: "Day", value: setpoints.temperatureDayC };
+
+  const [startHour, startMinute] = parseTimeOfDay(setpoints.dayStart);
+  const [endHour, endMinute] = parseTimeOfDay(setpoints.dayEnd);
+  const nowMinutes = instant.getUTCHours() * 60 + instant.getUTCMinutes();
+  const startMinutes = startHour * 60 + startMinute;
+  const endMinutes = endHour * 60 + endMinute;
+  const isDay =
+    startMinutes <= endMinutes
+      ? nowMinutes >= startMinutes && nowMinutes < endMinutes
+      : nowMinutes >= startMinutes || nowMinutes < endMinutes;
+
+  return isDay
+    ? { label: "Day", value: setpoints.temperatureDayC }
+    : { label: "Night", value: setpoints.temperatureNightC };
+}
+
+function parseTimeOfDay(value: string): [number, number] {
+  const [hour, minute] = value.split(":").map((part) => Number.parseInt(part, 10));
+  return [hour, minute];
 }
 
 // ---------------------------------------------------------------------------

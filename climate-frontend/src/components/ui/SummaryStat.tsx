@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 
 type SummaryStatDensity = "default" | "compact";
+type SummaryStatValueSize = "default" | "small";
 
 const DENSITY_STYLES: Record<
   SummaryStatDensity,
@@ -33,6 +34,7 @@ export function SummaryStat({
   color,
   dot = false,
   density = "default",
+  valueSize = "default",
 }: {
   label: string;
   value: ReactNode;
@@ -41,8 +43,10 @@ export function SummaryStat({
   color: string;
   dot?: boolean;
   density?: SummaryStatDensity;
+  valueSize?: SummaryStatValueSize;
 }) {
   const styles = DENSITY_STYLES[density];
+  const valueClass = valueSize === "small" ? "text-xl" : "text-2xl";
 
   return (
     <div
@@ -57,7 +61,9 @@ export function SummaryStat({
       </span>
       <div className="min-w-0">
         <p className="section-label">{label}</p>
-        <p className="text-fg-default font-mono text-2xl font-semibold tabular-nums">{value}</p>
+        <p className={`text-fg-default font-mono ${valueClass} font-semibold tabular-nums`}>
+          {value}
+        </p>
         <p className="text-fg-subtle mt-0.5 flex items-center gap-1.5 text-xs">
           {dot ? (
             <span
