@@ -3,9 +3,11 @@ import type { Connectivity, EventEntry, GreenhouseSummary } from "../../src/api/
 import {
   activeTemperatureSetpoint,
   activeFaultCount,
+  formatGreenhouseLabel,
   formatLastWatered,
   formatSchedule,
   formatZoneLabel,
+  moistureFillSpans,
   moistureScalePosition,
   rangeTierSelection,
   readingVsSetpointDelta,
@@ -136,6 +138,12 @@ describe("zoneMoistureStatus", () => {
     ).toMatchObject({ kind: "dry", label: "Dry" });
   });
 
+  it("reads above the high threshold as Saturated", () => {
+    expect(
+      zoneMoistureStatus({ ...band, moistureVwc: 0.9, irrigating: false, faulted: false }),
+    ).toMatchObject({ kind: "wet", label: "Saturated" });
+  });
+
   it("prefers Watering over Dry while the valve is open", () => {
     expect(
       zoneMoistureStatus({ ...band, moistureVwc: 0.28, irrigating: true, faulted: false }),
@@ -170,6 +178,65 @@ describe("moistureScalePosition", () => {
   });
 });
 
+describe("moistureFillSpans", () => {
+  // Target band 50–70 %: the three worked examples from the gauge design.
+  const band = [0.5, 0.7] as const;
+
+  it("colours only the dry band when the reading sits below the low threshold", () => {
+    const spans = moistureFillSpans(0.25, ...band);
+    expect(spans.dry).toBeCloseTo(0.25);
+    expect(spans.target).toBeCloseTo(0);
+    expect(spans.wet).toBeCloseTo(0);
+  });
+
+  it("fills the dry band and part of the target band for an in-band reading", () => {
+    const spans = moistureFillSpans(0.65, ...band);
+    expect(spans.dry).toBeCloseTo(0.5);
+    expect(spans.target).toBeCloseTo(0.15);
+    expect(spans.wet).toBeCloseTo(0);
+  });
+
+  it("fills into the wet band when the reading is above the high threshold", () => {
+    const spans = moistureFillSpans(0.8, ...band);
+    expect(spans.dry).toBeCloseTo(0.5);
+    expect(spans.target).toBeCloseTo(0.2);
+    expect(spans.wet).toBeCloseTo(0.1);
+  });
+
+  it("exposes the clamped band boundaries for the section-break ticks", () => {
+    const spans = moistureFillSpans(0.65, ...band);
+    expect(spans.low).toBeCloseTo(0.5);
+    expect(spans.high).toBeCloseTo(0.7);
+  });
+
+  it("leaves the bar fully dark when there is no reading", () => {
+    const spans = moistureFillSpans(null, ...band);
+    expect(spans.dry).toBe(0);
+    expect(spans.target).toBe(0);
+    expect(spans.wet).toBe(0);
+  });
+
+  it("stops the fill exactly at a band boundary", () => {
+    const spans = moistureFillSpans(0.5, ...band);
+    expect(spans.dry).toBeCloseTo(0.5);
+    expect(spans.target).toBeCloseTo(0);
+    expect(spans.wet).toBeCloseTo(0);
+  });
+
+  it("clamps a reading above 1 so the wet band fills to the end", () => {
+    const spans = moistureFillSpans(1.4, ...band);
+    expect(spans.dry).toBeCloseTo(0.5);
+    expect(spans.target).toBeCloseTo(0.2);
+    expect(spans.wet).toBeCloseTo(0.3);
+  });
+
+  it("never lets the high boundary fall below the low boundary", () => {
+    const spans = moistureFillSpans(0.65, 0.6, 0.4);
+    expect(spans.low).toBeCloseTo(0.6);
+    expect(spans.high).toBeCloseTo(0.6);
+  });
+});
+
 describe("formatLastWatered", () => {
   const now = new Date("2026-06-29T15:00:00.000Z");
 
@@ -199,6 +266,17 @@ describe("formatZoneLabel", () => {
   it("title-cases a kebab slug", () => {
     expect(formatZoneLabel("bench-a")).toBe("Bench A");
     expect(formatZoneLabel("propagation-zone")).toBe("Propagation Zone");
+  });
+});
+
+describe("formatGreenhouseLabel", () => {
+  it("title-cases a space-separated name", () => {
+    expect(formatGreenhouseLabel("greenhouse a")).toBe("Greenhouse A");
+    expect(formatGreenhouseLabel("Greenhouse a")).toBe("Greenhouse A");
+  });
+
+  it("leaves an already-pretty name unchanged (idempotent)", () => {
+    expect(formatGreenhouseLabel("Greenhouse A")).toBe("Greenhouse A");
   });
 });
 

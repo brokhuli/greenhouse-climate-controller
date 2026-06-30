@@ -204,7 +204,7 @@ export function alignSeries(seriesList: readonly (readonly SeriesPoint[])[]): {
 // Zone irrigation status (soil-moisture card)
 // ---------------------------------------------------------------------------
 
-export type ZoneMoistureStatusKind = "ok" | "dry" | "watering" | "fault" | "unknown";
+export type ZoneMoistureStatusKind = "ok" | "dry" | "wet" | "watering" | "fault" | "unknown";
 
 export type ZoneMoistureStatus = {
   kind: ZoneMoistureStatusKind;
@@ -224,16 +224,20 @@ export type ZoneMoistureInputs = {
 /**
  * Resolve a zone's single headline status for the soil-moisture card. Precedence, most urgent
  * first: a faulted zone reads as Fault; a missing reading is No data; an open valve is Watering; a
- * reading below the low threshold is Dry; otherwise OK. Colour always travels with a text label —
- * the design system forbids colour-only status.
+ * reading below the low threshold is Dry and one above the high threshold is Saturated; otherwise
+ * OK. Dry and Saturated are the two out-of-band sides and share the warning colour; OK keeps green
+ * for in-band only. Colour always travels with a text label — the design system forbids colour-only
+ * status.
  */
 export function zoneMoistureStatus(inputs: ZoneMoistureInputs): ZoneMoistureStatus {
-  const { moistureVwc, lowThreshold, faulted, irrigating } = inputs;
+  const { moistureVwc, lowThreshold, highThreshold, faulted, irrigating } = inputs;
   if (faulted) return { kind: "fault", label: "Fault", colorVar: "--color-fault" };
   if (moistureVwc == null)
     return { kind: "unknown", label: "No data", colorVar: "--color-fg-muted" };
   if (irrigating) return { kind: "watering", label: "Watering", colorVar: "--color-info" };
   if (moistureVwc < lowThreshold) return { kind: "dry", label: "Dry", colorVar: "--color-warning" };
+  if (moistureVwc > highThreshold)
+    return { kind: "wet", label: "Saturated", colorVar: "--color-warning" };
   return { kind: "ok", label: "OK", colorVar: "--color-status-online" };
 }
 
@@ -245,6 +249,41 @@ export function zoneMoistureStatus(inputs: ZoneMoistureInputs): ZoneMoistureStat
 export function moistureScalePosition(moistureVwc: number | null): number | null {
   if (moistureVwc == null) return null;
   return moistureVwc < 0 ? 0 : moistureVwc > 1 ? 1 : moistureVwc;
+}
+
+export type MoistureFillSpans = {
+  /** Clamped band boundaries (0–1), exposed so the bar can mark each section start. */
+  low: number;
+  high: number;
+  /** Width (0–1 of the full scale) the reading colours within each band; null reading ⇒ all 0. */
+  dry: number;
+  target: number;
+  wet: number;
+};
+
+/**
+ * Split the moisture bar into its three band-tinted fill spans for a reading. The bar fills like a
+ * gauge — colour runs from 0 up to the reading only — so each band (dry 0–low, target low–high, wet
+ * high–1) is tinted just over the portion the reading covers and stays on the dark track above it.
+ * `dry + target + wet` equals the clamped reading; a null reading yields all zeros (a fully dark bar).
+ */
+const clamp01 = (value: number): number => (value < 0 ? 0 : value > 1 ? 1 : value);
+
+export function moistureFillSpans(
+  moistureVwc: number | null,
+  lowThreshold: number,
+  highThreshold: number,
+): MoistureFillSpans {
+  const low = clamp01(lowThreshold);
+  const high = Math.max(low, clamp01(highThreshold));
+  const fill = moistureVwc == null ? 0 : clamp01(moistureVwc);
+  return {
+    low,
+    high,
+    dry: Math.min(fill, low),
+    target: Math.max(0, Math.min(fill, high) - low),
+    wet: Math.max(0, fill - high),
+  };
 }
 
 /**
@@ -268,13 +307,23 @@ function isSameLocalDay(a: Date, b: Date): boolean {
   );
 }
 
-/** Prettify a zone slug for display: "bench-a" → "Bench A". */
-export function formatZoneLabel(zoneId: string): string {
-  return zoneId
-    .split("-")
+/** Title-case a label for display, splitting on spaces or hyphens: "greenhouse a" → "Greenhouse A". */
+function titleCaseLabel(value: string): string {
+  return value
+    .split(/[\s-]+/)
     .filter((part) => part.length > 0)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+/** Prettify a zone slug for display: "bench-a" → "Bench A". */
+export function formatZoneLabel(zoneId: string): string {
+  return titleCaseLabel(zoneId);
+}
+
+/** Prettify a greenhouse display name for display: "greenhouse a" → "Greenhouse A". */
+export function formatGreenhouseLabel(name: string): string {
+  return titleCaseLabel(name);
 }
 
 /** Render an irrigation schedule ("06:00,14:00") with comma-space separators for display. */

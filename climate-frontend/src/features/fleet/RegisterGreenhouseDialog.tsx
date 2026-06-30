@@ -8,6 +8,7 @@ import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
 import { TextField } from "../../components/ui/TextField";
 import { useToast } from "../../components/ui/toast-context";
+import { formatGreenhouseLabel } from "../../lib/derivations";
 
 /**
  * Add a greenhouse to the fleet (components §3). A modal form, not a route — writes are in-view
@@ -92,7 +93,7 @@ export function RegisterGreenhouseDialog({
             toast.push({
               variant: "success",
               title: "Greenhouse registered",
-              message: created.displayName,
+              message: formatGreenhouseLabel(created.displayName),
             });
             reset();
             onClose();

@@ -9,7 +9,7 @@ import { expect, test } from "@playwright/test";
 test("fleet overview lists the registered greenhouses", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Fleet overview" })).toBeVisible();
-  await expect(page.getByText("Greenhouse a")).toBeVisible();
+  await expect(page.getByText("Greenhouse A")).toBeVisible();
 });
 
 test("greenhouse detail renders charts and links to the setpoint editor (not an error card)", async ({

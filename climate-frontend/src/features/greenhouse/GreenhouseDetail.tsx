@@ -1,6 +1,6 @@
 import { useMemo } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { SlidersHorizontal } from "lucide-react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { ChevronRight, SlidersHorizontal } from "lucide-react";
 import type { ActuatorName, ActuatorState, Metric, Setpoints } from "../../api/schemas";
 import { useFleet, useGreenhouse } from "../../api/queries/greenhouses";
 import { useEvents } from "../../api/queries/events";
@@ -34,6 +34,7 @@ import { rangeMs } from "./range";
 const SECTION_STYLE = { gap: "var(--layout-section-gap)" };
 const CARD_GRID_STYLE = { gap: "var(--layout-card-gap)" };
 const TOOLBAR_STYLE = { gap: "var(--layout-toolbar-gap)" };
+const DETAIL_ACTIVITY_LIMIT = 12;
 
 const HOUSE_METRICS: { metric: Metric; label: string; color: string; unit: string }[] = [
   { metric: "temperature", label: "Temperature", color: "var(--chart-temperature)", unit: "°C" },
@@ -179,7 +180,9 @@ export default function GreenhouseDetail() {
   };
   // DLI lives on the fleet snapshot (it's a derived accumulator, not a detail-endpoint field).
   const dli = fleet.data?.find((summary) => summary.id === id)?.climate.dli ?? null;
-  const faultCount = activeFaultCount(events.data ?? []);
+  const greenhouseEvents = events.data ?? [];
+  const faultCount = activeFaultCount(greenhouseEvents);
+  const recentEvents = greenhouseEvents.slice(0, DETAIL_ACTIVITY_LIMIT);
   // Join each zone's mutable targets with its live status (keyed by zone_id) into the rows the
   // status table renders. Current moisture prefers the live edge over the snapshot, except a faulted
   // zone publishes nothing — show no value rather than a stale ring-buffer reading.
@@ -253,14 +256,22 @@ export default function GreenhouseDetail() {
             <PanelHeader title="Actuator states" sectionLabel titleSize="large" />
             <ActuatorStatePanel actuators={actuatorReadings} />
           </Card>
-          <Card>
-            <PanelHeader title="Recent Activity" sectionLabel titleSize="large" />
+          <Link
+            to={`/activity?greenhouse_id=${encodeURIComponent(id)}`}
+            className="border-border bg-surface-1 hover:border-border-strong block rounded-lg border transition-colors duration-[var(--motion-instant)]"
+            style={{ padding: "var(--space-4)" }}
+            aria-label={`View all activity for ${detail.displayName}`}
+          >
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h3 className="section-label section-label-lg">Recent Activity</h3>
+              <ChevronRight size={16} className="text-fg-subtle shrink-0" aria-hidden />
+            </div>
             {events.isLoading ? (
               <Skeleton height={120} />
             ) : (
-              <EventList events={events.data ?? []} showGreenhouse={false} />
+              <EventList events={recentEvents} showGreenhouse={false} />
             )}
-          </Card>
+          </Link>
         </div>
       </div>
     </div>

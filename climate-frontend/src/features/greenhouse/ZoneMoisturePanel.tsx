@@ -3,6 +3,7 @@ import {
   formatLastWatered,
   formatSchedule,
   formatZoneLabel,
+  moistureFillSpans,
   moistureScalePosition,
   zoneMoistureStatus,
 } from "../../lib/derivations";
@@ -31,16 +32,21 @@ const GRID_STYLE = {
 };
 
 const asPercent = (vwc: number): number => Math.round(vwc * 100);
-const clamp01 = (value: number): number => (value < 0 ? 0 : value > 1 ? 1 : value);
 
-// The bar spans the full 0–100% VWC scale, split into three regions at the thresholds so a reading
-// reads as too-dry / in-target / too-wet at a glance. Each segment blends its semantic colour into
-// the neutral track so the bar stays cohesive.
-const DRY_FILL = "color-mix(in srgb, var(--color-warning) 18%, var(--color-surface-3))";
-const BAND_FILL = "color-mix(in srgb, var(--color-status-online) 40%, var(--color-surface-3))";
-const WET_FILL = "color-mix(in srgb, var(--color-info) 18%, var(--color-surface-3))";
+// The bar fills like a gauge: colour runs from 0 up to the reading only, colouring each threshold band
+// (dry / in-target / wet) over the portion the reading covers. Above the reading the bar stays on the
+// neutral dark TRACK so it reads as too-dry / in-target / too-wet at a glance. Each fill uses the same
+// orange/green/blue chart palette as the stacked climate series at full strength, so the bands match
+// the chart lines directly.
+const TRACK = "var(--color-surface-3)";
+const DRY_FILL = "var(--chart-par)";
+const BAND_FILL = "var(--chart-temperature)";
+const WET_FILL = "var(--chart-humidity)";
+// Section-break tick at each band start: a graduation mark in a mid-tone so it stands out over both
+// the coloured fill and the dark track, in either theme.
+const TICK = "var(--color-fg-subtle)";
 
-/** The moisture bar: three threshold regions across the 0–100% scale with a droplet at the reading. */
+/** The moisture bar: a band-coloured gauge that fills from 0 to the reading, with a droplet on top. */
 function MoistureBar({ row }: { row: ZoneMoistureRow }) {
   const status = zoneMoistureStatus({
     moistureVwc: row.moistureVwc,
@@ -50,19 +56,38 @@ function MoistureBar({ row }: { row: ZoneMoistureRow }) {
     faulted: row.faulted,
   });
   const position = moistureScalePosition(row.moistureVwc);
-  const low = clamp01(row.lowThreshold);
-  const high = Math.max(low, clamp01(row.highThreshold));
+  const spans = moistureFillSpans(row.moistureVwc, row.lowThreshold, row.highThreshold);
   return (
     <div className="flex items-center gap-2">
       <span className="text-fg-default w-9 shrink-0 font-mono text-sm tabular-nums">
         {row.moistureVwc == null ? "—" : `${asPercent(row.moistureVwc)} %`}
       </span>
       <div className="relative h-1.5 min-w-0 flex-1">
+        {/* Dark track underneath, then the band-tinted fill up to the reading on top of it. */}
+        <div className="absolute inset-0 rounded-full" style={{ backgroundColor: TRACK }} />
         <div className="absolute inset-0 flex overflow-hidden rounded-full">
-          <div style={{ width: `${low * 100}%`, backgroundColor: DRY_FILL }} />
-          <div style={{ width: `${(high - low) * 100}%`, backgroundColor: BAND_FILL }} />
-          <div className="flex-1" style={{ backgroundColor: WET_FILL }} />
+          <div style={{ width: `${spans.dry * 100}%`, backgroundColor: DRY_FILL }} />
+          <div style={{ width: `${spans.target * 100}%`, backgroundColor: BAND_FILL }} />
+          <div style={{ width: `${spans.wet * 100}%`, backgroundColor: WET_FILL }} />
         </div>
+        {/* Section-break ticks at each band start, protruding past the bar so the thresholds stay
+            legible even where the track is dark. */}
+        <div
+          className="absolute -inset-y-0.5 w-0.5 rounded-full"
+          style={{
+            left: `${spans.low * 100}%`,
+            transform: "translateX(-50%)",
+            backgroundColor: TICK,
+          }}
+        />
+        <div
+          className="absolute -inset-y-0.5 w-0.5 rounded-full"
+          style={{
+            left: `${spans.high * 100}%`,
+            transform: "translateX(-50%)",
+            backgroundColor: TICK,
+          }}
+        />
         {position != null ? (
           <Droplet
             size={14}
@@ -126,7 +151,7 @@ export function ZoneMoisturePanel({ rows }: { rows: ZoneMoistureRow[] }) {
           </div>
         );
       })}
-      <div className="border-divider text-fg-muted mt-1 flex items-center gap-2 border-t pt-2 text-sm">
+      <div className="text-fg-muted mt-1 flex items-center gap-2 pt-2 text-sm">
         <Clock size={14} aria-hidden className="shrink-0" />
         <span>
           Irrigation Schedule:{" "}

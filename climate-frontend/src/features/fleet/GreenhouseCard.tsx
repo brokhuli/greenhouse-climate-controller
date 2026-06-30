@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { ChevronRight } from "lucide-react";
 import type { Connectivity, GreenhouseSummary, Reading } from "../../api/schemas";
 import { liveSeriesKey, useLiveSeries } from "../../hooks/useLiveSeries";
-import { mergeReadings } from "../../lib/derivations";
+import { formatGreenhouseLabel, mergeReadings } from "../../lib/derivations";
 import { MetricTile } from "../../components/ui/MetricTile";
 import { StatusBadge } from "../../components/ui/StatusBadge";
 import { TimeScaleIndicator } from "../../components/ui/TimeScaleControl";
@@ -69,7 +69,7 @@ function GreenhouseCardImpl({
             }}
           />
           <span className="text-fg-default truncate text-base font-semibold">
-            {summary.displayName}
+            {formatGreenhouseLabel(summary.displayName)}
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-2">
