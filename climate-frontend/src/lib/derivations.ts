@@ -199,3 +199,89 @@ export function alignSeries(seriesList: readonly (readonly SeriesPoint[])[]): {
   });
   return { xs, ys };
 }
+
+// ---------------------------------------------------------------------------
+// Zone irrigation status (soil-moisture card)
+// ---------------------------------------------------------------------------
+
+export type ZoneMoistureStatusKind = "ok" | "dry" | "watering" | "fault" | "unknown";
+
+export type ZoneMoistureStatus = {
+  kind: ZoneMoistureStatusKind;
+  label: string;
+  /** CSS custom property backing the status colour (tokens.css). */
+  colorVar: string;
+};
+
+export type ZoneMoistureInputs = {
+  moistureVwc: number | null;
+  lowThreshold: number;
+  highThreshold: number;
+  irrigating: boolean;
+  faulted: boolean;
+};
+
+/**
+ * Resolve a zone's single headline status for the soil-moisture card. Precedence, most urgent
+ * first: a faulted zone reads as Fault; a missing reading is No data; an open valve is Watering; a
+ * reading below the low threshold is Dry; otherwise OK. Colour always travels with a text label —
+ * the design system forbids colour-only status.
+ */
+export function zoneMoistureStatus(inputs: ZoneMoistureInputs): ZoneMoistureStatus {
+  const { moistureVwc, lowThreshold, faulted, irrigating } = inputs;
+  if (faulted) return { kind: "fault", label: "Fault", colorVar: "--color-fault" };
+  if (moistureVwc == null)
+    return { kind: "unknown", label: "No data", colorVar: "--color-fg-muted" };
+  if (irrigating) return { kind: "watering", label: "Watering", colorVar: "--color-info" };
+  if (moistureVwc < lowThreshold) return { kind: "dry", label: "Dry", colorVar: "--color-warning" };
+  return { kind: "ok", label: "OK", colorVar: "--color-status-online" };
+}
+
+/**
+ * Position a VWC reading on the full 0–1 moisture-bar scale (the bar spans 0–100 % VWC, split into
+ * dry/target/wet regions at the thresholds): the reading itself, clamped to 0–1, or null when there
+ * is no reading.
+ */
+export function moistureScalePosition(moistureVwc: number | null): number | null {
+  if (moistureVwc == null) return null;
+  return moistureVwc < 0 ? 0 : moistureVwc > 1 ? 1 : moistureVwc;
+}
+
+/**
+ * "Last watered" label for a zone's last cycle end: "Today, 8:00 AM" on the local calendar day,
+ * "Jun 24, 8:00 AM" otherwise, "Never" when the zone has not cycled. `now` is injectable so the
+ * today/other-day branch is deterministic in tests.
+ */
+export function formatLastWatered(ts: Date | null, now: Date = new Date()): string {
+  if (!ts) return "Never";
+  const time = ts.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  if (isSameLocalDay(ts, now)) return `Today, ${time}`;
+  const date = ts.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return `${date}, ${time}`;
+}
+
+function isSameLocalDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+/** Prettify a zone slug for display: "bench-a" → "Bench A". */
+export function formatZoneLabel(zoneId: string): string {
+  return zoneId
+    .split("-")
+    .filter((part) => part.length > 0)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+/** Render an irrigation schedule ("06:00,14:00") with comma-space separators for display. */
+export function formatSchedule(schedule: string): string {
+  return schedule
+    .split(",")
+    .map((time) => time.trim())
+    .filter((time) => time.length > 0)
+    .join(", ");
+}

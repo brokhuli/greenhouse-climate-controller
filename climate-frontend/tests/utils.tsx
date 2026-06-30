@@ -10,6 +10,7 @@ import type {
   GreenhouseDetail,
   GreenhouseSummary,
   Setpoints,
+  ZoneStatus,
 } from "../src/api/schemas";
 
 /** A QueryClient that never retries or garbage-collects mid-test. */
@@ -81,6 +82,15 @@ export const sampleSummary = (overrides: Partial<GreenhouseSummary> = {}): Green
   ...overrides,
 });
 
+export const sampleZoneStatus = (overrides: Partial<ZoneStatus> = {}): ZoneStatus => ({
+  zoneId: "bench-a",
+  soilMoistureVwc: 0.41,
+  irrigating: false,
+  faulted: false,
+  lastCycleTs: new Date("2026-06-29T08:00:00.000Z"),
+  ...overrides,
+});
+
 export const sampleDetail = (overrides: Partial<GreenhouseDetail> = {}): GreenhouseDetail => ({
   id: "gh-a",
   displayName: "Greenhouse A",
@@ -89,6 +99,7 @@ export const sampleDetail = (overrides: Partial<GreenhouseDetail> = {}): Greenho
   drift: false,
   timeScale: null,
   setpoints: sampleSetpoints(),
+  zoneStatus: [sampleZoneStatus()],
   ...overrides,
 });
 

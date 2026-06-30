@@ -37,4 +37,23 @@ describe("GreenhouseDetail", () => {
     // The editor moved to its own view — no inline Setpoints panel renders here anymore.
     expect(screen.queryByRole("heading", { name: "Setpoints" })).not.toBeInTheDocument();
   });
+
+  it("renders the per-zone soil-moisture status table", () => {
+    const client = makeClient();
+    // The default detail fixture carries one zone (bench-a) with healthy live status.
+    client.setQueryData(queryKeys.greenhouse("gh-a"), sampleDetail({ id: "gh-a" }));
+    client.setQueryData(queryKeys.fleet(), [sampleSummary({ id: "gh-a" })]);
+    renderWithProviders(
+      <Routes>
+        <Route path="/greenhouses/:id" element={<GreenhouseDetail />} />
+      </Routes>,
+      { client, route: "/greenhouses/gh-a" },
+    );
+
+    expect(screen.getByText("Bench A")).toBeInTheDocument(); // slug prettified
+    expect(screen.getByText("41 %")).toBeInTheDocument(); // snapshot moisture
+    expect(screen.getByText(/30\s*[–-]\s*60\s*%/)).toBeInTheDocument(); // target range
+    expect(screen.getByText("OK")).toBeInTheDocument(); // in-band status
+    expect(screen.getByText(/Irrigation Schedule/)).toBeInTheDocument();
+  });
 });

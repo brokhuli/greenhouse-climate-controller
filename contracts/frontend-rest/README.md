@@ -41,6 +41,7 @@ components/
     common.json              #   Slug, Connectivity, ActuatorName, Error, ValidationError (shared)
     greenhouses.json         #   GreenhouseSummary, GreenhouseDetail, GreenhouseRegistration, ControllerEndpoint
     setpoints.json           #   Setpoints (target bundle), SetpointsPatch, ZoneTargets
+    zones.json               #   ZoneStatus (live per-zone irrigation state on the detail snapshot)
     telemetry.json           #   TelemetryRange, TelemetrySeries, Reading, ActuatorState
     analytics.json           #   AnalyticsResponse, AnalyticsSeries, AnalyticsBucket
     events.json              #   EventEntry

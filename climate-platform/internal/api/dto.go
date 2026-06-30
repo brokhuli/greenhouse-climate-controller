@@ -57,6 +57,7 @@ type greenhouseDetailDTO struct {
 	Drift       bool            `json:"drift"`
 	TimeScale   *float64        `json:"time_scale,omitempty"`
 	Setpoints   json.RawMessage `json:"setpoints"`
+	ZoneStatus  []zoneStatusDTO `json:"zone_status"`
 }
 
 // --- setpoints (patch parsed for validation; the raw body is relayed unchanged) ---

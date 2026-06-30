@@ -16,12 +16,13 @@ import { PanelHeader } from "../../components/ui/PanelHeader";
 import { Pill } from "../../components/ui/Pill";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { StatusBadge } from "../../components/ui/StatusBadge";
-import { TimeSeriesChart, type ReferenceLine } from "../../components/ui/TimeSeriesChart";
+import { type ReferenceLine } from "../../components/ui/TimeSeriesChart";
 import {
   StackedTimeSeriesChart,
   type StackedBand,
 } from "../../components/ui/StackedTimeSeriesChart";
 import { ActuatorStatePanel, type ActuatorReading } from "./ActuatorStatePanel";
+import { ZoneMoisturePanel, type ZoneMoistureRow } from "./ZoneMoisturePanel";
 import { GreenhouseSummaryBar, type SummaryReadings } from "./GreenhouseSummaryBar";
 import { analyticsReadings, telemetryReadings } from "./chartData";
 import { usePersistentRange } from "../../hooks/usePersistentRange";
@@ -89,9 +90,6 @@ function latestActuators(
   }
   return [...byActuator.values()];
 }
-
-const format = (value: number): string =>
-  Number.isInteger(value) ? String(value) : value.toFixed(1);
 
 export default function GreenhouseDetail() {
   const { id = "" } = useParams<{ id: string }>();
@@ -182,33 +180,25 @@ export default function GreenhouseDetail() {
   // DLI lives on the fleet snapshot (it's a derived accumulator, not a detail-endpoint field).
   const dli = fleet.data?.find((summary) => summary.id === id)?.climate.dli ?? null;
   const faultCount = activeFaultCount(events.data ?? []);
-  const soilMoistureCards = soilZones.map((zone) => {
-    const historical = isRaw
-      ? telemetryReadings(telemetry.data, "soil_moisture", zone.zoneId)
-      : analyticsReadings(analytics.data, "soil_moisture", zone.zoneId);
-    const liveReadings = isRaw ? (live.get(liveSeriesKey("soil_moisture", zone.zoneId)) ?? []) : [];
-    const points = mergeReadings(historical, liveReadings, { windowMs });
-    const latest = points.at(-1)?.v;
-    return (
-      <Card key={`soil-${zone.zoneId}`}>
-        <PanelHeader
-          title={`Soil moisture · ${zone.zoneId}`}
-          value={latest !== undefined ? `${format(latest)} VWC` : "—"}
-        />
-        <TimeSeriesChart
-          series={{
-            label: `Soil moisture (${zone.zoneId})`,
-            color: "var(--chart-soil-moisture)",
-            points,
-          }}
-          references={[
-            { label: "Low", value: zone.moistureLowThreshold },
-            { label: "High", value: zone.moistureHighThreshold },
-          ]}
-          unit="VWC"
-        />
-      </Card>
-    );
+  // Join each zone's mutable targets with its live status (keyed by zone_id) into the rows the
+  // status table renders. Current moisture prefers the live edge over the snapshot, except a faulted
+  // zone publishes nothing — show no value rather than a stale ring-buffer reading.
+  const statusByZone = new Map(detail.zoneStatus.map((status) => [status.zoneId, status]));
+  const zoneRows: ZoneMoistureRow[] = soilZones.map((zone) => {
+    const status = statusByZone.get(zone.zoneId);
+    const faulted = status?.faulted ?? false;
+    const liveLatest = live.get(liveSeriesKey("soil_moisture", zone.zoneId))?.at(-1)?.value;
+    const moistureVwc = faulted ? null : (liveLatest ?? status?.soilMoistureVwc ?? null);
+    return {
+      zoneId: zone.zoneId,
+      moistureVwc,
+      lowThreshold: zone.moistureLowThreshold,
+      highThreshold: zone.moistureHighThreshold,
+      lastWatered: status?.lastCycleTs ?? null,
+      irrigating: status?.irrigating ?? false,
+      faulted,
+      schedule: zone.schedule,
+    };
   });
 
   return (
@@ -253,9 +243,10 @@ export default function GreenhouseDetail() {
             <PanelHeader title="Climate overview" sectionLabel titleSize="large" />
             <StackedTimeSeriesChart bands={climateBands} />
           </Card>
-          <div className="grid grid-cols-1 xl:grid-cols-2" style={CARD_GRID_STYLE}>
-            {soilMoistureCards}
-          </div>
+          <Card>
+            <PanelHeader title="Soil moisture" sectionLabel titleSize="large" />
+            <ZoneMoisturePanel rows={zoneRows} />
+          </Card>
         </div>
         <div className="flex flex-col" style={CARD_GRID_STYLE}>
           <Card>

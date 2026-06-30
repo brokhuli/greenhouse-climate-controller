@@ -96,6 +96,15 @@ export const wireZoneTargets = z.object({
   schedule,
 });
 
+/** Live per-zone irrigation state served on the detail snapshot (frontend-rest ZoneStatus). */
+export const wireZoneStatus = z.object({
+  zone_id: slug,
+  soil_moisture_vwc: z.number().min(0).max(1).nullable(),
+  irrigating: z.boolean(),
+  faulted: z.boolean(),
+  last_cycle_ts: isoTimestamp.nullable(),
+});
+
 export const wireSetpoints = z.object({
   temperature_day_c: z.number().min(-20).max(60),
   temperature_night_c: z.number().min(-20).max(60),
@@ -146,6 +155,7 @@ export const wireGreenhouseDetail = z.object({
   drift: z.boolean().default(false),
   time_scale: z.number().min(0.25).max(8).nullable().optional(),
   setpoints: wireSetpoints,
+  zone_status: z.array(wireZoneStatus),
 });
 
 export const wireGreenhouseRegistration = z.object({
@@ -358,6 +368,14 @@ export type ZoneTargets = {
   schedule: string;
 };
 
+export type ZoneStatus = {
+  zoneId: string;
+  soilMoistureVwc: number | null;
+  irrigating: boolean;
+  faulted: boolean;
+  lastCycleTs: Date | null;
+};
+
 export type Setpoints = {
   temperatureDayC: number;
   temperatureNightC: number;
@@ -401,6 +419,7 @@ export type GreenhouseDetail = {
   drift: boolean;
   timeScale: number | null;
   setpoints: Setpoints;
+  zoneStatus: ZoneStatus[];
 };
 
 export type GreenhouseRegistrationInput = {
@@ -475,6 +494,14 @@ export type FleetTimeScaleResult = {
 // Adapters: wire (snake_case) → view-model (camelCase)
 // ---------------------------------------------------------------------------
 
+export const toZoneStatus = (w: z.infer<typeof wireZoneStatus>): ZoneStatus => ({
+  zoneId: w.zone_id,
+  soilMoistureVwc: w.soil_moisture_vwc,
+  irrigating: w.irrigating,
+  faulted: w.faulted,
+  lastCycleTs: w.last_cycle_ts ? new Date(w.last_cycle_ts) : null,
+});
+
 export const toZoneTargets = (w: z.infer<typeof wireZoneTargets>): ZoneTargets => ({
   zoneId: w.zone_id,
   moistureLowThreshold: w.moisture_low_threshold,
@@ -524,6 +551,7 @@ export const toGreenhouseDetail = (w: z.infer<typeof wireGreenhouseDetail>): Gre
   drift: w.drift,
   timeScale: w.time_scale ?? null,
   setpoints: toSetpoints(w.setpoints),
+  zoneStatus: w.zone_status.map(toZoneStatus),
 });
 
 export const toReading = (w: z.infer<typeof wireReading>): Reading => ({
