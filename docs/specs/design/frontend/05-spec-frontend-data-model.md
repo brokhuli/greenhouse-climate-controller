@@ -96,10 +96,13 @@ export const wireGreenhouseSummary = z.object({
   status: connectivity,
   drift: z.boolean().default(false),               // (2b) intended ≠ reported setpoints
   time_scale: z.number().nullable().optional(),    // sim-only: simulated-clock speed (1 = real-time); null/absent on real hardware
-  // compact current-vs-target readout for the fleet card
+  // compact current-vs-target readout for the fleet card (all fields optional/nullable)
   climate: z.object({
     temperature: z.number().nullable(),
-    setpoint_temperature: z.number().nullable(),
+    humidity: z.number().nullable(),
+    co2: z.number().nullable(),
+    dli: z.number().nullable(),                     // accumulated Daily Light Integral for the crop day (derived; PAR stays a telemetry metric)
+    setpoint_temperature: z.number().nullable(),    // currently-resolved temperature setpoint
   }).partial().optional(),
 });
 
@@ -113,7 +116,10 @@ single representative example, the same pattern applies to every wire schema bel
 export type GreenhouseSummary = {
   id: string; displayName: string; crop: string | null;
   status: Connectivity; drift: boolean; timeScale: number | null;
-  climate: { temperature?: number | null; setpointTemperature?: number | null };
+  climate: {
+    temperature?: number | null; humidity?: number | null; co2?: number | null;
+    dli?: number | null; setpointTemperature?: number | null;
+  };
 };
 
 export const toGreenhouseSummary =
@@ -122,6 +128,9 @@ export const toGreenhouseSummary =
     status: w.status, drift: w.drift, timeScale: w.time_scale ?? null,
     climate: {
       temperature: w.climate?.temperature,
+      humidity: w.climate?.humidity,
+      co2: w.climate?.co2,
+      dli: w.climate?.dli,
       setpointTemperature: w.climate?.setpoint_temperature,
     },
   });
@@ -180,6 +189,36 @@ export const wireSetpoints = z.object({
   })),
 });
 ```
+
+### Greenhouse detail & live zone status (2a)
+
+The detail endpoint returns a greenhouse's summary fields, its full current `setpoints`
+bundle, **and** a live per-zone irrigation `zone_status` array — the read-only counterpart
+to the mutable per-zone targets on `setpoints.zones`, keyed by `zone_id`. *(wire)* — mirrors
+[`GreenhouseDetail`](../../../../contracts/frontend-rest/components/schemas/greenhouses.json#L75)
+and [`ZoneStatus`](../../../../contracts/frontend-rest/components/schemas/zones.json):
+
+```ts
+export const wireZoneStatus = z.object({
+  zone_id: zoneId,
+  soil_moisture_vwc: z.number().nullable(),   // latest VWC 0–1, or null when the zone's sensor is faulted/unavailable
+  irrigating: z.boolean(),                    // valve open (watering now)
+  faulted: z.boolean(),                       // irrigation disabled by a fault (sensor unavailable / active zone fault)
+  last_cycle_ts: z.coerce.date().nullable(),  // end of the most recent cycle, or null if it has not cycled yet
+});
+
+export const wireGreenhouseDetail = wireGreenhouseSummary
+  .omit({ climate: true })
+  .extend({
+    setpoints: wireSetpoints,
+    zone_status: z.array(wireZoneStatus),
+  });
+```
+
+The detail feature merges each `zone_status` entry with its matching `setpoints.zones`
+target (by `zone_id`) into the rows the [`ZoneMoisturePanel`](./06-spec-frontend-components.md)
+renders, and overlays the live per-zone `soil_moisture` edge from the WS ring buffer. A
+faulted zone reports `soil_moisture_vwc: null` — the UI shows "—", never a stale reading.
 
 ### Crop profiles & assignment (2b)
 
@@ -335,7 +374,8 @@ entries:
 | Key | Source | Notes |
 |---|---|---|
 | `["fleet"]` | `GET /api/greenhouses` | patched by `status` / `drift` frames |
-| `["greenhouse", id]` | `GET /api/greenhouses/:id` | snapshot incl. current setpoints |
+| `["fleet-sparklines", window]` | `GET /api/greenhouses/sparklines?metric&window` | one batched query backing every fleet card's compact sparkline — avoids an N-request fan-out on the overview |
+| `["greenhouse", id]` | `GET /api/greenhouses/:id` | snapshot incl. current setpoints **and** live `zone_status` |
 | `["telemetry", id, range]` | `GET /api/greenhouses/:id/telemetry?from&to` | historical half of the chart (raw samples, short ranges) |
 | `["analytics", id, range, interval]` | `GET /api/greenhouses/:id/analytics?from&to&interval` | aggregated long-range chart series (replaces raw telemetry past the range threshold — [architecture §4](./03-spec-frontend-architecture.md#4-runtime-data-flow)) |
 | `["events", scope]` | `GET /api/events?…` | activity feed; prepended by `event` frames |
@@ -383,11 +423,14 @@ unit-tested and never embedded in components:
 | Derivation | Inputs | Used by |
 |---|---|---|
 | **Reading-vs-setpoint delta** | current reading + setpoint | detail metric tiles, fleet card |
+| **Active day/night setpoint** | `setpoints` + current instant vs `day_start`/`day_end` (wrap-aware) | detail summary temperature tile — which of the day/night targets is in force (**Day**/**Night** label + value) |
 | **Status rollup** | per-greenhouse `status` + `drift` | fleet site-wide summary (e.g. "3 online, 1 degraded, 1 drift") |
 | **Range-tier selection** | requested range vs threshold | picks raw `telemetry` vs `analytics` aggregates and the bucket `interval` (architecture §4) |
 | **Series merge** | history range (raw **or** analytics buckets) + live ring buffer | the continuous detail chart (de-dup on `ts` at the seam) |
 | **Event severity grouping** | event stream | activity feed ordering + toast triggering |
+| **Active-fault count** | recent event stream | detail summary Status tile (count of fault-kind entries in the window) |
 | **In-band / out-of-band band** | reading vs humidity/temperature band | chart threshold shading (chart tokens) |
+| **Zone moisture status & band fill** | zone reading + low/high thresholds + `irrigating`/`faulted` | `ZoneMoisturePanel` — headline status pill (Watering/Dry/Saturated/OK/Fault/No data) + the band-tinted gauge fill |
 | **Simulated-time axis** | series `ts` + `timeScale` | the detail chart's x-axis (plots on simulated time) + the speed indicator label |
 
 Keeping these pure means a view never recomputes climate logic inline, and the

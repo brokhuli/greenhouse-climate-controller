@@ -84,19 +84,32 @@ actions**, **role**.
 - **Shows:** real-time charts of readings vs setpoints (temperature, humidity,
   CO₂, PAR, per-zone soil moisture), current actuator states, and the event
   history — fed live by the WebSocket stream and backfilled by range queries over
-  history. Active faults and interlock activations are raised prominently. Charts
+  history. A summary readout surfaces the **active (Day / Night) temperature
+  setpoint** with its label — which of the two day/night targets is currently in
+  force, resolved from the greenhouse's clock against its day window. Alongside the
+  per-zone soil-moisture chart, a **live per-zone irrigation status** panel shows,
+  for each zone, its current moisture against the target band, whether it is
+  **watering now**, whether it is **faulted**, and when it **last watered**. Active
+  faults and interlock activations are raised prominently. Charts
   plot on **simulated time** (the controller's clock), and on a simulated controller
   a **speed indicator** shows the current time-scale.
-- **Primary actions:** edit setpoints (see view 3); change the historical time
-  range; *(2a, simulation-only)* adjust the controller's **simulation speed**
-  (0.5×/1×/2×/4×) as a **live** control; (2b) view/assign the crop profile.
+- **Primary actions:** open the setpoint editor (view 3, its own route); change the
+  historical time range; *(2a, simulation-only)* adjust the controller's
+  **simulation speed** (0.5×/1×/2×/4×) as a **live** control; jump to this
+  greenhouse's filtered activity feed; (2b) view/assign the crop profile.
 - **Role:** Viewer (read) / Operator (edits, speed).
 
 ### 3. Control — setpoint edits *(2a relay → sticky in 2b)*
 
-- **Purpose:** the operator's manual control surface for one greenhouse.
+- **Purpose:** the operator's manual control surface for one greenhouse. This is a
+  **focused task on its own route** (`/greenhouses/:id/setpoints`,
+  [architecture §3](./03-spec-frontend-architecture.md#3-route-tree)), reached from
+  the detail view — a deliberate full-surface edit rather than a card scrolled past
+  on the detail page. The editor reads the same cached greenhouse snapshot, so the
+  focused route costs no telemetry context.
 - **Shows:** the editable setpoint fields (mirroring the controller's
-  runtime-adjustable [`[setpoints]`](../platform/03-spec-platform-data-model.md)),
+  runtime-adjustable [`[setpoints]`](../platform/03-spec-platform-data-model.md)) —
+  the global climate targets **plus** the per-zone irrigation thresholds/schedule —
   current values, and the pending/confirmed state of an in-flight edit.
 - **Primary actions:** submit a setpoint change. In 2a this is a thin relay to the
   controller's REST API; in 2b the same edit becomes a **sticky** part of the
@@ -121,10 +134,13 @@ actions**, **role**.
 - **Purpose:** never let a problem go unseen.
 - **Shows:** faults, offline controllers, and interlock activations raised
   prominently across fleet and detail views; an activity/audit feed of downward
-  writes (who/what/when, [platform fleet management](../platform/05-spec-platform-crop-profiles.md#5-fleet-management--operator-control)).
-  **Drift** (intended vs reported setpoints) is surfaced once reconciliation
-  exists (2b).
-- **Primary actions:** acknowledge/inspect; jump to the affected greenhouse.
+  writes (who/what/when, [platform fleet management](../platform/05-spec-platform-crop-profiles.md#5-fleet-management--operator-control)),
+  **filterable by greenhouse and kind**. **Drift** (intended vs reported setpoints)
+  is surfaced once reconciliation exists (2b).
+- **Primary actions:** acknowledge/inspect; jump to the affected greenhouse. The
+  reverse path exists too — the detail view links into the **greenhouse-filtered**
+  feed (`/activity?greenhouse_id=…`, a deep-linkable query param) so an operator can
+  drill from one greenhouse into its full history.
 - **Role:** Viewer (read).
 
 ---
