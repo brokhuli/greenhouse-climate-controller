@@ -127,9 +127,13 @@ route in [architecture §3](./03-spec-frontend-architecture.md#3-route-tree).
   (history), and a live subscription for the streaming edge.
 - **Renders:** header (`StatusBadge`, crop, profile chip in 2b, a `RetireGreenhouseAction`
   in the header overflow, and — on a simulated controller — a `TimeScaleControl` live speed knob +
-  `TimeScaleIndicator`); a stack of
+  `TimeScaleIndicator`); a `GreenhouseSummaryBar` of `MetricTile`s (including the active
+  **Day / Night** temperature setpoint, [data-model §8](./05-spec-frontend-data-model.md#8-view-model-derivations)); a stack of
   `TimeSeriesChart` (readings vs setpoint bands, plotted on simulated time); `ActuatorStatePanel`;
-  `EventList`; the `SetpointEditForm` entry point; a `RangePicker`.
+  a `ZoneMoisturePanel` (live per-zone irrigation status); a **Recent Activity** card
+  (`EventList`) that links to this greenhouse's filtered [`ActivityFeed`](#activityfeed-2a-drift-entries-2b);
+  a **link/button to the `/greenhouses/:id/setpoints` route** (the `SetpointEditForm` lives on
+  that route, not inline — [architecture §3](./03-spec-frontend-architecture.md#3-route-tree)); a `RangePicker`.
 - **States:** loading → skeleton charts; offline → charts show history + a live gap
   + "controller offline"; error → error card, cached snapshot stays.
 - **Role-gating (2b):** edit/assign affordances operator-only (rendered disabled
@@ -155,8 +159,12 @@ route in [architecture §3](./03-spec-frontend-architecture.md#3-route-tree).
 
 - **Purpose:** Chronological events across the site — faults, interlocks, setpoint
   edits, profile applications, drift.
-- **Data:** `useEvents(scope)` (`["events", scope]`), prepended by `event` frames.
-- **Renders:** severity-grouped `EventList`; filter by greenhouse/kind.
+- **Data:** `useEvents(scope)` (`["events", scope]`), prepended by `event` frames. The
+  `scope` (`greenhouseId` / `kind` / `severity`) is hydrated from the URL query params, so
+  `/activity?greenhouse_id=…` deep-links a pre-filtered feed (the detail view's Recent
+  Activity card links here).
+- **Renders:** severity-grouped `EventList`; a greenhouse/kind filter control bound to
+  the query params.
 - **States:** loading/empty/error standard; critical events also raise a toast.
 
 ---
@@ -227,9 +235,32 @@ Reused across views; typed props; zero domain knowledge.
 - **Purpose:** Commanded vs observed actuator positions.
 - **Props:** `actuatorState[]`.
 
+### `ZoneMoisturePanel` *(2a)*
+
+- **Purpose:** Live per-zone irrigation status on the detail view — the read-only
+  counterpart to the per-zone irrigation *targets* the operator edits on the setpoints
+  route.
+- **Props:** `zones` — one row per zone, each merging the mutable targets
+  (`moistureLowThreshold` / `moistureHighThreshold` / `schedule`) with the live
+  `zoneStatus` (`soilMoistureVwc`, `irrigating`, `faulted`, `lastCycleTs` —
+  [data-model §3](./05-spec-frontend-data-model.md#3-relational-shapes-config--metadata)).
+- **Data:** the feature merges `useGreenhouse(id)`'s `zoneStatus` with the live
+  per-zone `soil_moisture` edge (`useLiveSeries`, keyed by `zone_id`) and passes rows
+  down; the panel itself is presentational.
+- **Renders:** per zone — a band-colored moisture **gauge** (dry / target / wet regions
+  split at the thresholds), a headline status pill (**Watering** / **Dry** / **Saturated**
+  / **OK** / **Fault** / **No data**), the last-watered label, and the schedule. Uses the
+  zone-status derivations ([data-model §8](./05-spec-frontend-data-model.md#8-view-model-derivations)).
+- **States:** faulted zone → reading shown as "—" (never a stale value) + Fault pill;
+  no reading → "No data".
+- **a11y:** status travels with a text label, **never color-only**.
+
 ### `SetpointEditForm` *(2a)*
 
-- **Purpose:** The operator's manual setpoint edit (view 3 in purpose-and-views).
+- **Purpose:** The operator's manual setpoint edit (view 3 in purpose-and-views). Rendered
+  on its **own route** (`/greenhouses/:id/setpoints`) via the `SetpointsView` feature
+  wrapper — reached from the detail view, not embedded in it
+  ([architecture §3](./03-spec-frontend-architecture.md#3-route-tree)).
 - **Props:** `greenhouseId`, current `setpoints`.
 - **Data:** `react-hook-form` + the `setpoints` schema; submit → setpoint mutation
   (2a relay; sticky/reconciled in 2b).
@@ -248,8 +279,9 @@ Reused across views; typed props; zero domain knowledge.
 
 ### `RegisterGreenhouseDialog` *(2a)*
 
-- **Purpose:** Add a greenhouse to the fleet (view 1 register action) — a modal form, not a
-  separate route (writes are in-view affordances, [architecture §3](./03-spec-frontend-architecture.md#3-route-tree)).
+- **Purpose:** Add a greenhouse to the fleet (view 1 register action) — a lightweight, contextual
+  write, so a modal form rather than its own route ([architecture §3](./03-spec-frontend-architecture.md#3-route-tree);
+  the focused setpoint edit is the one write that does get a route).
 - **Props:** `open`, `onClose`.
 - **Data:** `react-hook-form` + the `greenhouseRegistration` Zod schema
   ([data-model §3](./05-spec-frontend-data-model.md#3-relational-shapes-config--metadata)); submit →
@@ -315,7 +347,8 @@ Reused across views; typed props; zero domain knowledge.
 | View / route | Components |
 |---|---|
 | `/` Fleet overview | `FleetOverview` → `FleetSummaryBar`, `RegisterGreenhouseDialog`, `FleetTimeScaleControl` (sim-only), `GreenhouseCard` → `StatusBadge`, `MetricTile`, `TimeScaleIndicator` (sim-only) |
-| `/greenhouses/:id` Detail | `GreenhouseDetail` → `TimeSeriesChart`, `MetricTile`, `ActuatorStatePanel`, `EventList`, `SetpointEditForm`, `RetireGreenhouseAction`, `RangePicker`, `TimeScaleControl`/`TimeScaleIndicator` (sim-only) |
+| `/greenhouses/:id` Detail | `GreenhouseDetail` → `GreenhouseSummaryBar`/`MetricTile`, `TimeSeriesChart`, `ActuatorStatePanel`, `ZoneMoisturePanel`, `EventList` (Recent Activity), `RetireGreenhouseAction`, `RangePicker`, `TimeScaleControl`/`TimeScaleIndicator` (sim-only) |
+| `/greenhouses/:id/setpoints` Setpoint editor | `SetpointsView` → `SetpointEditForm` |
 | `/profiles` (2b) | `ProfileLibrary` → profile cards, assignment panel |
 | `/profiles/:id` (2b) | `ProfileEditor` → `SetpointFields`, stage selector |
 | `/activity` | `ActivityFeed` → `EventList` |

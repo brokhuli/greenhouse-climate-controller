@@ -115,17 +115,25 @@ path so deep links resolve (SPA fallback,
 | Route | View | Slice | Notes |
 |---|---|---|---|
 | `/` | Fleet overview | 2a | Landing; fleet-of-one renders the same |
-| `/greenhouses/:id` | Per-greenhouse detail | 2a | Live charts + history + setpoint edit |
+| `/greenhouses/:id` | Per-greenhouse detail | 2a | Live charts + history; links out to the setpoint editor |
 | `/greenhouses/:id?range=…` | (same) | 2a | History range as a query param (deep-linkable) |
+| `/greenhouses/:id/setpoints` | Setpoint editor | 2a | Focused manual-control surface for one greenhouse (`SetpointsView` → `SetpointEditForm`) |
 | `/profiles` | Crop-profile library | 2b | Operator-gated edits |
 | `/profiles/:profileId` | Profile editor | 2b | Stage-aware target bundle |
 | `/activity` | Activity / health feed | 2a | Drift entries appear in 2b |
+| `/activity?greenhouse_id=…&kind=…` | (same) | 2a | Greenhouse/kind filter as query params (deep-linkable; the detail view links here) |
 | `/login/callback` | OIDC redirect handler | 2b | Client-owned (not under `/auth`); consumes Keycloak code, then redirects |
 | `*` | 404 | 2a | On-brand not-found |
 
-Write **actions** (setpoint edit, profile assign/apply) are not separate routes —
-they are in-view affordances (dialog/inline form) on the detail and profile
-views, so an operator never loses telemetry context to act.
+Writes split by weight. A **focused** write — the setpoint edit — gets its **own
+route** (`/greenhouses/:id/setpoints`) so the operator commits to it deliberately on
+a surface built for that one task, rather than editing a bundle of fields wedged into
+a card they scrolled past. **Lightweight/contextual** writes stay **in-view
+affordances** (dialog/inline form) so the operator never loses telemetry context for
+a quick action: register/retire are `Dialog`s on the fleet/detail views, and **(2b)**
+profile assign/apply is an in-view affordance on the detail/profile views. The
+detail → setpoints route keeps the greenhouse's live snapshot one click away (and the
+editor reads the same cached snapshot), so the focused route costs no context.
 
 ---
 

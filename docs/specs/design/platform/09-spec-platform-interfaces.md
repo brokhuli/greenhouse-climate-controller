@@ -58,9 +58,9 @@ does*, not its wire shapes.
 
 | Surface | Role | Slice |
 |---|---|---|
-| **REST — greenhouses** | Register/retire greenhouses; read fleet + per-greenhouse status | 2a |
+| **REST — greenhouses** | Register/retire greenhouses; read fleet + per-greenhouse status. The per-greenhouse **detail** snapshot merges the controller's live `/zones` into a read-only `zone_status` alongside the current setpoints bundle | 2a |
 | **REST — telemetry** | Range queries over historical readings/actuator states/events | 2a |
-| **REST — analytics** | Aggregations and derived series for dashboards | 2a |
+| **REST — analytics** | Aggregations and derived series for dashboards — including the fleet-wide **sparklines** read (one metric's recent history for every greenhouse, batched for the overview) | 2a |
 | **REST — setpoint edits** | Ad-hoc setpoint edits, relayed to controllers (sticky intended state once reconciliation exists) | 2a |
 | **REST — simulation time-scale** *(sim-only)* | Read/set a controller's simulated-clock **speed**, per-greenhouse and fleet-wide, relayed to the controller's sim-only [`/sim/time-scale`](../controller/08-spec-controller-interfaces.md#simulation-control-simulated-hal-only). The fleet form fans out as N independent per-controller writes (no shared clock). An explicit, narrow exception to setpoint-only control — a diagnostic, not a setpoint; rejected (404) for a real-hardware controller. The current speed is also surfaced on the greenhouse status and the WebSocket `status` frame | 2a |
 | **WebSockets** | Live fan-out of telemetry, status changes (incl. sim time-scale), drift, and events to the dashboard | 2a |
