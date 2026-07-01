@@ -13,6 +13,8 @@ import {
 } from "lucide-react";
 import type { Connectivity, Setpoints } from "../../api/schemas";
 import { SummaryStat } from "../../components/ui/SummaryStat";
+import type { SeriesPoint } from "../../lib/derivations";
+import { activeTemperatureSetpoint } from "../../lib/derivations";
 
 const GRID_STYLE = { gap: "var(--layout-card-gap)" };
 const SUMMARY_STAT_PROPS = { density: "compact" as const };
@@ -20,6 +22,7 @@ const SUMMARY_STAT_PROPS = { density: "compact" as const };
 /** Latest house climate readings, sourced from the same merged telemetry the charts plot. */
 export type SummaryReadings = {
   temperature?: number;
+  temperaturePoint?: SeriesPoint;
   humidity?: number;
   co2?: number;
   vpd?: number;
@@ -79,6 +82,10 @@ export function GreenhouseSummaryBar({
   faultCount: number;
 }) {
   const statusMeta = STATUS_META[status];
+  const activeTemp = activeTemperatureSetpoint(
+    setpoints,
+    readings.temperaturePoint ? new Date(readings.temperaturePoint.t * 1000) : null,
+  );
   return (
     <div
       className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7"
@@ -88,7 +95,7 @@ export function GreenhouseSummaryBar({
         {...SUMMARY_STAT_PROPS}
         label="Temperature"
         value={metricValue(readings.temperature, (v) => v.toFixed(1), "°C")}
-        caption={`Setpoint ${fmt(setpoints.temperatureDayC)}`}
+        caption={`${activeTemp.label} setpoint ${fmt(activeTemp.value)}`}
         Icon={Thermometer}
         color="var(--chart-temperature)"
       />
@@ -132,6 +139,7 @@ export function GreenhouseSummaryBar({
         Icon={statusMeta.Icon}
         color={statusMeta.color}
         dot={statusMeta.dot}
+        valueSize="small"
       />
       <SummaryStat
         {...SUMMARY_STAT_PROPS}
@@ -141,6 +149,7 @@ export function GreenhouseSummaryBar({
         Icon={Target}
         color={drift ? "var(--color-status-drift)" : "var(--color-fg-subtle)"}
         dot={drift}
+        valueSize="small"
       />
     </div>
   );

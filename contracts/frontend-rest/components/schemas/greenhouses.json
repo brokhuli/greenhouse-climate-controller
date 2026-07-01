@@ -74,7 +74,7 @@
   },
   "GreenhouseDetail": {
     "type": "object",
-    "description": "A single greenhouse's snapshot for the detail view: its summary fields plus the full current target bundle (frontend data model §6, key [\"greenhouse\", id]).",
+    "description": "A single greenhouse's snapshot for the detail view: its summary fields, the full current target bundle, and the live per-zone irrigation status (frontend data model §6, key [\"greenhouse\", id]).",
     "properties": {
       "id": { "$ref": "#/GreenhouseSummary/properties/id" },
       "display_name": { "$ref": "#/GreenhouseSummary/properties/display_name" },
@@ -82,9 +82,14 @@
       "status": { "$ref": "./common.json#/Connectivity" },
       "drift": { "$ref": "#/GreenhouseSummary/properties/drift" },
       "time_scale": { "$ref": "#/GreenhouseSummary/properties/time_scale" },
-      "setpoints": { "$ref": "./setpoints.json#/Setpoints" }
+      "setpoints": { "$ref": "./setpoints.json#/Setpoints" },
+      "zone_status": {
+        "type": "array",
+        "description": "Live per-zone irrigation status, one entry per configured zone, keyed to a Setpoints.zones target by zone_id. The read-only counterpart to the mutable per-zone targets.",
+        "items": { "$ref": "./zones.json#/ZoneStatus" }
+      }
     },
-    "required": ["id", "display_name", "crop", "status", "drift", "setpoints"],
+    "required": ["id", "display_name", "crop", "status", "drift", "setpoints", "zone_status"],
     "additionalProperties": false
   },
   "GreenhouseRegistration": {

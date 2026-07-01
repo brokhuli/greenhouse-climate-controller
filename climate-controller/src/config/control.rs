@@ -60,10 +60,10 @@ pub struct Pid {
 impl Default for Pid {
     fn default() -> Self {
         Pid {
-            kp: 15.0,
-            ki: 0.4,
+            kp: 18.0,
+            ki: 0.5,
             kd: 0.0,
-            integral_clamp: 80.0,
+            integral_clamp: 100.0,
         }
     }
 }

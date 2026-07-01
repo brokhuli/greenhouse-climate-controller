@@ -92,6 +92,12 @@ func (s *Server) getGreenhouse(c echo.Context) error {
 	if err != nil {
 		return s.fail(c, err)
 	}
+	// The same /zones body also carries each zone's live irrigation state, which the detail view
+	// renders next to the targets; surface it as a sibling array (no extra controller call).
+	zoneStatus, err := extractZoneStatus(zonesResp.Body)
+	if err != nil {
+		return s.fail(c, err)
+	}
 	live := s.liveFields(id)
 	return c.JSON(http.StatusOK, greenhouseDetailDTO{
 		ID:          greenhouse.ID,
@@ -101,6 +107,7 @@ func (s *Server) getGreenhouse(c echo.Context) error {
 		Drift:       false,
 		TimeScale:   live.TimeScale,
 		Setpoints:   setpoints,
+		ZoneStatus:  zoneStatus,
 	})
 }
 

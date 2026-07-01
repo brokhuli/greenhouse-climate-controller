@@ -32,11 +32,18 @@ describe("wire → view-model adapters", () => {
     expect(vm.climate.setpointTemperature).toBe(24);
   });
 
-  it("maps a greenhouse detail incl. setpoints + zones", () => {
+  it("maps a greenhouse detail incl. setpoints + zones + live zone status", () => {
     const vm = toGreenhouseDetail(parse(wireGreenhouseDetail, "greenhouse-detail.json"));
     expect(vm.timeScale).toBeNull(); // absent on the wire → null
     expect(vm.setpoints.temperatureDayC).toBe(24);
     expect(vm.setpoints.zones[0]).toMatchObject({ zoneId: "bench-a", drainPeriodSecs: 300 });
+    expect(vm.zoneStatus[0]).toMatchObject({
+      zoneId: "bench-a",
+      soilMoistureVwc: 0.41,
+      irrigating: false,
+      faulted: false,
+    });
+    expect(vm.zoneStatus[0].lastCycleTs).toBeInstanceOf(Date); // ISO string → Date
   });
 
   it("maps a telemetry range, coercing timestamps to Date", () => {

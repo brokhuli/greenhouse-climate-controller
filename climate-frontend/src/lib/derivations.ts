@@ -4,6 +4,7 @@ import type {
   EventEntry,
   GreenhouseSummary,
   Reading,
+  Setpoints,
 } from "../api/schemas";
 
 /**
@@ -31,6 +32,33 @@ export function readingVsSetpointDelta(
   const delta = reading - setpoint;
   const direction = delta > 0 ? "above" : delta < 0 ? "below" : "equal";
   return { delta, direction };
+}
+
+/** Resolve the active day/night temperature setpoint for a simulated timestamp. */
+export function activeTemperatureSetpoint(
+  setpoints: Setpoints,
+  instant: Date | null | undefined,
+): { label: "Day" | "Night"; value: number } {
+  if (!instant) return { label: "Day", value: setpoints.temperatureDayC };
+
+  const [startHour, startMinute] = parseTimeOfDay(setpoints.dayStart);
+  const [endHour, endMinute] = parseTimeOfDay(setpoints.dayEnd);
+  const nowMinutes = instant.getUTCHours() * 60 + instant.getUTCMinutes();
+  const startMinutes = startHour * 60 + startMinute;
+  const endMinutes = endHour * 60 + endMinute;
+  const isDay =
+    startMinutes <= endMinutes
+      ? nowMinutes >= startMinutes && nowMinutes < endMinutes
+      : nowMinutes >= startMinutes || nowMinutes < endMinutes;
+
+  return isDay
+    ? { label: "Day", value: setpoints.temperatureDayC }
+    : { label: "Night", value: setpoints.temperatureNightC };
+}
+
+function parseTimeOfDay(value: string): [number, number] {
+  const [hour, minute] = value.split(":").map((part) => Number.parseInt(part, 10));
+  return [hour, minute];
 }
 
 // ---------------------------------------------------------------------------
@@ -170,4 +198,139 @@ export function alignSeries(seriesList: readonly (readonly SeriesPoint[])[]): {
     return row;
   });
   return { xs, ys };
+}
+
+// ---------------------------------------------------------------------------
+// Zone irrigation status (soil-moisture card)
+// ---------------------------------------------------------------------------
+
+export type ZoneMoistureStatusKind = "ok" | "dry" | "wet" | "watering" | "fault" | "unknown";
+
+export type ZoneMoistureStatus = {
+  kind: ZoneMoistureStatusKind;
+  label: string;
+  /** CSS custom property backing the status colour (tokens.css). */
+  colorVar: string;
+};
+
+export type ZoneMoistureInputs = {
+  moistureVwc: number | null;
+  lowThreshold: number;
+  highThreshold: number;
+  irrigating: boolean;
+  faulted: boolean;
+};
+
+/**
+ * Resolve a zone's single headline status for the soil-moisture card. Precedence, most urgent
+ * first: a faulted zone reads as Fault; a missing reading is No data; an open valve is Watering; a
+ * reading below the low threshold is Dry and one above the high threshold is Saturated; otherwise
+ * OK. Dry and Saturated are the two out-of-band sides and share the warning colour; OK keeps green
+ * for in-band only. Colour always travels with a text label — the design system forbids colour-only
+ * status.
+ */
+export function zoneMoistureStatus(inputs: ZoneMoistureInputs): ZoneMoistureStatus {
+  const { moistureVwc, lowThreshold, highThreshold, faulted, irrigating } = inputs;
+  if (faulted) return { kind: "fault", label: "Fault", colorVar: "--color-fault" };
+  if (moistureVwc == null)
+    return { kind: "unknown", label: "No data", colorVar: "--color-fg-muted" };
+  if (irrigating) return { kind: "watering", label: "Watering", colorVar: "--color-info" };
+  if (moistureVwc < lowThreshold) return { kind: "dry", label: "Dry", colorVar: "--color-warning" };
+  if (moistureVwc > highThreshold)
+    return { kind: "wet", label: "Saturated", colorVar: "--color-warning" };
+  return { kind: "ok", label: "OK", colorVar: "--color-status-online" };
+}
+
+/**
+ * Position a VWC reading on the full 0–1 moisture-bar scale (the bar spans 0–100 % VWC, split into
+ * dry/target/wet regions at the thresholds): the reading itself, clamped to 0–1, or null when there
+ * is no reading.
+ */
+export function moistureScalePosition(moistureVwc: number | null): number | null {
+  if (moistureVwc == null) return null;
+  return moistureVwc < 0 ? 0 : moistureVwc > 1 ? 1 : moistureVwc;
+}
+
+export type MoistureFillSpans = {
+  /** Clamped band boundaries (0–1), exposed so the bar can mark each section start. */
+  low: number;
+  high: number;
+  /** Width (0–1 of the full scale) the reading colours within each band; null reading ⇒ all 0. */
+  dry: number;
+  target: number;
+  wet: number;
+};
+
+/**
+ * Split the moisture bar into its three band-tinted fill spans for a reading. The bar fills like a
+ * gauge — colour runs from 0 up to the reading only — so each band (dry 0–low, target low–high, wet
+ * high–1) is tinted just over the portion the reading covers and stays on the dark track above it.
+ * `dry + target + wet` equals the clamped reading; a null reading yields all zeros (a fully dark bar).
+ */
+const clamp01 = (value: number): number => (value < 0 ? 0 : value > 1 ? 1 : value);
+
+export function moistureFillSpans(
+  moistureVwc: number | null,
+  lowThreshold: number,
+  highThreshold: number,
+): MoistureFillSpans {
+  const low = clamp01(lowThreshold);
+  const high = Math.max(low, clamp01(highThreshold));
+  const fill = moistureVwc == null ? 0 : clamp01(moistureVwc);
+  return {
+    low,
+    high,
+    dry: Math.min(fill, low),
+    target: Math.max(0, Math.min(fill, high) - low),
+    wet: Math.max(0, fill - high),
+  };
+}
+
+/**
+ * "Last watered" label for a zone's last cycle end: "Today, 8:00 AM" on the local calendar day,
+ * "Jun 24, 8:00 AM" otherwise, "Never" when the zone has not cycled. `now` is injectable so the
+ * today/other-day branch is deterministic in tests.
+ */
+export function formatLastWatered(ts: Date | null, now: Date = new Date()): string {
+  if (!ts) return "Never";
+  const time = ts.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  if (isSameLocalDay(ts, now)) return `Today, ${time}`;
+  const date = ts.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return `${date}, ${time}`;
+}
+
+function isSameLocalDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+/** Title-case a label for display, splitting on spaces or hyphens: "greenhouse a" → "Greenhouse A". */
+function titleCaseLabel(value: string): string {
+  return value
+    .split(/[\s-]+/)
+    .filter((part) => part.length > 0)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+/** Prettify a zone slug for display: "bench-a" → "Bench A". */
+export function formatZoneLabel(zoneId: string): string {
+  return titleCaseLabel(zoneId);
+}
+
+/** Prettify a greenhouse display name for display: "greenhouse a" → "Greenhouse A". */
+export function formatGreenhouseLabel(name: string): string {
+  return titleCaseLabel(name);
+}
+
+/** Render an irrigation schedule ("06:00,14:00") with comma-space separators for display. */
+export function formatSchedule(schedule: string): string {
+  return schedule
+    .split(",")
+    .map((time) => time.trim())
+    .filter((time) => time.length > 0)
+    .join(", ");
 }

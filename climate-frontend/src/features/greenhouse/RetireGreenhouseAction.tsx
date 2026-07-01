@@ -5,6 +5,7 @@ import { useRetireGreenhouse } from "../../api/queries/greenhouses";
 import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
 import { useToast } from "../../components/ui/toast-context";
+import { formatGreenhouseLabel } from "../../lib/derivations";
 
 /**
  * Remove a greenhouse from the fleet (components §3) — a danger confirm. On success the fleet is
@@ -22,11 +23,12 @@ export function RetireGreenhouseAction({
   const navigate = useNavigate();
   const toast = useToast();
   const mutation = useRetireGreenhouse();
+  const name = formatGreenhouseLabel(displayName);
 
   const confirm = () =>
     mutation.mutate(greenhouseId, {
       onSuccess: () => {
-        toast.push({ variant: "success", title: "Greenhouse retired", message: displayName });
+        toast.push({ variant: "success", title: "Greenhouse retired", message: name });
         setOpen(false);
         navigate("/");
       },
@@ -47,7 +49,7 @@ export function RetireGreenhouseAction({
       <Dialog
         open={open}
         onClose={() => setOpen(false)}
-        title={`Retire ${displayName}?`}
+        title={`Retire ${name}?`}
         description="Removes the registry entry. Stored history is retained."
         footer={
           <>
@@ -62,7 +64,7 @@ export function RetireGreenhouseAction({
       >
         <p className="text-fg-muted text-sm">
           The platform will stop tracking{" "}
-          <span className="text-fg-default font-medium">{displayName}</span> ({greenhouseId}).
+          <span className="text-fg-default font-medium">{name}</span> ({greenhouseId}).
         </p>
       </Dialog>
     </>

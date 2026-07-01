@@ -1,5 +1,6 @@
 import { useMatch } from "react-router-dom";
 import { useGreenhouse } from "../api/queries/greenhouses";
+import { formatGreenhouseLabel } from "../lib/derivations";
 import { useStream } from "../app/stream-context";
 import { ConnectionStatus } from "./ConnectionStatus";
 import { connectionStateFromWs } from "./connection";
@@ -20,7 +21,9 @@ export function TopBar() {
   let title = "Fleet Overview";
   let subtitle = "Fleet operations console";
   if (greenhouseId) {
-    title = greenhouse.data?.displayName ?? `Greenhouse ${greenhouseId}`;
+    title = greenhouse.data?.displayName
+      ? formatGreenhouseLabel(greenhouse.data.displayName)
+      : `Greenhouse ${greenhouseId}`;
     subtitle = setpointsMatch ? "Edit setpoints" : (greenhouse.data?.crop ?? "Greenhouse detail");
   } else if (activityMatch) {
     title = "Activity";

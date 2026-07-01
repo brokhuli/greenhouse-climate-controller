@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { useGreenhouse } from "../../api/queries/greenhouses";
 import { ErrorState } from "../../components/ui/ErrorState";
 import { Skeleton } from "../../components/ui/Skeleton";
+import { formatGreenhouseLabel } from "../../lib/derivations";
 import { SetpointEditForm } from "./SetpointEditForm";
 
 const SECTION_STYLE = { gap: "var(--layout-section-gap)" };
@@ -43,7 +44,7 @@ export default function SetpointsView() {
         className="text-fg-muted hover:text-fg-default inline-flex items-center gap-1 text-sm"
       >
         <ArrowLeft size={14} aria-hidden />
-        Back to {detail.displayName}
+        Back to {formatGreenhouseLabel(detail.displayName)}
       </Link>
       <SetpointEditForm
         greenhouseId={id}
