@@ -15,6 +15,7 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/ingest"
+	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/reconcile"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/relay"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/state"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/store"
@@ -23,18 +24,19 @@ import (
 
 // Server wires the HTTP handlers to their collaborators.
 type Server struct {
-	store  *store.Store
-	fleet  *state.Fleet
-	ing    *ingest.Ingester
-	relay  *relay.Client
-	hub    *ws.Hub
-	log    *slog.Logger
-	router *echo.Echo
+	store     *store.Store
+	fleet     *state.Fleet
+	ing       *ingest.Ingester
+	relay     *relay.Client
+	reconcile *reconcile.Reconciler
+	hub       *ws.Hub
+	log       *slog.Logger
+	router    *echo.Echo
 }
 
 // New builds the server and its route tree.
-func New(store *store.Store, fleet *state.Fleet, ing *ingest.Ingester, relay *relay.Client, hub *ws.Hub, log *slog.Logger) *Server {
-	s := &Server{store: store, fleet: fleet, ing: ing, relay: relay, hub: hub, log: log}
+func New(store *store.Store, fleet *state.Fleet, ing *ingest.Ingester, relay *relay.Client, reconciler *reconcile.Reconciler, hub *ws.Hub, log *slog.Logger) *Server {
+	s := &Server{store: store, fleet: fleet, ing: ing, relay: relay, reconcile: reconciler, hub: hub, log: log}
 	router := echo.New()
 	router.HideBanner = true
 	router.HidePort = true
@@ -60,6 +62,17 @@ func (s *Server) routes(router *echo.Echo) {
 	api.GET("/greenhouses/:id/sim/time-scale", s.getTimeScale)
 	api.PATCH("/greenhouses/:id/sim/time-scale", s.setTimeScale)
 	api.PATCH("/sim/time-scale", s.setFleetTimeScale)
+
+	// Crop profiles + assignment (2b). Unauthenticated in the backbone slice, like the rest of
+	// the surface — role gating (viewer/operator) lands with the deferred Keycloak block.
+	api.GET("/profiles", s.listProfiles)
+	api.POST("/profiles", s.createProfile)
+	api.GET("/profiles/:profileID", s.getProfile)
+	api.PATCH("/profiles/:profileID", s.updateProfile)
+	api.DELETE("/profiles/:profileID", s.deleteProfile)
+	api.GET("/greenhouses/:id/assignment", s.getAssignment)
+	api.PUT("/greenhouses/:id/assignment", s.setAssignment)
+
 	api.GET("/events", s.listEvents)
 	api.GET("/stream", s.stream) // WebSocket live fan-out (frontend-ws)
 }

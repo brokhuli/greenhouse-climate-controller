@@ -7,15 +7,17 @@ const FleetOverview = lazy(() => import("../features/fleet/FleetOverview"));
 const GreenhouseDetail = lazy(() => import("../features/greenhouse/GreenhouseDetail"));
 const SetpointsView = lazy(() => import("../features/greenhouse/SetpointsView"));
 const ActivityFeed = lazy(() => import("../features/activity/ActivityFeed"));
+const ProfileManagement = lazy(() => import("../features/profiles/ProfileManagement"));
 const NotFound = lazy(() => import("../features/NotFound"));
 
-/** The client-side route tree (architecture §3). 2b routes (/profiles…) are deferred. */
+/** The client-side route tree (architecture §3). */
 export function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<FleetOverview />} />
       <Route path="/greenhouses/:id" element={<GreenhouseDetail />} />
       <Route path="/greenhouses/:id/setpoints" element={<SetpointsView />} />
+      <Route path="/profiles" element={<ProfileManagement />} />
       <Route path="/activity" element={<ActivityFeed />} />
       <Route path="*" element={<NotFound />} />
     </Routes>

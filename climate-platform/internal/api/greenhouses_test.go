@@ -19,7 +19,7 @@ func TestSummaryOfIncludesLiveClimate(t *testing.T) {
 	fleet.SetDLI("gh-a", &dli)
 
 	s := &Server{fleet: fleet}
-	summary := s.summaryOf(store.Greenhouse{ID: "gh-a", DisplayName: "Greenhouse A"})
+	summary := s.summaryOf(store.Greenhouse{ID: "gh-a", DisplayName: "Greenhouse A"}, false)
 
 	if summary.Climate.Temperature == nil || *summary.Climate.Temperature != 23.4 {
 		t.Fatalf("temperature not in summary: %+v", summary.Climate)
@@ -41,7 +41,7 @@ func TestSummaryOfIncludesLiveClimate(t *testing.T) {
 
 func TestSummaryOfOfflineWhenUnknown(t *testing.T) {
 	s := &Server{fleet: state.NewFleet(10 * time.Second)}
-	summary := s.summaryOf(store.Greenhouse{ID: "gh-x", DisplayName: "X"})
+	summary := s.summaryOf(store.Greenhouse{ID: "gh-x", DisplayName: "X"}, false)
 	if summary.Status != "offline" {
 		t.Fatalf("unknown greenhouse should be offline, got %s", summary.Status)
 	}

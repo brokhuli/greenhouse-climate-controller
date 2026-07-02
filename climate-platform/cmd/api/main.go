@@ -18,6 +18,7 @@ import (
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/api"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/config"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/ingest"
+	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/reconcile"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/relay"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/state"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/store"
@@ -54,6 +55,9 @@ func run(log *slog.Logger) error {
 	if err := db.EnsureTimescale(ctx, cfg.RetentionDays); err != nil {
 		return fmt.Errorf("ensure timescale: %w", err)
 	}
+	if err := db.EnsureProvenancePrune(ctx, cfg.ProvenancePruneDays); err != nil {
+		return fmt.Errorf("ensure provenance prune: %w", err)
+	}
 
 	fleet := state.NewFleet(cfg.OfflineAfter)
 	hub := ws.NewHub(log)
@@ -73,7 +77,15 @@ func run(log *slog.Logger) error {
 		return fmt.Errorf("start ingester: %w", err)
 	}
 
-	server := api.New(db, fleet, ing, relay.New(cfg.RelayTimeout), hub, log)
+	relayClient := relay.New(cfg.RelayTimeout)
+	reconciler := reconcile.New(db, relayClient, fleet, hub, log, reconcile.Config{
+		Interval:   cfg.ReconcileInterval,
+		Jitter:     cfg.ReassertJitter,
+		MaxRetries: cfg.DriftMaxRetries,
+	})
+	reconciler.Start(ctx)
+
+	server := api.New(db, fleet, ing, relayClient, reconciler, hub, log)
 
 	serverErr := make(chan error, 1)
 	go func() { serverErr <- server.Start(cfg.HTTPAddr) }()

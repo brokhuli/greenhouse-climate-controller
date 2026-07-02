@@ -32,6 +32,18 @@ type Config struct {
 	OfflineAfter time.Duration
 	// RelayTimeout bounds a downward controller REST call.
 	RelayTimeout time.Duration
+	// ReconcileInterval is the reconciliation loop cadence: how often the platform
+	// re-asserts intended state and checks for drift (crop-profiles §3, P2-REL-1).
+	ReconcileInterval time.Duration
+	// ReassertJitter bounds the random stagger between greenhouses within a cycle, so a
+	// shared reconnect does not thunder the controllers' REST APIs.
+	ReassertJitter time.Duration
+	// DriftMaxRetries is how many consecutive failed deliveries/corrections the reconciler
+	// makes before backing off and leaving drift surfaced for the operator.
+	DriftMaxRetries int
+	// ProvenancePruneDays is the window past which superseded setpoint revisions are pruned;
+	// the current revision per greenhouse is always kept (platform data model §2).
+	ProvenancePruneDays int
 }
 
 // Load resolves the configuration from the environment, applying defaults. It returns
@@ -45,6 +57,11 @@ func Load() (Config, error) {
 		IngestBufferSize: envInt("PLATFORM_INGEST_BUFFER", 4096),
 		OfflineAfter:     time.Duration(envInt("PLATFORM_OFFLINE_AFTER_SECS", 10)) * time.Second,
 		RelayTimeout:     time.Duration(envInt("PLATFORM_RELAY_TIMEOUT_SECS", 5)) * time.Second,
+
+		ReconcileInterval:   time.Duration(envInt("PLATFORM_RECONCILE_INTERVAL_SECS", 30)) * time.Second,
+		ReassertJitter:      time.Duration(envInt("PLATFORM_REASSERT_JITTER_SECS", 3)) * time.Second,
+		DriftMaxRetries:     envInt("PLATFORM_DRIFT_MAX_RETRIES", 5),
+		ProvenancePruneDays: envInt("PLATFORM_PROVENANCE_PRUNE_DAYS", 30),
 	}
 	if cfg.DatabaseURL == "" {
 		return Config{}, fmt.Errorf("PLATFORM_DATABASE_URL is required")

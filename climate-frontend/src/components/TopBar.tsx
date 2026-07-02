@@ -1,5 +1,6 @@
 import { useMatch } from "react-router-dom";
 import { useGreenhouse } from "../api/queries/greenhouses";
+import { useAssignment, useProfile } from "../api/queries/profiles";
 import { formatGreenhouseLabel } from "../lib/derivations";
 import { useStream } from "../app/stream-context";
 import { ConnectionStatus } from "./ConnectionStatus";
@@ -17,6 +18,8 @@ export function TopBar() {
   const activityMatch = useMatch("/activity");
   const greenhouseId = detailMatch?.params.id ?? setpointsMatch?.params.id ?? "";
   const greenhouse = useGreenhouse(greenhouseId);
+  const assignment = useAssignment(detailMatch?.params.id ?? "");
+  const profile = useProfile(assignment.data?.profileId ?? "");
 
   let title = "Fleet Overview";
   let subtitle = "Fleet operations console";
@@ -29,6 +32,10 @@ export function TopBar() {
     title = "Activity";
     subtitle = "Faults, interlocks & operator writes";
   }
+  const profileLabel = assignment.data
+    ? (profile.data?.name ?? assignment.data.profileId)
+    : undefined;
+  const stageLabel = assignment.data?.stage;
 
   return (
     <header
@@ -36,7 +43,21 @@ export function TopBar() {
       style={{ height: "var(--layout-topbar-height)" }}
     >
       <div className="min-w-0">
-        <h1 className="text-fg-default truncate text-lg font-semibold">{title}</h1>
+        <h1 className="text-fg-default flex min-w-0 items-baseline gap-2 text-lg font-semibold">
+          <span className="min-w-0 truncate">{title}</span>
+          {profileLabel && stageLabel ? (
+            <>
+              <span className="text-fg-muted shrink-0" aria-hidden>
+                •
+              </span>
+              <span className="text-fg-muted min-w-0 truncate">{profileLabel}</span>
+              <span className="text-fg-muted shrink-0" aria-hidden>
+                •
+              </span>
+              <span className="text-fg-muted min-w-0 truncate">{stageLabel}</span>
+            </>
+          ) : null}
+        </h1>
         <p className="text-fg-muted truncate text-sm">{subtitle}</p>
       </div>
       <div className="flex items-center gap-3">

@@ -22,6 +22,7 @@ import {
   type StackedBand,
 } from "../../components/ui/StackedTimeSeriesChart";
 import { ActuatorStatePanel, type ActuatorReading } from "./ActuatorStatePanel";
+import { ProfileAssignmentPanel } from "./ProfileAssignmentPanel";
 import { ZoneMoisturePanel, type ZoneMoistureRow } from "./ZoneMoisturePanel";
 import { GreenhouseSummaryBar, type SummaryReadings } from "./GreenhouseSummaryBar";
 import { analyticsReadings, telemetryReadings } from "./chartData";
@@ -252,6 +253,7 @@ export default function GreenhouseDetail() {
           </Card>
         </div>
         <div className="flex flex-col" style={CARD_GRID_STYLE}>
+          <ProfileAssignmentPanel greenhouseId={id} />
           <Card>
             <PanelHeader title="Actuator states" sectionLabel titleSize="large" />
             <ActuatorStatePanel actuators={actuatorReadings} />

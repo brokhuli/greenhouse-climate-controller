@@ -18,4 +18,7 @@ export const queryKeys = {
   analytics: (id: string, range: RangeParams, interval: AnalyticsInterval) =>
     ["analytics", id, range.window, interval] as const,
   events: (scope: EventScope) => ["events", scope] as const,
+  profiles: () => ["profiles"] as const,
+  profile: (id: string) => ["profile", id] as const,
+  assignment: (greenhouseId: string) => ["assignment", greenhouseId] as const,
 };

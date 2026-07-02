@@ -44,7 +44,7 @@ const apiBase = (): string => import.meta.env.VITE_API_BASE ?? "";
 
 const url = (path: string): string => `${apiBase()}/api${path}`;
 
-type RequestInit = { method?: "GET" | "POST" | "PATCH" | "DELETE"; body?: unknown };
+type RequestInit = { method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"; body?: unknown };
 
 const errorKindForStatus = (status: number): ApiErrorKind => {
   if (status === 404) return "not_found";
@@ -118,6 +118,8 @@ export const apiClient = {
   get: <S extends z.ZodTypeAny>(path: string, schema: S) => requestJson(path, schema),
   post: <S extends z.ZodTypeAny>(path: string, body: unknown, schema: S) =>
     requestJson(path, schema, { method: "POST", body }),
+  put: <S extends z.ZodTypeAny>(path: string, body: unknown, schema: S) =>
+    requestJson(path, schema, { method: "PUT", body }),
   patch: <S extends z.ZodTypeAny>(path: string, body: unknown, schema: S) =>
     requestJson(path, schema, { method: "PATCH", body }),
   delete: async (path: string): Promise<void> => {

@@ -14,7 +14,8 @@ stack. Specs: [`docs/specs/design/frontend/`](../docs/specs/design/frontend/); w
 This package is the **project skeleton plus the contract-bound API layer**. Built and green:
 
 - App shell + theming: Vite, Tailwind v4 + design tokens (dark default / light), the route tree
-  (`/`, `/greenhouses/:id`, `/activity`, 404) with a themed console shell (`AppFrame`/`SideNav`/`TopBar`).
+  (`/`, `/greenhouses/:id`, `/greenhouses/:id/setpoints`, `/profiles`, `/activity`, 404) with a
+  themed console shell (`AppFrame`/`SideNav`/`TopBar`).
 - `src/api/` — the only module that knows the API exists: Zod wire schemas + camelCase adapters
   (`schemas.ts`), the fetch client with typed error mapping (`client.ts`), the WebSocket client with
   backoff reconnect + frame dispatch (`ws.ts`), and TanStack Query hooks (`queries/`).
@@ -22,10 +23,12 @@ This package is the **project skeleton plus the contract-bound API layer**. Buil
 - Tests: the Zod layer is checked against the committed contract fixtures; adapters, client, ws, and
   derivations are unit-tested; an `App` smoke test renders the shell.
 
-**Deferred to later slices:** the real feature views (fleet grid, detail charts), uPlot charts,
-setpoint/registration forms, optimistic mutation patching, Playwright + Lighthouse, the nginx
-`proxy`/`frontend` compose services and the `Dockerfile`, and all 2b (crop profiles, drift UI,
-Keycloak/OIDC).
+The 2a feature views (fleet grid, per-greenhouse detail with uPlot charts, setpoint/registration
+forms, activity feed) and the **2b backbone** UI — the crop-profile library (`/profiles`),
+per-greenhouse profile assignment, and drift surfacing on the fleet cards + detail — are built.
+
+**Deferred to later slices:** Playwright + Lighthouse, the nginx `proxy`/`frontend` compose
+services and the `Dockerfile`, and the remaining 2b infra (Keycloak/OIDC auth, observability).
 
 ## Layout
 

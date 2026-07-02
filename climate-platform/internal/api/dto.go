@@ -1,6 +1,10 @@
 package api
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/domain"
+)
 
 // --- error bodies ---
 
@@ -83,6 +87,28 @@ type setpointsPatchDTO struct {
 	VPDTargetKpa                 *float64         `json:"vpd_target_kpa"`
 	DLITargetMol                 *float64         `json:"dli_target_mol"`
 	Zones                        []zoneTargetsDTO `json:"zones"`
+}
+
+// --- crop profiles & assignment (2b) ---
+//
+// Responses reuse the domain types directly (domain.CropProfile / domain.Assignment): their
+// JSON tags already match the frontend-rest contract, so no separate response DTO is needed.
+// Requests decode into these DTOs so a partial patch can distinguish an absent field from a
+// zero value.
+
+// cropProfilePatchDTO is a partial profile update (frontend-rest CropProfilePatch): any subset
+// of name/crop/stages. A present stages array replaces the stage set wholesale.
+type cropProfilePatchDTO struct {
+	Name   *string               `json:"name"`
+	Crop   *string               `json:"crop"`
+	Stages []domain.ProfileStage `json:"stages"`
+}
+
+// assignmentInputDTO assigns a profile/stage to the greenhouse named in the path
+// (frontend-rest AssignmentInput); the greenhouse identity comes from the path, not the body.
+type assignmentInputDTO struct {
+	ProfileID string `json:"profile_id"`
+	Stage     string `json:"stage"`
 }
 
 // --- telemetry ---
