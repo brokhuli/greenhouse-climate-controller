@@ -8,8 +8,8 @@ import { connectionStateFromWs } from "./connection";
 import { ThemeToggle } from "./ThemeToggle";
 
 /**
- * Header strip: current scope (site or greenhouse name), the live connection status, and the theme
- * toggle (components §1). The scope follows the route; the status reflects the single stream.
+ * Header strip: current scope, live connection status, and the theme toggle. The scope follows the
+ * route; the status reflects the single stream.
  */
 export function TopBar() {
   const { connectionState } = useStream();
@@ -32,10 +32,10 @@ export function TopBar() {
     title = "Activity";
     subtitle = "Faults, interlocks & operator writes";
   }
+
   const profileLabel = assignment.data
     ? (profile.data?.name ?? assignment.data.profileId)
     : undefined;
-  const stageLabel = assignment.data?.stage;
 
   return (
     <header
@@ -45,16 +45,12 @@ export function TopBar() {
       <div className="min-w-0">
         <h1 className="text-fg-default flex min-w-0 items-baseline gap-2 text-lg font-semibold">
           <span className="min-w-0 truncate">{title}</span>
-          {profileLabel && stageLabel ? (
+          {profileLabel ? (
             <>
               <span className="text-fg-muted shrink-0" aria-hidden>
-                •
+                {"\u2022"}
               </span>
               <span className="text-fg-muted min-w-0 truncate">{profileLabel}</span>
-              <span className="text-fg-muted shrink-0" aria-hidden>
-                •
-              </span>
-              <span className="text-fg-muted min-w-0 truncate">{stageLabel}</span>
             </>
           ) : null}
         </h1>

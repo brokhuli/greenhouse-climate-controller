@@ -2,7 +2,15 @@ import { describe, expect, it } from "vitest";
 import { fireEvent, screen } from "@testing-library/react";
 import FleetOverview from "../../src/features/fleet/FleetOverview";
 import { queryKeys } from "../../src/api/queries/keys";
-import { makeClient, renderWithProviders, sampleSummary } from "../utils";
+import type { Assignment, CropProfile } from "../../src/api/schemas";
+import { makeClient, renderWithProviders, sampleSetpoints, sampleSummary } from "../utils";
+
+const profile = (): CropProfile => ({
+  id: "lettuce",
+  name: "Lettuce",
+  crop: "lettuce",
+  stages: [{ stage: "vegetative", targets: sampleSetpoints({ zones: [] }) }],
+});
 
 describe("FleetOverview", () => {
   it("shows the empty state with a register CTA when no greenhouses exist", () => {
@@ -26,6 +34,25 @@ describe("FleetOverview", () => {
     // "Online" surfaces as a card connectivity badge; "Offline" as both a badge and a rollup tile.
     expect(screen.getAllByText("Online").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Offline").length).toBeGreaterThan(0);
+  });
+
+  it("shows the assigned crop profile below the greenhouse name", () => {
+    const client = makeClient();
+    const assignment: Assignment = {
+      greenhouseId: "gh-a",
+      profileId: "lettuce",
+      stage: "vegetative",
+    };
+    client.setQueryData(queryKeys.fleet(), [
+      sampleSummary({ id: "gh-a", displayName: "Greenhouse A" }),
+    ]);
+    client.setQueryData(queryKeys.assignment("gh-a"), assignment);
+    client.setQueryData(queryKeys.profile("lettuce"), profile());
+
+    renderWithProviders(<FleetOverview />, { client });
+
+    expect(screen.getByText("Greenhouse A")).toBeInTheDocument();
+    expect(screen.getByText("Lettuce")).toBeInTheDocument();
   });
 
   it("offers the shared range options and reflects the selection", () => {

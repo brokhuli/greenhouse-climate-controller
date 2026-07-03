@@ -13,7 +13,7 @@ const profile = (): CropProfile => ({
 });
 
 describe("TopBar", () => {
-  it("adds the active crop profile and growth stage to greenhouse detail titles", () => {
+  it("adds the active crop profile to greenhouse detail titles", () => {
     const client = makeClient();
     const assignment: Assignment = {
       greenhouseId: "gh-a",
@@ -26,8 +26,8 @@ describe("TopBar", () => {
 
     renderWithProviders(<TopBar />, { client, route: "/greenhouses/gh-a" });
 
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-      /Greenhouse A\s*•\s*Lettuce\s*•\s*vegetative/,
-    );
+    const heading = screen.getByRole("heading", { level: 1 });
+    expect(heading).toHaveTextContent(/Greenhouse A\s*•\s*Lettuce/);
+    expect(heading).not.toHaveTextContent("vegetative");
   });
 });
