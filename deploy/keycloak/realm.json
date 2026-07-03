@@ -1,0 +1,59 @@
+{
+  "realm": "greenhouse",
+  "enabled": true,
+  "sslRequired": "none",
+  "roles": {
+    "realm": [
+      { "name": "gh-viewer", "description": "Read fleet, telemetry, analytics, status" },
+      { "name": "gh-operator", "description": "Viewer plus every write-path action (platform security §3)" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "climate-frontend",
+      "name": "Climate console (SPA)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": ["http://localhost:8080/*"],
+      "webOrigins": ["+"],
+      "attributes": {
+        "post.logout.redirect.uris": "http://localhost:8080/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "climate-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "climate-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "operator",
+      "enabled": true,
+      "email": "operator@example.com",
+      "firstName": "Olive",
+      "lastName": "Operator",
+      "credentials": [{ "type": "password", "value": "operator", "temporary": false }],
+      "realmRoles": ["gh-operator"]
+    },
+    {
+      "username": "viewer",
+      "enabled": true,
+      "email": "viewer@example.com",
+      "firstName": "Vera",
+      "lastName": "Viewer",
+      "credentials": [{ "type": "password", "value": "viewer", "temporary": false }],
+      "realmRoles": ["gh-viewer"]
+    }
+  ]
+}

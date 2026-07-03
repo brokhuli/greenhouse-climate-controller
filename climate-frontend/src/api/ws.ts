@@ -8,6 +8,7 @@ import {
   type StatusFrame,
   type TelemetryFrame,
 } from "./schemas";
+import { getAccessToken } from "./authToken";
 
 /**
  * The single live-push channel: a thin wrapper over the browser `WebSocket` to the platform's
@@ -54,9 +55,14 @@ export type StreamClientOptions = {
 
 const defaultStreamUrl = (): string => {
   const base = import.meta.env.VITE_API_BASE;
-  if (base) return `${base.replace(/^http/, "ws")}/api/stream`;
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//${window.location.host}/api/stream`;
+  const streamUrl = base
+    ? `${base.replace(/^http/, "ws")}/api/stream`
+    : `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/api/stream`;
+  // A browser cannot set an Authorization header on the WS handshake, so the token (when present)
+  // rides as a query param the API validates before upgrading. Resolved per (re)connect, so a
+  // renewed token is picked up automatically.
+  const token = getAccessToken();
+  return token ? `${streamUrl}?access_token=${encodeURIComponent(token)}` : streamUrl;
 };
 
 const defaultSocketFactory = (url: string): WebSocketLike =>

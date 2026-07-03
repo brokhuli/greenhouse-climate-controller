@@ -3,6 +3,7 @@ import { useGreenhouse } from "../api/queries/greenhouses";
 import { useAssignment, useProfile } from "../api/queries/profiles";
 import { formatGreenhouseLabel } from "../lib/derivations";
 import { useStream } from "../app/stream-context";
+import { UserMenu } from "../features/auth/UserMenu";
 import { ConnectionStatus } from "./ConnectionStatus";
 import { connectionStateFromWs } from "./connection";
 import { ThemeToggle } from "./ThemeToggle";
@@ -59,6 +60,7 @@ export function TopBar() {
       <div className="flex items-center gap-3">
         <ConnectionStatus state={connectionStateFromWs(connectionState)} />
         <ThemeToggle />
+        <UserMenu />
       </div>
     </header>
   );

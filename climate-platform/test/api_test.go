@@ -89,7 +89,7 @@ func TestProfileAssignmentHTTP(t *testing.T) {
 	ing := ingest.New(st, fleet, hub, log, "tcp://localhost:1883", 4096, time.Hour)
 	relayClient := relay.New(5 * time.Second)
 	reconciler := reconcile.New(st, relayClient, fleet, hub, log, reconcile.Config{Interval: time.Hour})
-	server := api.New(st, fleet, ing, relayClient, reconciler, hub, log)
+	server := api.New(st, fleet, ing, relayClient, reconciler, hub, nil, log)
 	platform := httptest.NewServer(server.Handler())
 	defer platform.Close()
 

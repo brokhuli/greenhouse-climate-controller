@@ -1,4 +1,5 @@
 import { useSetFleetTimeScale } from "../../api/queries/sim";
+import { useRole } from "../../hooks/useRole";
 import { TimeScaleControl } from "../../components/ui/TimeScaleControl";
 import { useToast } from "../../components/ui/toast-context";
 
@@ -9,12 +10,14 @@ import { useToast } from "../../components/ui/toast-context";
  */
 export function FleetTimeScaleControl({ currentScale }: { currentScale: number | null }) {
   const toast = useToast();
+  const { isOperator } = useRole();
   const mutation = useSetFleetTimeScale();
 
   return (
     <TimeScaleControl
       value={currentScale}
       pending={mutation.isPending}
+      disabled={!isOperator}
       label="Fleet simulation speed"
       onChange={(scale) =>
         mutation.mutate(scale, {

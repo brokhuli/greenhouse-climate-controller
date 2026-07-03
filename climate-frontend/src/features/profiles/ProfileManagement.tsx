@@ -3,6 +3,7 @@ import { Plus } from "lucide-react";
 import { useDeleteProfile, useProfiles } from "../../api/queries/profiles";
 import type { CropProfile } from "../../api/schemas";
 import { ApiError } from "../../api/client";
+import { useRole } from "../../hooks/useRole";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/Card";
 import { Dialog } from "../../components/ui/Dialog";
@@ -23,16 +24,23 @@ const GRID_STYLE = { gap: "var(--layout-card-gap)" };
  */
 export default function ProfileManagement() {
   const profiles = useProfiles();
+  const { isOperator } = useRole();
   // `null` = closed; "new" = create; a profile = edit that profile.
   const [editing, setEditing] = useState<CropProfile | "new" | null>(null);
   const [deleting, setDeleting] = useState<CropProfile | null>(null);
 
   const library = profiles.data ?? [];
+  const operatorOnly = isOperator ? undefined : "Operator role required";
 
   return (
     <div className="flex flex-col" style={{ gap: "var(--layout-section-gap)" }}>
       <div className="flex items-center justify-end">
-        <Button variant="primary" onClick={() => setEditing("new")}>
+        <Button
+          variant="primary"
+          onClick={() => setEditing("new")}
+          disabled={!isOperator}
+          title={operatorOnly}
+        >
           <Plus size={16} aria-hidden />
           New profile
         </Button>
@@ -55,7 +63,12 @@ export default function ProfileManagement() {
           title="No crop profiles yet"
           message="Create a profile to assign stage-aware targets to your greenhouses."
           action={
-            <Button variant="primary" onClick={() => setEditing("new")}>
+            <Button
+              variant="primary"
+              onClick={() => setEditing("new")}
+              disabled={!isOperator}
+              title={operatorOnly}
+            >
               Create profile
             </Button>
           }
@@ -76,10 +89,20 @@ export default function ProfileManagement() {
                 ))}
               </div>
               <div className="mt-4 flex justify-end gap-2">
-                <Button variant="secondary" onClick={() => setEditing(profile)}>
+                <Button
+                  variant="secondary"
+                  onClick={() => setEditing(profile)}
+                  disabled={!isOperator}
+                  title={operatorOnly}
+                >
                   Edit
                 </Button>
-                <Button variant="danger" onClick={() => setDeleting(profile)}>
+                <Button
+                  variant="danger"
+                  onClick={() => setDeleting(profile)}
+                  disabled={!isOperator}
+                  title={operatorOnly}
+                >
                   Delete
                 </Button>
               </div>

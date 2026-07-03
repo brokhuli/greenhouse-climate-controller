@@ -5,6 +5,7 @@ import { z } from "zod";
 import { ApiError } from "../../api/client";
 import type { Setpoints } from "../../api/schemas";
 import { useSetpointEdit } from "../../api/queries/greenhouses";
+import { useRole } from "../../hooks/useRole";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/Card";
 import { Dialog } from "../../components/ui/Dialog";
@@ -130,6 +131,7 @@ export function SetpointEditForm({
   offline: boolean;
 }) {
   const toast = useToast();
+  const { isOperator } = useRole();
   const mutation = useSetpointEdit(greenhouseId);
   const {
     register,
@@ -154,7 +156,8 @@ export function SetpointEditForm({
     [pending, setpoints],
   );
 
-  const disabled = offline || mutation.isPending;
+  // Viewers get a read-only form; operators can edit (unless the controller is offline in 2a).
+  const disabled = offline || mutation.isPending || !isOperator;
 
   const onValid = (values: FormValues) => {
     setPending(values);
@@ -193,7 +196,14 @@ export function SetpointEditForm({
   return (
     <Card>
       <PanelHeader title="Setpoints" />
-      {offline ? (
+      {!isOperator ? (
+        <p
+          className="border-border bg-surface-2 text-fg-muted mb-3 rounded-md border px-3 py-2 text-xs"
+          role="note"
+        >
+          Read-only — the operator role is required to edit setpoints.
+        </p>
+      ) : offline ? (
         <p
           className="border-border bg-surface-2 text-fg-muted mb-3 rounded-md border px-3 py-2 text-xs"
           role="note"
@@ -276,7 +286,12 @@ export function SetpointEditForm({
         ) : null}
 
         <div className="flex justify-end">
-          <Button variant="primary" type="submit" disabled={disabled}>
+          <Button
+            variant="primary"
+            type="submit"
+            disabled={disabled}
+            title={!isOperator ? "Operator role required" : undefined}
+          >
             Review &amp; apply
           </Button>
         </div>

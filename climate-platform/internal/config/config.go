@@ -44,6 +44,18 @@ type Config struct {
 	// ProvenancePruneDays is the window past which superseded setpoint revisions are pruned;
 	// the current revision per greenhouse is always kept (platform data model §2).
 	ProvenancePruneDays int
+	// OIDCIssuerURL is the token issuer the API trusts (the `iss` claim, browser-facing —
+	// e.g. http://localhost:8080/auth/realms/greenhouse). When empty, OIDC is disabled and
+	// the API runs unauthenticated on the trusted network (RFC-011); when set, human
+	// viewer/operator auth is enforced (platform security §2, P2-SEC-1).
+	OIDCIssuerURL string
+	// OIDCDiscoveryURL is where the API fetches the discovery document / JWKS on the internal
+	// network (e.g. http://auth:8080/auth/realms/greenhouse). Defaults to OIDCIssuerURL; set
+	// it separately when Keycloak sits behind the proxy under a different internal address.
+	OIDCDiscoveryURL string
+	// OIDCAudience, when set, is required in the token's `aud` (the Keycloak audience mapper
+	// adds it). Empty skips the audience check.
+	OIDCAudience string
 }
 
 // Load resolves the configuration from the environment, applying defaults. It returns
@@ -62,6 +74,10 @@ func Load() (Config, error) {
 		ReassertJitter:      time.Duration(envInt("PLATFORM_REASSERT_JITTER_SECS", 3)) * time.Second,
 		DriftMaxRetries:     envInt("PLATFORM_DRIFT_MAX_RETRIES", 5),
 		ProvenancePruneDays: envInt("PLATFORM_PROVENANCE_PRUNE_DAYS", 30),
+
+		OIDCIssuerURL:    env("PLATFORM_OIDC_ISSUER_URL", ""),
+		OIDCDiscoveryURL: env("PLATFORM_OIDC_DISCOVERY_URL", ""),
+		OIDCAudience:     env("PLATFORM_OIDC_AUDIENCE", ""),
 	}
 	if cfg.DatabaseURL == "" {
 		return Config{}, fmt.Errorf("PLATFORM_DATABASE_URL is required")

@@ -1,8 +1,9 @@
 // Package api is the platform's served HTTP surface: the operator/fleet REST API
 // (frontend-rest contract) plus the WebSocket live channel (frontend-ws). Handlers
 // read from the store and the in-memory fleet state, validate writes, and relay
-// setpoint/time-scale edits down to the controllers. In 2a the surface is
-// unauthenticated on the trusted local Docker network (RFC-011).
+// setpoint/time-scale edits down to the controllers. When OIDC is configured (2b) the
+// surface enforces human viewer/operator auth via the auth middleware; when it is not, it
+// runs unauthenticated on the trusted local Docker network (RFC-011), as in 2a.
 package api
 
 import (
@@ -14,6 +15,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 
+	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/auth"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/ingest"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/reconcile"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/relay"
@@ -30,13 +32,15 @@ type Server struct {
 	relay     *relay.Client
 	reconcile *reconcile.Reconciler
 	hub       *ws.Hub
+	verifier  *auth.Verifier
 	log       *slog.Logger
 	router    *echo.Echo
 }
 
-// New builds the server and its route tree.
-func New(store *store.Store, fleet *state.Fleet, ing *ingest.Ingester, relay *relay.Client, reconciler *reconcile.Reconciler, hub *ws.Hub, log *slog.Logger) *Server {
-	s := &Server{store: store, fleet: fleet, ing: ing, relay: relay, reconcile: reconciler, hub: hub, log: log}
+// New builds the server and its route tree. verifier gates the surface: nil runs
+// unauthenticated (2a trusted-network posture), non-nil enforces viewer/operator auth.
+func New(store *store.Store, fleet *state.Fleet, ing *ingest.Ingester, relay *relay.Client, reconciler *reconcile.Reconciler, hub *ws.Hub, verifier *auth.Verifier, log *slog.Logger) *Server {
+	s := &Server{store: store, fleet: fleet, ing: ing, relay: relay, reconcile: reconciler, hub: hub, verifier: verifier, log: log}
 	router := echo.New()
 	router.HideBanner = true
 	router.HidePort = true
@@ -50,28 +54,34 @@ func New(store *store.Store, fleet *state.Fleet, ing *ingest.Ingester, relay *re
 func (s *Server) routes(router *echo.Echo) {
 	router.GET("/healthz", func(c echo.Context) error { return c.JSON(http.StatusOK, map[string]string{"status": "ok"}) })
 
+	// Every /api call (REST + the WS handshake) must carry a valid token when OIDC is
+	// configured; reads are open to any authenticated role, writes are additionally gated to
+	// operator (platform security §4). When the verifier is nil both are pass-throughs — the
+	// unauthenticated 2a posture (RFC-011).
 	api := router.Group("/api")
+	api.Use(auth.Authenticated(s.verifier))
+	operator := auth.RequireOperator(s.verifier)
+
 	api.GET("/greenhouses", s.listGreenhouses)
-	api.POST("/greenhouses", s.registerGreenhouse)
+	api.POST("/greenhouses", s.registerGreenhouse, operator)
 	api.GET("/greenhouses/sparklines", s.getFleetSparklines) // static segment resolves before :id
 	api.GET("/greenhouses/:id", s.getGreenhouse)
-	api.DELETE("/greenhouses/:id", s.retireGreenhouse)
-	api.PATCH("/greenhouses/:id/setpoints", s.editSetpoints)
+	api.DELETE("/greenhouses/:id", s.retireGreenhouse, operator)
+	api.PATCH("/greenhouses/:id/setpoints", s.editSetpoints, operator)
 	api.GET("/greenhouses/:id/telemetry", s.getTelemetry)
 	api.GET("/greenhouses/:id/analytics", s.getAnalytics)
 	api.GET("/greenhouses/:id/sim/time-scale", s.getTimeScale)
-	api.PATCH("/greenhouses/:id/sim/time-scale", s.setTimeScale)
-	api.PATCH("/sim/time-scale", s.setFleetTimeScale)
+	api.PATCH("/greenhouses/:id/sim/time-scale", s.setTimeScale, operator)
+	api.PATCH("/sim/time-scale", s.setFleetTimeScale, operator)
 
-	// Crop profiles + assignment (2b). Unauthenticated in the backbone slice, like the rest of
-	// the surface — role gating (viewer/operator) lands with the deferred Keycloak block.
+	// Crop profiles + assignment (2b). Reads browse the library; writes are operator-only.
 	api.GET("/profiles", s.listProfiles)
-	api.POST("/profiles", s.createProfile)
+	api.POST("/profiles", s.createProfile, operator)
 	api.GET("/profiles/:profileID", s.getProfile)
-	api.PATCH("/profiles/:profileID", s.updateProfile)
-	api.DELETE("/profiles/:profileID", s.deleteProfile)
+	api.PATCH("/profiles/:profileID", s.updateProfile, operator)
+	api.DELETE("/profiles/:profileID", s.deleteProfile, operator)
 	api.GET("/greenhouses/:id/assignment", s.getAssignment)
-	api.PUT("/greenhouses/:id/assignment", s.setAssignment)
+	api.PUT("/greenhouses/:id/assignment", s.setAssignment, operator)
 
 	api.GET("/events", s.listEvents)
 	api.GET("/stream", s.stream) // WebSocket live fan-out (frontend-ws)

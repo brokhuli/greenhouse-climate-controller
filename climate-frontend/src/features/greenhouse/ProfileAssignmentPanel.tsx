@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import { ApiError } from "../../api/client";
 import { useAssignment, useProfiles, useSetAssignment } from "../../api/queries/profiles";
+import { useRole } from "../../hooks/useRole";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/Card";
 import { PanelHeader } from "../../components/ui/PanelHeader";
@@ -19,6 +20,7 @@ export function ProfileAssignmentPanel({ greenhouseId }: { greenhouseId: string 
   const profileSelectId = useId();
   const stageSelectId = useId();
   const toast = useToast();
+  const { isOperator } = useRole();
   const profiles = useProfiles();
   const assignment = useAssignment(greenhouseId);
   const setAssignment = useSetAssignment(greenhouseId);
@@ -86,7 +88,8 @@ export function ProfileAssignmentPanel({ greenhouseId }: { greenhouseId: string 
             <Button
               variant="primary"
               onClick={apply}
-              disabled={setAssignment.isPending || unchanged || !profileId || !stage}
+              disabled={setAssignment.isPending || unchanged || !profileId || !stage || !isOperator}
+              title={isOperator ? undefined : "Operator role required"}
             >
               {setAssignment.isPending ? "Applying..." : "Apply profile"}
             </Button>

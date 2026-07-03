@@ -1,4 +1,5 @@
 import { useSetTimeScale } from "../../api/queries/sim";
+import { useRole } from "../../hooks/useRole";
 import { TimeScaleControl } from "../../components/ui/TimeScaleControl";
 import { useToast } from "../../components/ui/toast-context";
 
@@ -16,12 +17,14 @@ export function GreenhouseTimeScaleControl({
   scale: number | null;
 }) {
   const toast = useToast();
+  const { isOperator } = useRole();
   const mutation = useSetTimeScale(greenhouseId);
 
   return (
     <TimeScaleControl
       value={scale}
       pending={mutation.isPending}
+      disabled={!isOperator}
       onChange={(next) =>
         mutation.mutate(next, {
           onError: (error) =>

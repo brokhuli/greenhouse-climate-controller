@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/api"
+	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/auth"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/config"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/ingest"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/reconcile"
@@ -85,11 +86,18 @@ func run(log *slog.Logger) error {
 	})
 	reconciler.Start(ctx)
 
-	server := api.New(db, fleet, ing, relayClient, reconciler, hub, log)
+	// OIDC verifier: nil (and thus an unauthenticated surface) unless PLATFORM_OIDC_ISSUER_URL
+	// is set. Discovery retries a slow-to-start Keycloak (platform security §2, RFC-011).
+	verifier, err := auth.NewVerifier(ctx, cfg.OIDCIssuerURL, cfg.OIDCDiscoveryURL, cfg.OIDCAudience)
+	if err != nil {
+		return fmt.Errorf("oidc verifier: %w", err)
+	}
+
+	server := api.New(db, fleet, ing, relayClient, reconciler, hub, verifier, log)
 
 	serverErr := make(chan error, 1)
 	go func() { serverErr <- server.Start(cfg.HTTPAddr) }()
-	log.Info("platform started", "addr", cfg.HTTPAddr, "broker", cfg.MQTTBrokerURL, "retention_days", cfg.RetentionDays)
+	log.Info("platform started", "addr", cfg.HTTPAddr, "broker", cfg.MQTTBrokerURL, "retention_days", cfg.RetentionDays, "auth", verifier != nil)
 
 	select {
 	case <-ctx.Done():
