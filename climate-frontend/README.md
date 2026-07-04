@@ -9,9 +9,9 @@ or the controllers directly. Built as static assets and served by the platform's
 stack. Specs: [`docs/specs/design/frontend/`](../docs/specs/design/frontend/); wire contracts:
 [`contracts/frontend-rest/`](../contracts/frontend-rest/), [`contracts/frontend-ws/`](../contracts/frontend-ws/).
 
-## Status — scaffold (2a, in progress)
+## Status — 2a + 2b UI (built & green)
 
-This package is the **project skeleton plus the contract-bound API layer**. Built and green:
+The dashboard is complete through the 2b backbone and the auth slice. Built and green:
 
 - App shell + theming: Vite, Tailwind v4 + design tokens (dark default / light), the route tree
   (`/`, `/greenhouses/:id`, `/greenhouses/:id/setpoints`, `/profiles`, `/activity`, 404) with a
@@ -20,6 +20,9 @@ This package is the **project skeleton plus the contract-bound API layer**. Buil
   (`schemas.ts`), the fetch client with typed error mapping (`client.ts`), the WebSocket client with
   backoff reconnect + frame dispatch (`ws.ts`), and TanStack Query hooks (`queries/`).
 - `src/lib/` — pure view-model derivations (reading-vs-setpoint, status rollup, range-tier).
+- `src/features/auth/` — OIDC Authorization-Code + PKCE login against Keycloak (`AuthProvider`,
+  `LoginCallback`), with viewer/operator role gating (`roles.ts`) that disables write affordances
+  for viewers and drives the `UserMenu` sign-in/out.
 - Tests: the Zod layer is checked against the committed contract fixtures; adapters, client, ws, and
   derivations are unit-tested; an `App` smoke test renders the shell.
 
@@ -27,8 +30,9 @@ The 2a feature views (fleet grid, per-greenhouse detail with uPlot charts, setpo
 forms, activity feed) and the **2b backbone** UI — the crop-profile library (`/profiles`),
 per-greenhouse profile assignment, and drift surfacing on the fleet cards + detail — are built.
 
-**Deferred to later slices:** Playwright + Lighthouse, the nginx `proxy`/`frontend` compose
-services and the `Dockerfile`, and the remaining 2b infra (Keycloak/OIDC auth, observability).
+**Deferred to later slices:** Playwright + Lighthouse (e2e / perf), and the remaining 2b
+observability infra (Prometheus/Grafana). The nginx `proxy`, the `Dockerfile`, and Keycloak/OIDC
+auth have all landed.
 
 ## Layout
 

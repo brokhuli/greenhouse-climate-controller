@@ -8,10 +8,11 @@ dashboard API over REST + WebSockets. Conforms to the message schemas in `../con
 Covers **Phase 2a** (the bidirectional telemetry pipeline plus a thin setpoint-edit relay) plus
 the **2b backbone**: crop profiles, setpoint **resolution**, an append-only intended-state /
 provenance ledger, and **reconciliation** (apply-on-change, re-assert on reconnect, drift
-detection). The platform is now the single setpoint authority (RFC-005). Still unauthenticated on
-the trusted local Docker network — Keycloak auth and Prometheus/Grafana observability are the
-remaining 2b slices and are **deferred** (the 2b endpoints therefore run without role gating for
-now; see `../docs/backlog.md`).
+detection). The platform is now the single setpoint authority (RFC-005). **Auth has landed**:
+Keycloak-issued OIDC tokens are validated by the API, which gates every write to the **operator**
+role — reads stay open (a missing token is served as an anonymous viewer; an invalid one is
+rejected). Prometheus/Grafana observability is the one remaining 2b slice and is still **deferred**
+(see `../docs/backlog.md`).
 
 ## Layout
 
