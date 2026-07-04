@@ -72,7 +72,7 @@ fall below the
 [application-gate](./05-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application)
 threshold and **escalate rather than auto-apply**, and persistent divergence is surfaced for
 recalibration. Refitting the parameters from history is **deferred**
-([scope](./11-spec-optimizer-scope.md)) — Phase 3 *detects and flags* drift; it does not auto-tune.
+([scope](./12-spec-optimizer-scope.md)) — Phase 3 *detects and flags* drift; it does not auto-tune.
 
 The crop-safe constraint engine
 ([constraint engine](./05-spec-optimizer-constraints-and-application.md#1-constraint-engine--safety))

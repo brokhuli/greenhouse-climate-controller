@@ -1,9 +1,10 @@
 // Package api is the platform's served HTTP surface: the operator/fleet REST API
 // (frontend-rest contract) plus the WebSocket live channel (frontend-ws). Handlers
 // read from the store and the in-memory fleet state, validate writes, and relay
-// setpoint/time-scale edits down to the controllers. When OIDC is configured (2b) the
-// surface enforces human viewer/operator auth via the auth middleware; when it is not, it
-// runs unauthenticated on the trusted local Docker network (RFC-011), as in 2a.
+// setpoint/time-scale edits down to the controllers. When OIDC is configured (2b) reads are
+// open to anyone (anonymous viewer) and writes require the operator role, enforced via the
+// auth middleware; when it is not, the surface runs unauthenticated on the trusted local
+// Docker network (RFC-011), as in 2a.
 package api
 
 import (
@@ -54,12 +55,13 @@ func New(store *store.Store, fleet *state.Fleet, ing *ingest.Ingester, relay *re
 func (s *Server) routes(router *echo.Echo) {
 	router.GET("/healthz", func(c echo.Context) error { return c.JSON(http.StatusOK, map[string]string{"status": "ok"}) })
 
-	// Every /api call (REST + the WS handshake) must carry a valid token when OIDC is
-	// configured; reads are open to any authenticated role, writes are additionally gated to
-	// operator (platform security §4). When the verifier is nil both are pass-throughs — the
-	// unauthenticated 2a posture (RFC-011).
+	// When OIDC is configured, reads (REST GETs + the WS handshake) are open to anyone,
+	// including anonymous visitors; writes are additionally gated to the operator role
+	// (platform security §4). OptionalAuth validates a token when present so an operator's
+	// claims reach the write gate and the audit trail. When the verifier is nil both are
+	// pass-throughs — the unauthenticated 2a posture (RFC-011).
 	api := router.Group("/api")
-	api.Use(auth.Authenticated(s.verifier))
+	api.Use(auth.OptionalAuth(s.verifier))
 	operator := auth.RequireOperator(s.verifier)
 
 	api.GET("/greenhouses", s.listGreenhouses)

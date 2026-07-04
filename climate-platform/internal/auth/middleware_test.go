@@ -36,8 +36,9 @@ func TestAuthMiddleware(t *testing.T) {
 	}{
 		{"disabled read passes through", nil, false, "", "", http.StatusOK},
 		{"disabled write passes through", nil, true, "", "", http.StatusOK},
-		{"enabled missing token 401", testVerifier(), false, "", "", http.StatusUnauthorized},
-		{"enabled invalid token 401", testVerifier(), false, "Bearer nope", "", http.StatusUnauthorized},
+		{"enabled anonymous read 200", testVerifier(), false, "", "", http.StatusOK},
+		{"enabled anonymous write 401", testVerifier(), true, "", "", http.StatusUnauthorized},
+		{"enabled invalid token read 401", testVerifier(), false, "Bearer nope", "", http.StatusUnauthorized},
 		{"enabled viewer read 200", testVerifier(), false, "Bearer viewer-token", "", http.StatusOK},
 		{"enabled viewer write 403", testVerifier(), true, "Bearer viewer-token", "", http.StatusForbidden},
 		{"enabled operator write 200", testVerifier(), true, "Bearer operator-token", "", http.StatusOK},
@@ -48,7 +49,7 @@ func TestAuthMiddleware(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			router := echo.New()
 			group := router.Group("/api")
-			group.Use(Authenticated(tc.verifier))
+			group.Use(OptionalAuth(tc.verifier))
 			handler := func(c echo.Context) error { return c.NoContent(http.StatusOK) }
 			if tc.operatorOnly {
 				group.GET("/x", handler, RequireOperator(tc.verifier))
@@ -74,11 +75,11 @@ func TestAuthMiddleware(t *testing.T) {
 	}
 }
 
-// TestClaimsReachHandler confirms Authenticated stashes claims for handlers (the audit trail).
+// TestClaimsReachHandler confirms OptionalAuth stashes claims for handlers (the audit trail).
 func TestClaimsReachHandler(t *testing.T) {
 	router := echo.New()
 	group := router.Group("/api")
-	group.Use(Authenticated(testVerifier()))
+	group.Use(OptionalAuth(testVerifier()))
 	group.GET("/whoami", func(c echo.Context) error {
 		claims := ClaimsFrom(c)
 		if claims == nil {

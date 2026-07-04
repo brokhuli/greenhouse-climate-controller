@@ -4,7 +4,6 @@ import { WebStorageStateStore } from "oidc-client-ts";
 import { RoleContext, type AuthState } from "../../hooks/useRole";
 import { setAccessToken, setUnauthorizedHandler } from "../../api/authToken";
 import { deriveRole, parseRoles } from "./roles";
-import { AuthSplash } from "./AuthSplash";
 
 const AUTHORITY = import.meta.env.VITE_OIDC_AUTHORITY;
 const CLIENT_ID = import.meta.env.VITE_OIDC_CLIENT_ID;
@@ -46,12 +45,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
-/** Maps `react-oidc-context` state into `RoleContext`, syncs the token holder, and auto-redirects an
- *  unauthenticated visitor to Keycloak (except while the callback is being processed). */
+/** Maps `react-oidc-context` state into `RoleContext` and syncs the token holder. Anonymous
+ *  visitors are let through as read-only viewers — login is only needed to gain the operator
+ *  (write) role — so nothing forces a redirect to Keycloak on first access. */
 function RoleBridge({ children }: { children: ReactNode }) {
   const auth = useAuth();
   const accessToken = auth.user?.access_token ?? null;
-  const onCallback = window.location.pathname === CALLBACK_PATH;
 
   useEffect(() => {
     setAccessToken(accessToken);
@@ -59,21 +58,15 @@ function RoleBridge({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     setUnauthorizedHandler(() => {
+      // Only bounce a signed-in user whose token expired; never yank an anonymous viewer
+      // (who holds no token) into the login flow over a stray 401.
+      if (!accessToken) return;
       void auth.signinRedirect({
         state: { returnTo: window.location.pathname + window.location.search },
       });
     });
     return () => setUnauthorizedHandler(null);
-  }, [auth]);
-
-  useEffect(() => {
-    if (onCallback) return;
-    if (!auth.isAuthenticated && !auth.isLoading && !auth.activeNavigator && !auth.error) {
-      void auth.signinRedirect({
-        state: { returnTo: window.location.pathname + window.location.search },
-      });
-    }
-  }, [auth, onCallback]);
+  }, [auth, accessToken]);
 
   const role = deriveRole(parseRoles(accessToken));
   const value: AuthState = {
@@ -90,14 +83,7 @@ function RoleBridge({ children }: { children: ReactNode }) {
     signOut: () => void auth.signoutRedirect(),
   };
 
-  // Hold the app behind a splash until authenticated; the callback route renders its own splash.
-  if (!onCallback && !auth.isAuthenticated) {
-    return (
-      <RoleContext.Provider value={value}>
-        <AuthSplash error={auth.error?.message} />
-      </RoleContext.Provider>
-    );
-  }
-
+  // No auth gate: render the app for anonymous viewers and signed-in users alike. The
+  // `/login/callback` route renders its own splash while the code exchange completes.
   return <RoleContext.Provider value={value}>{children}</RoleContext.Provider>;
 }

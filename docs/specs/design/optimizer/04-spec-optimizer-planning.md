@@ -59,7 +59,7 @@ All five levers are configurable ([configuration](./10-spec-optimizer-configurat
 > at `time_scale ≠ 1.0`, telemetry arrives faster/slower than wall-clock and these levers would
 > desync from the plant — so the [input gate](./06-spec-optimizer-input-gating.md) holds
 > the cycle *before* the planner is invoked rather than this layer compensating. The optimizer is
-> explicitly not required to operate off 1× ([scope](./11-spec-optimizer-scope.md)); it resumes when
+> explicitly not required to operate off 1× ([scope](./12-spec-optimizer-scope.md)); it resumes when
 > the controller returns to real-time.
 
 ### Determinism & reproducibility
@@ -104,4 +104,4 @@ and are always subordinate to the crop-safe bounds enforced by the
 [constraint engine](./05-spec-optimizer-constraints-and-application.md#1-constraint-engine--safety).
 The Phase 3 cost signal is deliberately local and static: a configured time-of-use schedule, not an
 external tariff feed. Live price feeds or site-wide load coordination are deferred with the other
-shared-input concerns in [scope](./11-spec-optimizer-scope.md).
+shared-input concerns in [scope](./12-spec-optimizer-scope.md).

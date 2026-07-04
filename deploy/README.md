@@ -14,10 +14,13 @@ simulation, so there is no hardware dependency). The remaining 2b observability 
 Grafana) are a deferred slice — commented placeholders in [`docker-compose.yml`](./docker-compose.yml).
 Full topology: [08-spec-platform-operations.md](../docs/specs/design/platform/08-spec-platform-operations.md#2-deployment).
 
-**Auth is on (2b).** The `api` validates Keycloak-issued tokens and gates every write to the
-**operator** role; reads need any authenticated user. Two users are seeded from
+**Auth is on (2b).** Reads are open to anyone — the SPA loads the fleet, dashboards, and live
+telemetry with no login. The `api` gates every **write** to the **operator** role, validating
+the Keycloak-issued token when one is present (an invalid token is rejected; a missing one is
+served as an anonymous viewer). Two users are seeded from
 [`keycloak/realm.json`](./keycloak/realm.json): **`operator`/`operator`** and **`viewer`/`viewer`**.
-Open `http://localhost:8080`, and the SPA redirects you to Keycloak to sign in.
+Open `http://localhost:8080` to browse read-only; click **Sign in** and authenticate as
+`operator` to unlock writes.
 
 ## Bring up the stack (platform + N controllers)
 

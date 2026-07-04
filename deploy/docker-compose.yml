@@ -71,8 +71,10 @@ services:
         condition: service_healthy
       mqtt:
         condition: service_healthy
-      auth: # (2b) discovery needs Keycloak up; the verifier also retries, so service_started suffices
-        condition: service_started
+      auth: # (2b) wait until Keycloak's realm discovery is actually served (healthcheck below), so the
+        # verifier's OIDC discovery can't lose the boot race on a cold realm import; the verifier still
+        # retries as a backstop
+        condition: service_healthy
     environment:
       PLATFORM_DATABASE_URL: postgres://greenhouse:${POSTGRES_PASSWORD:?set in deploy/.env}@db:5432/greenhouse?sslmode=disable
       PLATFORM_MQTT_BROKER_URL: tcp://mqtt:1883
@@ -111,6 +113,19 @@ services:
       KC_HTTP_ENABLED: "true"
     volumes:
       - ./keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro
+    healthcheck:
+      # Keycloak's image ships bash but no curl/wget, so probe the realm's OIDC discovery endpoint
+      # over bash's /dev/tcp: "healthy" means the realm is imported and discovery is actually being
+      # served (not merely that the port is open) — exactly what the api's verifier needs.
+      test:
+        - CMD
+        - bash
+        - -c
+        - 'exec 3<>/dev/tcp/127.0.0.1/8080 && printf "GET /auth/realms/greenhouse/.well-known/openid-configuration HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" >&3 && head -n1 <&3 | grep -q 200'
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 20s
     deploy:
       resources:
         limits:

@@ -11,12 +11,15 @@ import (
 // Authenticated for RequireOperator (and handlers) to read.
 const contextKey = "auth.claims"
 
-// Authenticated requires a valid bearer token on every request in the group and stashes the
-// resulting claims for downstream checks. When the verifier is nil (OIDC not configured) it
-// is a pass-through — the unauthenticated 2a posture. The token is read from the
+// OptionalAuth validates a bearer token when one is present and stashes the resulting claims
+// for downstream checks, but lets a token-less request through as an anonymous viewer — reads
+// are open to anyone; writes are gated separately by RequireOperator. A present-but-invalid
+// token is still rejected with 401 so an expired operator session re-authenticates cleanly
+// rather than silently dropping to read-only. When the verifier is nil (OIDC not configured)
+// it is a pass-through — the unauthenticated 2a posture. The token is read from the
 // `Authorization: Bearer` header or, for the WebSocket handshake where a browser cannot set
 // headers, from the `access_token` query parameter.
-func Authenticated(verifier *Verifier) echo.MiddlewareFunc {
+func OptionalAuth(verifier *Verifier) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			if verifier == nil {
@@ -24,7 +27,7 @@ func Authenticated(verifier *Verifier) echo.MiddlewareFunc {
 			}
 			rawToken := bearerToken(c.Request())
 			if rawToken == "" {
-				return unauthorized(c, "missing bearer token")
+				return next(c) // anonymous viewer — no claims stashed
 			}
 			claims, err := verifier.Verify(c.Request().Context(), rawToken)
 			if err != nil {
@@ -36,9 +39,10 @@ func Authenticated(verifier *Verifier) echo.MiddlewareFunc {
 	}
 }
 
-// RequireOperator gates a write route on the operator role. It assumes Authenticated has
-// already run (same group), so a missing claim means the token lacked authentication. When
-// the verifier is nil it is a pass-through, matching Authenticated.
+// RequireOperator gates a write route on the operator role. It assumes OptionalAuth has
+// already run (same group), so a missing claim means the request is anonymous (no token) —
+// answered with 401 so the caller knows to sign in. When the verifier is nil it is a
+// pass-through, matching OptionalAuth.
 func RequireOperator(verifier *Verifier) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {

@@ -363,7 +363,7 @@ weather feed**, and nothing else from the deferred list.
 
 | Deferred / excluded | Why / where it belongs |
 |---|---|
-| Site-wide orchestration | Coordinated behavior across greenhouses (staggering loads, sharing constrained resources) still needs a shared-infrastructure model that is out of scope; like Phase 3, Phase 4 plans **one greenhouse at a time** ([P3 §15](./optimizer/11-spec-optimizer-scope.md), [physical-system-multi.md](./physical-system-multi.md#out-of-scope-for-this-site-model)) |
+| Site-wide orchestration | Coordinated behavior across greenhouses (staggering loads, sharing constrained resources) still needs a shared-infrastructure model that is out of scope; like Phase 3, Phase 4 plans **one greenhouse at a time** ([P3 §15](./optimizer/12-spec-optimizer-scope.md), [physical-system-multi.md](./physical-system-multi.md#out-of-scope-for-this-site-model)) |
 | Shared fuel / supply contention | The burner draws from an **assumed-infinite** fuel supply; shared-tank depletion and contention remain unmodeled site-level physics ([physical-system-multi.md — Common Inputs](./physical-system-multi.md#common-inputs--out-of-scope)) |
 | Central heating plant (boiler) | The coupled device modeled is a **per-greenhouse burner**, not a site boiler piping heat to many houses ([physical-system-multi.md](./physical-system-multi.md#common-inputs--out-of-scope)) |
 | Direct actuator commanding by the optimizer | Driving actuators — including the burner and the device choice — is **controller-owned** ([§4](#4-actuator-selection-coordination-controller-layer)); the optimizer's downward influence stays **setpoint-only**, through Phase 2 |

@@ -40,17 +40,23 @@ runs as a container in the stack ([operations](./08-spec-platform-operations.md#
 
 ### Login & token flow
 
-1. The browser SPA, having no session, redirects to Keycloak via `/auth`
+**Reads need no login.** Anonymous visitors get read-only viewer access — the SPA loads the
+fleet, dashboards, and live telemetry without a session, and the API serves reads without a
+token. Login is required only to gain the **operator** (write) role. So the flow below is
+triggered when a visitor chooses to sign in (or a write is attempted), not on first access.
+
+1. When the visitor signs in, the browser SPA redirects to Keycloak via `/auth`
    (**Authorization Code + PKCE** — the public-client flow, no client secret in the
    browser; see [frontend tech stack](../frontend/04-spec-frontend-tech-stack.md)).
 2. The user authenticates against Keycloak; Keycloak redirects back with an
    authorization code, which the SPA exchanges for an **access token** (JWT) and a
    refresh token.
 3. The SPA attaches the access token as a `Bearer` credential on every API call.
-4. The Go API **validates** the token on each request — signature against Keycloak's
+4. The Go API **validates** the token when one is present — signature against Keycloak's
    published JWKS, plus issuer/audience/expiry — then reads the roles claim and applies
-   the capability rules below. No per-request round-trip to Keycloak is needed for
-   validation.
+   the capability rules below. A request with **no** token is served as an anonymous viewer
+   (reads only); a request with a **present-but-invalid** token is rejected (401). No
+   per-request round-trip to Keycloak is needed for validation.
 
 ---
 
@@ -62,6 +68,11 @@ Two roles are sufficient for the platform:
 |---|---|
 | Viewer | Read fleet, telemetry, analytics, status |
 | Operator | All of Viewer **plus** every write-path action (assign/apply profiles, ad-hoc setpoint edits) |
+
+The **viewer** capability is the public baseline: it is granted to any request, with or
+without a token, so dashboards and telemetry are open to anyone. Signing in as a Keycloak
+`gh-viewer` user is therefore an *optional* named read-only identity, not a prerequisite to
+read — what login actually buys is the **operator** role and its write access.
 
 Keycloak realm roles (e.g. `gh-viewer`, `gh-operator`) are mapped onto these two
 platform roles in the API's authorization layer. Keeping the mapping in the API — not
@@ -88,20 +99,23 @@ Finer-grained RBAC and multi-tenant identity are out of scope
 
 ## 4. Capability matrix
 
-How the two roles line up against the [API surface](./09-spec-platform-interfaces.md#3-api-surface-inventory):
+How the roles line up against the [API surface](./09-spec-platform-interfaces.md#3-api-surface-inventory).
+The **Anonymous** column is a caller with no token; it holds the viewer capability:
 
-| Surface | Viewer | Operator |
-|---|---|---|
-| Read fleet / per-greenhouse status | ✓ | ✓ |
-| Telemetry range queries / analytics | ✓ | ✓ |
-| Browse crop-profile library | ✓ | ✓ |
-| Register / retire greenhouses | — | ✓ |
-| Ad-hoc setpoint edits | — | ✓ |
-| Create/edit crop profiles | — | ✓ |
-| Assign profile/stage + apply/reconcile | — | ✓ |
-| `POST /setpoints` (optimizer write path) | — | ✓ |
+| Surface | Anonymous | Viewer | Operator |
+|---|---|---|---|
+| Read fleet / per-greenhouse status | ✓ | ✓ | ✓ |
+| Telemetry range queries / analytics | ✓ | ✓ | ✓ |
+| Live telemetry stream (WebSocket) | ✓ | ✓ | ✓ |
+| Browse crop-profile library | ✓ | ✓ | ✓ |
+| Register / retire greenhouses | — | — | ✓ |
+| Ad-hoc setpoint edits | — | — | ✓ |
+| Create/edit crop profiles | — | — | ✓ |
+| Assign profile/stage + apply/reconcile | — | — | ✓ |
+| `POST /setpoints` (optimizer write path) | — | — | ✓ |
 
-The rule reduces to: **viewers read, operators read and write.** Every write surface
+The rule reduces to: **anyone reads, operators read and write.** A write attempted with no
+token is answered 401 (sign in); with a non-operator token, 403. Every write surface
 is an operator-only action **for human actors**. The `POST /setpoints` row is the one surface a
 **service** actor also reaches: in `SERVICE_AUTH_MODE=oidc` the optimizer calls it with the narrow
 `setpoints:write` role ([§3](#two-actor-types-human-and-service)) — it cannot touch any other write
@@ -114,8 +128,9 @@ surface (registration, profiles, assignments), which remain operator-only.
 In 2a the platform runs with **no authentication**: every endpoint is open on the
 trusted local Docker network. This is deliberate — it keeps the MVP focused on the
 telemetry pipeline and the setpoint relay, and adding Keycloak in 2b changes **no
-committed interface** (the same write endpoints simply become operator-gated). The
-frontend's relying-party client is absent in 2a and added in 2b
+committed interface**: reads stay open to anyone (now as an explicit anonymous-viewer
+posture rather than trusted-network happenstance), and only the write endpoints become
+operator-gated. The frontend's relying-party client is absent in 2a and added in 2b
 ([frontend tech stack](../frontend/04-spec-frontend-tech-stack.md)).
 
 ### The service-to-service plane: trusted by default, authenticatable on demand
