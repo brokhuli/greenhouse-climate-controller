@@ -16,9 +16,13 @@ func (s *Server) listGreenhouses(c echo.Context) error {
 	if err != nil {
 		return s.fail(c, err)
 	}
+	drift, err := s.store.ListDrift(ctx)
+	if err != nil {
+		return s.fail(c, err)
+	}
 	summaries := make([]greenhouseSummaryDTO, 0, len(greenhouses))
 	for _, greenhouse := range greenhouses {
-		summaries = append(summaries, s.summaryOf(greenhouse))
+		summaries = append(summaries, s.summaryOf(greenhouse, drift[greenhouse.ID]))
 	}
 	return c.JSON(http.StatusOK, summaries)
 }
@@ -39,6 +43,9 @@ func (s *Server) registerGreenhouse(c echo.Context) error {
 		Endpoint: store.Endpoint{
 			RESTBaseURL:   req.Controller.RESTBaseURL,
 			MQTTTopicRoot: req.Controller.MQTTTopicRoot,
+			// Optional per-controller pre-shared token (RFC-011); the platform presents it on every
+			// downward REST write when the controller is hardened, nil otherwise.
+			BearerToken: req.Controller.BearerToken,
 		},
 	}
 	if err := s.store.Register(ctx, registration); err != nil {
@@ -49,7 +56,7 @@ func (s *Server) registerGreenhouse(c echo.Context) error {
 	}
 	s.ing.Add(req.ID, req.Controller.MQTTTopicRoot)
 	s.log.Info("greenhouse registered", "id", req.ID, "rest", req.Controller.RESTBaseURL)
-	return c.JSON(http.StatusCreated, s.summaryOf(store.Greenhouse{ID: req.ID, DisplayName: req.DisplayName, Crop: req.Crop}))
+	return c.JSON(http.StatusCreated, s.summaryOf(store.Greenhouse{ID: req.ID, DisplayName: req.DisplayName, Crop: req.Crop}, false))
 }
 
 func (s *Server) getGreenhouse(c echo.Context) error {
@@ -98,13 +105,30 @@ func (s *Server) getGreenhouse(c echo.Context) error {
 	if err != nil {
 		return s.fail(c, err)
 	}
+	recon, _, err := s.store.GetReconState(ctx, id)
+	if err != nil {
+		return s.fail(c, err)
+	}
+	// When the platform holds intended state for this greenhouse, report its intended global
+	// setpoints (authoritative, updated synchronously on assignment/edit) so the detail does not lag
+	// a controller tick; the controller's per-zone config is kept and any divergence shows as drift.
+	current, hasIntended, err := s.store.CurrentRevision(ctx, id)
+	if err != nil {
+		return s.fail(c, err)
+	}
+	if hasIntended {
+		setpoints, err = overlayGlobalSetpoints(setpoints, current.Setpoints)
+		if err != nil {
+			return s.fail(c, err)
+		}
+	}
 	live := s.liveFields(id)
 	return c.JSON(http.StatusOK, greenhouseDetailDTO{
 		ID:          greenhouse.ID,
 		DisplayName: greenhouse.DisplayName,
 		Crop:        greenhouse.Crop,
 		Status:      live.Status,
-		Drift:       false,
+		Drift:       recon.Drift,
 		TimeScale:   live.TimeScale,
 		Setpoints:   setpoints,
 		ZoneStatus:  zoneStatus,
@@ -126,15 +150,16 @@ func (s *Server) retireGreenhouse(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-// summaryOf overlays the in-memory live state onto a registry row.
-func (s *Server) summaryOf(greenhouse store.Greenhouse) greenhouseSummaryDTO {
+// summaryOf overlays the in-memory live state and the reconciliation drift flag onto a
+// registry row.
+func (s *Server) summaryOf(greenhouse store.Greenhouse, drift bool) greenhouseSummaryDTO {
 	live := s.liveFields(greenhouse.ID)
 	return greenhouseSummaryDTO{
 		ID:          greenhouse.ID,
 		DisplayName: greenhouse.DisplayName,
 		Crop:        greenhouse.Crop,
 		Status:      live.Status,
-		Drift:       false,
+		Drift:       drift,
 		TimeScale:   live.TimeScale,
 		Climate:     climateDTO{Temperature: live.Temperature, Humidity: live.Humidity, CO2: live.CO2, DLI: live.DLI, SetpointTemperature: nil},
 	}

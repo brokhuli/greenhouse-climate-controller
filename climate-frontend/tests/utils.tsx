@@ -5,6 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { StreamProvider } from "../src/app/StreamProvider";
 import { ToastProvider } from "../src/components/ui/ToastProvider";
 import { ThemeProvider } from "../src/hooks/ThemeProvider";
+import { RoleContext, type AuthState, type PlatformRole } from "../src/hooks/useRole";
 import type {
   EventEntry,
   GreenhouseDetail,
@@ -20,26 +21,51 @@ export function makeClient(): QueryClient {
   });
 }
 
+/** Build an auth state for a given role (used to render as viewer/operator in tests). */
+export function roleState(role: PlatformRole): AuthState {
+  return {
+    authEnabled: true,
+    isAuthenticated: true,
+    isLoading: false,
+    role,
+    isOperator: role === "operator",
+    username: role,
+    signIn: () => {},
+    signOut: () => {},
+  };
+}
+
 /**
  * Render under the full provider stack (query cache, theme, toasts, the live stream, and a memory
- * router). Seed the cache before rendering so view containers resolve without the network.
+ * router). Seed the cache before rendering so view containers resolve without the network. Pass
+ * `role` to render as a viewer/operator; omitting it uses the open-operator default (auth disabled),
+ * matching the unauthenticated posture existing tests assume.
  */
 export function renderWithProviders(
   ui: ReactElement,
-  options: { client?: QueryClient; route?: string } = {},
+  options: { client?: QueryClient; route?: string; role?: PlatformRole } = {},
 ) {
   const client = options.client ?? makeClient();
-  const wrapper = ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={client}>
-      <ThemeProvider>
-        <ToastProvider>
-          <StreamProvider>
-            <MemoryRouter initialEntries={[options.route ?? "/"]}>{children}</MemoryRouter>
-          </StreamProvider>
-        </ToastProvider>
-      </ThemeProvider>
-    </QueryClientProvider>
-  );
+  const wrapper = ({ children }: { children: ReactNode }) => {
+    const routed = <MemoryRouter initialEntries={[options.route ?? "/"]}>{children}</MemoryRouter>;
+    return (
+      <QueryClientProvider client={client}>
+        <ThemeProvider>
+          <ToastProvider>
+            <StreamProvider>
+              {options.role ? (
+                <RoleContext.Provider value={roleState(options.role)}>
+                  {routed}
+                </RoleContext.Provider>
+              ) : (
+                routed
+              )}
+            </StreamProvider>
+          </ToastProvider>
+        </ThemeProvider>
+      </QueryClientProvider>
+    );
+  };
   return { client, ...render(ui, { wrapper }) };
 }
 

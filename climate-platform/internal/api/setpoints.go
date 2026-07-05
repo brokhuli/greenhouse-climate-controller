@@ -3,31 +3,68 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/labstack/echo/v4"
 
+	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/auth"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/domain"
-	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/ws"
+	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/reconcile"
 )
 
-// editSetpoints is the 2a thin relay: validate the partial edit, forward it to the
-// controller's REST PATCH /greenhouses/{id}/setpoints, and return the response verbatim so
-// its 200/404/422 propagates unchanged (RFC-005). A successful edit is recorded as a
-// change-attribution audit event and pushed live.
+// editSetpoints is the operator's ad-hoc setpoint edit (200). In 2b it is no longer a thin relay:
+// the edit's global fields are merged onto the greenhouse's current intended state (or the
+// controller's reported setpoints when none exists yet) and applied through the reconciler, so it
+// becomes sticky intended state — re-asserted on reconnect rather than silently reverted
+// (crop-profiles §5).
 func (s *Server) editSetpoints(c echo.Context) error {
+	return s.applySetpointWrite(c, domain.SourceOperatorEdit, "operator", "ad-hoc edit", http.StatusOK)
+}
+
+// submitSetpoints is the optimizer's single-authority setpoint write path (RFC-005 / RFC-011,
+// POST /setpoints). It shares editSetpoints' merge/validate/reconcile machinery but records
+// optimizer provenance and returns 202 Accepted (this surface's contract success code). Its gate
+// is SERVICE_AUTH_MODE-dependent (server route): in the default trusted_network mode it accepts the
+// untokened internal call; in oidc mode it requires a setpoints:write service token (or operator).
+func (s *Server) submitSetpoints(c echo.Context) error {
+	actor := s.setpointActor(c, "optimizer")
+	return s.applySetpointWrite(c, domain.SourceOptimizer, actor, "optimizer setpoint submission", http.StatusAccepted)
+}
+
+// setpointActor is the audit actor for a setpoint write: the authenticated token's username (or
+// subject) when present, else the fallback for the untokened trusted_network path.
+func (s *Server) setpointActor(c echo.Context, fallback string) string {
+	if claims := auth.ClaimsFrom(c); claims != nil {
+		if claims.Username != "" {
+			return claims.Username
+		}
+		if claims.Subject != "" {
+			return claims.Subject
+		}
+	}
+	return fallback
+}
+
+// applySetpointWrite is the shared body of the operator edit and the optimizer submission: decode
+// and validate the partial edit, merge it onto the reconciler's baseline, and apply it as sticky
+// intended state under the given provenance. An out-of-range value is rejected 422; an unreachable
+// controller with no prior intended state is 503; a controller that rejects the delivery has its
+// status/body passed through; otherwise the write is accepted (delivered, or held when offline) and
+// the resulting bundle returned with successStatus.
+func (s *Server) applySetpointWrite(c echo.Context, source domain.SetpointSource, actor, description string, successStatus int) error {
 	ctx := c.Request().Context()
 	id := c.Param("id")
-	endpoint, found, err := s.store.GetEndpoint(ctx, id)
+	exists, err := s.store.Exists(ctx, id)
 	if err != nil {
 		return s.fail(c, err)
 	}
-	if !found {
+	if !exists {
 		return respondNotFound(c, "greenhouse not found")
 	}
+
 	raw, err := io.ReadAll(c.Request().Body)
 	if err != nil {
 		return respondError(c, http.StatusBadRequest, "could not read body")
@@ -46,33 +83,71 @@ func (s *Server) editSetpoints(c echo.Context) error {
 		return respondValidation(c, verr)
 	}
 
-	// Zone targets are a separate controller resource; the controller's /setpoints PATCH owns only
-	// the global setpoints, so strip zones from the relayed body (the platform still accepts them in
-	// the frontend-rest patch — zone-target editing is not wired through this path in 2a).
-	relayBody, err := stripZones(raw)
+	baseline, err := s.reconcile.Baseline(ctx, id)
 	if err != nil {
-		return respondError(c, http.StatusBadRequest, "invalid JSON body")
-	}
-	resp, err := s.relay.Do(ctx, http.MethodPatch, endpoint.RESTBaseURL, controllerPath(id, "/setpoints"), endpoint.BearerToken, relayBody)
-	if err != nil {
+		if errors.Is(err, reconcile.ErrUnknownGreenhouse) {
+			return respondNotFound(c, "greenhouse not found")
+		}
+		// No intended state yet and the controller could not be reached to seed one.
 		return respondError(c, http.StatusServiceUnavailable, "controller unreachable")
 	}
-	if resp.Status >= 200 && resp.Status < 300 {
-		event := domain.Event{
-			GreenhouseID: id,
-			TS:           time.Now().UTC(),
-			Kind:         "setpoint_edit",
-			Severity:     "info",
-			Message:      "setpoint edit applied",
-			Source:       "operator",
-		}
-		if err := s.store.InsertEvent(ctx, event); err != nil {
-			s.log.Error("audit setpoint edit", "id", id, "err", err)
-		}
-		s.hub.Broadcast(ws.NewEvent(event))
-		s.log.Info("setpoint edit relayed", "id", id, "status", resp.Status)
+	candidate := applyGlobalPatch(baseline, patch)
+	if verr := validateSetpoints(candidate); verr != nil {
+		return respondValidation(c, verr)
 	}
-	return c.JSONBlob(resp.Status, resp.Body)
+
+	outcome, err := s.reconcile.Apply(ctx, id, candidate, source, actor, description)
+	if err != nil {
+		if errors.Is(err, reconcile.ErrUnknownGreenhouse) {
+			return respondNotFound(c, "greenhouse not found")
+		}
+		return s.fail(c, err)
+	}
+	if outcome.ControllerStatus != 0 && !outcome.Delivered && !outcome.Deferred {
+		return c.JSONBlob(outcome.ControllerStatus, outcome.ControllerBody)
+	}
+	return c.JSON(successStatus, outcome.Setpoints)
+}
+
+// applyGlobalPatch merges a partial edit's global setpoint fields onto a baseline bundle. Zone
+// targets are carried from the baseline unchanged: ad-hoc zone-target edits are out of the 2b
+// backbone (zone targets are governed by the assigned crop profile), mirroring 2a's decision not
+// to relay zones through this path.
+func applyGlobalPatch(base domain.Setpoints, patch setpointsPatchDTO) domain.Setpoints {
+	if patch.TemperatureDayC != nil {
+		base.TemperatureDayC = *patch.TemperatureDayC
+	}
+	if patch.TemperatureNightC != nil {
+		base.TemperatureNightC = *patch.TemperatureNightC
+	}
+	if patch.DayStart != nil {
+		base.DayStart = *patch.DayStart
+	}
+	if patch.DayEnd != nil {
+		base.DayEnd = *patch.DayEnd
+	}
+	if patch.HumidityLowPct != nil {
+		base.HumidityLowPct = *patch.HumidityLowPct
+	}
+	if patch.HumidityHighPct != nil {
+		base.HumidityHighPct = *patch.HumidityHighPct
+	}
+	if patch.HumidityDeadbandPct != nil {
+		base.HumidityDeadbandPct = *patch.HumidityDeadbandPct
+	}
+	if patch.CO2TargetPpm != nil {
+		base.CO2TargetPPM = *patch.CO2TargetPpm
+	}
+	if patch.CO2VentInterlockThresholdPct != nil {
+		base.CO2VentInterlockThresholdPct = *patch.CO2VentInterlockThresholdPct
+	}
+	if patch.VPDTargetKpa != nil {
+		base.VPDTargetKPa = *patch.VPDTargetKpa
+	}
+	if patch.DLITargetMol != nil {
+		base.DLITargetMol = *patch.DLITargetMol
+	}
+	return base
 }
 
 // decodeSetpointsPatch parses the patch body, rejecting unknown fields to honor the
@@ -89,6 +164,9 @@ func decodeSetpointsPatch(raw []byte) (setpointsPatchDTO, error) {
 // (Go reports `json: unknown field "x"`); ok is false for any other decode error.
 func unknownFieldName(err error) (string, bool) {
 	const prefix = "json: unknown field "
+	if err == nil {
+		return "", false
+	}
 	if msg := err.Error(); strings.HasPrefix(msg, prefix) {
 		return strings.Trim(strings.TrimPrefix(msg, prefix), `"`), true
 	}

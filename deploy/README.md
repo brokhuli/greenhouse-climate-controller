@@ -2,50 +2,89 @@
 
 Root orchestration for the local stack — **Docker Compose**.
 
-The eventual stack is the full Phase 2 platform (API, database, reverse proxy, frontend, auth,
-observability) plus the MQTT broker, running with a single command — and the cross-phase
-end-to-end harness used for integration testing.
+The stack is the full Phase 2 platform — the MQTT broker, TimescaleDB, the Go `api`, Keycloak
+(`auth`), and the nginx `proxy` that fronts everything — plus the generated Phase 1 controllers,
+running with a single command.
 
-**Today (Phase 2a backend) the live services are the Mosquitto broker, TimescaleDB, and the Go
-platform `api`.** The React SPA and its nginx `proxy` are a later slice, so the `api` is exposed
-on host port `8080` directly. The Phase 1 controllers run as **generated containers** (the HAL is
-pure simulation, so there is no hardware dependency); the 2b services (auth, Prometheus, Grafana)
-remain commented placeholders in [`docker-compose.yml`](./docker-compose.yml). Full topology:
-[08-spec-platform-operations.md](../docs/specs/design/platform/08-spec-platform-operations.md#2-deployment).
+**The `proxy` is the single entry point: everything is reached at `http://localhost:8080`** — it
+serves the built React SPA and reverse-proxies `/api` (REST + WebSocket) and `/auth` (Keycloak). The
+`api` is no longer exposed directly. The `proxy` service consolidates the spec's `proxy` + `frontend`
+into one nginx image. The Phase 1 controllers run as **generated containers** (the HAL is pure
+simulation, so there is no hardware dependency). The remaining 2b observability services (Prometheus,
+Grafana) are a deferred slice — commented placeholders in [`docker-compose.yml`](./docker-compose.yml).
+Full topology: [08-spec-platform-operations.md](../docs/specs/design/platform/08-spec-platform-operations.md#2-deployment).
+
+**Auth is on (2b).** Reads are open to anyone — the SPA loads the fleet, dashboards, and live
+telemetry with no login. The `api` gates every **write** to the **operator** role, validating
+the Keycloak-issued token when one is present (an invalid token is rejected; a missing one is
+served as an anonymous viewer). Two users are seeded from
+[`keycloak/realm.json`](./keycloak/realm.json): **`operator`/`operator`** and **`viewer`/`viewer`**.
+Open `http://localhost:8080` to browse read-only; click **Sign in** and authenticate as
+`operator` to unlock writes.
 
 ## Bring up the stack (platform + N controllers)
 
 ```sh
-# 1. Set the database password.
+# 1. Set the DB password + Keycloak admin password.
 cp deploy/.env.example deploy/.env
 
 # 2. Generate N controller services (per-greenhouse TOML + override + register.sh).
 bash deploy/scripts/gen-controllers.sh 2
 
-# 3. Build + start broker, DB, API, and the N controllers.
+# 3. Build + start broker, DB, API, Keycloak, proxy, and the N controllers.
 docker compose --env-file deploy/.env \
     -f deploy/docker-compose.yml -f deploy/docker-compose.override.yml up -d --build
 
 # 4. Register the greenhouses with the platform (ingest rejects unregistered ids).
+#    register.sh fetches an operator token automatically (deploy/scripts/get-token.sh).
 bash deploy/controllers/register.sh
 ```
 
-Then exercise the API on `http://localhost:8080`:
+Open the dashboard at `http://localhost:8080` and sign in as `operator` (writes) or `viewer`
+(read-only). To exercise the API with `curl`, grab a token first — reads work with any user, writes
+need `operator`:
 
 ```sh
-curl localhost:8080/api/greenhouses                                   # fleet, both online
-curl "localhost:8080/api/greenhouses/gh-a/telemetry?from=2026-06-23T00:00:00Z&to=2026-06-24T00:00:00Z"
-curl "localhost:8080/api/greenhouses/gh-a/analytics?from=2026-06-23T00:00:00Z&to=2026-06-24T00:00:00Z&interval=5m"
+TOKEN="$(bash deploy/scripts/get-token.sh)"                            # operator by default
+curl -H "Authorization: Bearer $TOKEN" localhost:8080/api/greenhouses  # fleet, both online
+curl -H "Authorization: Bearer $TOKEN" \
+     "localhost:8080/api/greenhouses/gh-a/analytics?from=2026-06-23T00:00:00Z&to=2026-06-24T00:00:00Z&interval=5m"
 curl -X PATCH localhost:8080/api/greenhouses/gh-a/setpoints \
-     -H 'Content-Type: application/json' -d '{"temperature_day_c":23}'   # relayed to the controller
-curl -X PATCH localhost:8080/api/sim/time-scale \
-     -H 'Content-Type: application/json' -d '{"scale":4}'                # fleet fast-forward
-# WebSocket live frames (telemetry/status/event):
-#   wscat -c ws://localhost:8080/api/stream
+     -H "Authorization: Bearer $TOKEN" \
+     -H 'Content-Type: application/json' -d '{"temperature_day_c":23}'   # operator-only; relayed to the controller
+# A viewer token (KC_USER=viewer KC_PASS=viewer bash deploy/scripts/get-token.sh) gets 403 on writes.
+# WebSocket live frames pass the token as a query param:
+#   wscat -c "ws://localhost:8080/api/stream?access_token=$TOKEN"
 ```
 
 `gen-controllers.sh N` is the lever for **performance testing** under different greenhouse counts
 (operations §2). Generated files (`docker-compose.override.yml`, `controllers/`) are git-ignored.
+
+## Service-auth hardening (RFC-011, dormant by default)
+
+Beyond the human viewer/operator auth above, two internal **service** write boundaries can be hardened
+for a multi-host posture. Both are **off by default** — the single-host stack behaves as documented above.
+
+- **Optimizer → `POST /setpoints`.** `PLATFORM_SERVICE_AUTH_MODE` (in the `api` env, default
+  `trusted_network`) gates the optimizer's setpoint write path. Set it to `oidc` and `POST
+  /api/greenhouses/{id}/setpoints` requires a Keycloak **client-credentials** token carrying the narrow
+  `setpoints:write` role (or an operator token); the dormant `optimizer` client lives in
+  [`keycloak/realm.json`](./keycloak/realm.json). Acquire one with the client secret:
+
+  ```sh
+  curl -s -X POST localhost:8080/auth/realms/greenhouse/protocol/openid-connect/token \
+       -d grant_type=client_credentials -d client_id=optimizer -d client_secret=dev-optimizer-secret
+  # → present the access_token as `Authorization: Bearer …` on POST /setpoints (202 on success).
+  ```
+  Rotate `dev-optimizer-secret` for any real deployment. In the default `trusted_network` mode the call
+  is accepted untokened, exactly as today.
+
+- **Platform → controller REST.** Each controller supports an optional `[api].auth_token`; when set it
+  requires a matching `Bearer` on its write endpoints (reads stay open). Run
+  `CONTROLLER_AUTH_TOKENS=1 bash deploy/scripts/gen-controllers.sh N` to mint one per controller — the
+  generator writes it into each controller's TOML and registers the greenhouse with the matching
+  `bearer_token`, so the platform presents it on every downward call. Unset (default) → controllers stay
+  unauthenticated.
 
 ## Inject demo faults
 

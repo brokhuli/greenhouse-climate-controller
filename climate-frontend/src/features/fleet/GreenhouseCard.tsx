@@ -2,6 +2,7 @@ import { memo } from "react";
 import { Link } from "react-router-dom";
 import { ChevronRight } from "lucide-react";
 import type { Connectivity, GreenhouseSummary, Reading } from "../../api/schemas";
+import { useAssignment, useProfile } from "../../api/queries/profiles";
 import { liveSeriesKey, useLiveSeries } from "../../hooks/useLiveSeries";
 import { formatGreenhouseLabel, mergeReadings } from "../../lib/derivations";
 import { MetricTile } from "../../components/ui/MetricTile";
@@ -41,6 +42,8 @@ function GreenhouseCardImpl({
   windowMs: number;
 }) {
   const live = useLiveSeries(summary.id);
+  const assignment = useAssignment(summary.id);
+  const profile = useProfile(assignment.data?.profileId ?? "");
   // History (batched REST seed) is the base; the live WebSocket tail wins on timestamp collisions.
   const points = mergeReadings(history, live.get(liveSeriesKey("temperature")) ?? [], {
     windowMs,
@@ -48,6 +51,9 @@ function GreenhouseCardImpl({
   const offline = summary.status === "offline";
   const showSpeed = summary.timeScale != null && summary.timeScale !== 1;
   const accent = accentColor(summary.status, summary.drift);
+  const profileLabel = assignment.data
+    ? (profile.data?.name ?? assignment.data.profileId)
+    : "No profile assigned";
 
   return (
     <Link
@@ -81,7 +87,7 @@ function GreenhouseCardImpl({
       </div>
 
       <div className="flex items-center justify-between gap-2">
-        <span className="text-fg-muted truncate text-sm">{summary.crop ?? ""}</span>
+        <span className="text-fg-muted truncate text-sm">{profileLabel}</span>
         <StatusBadge status={summary.status} drift={summary.drift} />
       </div>
 

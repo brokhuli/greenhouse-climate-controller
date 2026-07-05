@@ -47,7 +47,7 @@ is Phase 2's) and it does not command actuators directly (that is Phase 1's).
 The optimizer is the intelligence layer above **each** greenhouse's controller. It operates on **one
 greenhouse at a time** — N independent planning problems, mirroring the N independent control loops
 of Phase 1. Site-wide orchestration across greenhouses, weather-reactive control, and combustion-heater
-coordination are out of scope (see [scope](./11-spec-optimizer-scope.md)).
+coordination are out of scope (see [scope](./12-spec-optimizer-scope.md)).
 
 ---
 
@@ -76,7 +76,10 @@ coordination are out of scope (see [scope](./11-spec-optimizer-scope.md)).
    outward surfaces*: the three integration interfaces and the served FastAPI API.
 10. [`10-spec-optimizer-configuration.md`](./10-spec-optimizer-configuration.md) —
     *the knobs*: the service configuration keys.
-11. [`11-spec-optimizer-scope.md`](./11-spec-optimizer-scope.md) — *the boundary*:
+11. [`11-spec-optimizer-tech-stack.md`](./11-spec-optimizer-tech-stack.md) — *the
+    dependency set*: what each library is, why over alternatives, and how it's used
+    here.
+12. [`12-spec-optimizer-scope.md`](./12-spec-optimizer-scope.md) — *the boundary*:
     deferred / out-of-scope capabilities.
 
 ---
@@ -112,7 +115,8 @@ How this set divides the work, and where each concern is detailed:
 | Service resilience, stateless restart, escalation backpressure, watchdog | [`08-spec-optimizer-resilience.md`](./08-spec-optimizer-resilience.md) | — |
 | The three integration interfaces + the served FastAPI surface | [`09-spec-optimizer-interfaces.md`](./09-spec-optimizer-interfaces.md) | [`contracts/`](../../../../contracts/), [`spec-contracts.md`](../spec-contracts.md), [RFC-008](../../../decisions/request-for-comments.md#rfc-008-phase-3-telemetry-read-path) |
 | Service configuration (env / Compose) and its keys | [`10-spec-optimizer-configuration.md`](./10-spec-optimizer-configuration.md) | — |
-| Non-negotiable scope; deferred / out-of-scope capabilities | [`11-spec-optimizer-scope.md`](./11-spec-optimizer-scope.md) | [spec-phase4.md](../spec-phase4.md) |
+| Tech-stack / dependency choices, discretionary picks, rejected alternatives | [`11-spec-optimizer-tech-stack.md`](./11-spec-optimizer-tech-stack.md) | [tech-stack-decisions.md](../tech-stack-decisions.md#phase-3--llm-climate-optimizer-python-only), [RFC-004](../../../decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface) |
+| Non-negotiable scope; deferred / out-of-scope capabilities | [`12-spec-optimizer-scope.md`](./12-spec-optimizer-scope.md) | [spec-phase4.md](../spec-phase4.md) |
 | Verification & feedback loops (system-wide strategy, tooling, CI; `07` is this set's instance) | [`spec-verification.md`](../spec-verification.md) | [NFR doc](../../artifacts/non-functional-requirements.md) |
 | Quality targets (perf, scale, reliability, test) | [NFR doc](../../artifacts/non-functional-requirements.md) | — (single source) |
 

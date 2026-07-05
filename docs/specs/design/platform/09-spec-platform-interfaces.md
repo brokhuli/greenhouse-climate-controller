@@ -95,7 +95,7 @@ capability split (viewer reads; operator reads + writes) is owned by
 [security](./07-spec-platform-security.md#4-capability-matrix).
 
 The **`POST /setpoints`** surface additionally accepts a **service** actor — the optimizer — when the
-deferred service-auth mode is enabled (`SERVICE_AUTH_MODE=oidc`,
+config-gated service-auth mode is enabled (`SERVICE_AUTH_MODE=oidc`,
 [RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009),
 superseding [RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)):
 the optimizer presents a Keycloak client-credentials token carrying the narrow `setpoints:write` role

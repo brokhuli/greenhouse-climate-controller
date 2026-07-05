@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Trash2 } from "lucide-react";
 import { useRetireGreenhouse } from "../../api/queries/greenhouses";
+import { useRole } from "../../hooks/useRole";
 import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
 import { useToast } from "../../components/ui/toast-context";
@@ -22,6 +23,7 @@ export function RetireGreenhouseAction({
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const toast = useToast();
+  const { isOperator } = useRole();
   const mutation = useRetireGreenhouse();
   const name = formatGreenhouseLabel(displayName);
 
@@ -42,7 +44,12 @@ export function RetireGreenhouseAction({
 
   return (
     <>
-      <Button variant="ghost" onClick={() => setOpen(true)}>
+      <Button
+        variant="ghost"
+        onClick={() => setOpen(true)}
+        disabled={!isOperator}
+        title={isOperator ? undefined : "Operator role required"}
+      >
         <Trash2 size={14} aria-hidden />
         Retire
       </Button>

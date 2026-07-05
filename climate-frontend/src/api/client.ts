@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import { wireErrorBody, wireValidationError } from "./schemas";
+import { getAccessToken, handleUnauthorized } from "./authToken";
 
 /**
  * The single REST client for the SPA. Every request/response shape is validated against the
@@ -44,7 +45,7 @@ const apiBase = (): string => import.meta.env.VITE_API_BASE ?? "";
 
 const url = (path: string): string => `${apiBase()}/api${path}`;
 
-type RequestInit = { method?: "GET" | "POST" | "PATCH" | "DELETE"; body?: unknown };
+type RequestInit = { method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"; body?: unknown };
 
 const errorKindForStatus = (status: number): ApiErrorKind => {
   if (status === 404) return "not_found";
@@ -78,17 +79,28 @@ const parseError = async (response: Response): Promise<ApiError> => {
 /** Perform the request and surface a non-2xx as a typed ApiError; returns the raw Response. */
 async function rawFetch(path: string, init: RequestInit): Promise<Response> {
   const { method = "GET", body } = init;
+  const headers: Record<string, string> = {};
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  // Attach the OIDC access token when authenticated (2b); absent in the unauthenticated 2a posture.
+  const token = getAccessToken();
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
   let response: Response;
   try {
     response = await fetch(url(path), {
       method,
-      headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,
+      headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch (cause) {
     throw new ApiError("network", "could not reach the platform API", { cause });
   }
-  if (!response.ok) throw await parseError(response);
+  if (!response.ok) {
+    // A 401 past the silent renew means the session is gone — bounce to login (frontend
+    // architecture §9). No-op when auth is disabled.
+    if (response.status === 401) handleUnauthorized();
+    throw await parseError(response);
+  }
   return response;
 }
 
@@ -118,6 +130,8 @@ export const apiClient = {
   get: <S extends z.ZodTypeAny>(path: string, schema: S) => requestJson(path, schema),
   post: <S extends z.ZodTypeAny>(path: string, body: unknown, schema: S) =>
     requestJson(path, schema, { method: "POST", body }),
+  put: <S extends z.ZodTypeAny>(path: string, body: unknown, schema: S) =>
+    requestJson(path, schema, { method: "PUT", body }),
   patch: <S extends z.ZodTypeAny>(path: string, body: unknown, schema: S) =>
     requestJson(path, schema, { method: "PATCH", body }),
   delete: async (path: string): Promise<void> => {

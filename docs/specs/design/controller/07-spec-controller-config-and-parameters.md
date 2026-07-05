@@ -133,11 +133,13 @@ greenhouses.
 ## REST API authentication (optional)
 
 ```toml
-[rest]
-auth_token = ""   # optional pre-shared bearer token for the write endpoints; unset = unauthenticated (default)
+[api]
+bind_addr = "127.0.0.1:8080"
+auth_token = ""   # optional pre-shared bearer token for the write endpoints; unset/empty = unauthenticated (default)
 ```
 
-The REST API is **unauthenticated by default** — the zero-friction standalone posture. Setting
+The token lives in the same `[api]` section as `bind_addr` (the REST bind). The REST API is
+**unauthenticated by default** — the zero-friction standalone posture. Setting a non-empty
 `auth_token` turns on the optional per-controller bearer-token check
 ([RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009),
 [interfaces §3](./08-spec-controller-interfaces.md#authenticating-the-write-path-optional)): **write**

@@ -12,8 +12,10 @@ use std::sync::Arc;
 
 use axum::Json;
 use axum::Router;
-use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
+use axum::extract::{Path, Query, Request, State};
+use axum::http::header::AUTHORIZATION;
+use axum::http::{HeaderMap, Method, StatusCode};
+use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, put};
 use chrono::{DateTime, Utc};
@@ -340,6 +342,9 @@ pub struct AppState {
     pub base: DateTime<Utc>,
     /// Per-metric plausibility bounds for sensor-injection validation.
     pub bounds: PlausibilityBounds,
+    /// Optional pre-shared bearer token guarding the write endpoints (RFC-011). `None` → writes are
+    /// unauthenticated (today's default); `Some` → PATCH/PUT/DELETE require a matching bearer.
+    pub auth_token: Option<Arc<str>>,
 }
 
 impl AppState {
@@ -352,8 +357,10 @@ impl AppState {
     }
 }
 
-/// Build the controller's REST router.
+/// Build the controller's REST router. When `state.auth_token` is set, a middleware layer requires a
+/// matching `Bearer` credential on the write endpoints (RFC-011); reads stay open regardless.
 pub fn router(state: AppState) -> Router {
+    let auth_token = state.auth_token.clone();
     Router::new()
         .route(
             "/greenhouses/{greenhouse_id}/setpoints",
@@ -382,7 +389,57 @@ pub fn router(state: AppState) -> Router {
             "/greenhouses/{greenhouse_id}/sim/time-scale",
             get(get_time_scale).put(put_time_scale),
         )
+        .layer(middleware::from_fn_with_state(
+            auth_token,
+            require_bearer_on_writes,
+        ))
         .with_state(state)
+}
+
+// ───────────────────────────── write authentication (optional, RFC-011) ─────────────────────────────
+
+/// Gate the REST **write** endpoints on a matching pre-shared bearer token when one is configured.
+/// Unset (`None`) → pass-through, the zero-friction standalone default. Reads (`GET`) are always
+/// open; only mutating methods (`PATCH`/`PUT`/`DELETE`) are gated, covering setpoint/zone/override
+/// and sim-control writes ([interfaces §3]). An unauthenticated write is rejected `401`.
+async fn require_bearer_on_writes(
+    State(auth_token): State<Option<Arc<str>>>,
+    request: Request,
+    next: Next,
+) -> Response {
+    if let Some(expected) = auth_token.as_deref()
+        && is_write_method(request.method())
+        && !bearer_matches(request.headers(), expected)
+    {
+        return unauthorized("missing or invalid bearer token");
+    }
+    next.run(request).await
+}
+
+fn is_write_method(method: &Method) -> bool {
+    matches!(*method, Method::PATCH | Method::PUT | Method::DELETE)
+}
+
+/// Whether the `Authorization: Bearer <token>` header matches the configured token. A plain `==`
+/// suffices for a pre-shared token on the trusted control network — the timing side-channel is out
+/// of the local threat model — so no constant-time-compare dependency is pulled in.
+fn bearer_matches(headers: &HeaderMap, expected: &str) -> bool {
+    headers
+        .get(AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.strip_prefix("Bearer "))
+        .map(|token| token == expected)
+        .unwrap_or(false)
+}
+
+fn unauthorized(message: impl Into<String>) -> Response {
+    (
+        StatusCode::UNAUTHORIZED,
+        Json(ErrorBody {
+            error: message.into(),
+        }),
+    )
+        .into_response()
 }
 
 // ───────────────────────────── responses ─────────────────────────────
@@ -977,6 +1034,90 @@ fn first_violation(validate: impl FnOnce(&mut Vec<FieldViolation>)) -> Option<Fi
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use axum::body::Body;
+    use axum::http::Request as HttpRequest;
+    use axum::routing::{get, patch};
+    use tower::ServiceExt; // for `oneshot`
+
+    // A throwaway router carrying only the write-auth layer, so the middleware is exercised without
+    // constructing a full AppState/RuntimeView. A GET read and a PATCH write stand in for the real
+    // surfaces (which share the same layer).
+    fn guarded_router(token: Option<Arc<str>>) -> Router {
+        Router::new()
+            .route("/r", get(|| async { StatusCode::OK }))
+            .route("/w", patch(|| async { StatusCode::OK }))
+            .layer(middleware::from_fn_with_state(
+                token,
+                require_bearer_on_writes,
+            ))
+    }
+
+    async fn status(router: Router, method: Method, path: &str, auth: Option<&str>) -> StatusCode {
+        let mut builder = HttpRequest::builder().method(method).uri(path);
+        if let Some(value) = auth {
+            builder = builder.header(AUTHORIZATION, value);
+        }
+        let response = router
+            .oneshot(builder.body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        response.status()
+    }
+
+    #[tokio::test]
+    async fn write_auth_unset_is_pass_through() {
+        // No configured token → writes and reads both open (today's default).
+        assert_eq!(
+            status(guarded_router(None), Method::PATCH, "/w", None).await,
+            StatusCode::OK
+        );
+        assert_eq!(
+            status(guarded_router(None), Method::GET, "/r", None).await,
+            StatusCode::OK
+        );
+    }
+
+    #[tokio::test]
+    async fn write_auth_set_gates_writes_but_not_reads() {
+        let token = || Some(Arc::from("s3cret"));
+
+        // Reads stay open even with a token configured.
+        assert_eq!(
+            status(guarded_router(token()), Method::GET, "/r", None).await,
+            StatusCode::OK
+        );
+        // Writes require a matching bearer.
+        assert_eq!(
+            status(guarded_router(token()), Method::PATCH, "/w", None).await,
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            status(
+                guarded_router(token()),
+                Method::PATCH,
+                "/w",
+                Some("Bearer wrong")
+            )
+            .await,
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            status(guarded_router(token()), Method::PATCH, "/w", Some("s3cret")).await,
+            StatusCode::UNAUTHORIZED,
+            "a bare token without the Bearer scheme is rejected"
+        );
+        assert_eq!(
+            status(
+                guarded_router(token()),
+                Method::PATCH,
+                "/w",
+                Some("Bearer s3cret")
+            )
+            .await,
+            StatusCode::OK
+        );
+    }
 
     #[test]
     fn patch_application_validates_bounds_and_invariants() {

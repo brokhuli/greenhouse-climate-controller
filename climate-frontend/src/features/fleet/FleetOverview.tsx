@@ -3,6 +3,7 @@ import { Plus } from "lucide-react";
 import { useFleet } from "../../api/queries/greenhouses";
 import { useFleetSparklines } from "../../api/queries/fleet";
 import { usePersistentRange } from "../../hooks/usePersistentRange";
+import { useRole } from "../../hooks/useRole";
 import { statusRollup } from "../../lib/derivations";
 import { Button } from "../../components/ui/Button";
 import { EmptyState } from "../../components/ui/EmptyState";
@@ -27,6 +28,7 @@ const TOOLBAR_STYLE = { gap: "var(--layout-toolbar-gap)" };
  */
 export default function FleetOverview() {
   const fleet = useFleet();
+  const { isOperator } = useRole();
   const [registerOpen, setRegisterOpen] = useState(false);
 
   // The card window is a deep-linkable ?window= choice (default 1h), independent of the detail view's
@@ -63,7 +65,12 @@ export default function FleetOverview() {
               <RangePicker value={windowKey} onChange={setWindow} />
             </>
           ) : null}
-          <Button variant="primary" onClick={() => setRegisterOpen(true)}>
+          <Button
+            variant="primary"
+            onClick={() => setRegisterOpen(true)}
+            disabled={!isOperator}
+            title={isOperator ? undefined : "Operator role required"}
+          >
             <Plus size={16} aria-hidden />
             Register
           </Button>
@@ -87,7 +94,12 @@ export default function FleetOverview() {
           title="No greenhouses registered"
           message="Register a greenhouse to begin monitoring the fleet."
           action={
-            <Button variant="primary" onClick={() => setRegisterOpen(true)}>
+            <Button
+              variant="primary"
+              onClick={() => setRegisterOpen(true)}
+              disabled={!isOperator}
+              title={isOperator ? undefined : "Operator role required"}
+            >
               Register greenhouse
             </Button>
           }

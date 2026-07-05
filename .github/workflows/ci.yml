@@ -2,8 +2,11 @@ name: CI
 
 # Clean-environment gate (RFC-010 / spec-verification.md §6). Re-runs, away from a
 # developer's machine, the same gates the local .githooks/pre-commit hook fires —
-# the Rust gate and the contract-validation harness. Per-phase gates (Go/Python/
-# frontend/load) and coverage enforcement land with the phases they verify.
+# the Rust gate and the contract-validation harness. The frontend gate (lint /
+# typecheck / unit tests + blocking Lighthouse CI against the static production
+# build) also runs here; its Playwright E2E stays local (needs the live stack).
+# Remaining per-phase gates (Python/load) and coverage enforcement land with the
+# phases they verify.
 
 on:
   push:
@@ -68,7 +71,7 @@ jobs:
       - name: Vet
         run: go vet ./...
       - name: Lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v7
         with:
           version: v2.12.2
           working-directory: climate-platform
@@ -113,3 +116,39 @@ jobs:
         run: npm ci
       - name: Validate schemas + fixtures
         run: npm run validate:contracts
+
+  frontend:
+    name: Frontend gate (climate-frontend)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: climate-frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      # Honors climate-frontend/.nvmrc (Node 24 — the pinned build toolchain),
+      # not the contracts job's Node 20.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: climate-frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: climate-frontend/package-lock.json
+
+      - name: Install
+        run: npm ci
+      - name: Format
+        run: npm run format:check
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Test
+        run: npm run test
+      # Production build feeds the Lighthouse gate (staticDistDir: ./dist).
+      - name: Build
+        run: npm run build
+      # Lighthouse CI (@lhci/cli) against the static production build — initial-load
+      # (< 2 s, P2-USE-1) + accessibility; thresholds in .lighthouserc.json fail the
+      # build (P2-TEST-2). E2E (Playwright) needs the live stack and runs locally.
+      - name: Lighthouse
+        run: npx lhci autorun

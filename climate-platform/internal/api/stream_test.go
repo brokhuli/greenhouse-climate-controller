@@ -11,6 +11,7 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/config"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/domain"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/ws"
 )
@@ -20,7 +21,7 @@ import (
 func TestStreamWebSocket(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	hub := ws.NewHub(logger)
-	srv := New(nil, nil, nil, nil, hub, logger)
+	srv := New(nil, nil, nil, nil, nil, hub, nil, config.ServiceAuthModeTrustedNetwork, logger)
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 

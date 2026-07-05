@@ -8,6 +8,36 @@ alternatives and tradeoffs.
 
 ---
 
+## 2026-07-04 — Service-auth hardening implemented (both RFC-011 write boundaries wired, dormant by default)
+
+**Decision:** Build the two service-auth boundaries the [2026-06-21 decision](#2026-06-21--internal-trust-model-reopened-service-to-service-auth-adopted-as-a-config-gated-off-by-default-hardening-mode)
+specified as dormant scaffolding, turning them from prose into working code — still **off by default**, so
+the single-host MVP behaves exactly as before:
+
+1. **Optimizer → Phase 2 API.** The Go API gained a `PLATFORM_SERVICE_AUTH_MODE` config
+   (`trusted_network` default | `oidc`) and a `RequireSetpointsWrite` middleware gating a **new
+   `POST /greenhouses/{id}/setpoints`** handler (`submitSetpoints`, records `source = optimizer`, returns
+   `202`). In `oidc` mode the route requires a `setpoints:write` (or operator) token validated on the
+   existing verifier; in `trusted_network` it accepts the untokened internal call. The Keycloak realm
+   gained a confidential `optimizer` client + `setpoints:write` service role. Token *acquisition* is
+   Phase-3 optimizer work; only API-side validation is built. The endpoint pre-commits a Phase-3-facing
+   interface (its only real caller is the unbuilt optimizer) — reusing the operator edit's merge/validate
+   machinery to minimise invention.
+2. **Platform → controller REST.** The Rust controller now enforces an optional `[api].auth_token`
+   (presence-gated axum layer over the write methods; reads stay open; unset = today's behavior). The
+   platform's registration API accepts a `bearer_token` (the store + relay already carried it), and the
+   `gen-controllers.sh` generator can mint per-controller tokens (`CONTROLLER_AUTH_TOKENS=1`).
+
+**Scope:** implementation + tests + contract (`frontend-rest` gains the `POST /setpoints` op; the
+`controller-rest` optional bearer scheme already existed). No committed interface changed in the default
+posture; no new runtime dependencies (Go reuses go-oidc, Rust reuses axum/tower, plain token compare).
+Reconciled a doc/impl drift: the controller token lives under `[api].auth_token`, not `[rest]`.
+
+**Basis:** Operator-directed early build of the dormant hardening path.
+**RFC:** [RFC-011](./request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009).
+
+---
+
 ## 2026-06-21 — Internal trust model reopened: service-to-service auth adopted as a config-gated, off-by-default hardening mode
 
 **Decision:** **Reverse** the [2026-06-08 human-only decision](#2026-06-08--internal-trust-model-no-service-to-service-auth-authentication-is-human-only)

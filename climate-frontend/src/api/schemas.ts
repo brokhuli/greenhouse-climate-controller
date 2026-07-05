@@ -687,3 +687,100 @@ export const toWireRegistration = (
     mqtt_topic_root: input.controller.mqttTopicRoot,
   },
 });
+
+// ---------------------------------------------------------------------------
+// Crop profiles & assignment (2b) — library entries and their greenhouse binding
+// ---------------------------------------------------------------------------
+
+export const wireProfileStage = z.object({ stage: z.string().min(1), targets: wireSetpoints });
+
+export const wireCropProfile = z.object({
+  id: slug,
+  name: z.string().min(1),
+  crop: z.string().min(1),
+  stages: z.array(wireProfileStage).min(1),
+});
+
+export const wireProfileLibrary = z.array(wireCropProfile);
+
+export const wireAssignment = z.object({
+  greenhouse_id: slug,
+  profile_id: slug,
+  stage: z.string().min(1),
+});
+
+export type ProfileStage = { stage: string; targets: Setpoints };
+export type CropProfile = { id: string; name: string; crop: string; stages: ProfileStage[] };
+export type Assignment = { greenhouseId: string; profileId: string; stage: string };
+export type AssignmentInput = { profileId: string; stage: string };
+
+export const toProfileStage = (w: z.infer<typeof wireProfileStage>): ProfileStage => ({
+  stage: w.stage,
+  targets: toSetpoints(w.targets),
+});
+
+export const toCropProfile = (w: z.infer<typeof wireCropProfile>): CropProfile => ({
+  id: w.id,
+  name: w.name,
+  crop: w.crop,
+  stages: w.stages.map(toProfileStage),
+});
+
+export const toAssignment = (w: z.infer<typeof wireAssignment>): Assignment => ({
+  greenhouseId: w.greenhouse_id,
+  profileId: w.profile_id,
+  stage: w.stage,
+});
+
+const toWireZoneTargets = (zone: ZoneTargets): z.input<typeof wireZoneTargets> => ({
+  zone_id: zone.zoneId,
+  moisture_low_threshold: zone.moistureLowThreshold,
+  moisture_high_threshold: zone.moistureHighThreshold,
+  drain_period_secs: zone.drainPeriodSecs,
+  schedule: zone.schedule,
+});
+
+/** Encode a full setpoint bundle (a crop-profile stage's targets) to the wire shape. */
+export const toWireSetpoints = (setpoints: Setpoints): z.input<typeof wireSetpoints> => ({
+  temperature_day_c: setpoints.temperatureDayC,
+  temperature_night_c: setpoints.temperatureNightC,
+  day_start: setpoints.dayStart,
+  day_end: setpoints.dayEnd,
+  humidity_low_pct: setpoints.humidityLowPct,
+  humidity_high_pct: setpoints.humidityHighPct,
+  humidity_deadband_pct: setpoints.humidityDeadbandPct,
+  co2_target_ppm: setpoints.co2TargetPpm,
+  co2_vent_interlock_threshold_pct: setpoints.co2VentInterlockThresholdPct,
+  vpd_target_kpa: setpoints.vpdTargetKpa,
+  dli_target_mol: setpoints.dliTargetMol,
+  zones: setpoints.zones.map(toWireZoneTargets),
+});
+
+export const toWireCropProfile = (profile: CropProfile): z.input<typeof wireCropProfile> => ({
+  id: profile.id,
+  name: profile.name,
+  crop: profile.crop,
+  stages: profile.stages.map((stage) => ({
+    stage: stage.stage,
+    targets: toWireSetpoints(stage.targets),
+  })),
+});
+
+/** Encode a profile edit as a CropProfilePatch (id is immutable — path identity only). */
+export const toWireCropProfilePatch = (
+  profile: CropProfile,
+): { name: string; crop: string; stages: z.input<typeof wireProfileStage>[] } => ({
+  name: profile.name,
+  crop: profile.crop,
+  stages: profile.stages.map((stage) => ({
+    stage: stage.stage,
+    targets: toWireSetpoints(stage.targets),
+  })),
+});
+
+export const toWireAssignmentInput = (
+  input: AssignmentInput,
+): { profile_id: string; stage: string } => ({
+  profile_id: input.profileId,
+  stage: input.stage,
+});

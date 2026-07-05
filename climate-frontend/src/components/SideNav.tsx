@@ -1,13 +1,14 @@
-import { Activity, LayoutGrid } from "lucide-react";
+import { Activity, LayoutGrid, Sprout } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useTheme } from "../hooks/theme";
 
 const NAV_ITEMS = [
   { to: "/", label: "Fleet", icon: LayoutGrid, end: true },
+  { to: "/profiles", label: "Profiles", icon: Sprout, end: false },
   { to: "/activity", label: "Activity", icon: Activity, end: false },
 ] as const;
 
-/** Primary navigation rail (architecture §8). Profiles (2b) is intentionally absent in 2a. */
+/** Primary navigation rail (architecture §8). */
 export function SideNav() {
   const { theme } = useTheme();
   const brandIcon = theme === "dark" ? "/favicon-dark.svg" : "/favicon-light.svg";

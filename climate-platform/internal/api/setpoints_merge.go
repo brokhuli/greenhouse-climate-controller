@@ -3,6 +3,8 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/domain"
 )
 
 // zoneTargetFields are the per-zone fields the frontend-rest Setpoints bundle carries. The
@@ -50,18 +52,28 @@ func mergeSetpointsZones(setpoints, zones []byte) (json.RawMessage, error) {
 	return json.Marshal(bundle)
 }
 
-// stripZones removes the `zones` field from a setpoints patch before it is relayed to the
-// controller's PATCH /setpoints, which only owns the global setpoints (zone targets are a separate
-// controller resource and would be rejected). The original bytes are returned unchanged when there
-// is no `zones` field, preserving pass-through fidelity.
-func stripZones(raw []byte) ([]byte, error) {
-	var patch map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &patch); err != nil {
+// overlayGlobalSetpoints replaces the global climate setpoints in a controller-reported bundle with
+// the platform's intended global setpoints, keeping the controller's per-zone config. The platform
+// is the setpoint authority (2b, RFC-005), so the detail reflects a profile assignment or ad-hoc
+// edit immediately rather than lagging a controller tick. The controller's actual per-zone
+// thresholds are preserved (a profile may not govern every zone), and any divergence between
+// intended and the controller's reported globals is surfaced separately as `drift`.
+func overlayGlobalSetpoints(reported []byte, intended domain.Setpoints) (json.RawMessage, error) {
+	var reportedFields map[string]json.RawMessage
+	if err := json.Unmarshal(reported, &reportedFields); err != nil {
+		return nil, fmt.Errorf("decode reported setpoints: %w", err)
+	}
+	intendedBytes, err := json.Marshal(intended)
+	if err != nil {
 		return nil, err
 	}
-	if _, ok := patch["zones"]; !ok {
-		return raw, nil
+	var result map[string]json.RawMessage
+	if err := json.Unmarshal(intendedBytes, &result); err != nil {
+		return nil, err
 	}
-	delete(patch, "zones")
-	return json.Marshal(patch)
+	// Keep the controller-reported per-zone config rather than the (possibly empty) intended zones.
+	if zones, ok := reportedFields["zones"]; ok {
+		result["zones"] = zones
+	}
+	return json.Marshal(result)
 }

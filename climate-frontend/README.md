@@ -9,23 +9,36 @@ or the controllers directly. Built as static assets and served by the platform's
 stack. Specs: [`docs/specs/design/frontend/`](../docs/specs/design/frontend/); wire contracts:
 [`contracts/frontend-rest/`](../contracts/frontend-rest/), [`contracts/frontend-ws/`](../contracts/frontend-ws/).
 
-## Status — scaffold (2a, in progress)
+## Status — 2a + 2b UI (built & green)
 
-This package is the **project skeleton plus the contract-bound API layer**. Built and green:
+The dashboard is complete through the 2b backbone and the auth slice. Built and green:
 
 - App shell + theming: Vite, Tailwind v4 + design tokens (dark default / light), the route tree
-  (`/`, `/greenhouses/:id`, `/activity`, 404) with a themed console shell (`AppFrame`/`SideNav`/`TopBar`).
+  (`/`, `/greenhouses/:id`, `/greenhouses/:id/setpoints`, `/profiles`, `/activity`, 404) with a
+  themed console shell (`AppFrame`/`SideNav`/`TopBar`).
 - `src/api/` — the only module that knows the API exists: Zod wire schemas + camelCase adapters
   (`schemas.ts`), the fetch client with typed error mapping (`client.ts`), the WebSocket client with
   backoff reconnect + frame dispatch (`ws.ts`), and TanStack Query hooks (`queries/`).
 - `src/lib/` — pure view-model derivations (reading-vs-setpoint, status rollup, range-tier).
+- `src/features/auth/` — OIDC Authorization-Code + PKCE login against Keycloak (`AuthProvider`,
+  `LoginCallback`), with viewer/operator role gating (`roles.ts`) that disables write affordances
+  for viewers and drives the `UserMenu` sign-in/out.
 - Tests: the Zod layer is checked against the committed contract fixtures; adapters, client, ws, and
   derivations are unit-tested; an `App` smoke test renders the shell.
 
-**Deferred to later slices:** the real feature views (fleet grid, detail charts), uPlot charts,
-setpoint/registration forms, optimistic mutation patching, Playwright + Lighthouse, the nginx
-`proxy`/`frontend` compose services and the `Dockerfile`, and all 2b (crop profiles, drift UI,
-Keycloak/OIDC).
+The 2a feature views (fleet grid, per-greenhouse detail with uPlot charts, setpoint/registration
+forms, activity feed) and the **2b backbone** UI — the crop-profile library (`/profiles`),
+per-greenhouse profile assignment, and drift surfacing on the fleet cards + detail — are built.
+
+**Verification:** ESLint, `tsc`, and the Vitest suite run in CI, with **Lighthouse CI**
+(`@lhci/cli` — initial-load + accessibility against the static production build) as a blocking gate;
+thresholds live in [`.lighthouserc.json`](./.lighthouserc.json) and the job is in
+[`../.github/workflows/ci.yml`](../.github/workflows/ci.yml). The **Playwright** E2E smoke test
+([`tests/e2e/`](./tests/e2e/)) runs locally against the live deploy stack — wiring it into CI is
+deferred.
+
+**Deferred to later slices:** frontend E2E in CI, and the remaining 2b observability infra
+(Prometheus/Grafana). The nginx `proxy`, the `Dockerfile`, and Keycloak/OIDC auth have all landed.
 
 ## Layout
 
@@ -34,7 +47,7 @@ Keycloak/OIDC).
 - `src/components/` — domain-agnostic primitives + the console shell.
 - `src/features/` — one folder per view (placeholders for now).
 - `src/hooks/`, `src/lib/`, `src/styles/` — theme, derivations, design tokens.
-- `tests/unit/` — Vitest + React Testing Library; `tests/e2e/` is reserved for Playwright.
+- `tests/unit/` — Vitest + React Testing Library; `tests/e2e/` holds the Playwright smoke test.
 
 ## Development
 
@@ -47,7 +60,9 @@ npm run build        # tsc --noEmit + vite build → dist/
 npm run lint         # ESLint
 npm run typecheck    # tsc --noEmit (strict)
 npm run test         # Vitest (unit + component)
+npm run test:e2e     # Playwright smoke test (needs the deploy stack — see below)
 npm run format       # Prettier
+npx lhci autorun     # Lighthouse CI against dist/ (run `npm run build` first)
 ```
 
 Node version is pinned in [`.nvmrc`](./.nvmrc).

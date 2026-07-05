@@ -65,6 +65,15 @@ type EventFrame struct {
 	Source   string `json:"source,omitempty"`
 }
 
+// DriftFrame reports whether a greenhouse's controller-reported setpoints still match its
+// intended state (type="drift", greenhouse-scoped): drift=true on divergence, false when
+// reconciled (frontend-ws drift.schema.json, 2b).
+type DriftFrame struct {
+	envelope
+	Type  string `json:"type"`
+	Drift bool   `json:"drift"`
+}
+
 // NewTelemetryReading builds a telemetry frame carrying a single sensor reading.
 func NewTelemetryReading(reading domain.Reading) TelemetryFrame {
 	return TelemetryFrame{
@@ -104,5 +113,14 @@ func NewEvent(event domain.Event) EventFrame {
 		Severity: event.Severity,
 		Message:  event.Message,
 		Source:   event.Source,
+	}
+}
+
+// NewDrift builds a drift frame (greenhouse-scoped; zone_id null).
+func NewDrift(greenhouseID string, ts time.Time, drift bool) DriftFrame {
+	return DriftFrame{
+		envelope: envelope{SchemaVersion, greenhouseID, nil, rfc3339ms(ts)},
+		Type:     "drift",
+		Drift:    drift,
 	}
 }
