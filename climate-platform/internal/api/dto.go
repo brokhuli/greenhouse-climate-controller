@@ -24,8 +24,9 @@ type validationBody struct {
 // --- greenhouses ---
 
 type controllerEndpointDTO struct {
-	RESTBaseURL   string `json:"rest_base_url"`
-	MQTTTopicRoot string `json:"mqtt_topic_root"`
+	RESTBaseURL   string  `json:"rest_base_url"`
+	MQTTTopicRoot string  `json:"mqtt_topic_root"`
+	BearerToken   *string `json:"bearer_token"`
 }
 
 type registrationDTO struct {

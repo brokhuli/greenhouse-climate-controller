@@ -61,6 +61,33 @@ func RequireOperator(verifier *Verifier) echo.MiddlewareFunc {
 	}
 }
 
+// RequireSetpointsWrite gates the optimizer → POST /setpoints boundary (RFC-011). It assumes
+// OptionalAuth has already run (same group). Enforcement is dormant by default and only kicks in
+// when enforce is true (SERVICE_AUTH_MODE=oidc):
+//
+//   - verifier == nil (OIDC not configured) → pass-through, the 2a unauthenticated posture.
+//   - enforce == false (SERVICE_AUTH_MODE=trusted_network) → pass-through: the service plane is
+//     trusted on the local network by default, independently of human auth being on.
+//   - enforce == true → a token is required (401 if absent) carrying setpoints:write or the
+//     operator role (403 otherwise).
+func RequireSetpointsWrite(verifier *Verifier, enforce bool) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			if verifier == nil || !enforce {
+				return next(c)
+			}
+			claims, ok := c.Get(contextKey).(*Claims)
+			if !ok || claims == nil {
+				return unauthorized(c, "missing bearer token")
+			}
+			if !claims.CanWriteSetpoints() {
+				return forbidden(c, "setpoints:write or operator role required")
+			}
+			return next(c)
+		}
+	}
+}
+
 // ClaimsFrom returns the validated claims for the request, if any (nil in unauthenticated
 // mode). Handlers use it for the audit trail (who performed a write).
 func ClaimsFrom(c echo.Context) *Claims {

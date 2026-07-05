@@ -13,6 +13,14 @@ import (
 	"time"
 )
 
+// Service-auth modes for the optimizer → POST /setpoints write boundary (RFC-011). The mode is
+// dormant by default: trusted_network accepts the internal call without a service token (the
+// committed single-host posture), oidc requires a Keycloak setpoints:write token.
+const (
+	ServiceAuthModeTrustedNetwork = "trusted_network"
+	ServiceAuthModeOIDC           = "oidc"
+)
+
 // Config is the resolved platform service configuration.
 type Config struct {
 	// DatabaseURL is the TimescaleDB/PostgreSQL DSN (pgx).
@@ -56,6 +64,11 @@ type Config struct {
 	// OIDCAudience, when set, is required in the token's `aud` (the Keycloak audience mapper
 	// adds it). Empty skips the audience check.
 	OIDCAudience string
+	// ServiceAuthMode gates the optimizer → POST /setpoints write boundary (RFC-011):
+	// trusted_network (default) accepts the internal call untokened; oidc requires a Keycloak
+	// setpoints:write client-credentials token, validated on the same path as human tokens. The
+	// oidc mode therefore requires OIDCIssuerURL to be set (platform security §5).
+	ServiceAuthMode string
 }
 
 // Load resolves the configuration from the environment, applying defaults. It returns
@@ -78,9 +91,22 @@ func Load() (Config, error) {
 		OIDCIssuerURL:    env("PLATFORM_OIDC_ISSUER_URL", ""),
 		OIDCDiscoveryURL: env("PLATFORM_OIDC_DISCOVERY_URL", ""),
 		OIDCAudience:     env("PLATFORM_OIDC_AUDIENCE", ""),
+
+		ServiceAuthMode: env("PLATFORM_SERVICE_AUTH_MODE", ServiceAuthModeTrustedNetwork),
 	}
 	if cfg.DatabaseURL == "" {
 		return Config{}, fmt.Errorf("PLATFORM_DATABASE_URL is required")
+	}
+	switch cfg.ServiceAuthMode {
+	case ServiceAuthModeTrustedNetwork:
+	case ServiceAuthModeOIDC:
+		// oidc mode reuses the human OIDC verifier to validate the service token, so it cannot be
+		// enforced without an issuer to validate against.
+		if cfg.OIDCIssuerURL == "" {
+			return Config{}, fmt.Errorf("PLATFORM_SERVICE_AUTH_MODE=oidc requires PLATFORM_OIDC_ISSUER_URL")
+		}
+	default:
+		return Config{}, fmt.Errorf("PLATFORM_SERVICE_AUTH_MODE must be %q or %q, got %q", ServiceAuthModeTrustedNetwork, ServiceAuthModeOIDC, cfg.ServiceAuthMode)
 	}
 	return cfg, nil
 }

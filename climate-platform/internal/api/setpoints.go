@@ -10,18 +10,51 @@ import (
 
 	"github.com/labstack/echo/v4"
 
+	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/auth"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/domain"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/reconcile"
 )
 
-// editSetpoints is the operator's ad-hoc setpoint edit. In 2b it is no longer a thin relay: the
-// edit's global fields are merged onto the greenhouse's current intended state (or the
+// editSetpoints is the operator's ad-hoc setpoint edit (200). In 2b it is no longer a thin relay:
+// the edit's global fields are merged onto the greenhouse's current intended state (or the
 // controller's reported setpoints when none exists yet) and applied through the reconciler, so it
 // becomes sticky intended state — re-asserted on reconnect rather than silently reverted
-// (crop-profiles §5). An out-of-range value is rejected 422; an unreachable controller with no
-// prior intended state is 503; otherwise the edit is accepted (delivered, or held when offline)
-// and the resulting bundle returned.
+// (crop-profiles §5).
 func (s *Server) editSetpoints(c echo.Context) error {
+	return s.applySetpointWrite(c, domain.SourceOperatorEdit, "operator", "ad-hoc edit", http.StatusOK)
+}
+
+// submitSetpoints is the optimizer's single-authority setpoint write path (RFC-005 / RFC-011,
+// POST /setpoints). It shares editSetpoints' merge/validate/reconcile machinery but records
+// optimizer provenance and returns 202 Accepted (this surface's contract success code). Its gate
+// is SERVICE_AUTH_MODE-dependent (server route): in the default trusted_network mode it accepts the
+// untokened internal call; in oidc mode it requires a setpoints:write service token (or operator).
+func (s *Server) submitSetpoints(c echo.Context) error {
+	actor := s.setpointActor(c, "optimizer")
+	return s.applySetpointWrite(c, domain.SourceOptimizer, actor, "optimizer setpoint submission", http.StatusAccepted)
+}
+
+// setpointActor is the audit actor for a setpoint write: the authenticated token's username (or
+// subject) when present, else the fallback for the untokened trusted_network path.
+func (s *Server) setpointActor(c echo.Context, fallback string) string {
+	if claims := auth.ClaimsFrom(c); claims != nil {
+		if claims.Username != "" {
+			return claims.Username
+		}
+		if claims.Subject != "" {
+			return claims.Subject
+		}
+	}
+	return fallback
+}
+
+// applySetpointWrite is the shared body of the operator edit and the optimizer submission: decode
+// and validate the partial edit, merge it onto the reconciler's baseline, and apply it as sticky
+// intended state under the given provenance. An out-of-range value is rejected 422; an unreachable
+// controller with no prior intended state is 503; a controller that rejects the delivery has its
+// status/body passed through; otherwise the write is accepted (delivered, or held when offline) and
+// the resulting bundle returned with successStatus.
+func (s *Server) applySetpointWrite(c echo.Context, source domain.SetpointSource, actor, description string, successStatus int) error {
 	ctx := c.Request().Context()
 	id := c.Param("id")
 	exists, err := s.store.Exists(ctx, id)
@@ -63,7 +96,7 @@ func (s *Server) editSetpoints(c echo.Context) error {
 		return respondValidation(c, verr)
 	}
 
-	outcome, err := s.reconcile.Apply(ctx, id, candidate, domain.SourceOperatorEdit, "operator", "ad-hoc edit")
+	outcome, err := s.reconcile.Apply(ctx, id, candidate, source, actor, description)
 	if err != nil {
 		if errors.Is(err, reconcile.ErrUnknownGreenhouse) {
 			return respondNotFound(c, "greenhouse not found")
@@ -73,7 +106,7 @@ func (s *Server) editSetpoints(c echo.Context) error {
 	if outcome.ControllerStatus != 0 && !outcome.Delivered && !outcome.Deferred {
 		return c.JSONBlob(outcome.ControllerStatus, outcome.ControllerBody)
 	}
-	return c.JSON(http.StatusOK, outcome.Setpoints)
+	return c.JSON(successStatus, outcome.Setpoints)
 }
 
 // applyGlobalPatch merges a partial edit's global setpoint fields onto a baseline bundle. Zone

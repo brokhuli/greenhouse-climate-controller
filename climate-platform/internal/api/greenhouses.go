@@ -43,6 +43,9 @@ func (s *Server) registerGreenhouse(c echo.Context) error {
 		Endpoint: store.Endpoint{
 			RESTBaseURL:   req.Controller.RESTBaseURL,
 			MQTTTopicRoot: req.Controller.MQTTTopicRoot,
+			// Optional per-controller pre-shared token (RFC-011); the platform presents it on every
+			// downward REST write when the controller is hardened, nil otherwise.
+			BearerToken: req.Controller.BearerToken,
 		},
 	}
 	if err := s.store.Register(ctx, registration); err != nil {

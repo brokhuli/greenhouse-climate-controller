@@ -15,6 +15,12 @@ const (
 	// KeycloakViewerRole grants read-only access; it is the baseline any authenticated
 	// user already has, so it is not checked directly.
 	KeycloakViewerRole = "gh-viewer"
+	// KeycloakSetpointsWriteRole is the narrow service role a Keycloak client-credentials token
+	// carries for the optimizer → POST /setpoints boundary (RFC-011). It grants only setpoint
+	// submission — not the full operator role (which also registers greenhouses and edits
+	// profiles). A service account's realm roles arrive in `realm_access.roles`, the same claim
+	// the verifier already reads for human roles.
+	KeycloakSetpointsWriteRole = "setpoints:write"
 )
 
 // Claims is the subset of a validated access token the platform authorizes on.
@@ -40,3 +46,11 @@ func (c *Claims) HasRole(role string) bool {
 // IsOperator reports whether the token maps to the platform operator role — the gate on
 // every write surface (platform security §4).
 func (c *Claims) IsOperator() bool { return c.HasRole(KeycloakOperatorRole) }
+
+// CanWriteSetpoints reports whether the token may submit setpoints on POST /setpoints — either a
+// service token carrying the narrow setpoints:write role (the optimizer) or a human operator, who
+// holds every write capability (platform security §4). It gates only that one surface; the other
+// write endpoints remain operator-only.
+func (c *Claims) CanWriteSetpoints() bool {
+	return c.HasRole(KeycloakSetpointsWriteRole) || c.IsOperator()
+}

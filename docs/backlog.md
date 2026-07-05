@@ -11,7 +11,6 @@ the relevant ADR / RFC.
 | Item | Why | Blocked on / When | Reference |
 |---|---|---|---|
 | Extend CI: coverage + per-phase gates | The CI pipeline now re-runs the Rust gate and the contract harness on push/PR ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)), but coverage is not yet enforced (`P1-TEST-1`, `cargo llvm-cov`), and the Go, Python, frontend, and load gates are not wired. | Coverage is wireable now; the per-phase gates land with the phase they verify (Phase 2 Go, Phase 3 Python, frontend). | [RFC-010](./decisions/request-for-comments.md#rfc-010-verification--continuous-integration-strategy); [`spec-verification.md §4`](./specs/design/spec-verification.md#4-tooling-matrix), [`§6`](./specs/design/spec-verification.md#6-ci-topology) |
-| Service-auth mode + controller pre-shared tokens (RFC-011) | The 2b human-auth slice landed (Keycloak viewer/operator), but the config-gated **service** boundaries are not built: `SERVICE_AUTH_MODE=oidc` (optimizer client-credentials on `POST /setpoints`) and per-controller pre-shared bearer tokens. These are dormant-by-default hardening for a multi-host posture. | **Phase 3** — the optimizer and its `POST /setpoints` write path don't exist yet, so there is nothing to guard; the controller token also needs controller-side (Rust) support. Trusted-network default is the committed single-host stance. | [platform security §5](./specs/design/platform/07-spec-platform-security.md); [RFC-011](./decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009) |
 | Ship the remaining 2b infra: observability | The 2b backbone landed without Prometheus/Grafana. The Go API does not yet expose `/metrics`, so ingestion rate, API latency, reconciliation actions, and datastore/background-job health (incl. the provenance-prune `add_job` registered by `EnsureProvenancePrune`) are not yet scraped or dashboarded. | With the deferred **2b observability slice**. | [platform operations §1–2](./specs/design/platform/08-spec-platform-operations.md) |
 
 ### Notes
@@ -28,5 +27,14 @@ first item above): Keycloak (`auth`) issues OIDC tokens, the Go API validates th
 nine write endpoints to the operator role, and the SPA performs the Authorization-Code + PKCE login
 and disables write affordances for viewers. The stack now runs behind the single nginx `proxy`
 (`/`, `/api`, `/auth`). Auth is enforced whenever `PLATFORM_OIDC_ISSUER_URL` is set (always, in the
-shipped Compose); an unconfigured local/test run stays open, the 2a trusted-network posture. The
-**service-auth** hardening mode is tracked separately above (Phase 3).
+shipped Compose); an unconfigured local/test run stays open, the 2a trusted-network posture.
+
+**Service-auth hardening landed (2026-07-04).** Both RFC-011 write boundaries are now implemented and
+**dormant by default** (removing the item formerly listed above): the Go API gained
+`PLATFORM_SERVICE_AUTH_MODE` (`trusted_network` default | `oidc`) gating a new `POST /setpoints`
+(`source = optimizer`, `202`) via a `setpoints:write` service role, and the Rust controller enforces an
+optional `[api].auth_token` on its REST write endpoints (unset = today's behavior), with the platform
+provisioning + presenting the matching token. Keycloak gained the confidential `optimizer` client. Token
+*acquisition* by the optimizer is still Phase 3; only the platform/controller sides are built. Outcome
+recorded in the [2026-07-04 ADR entry](./decisions/architecture-design-record.md) and
+[RFC-011](./decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009).

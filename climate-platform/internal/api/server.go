@@ -17,6 +17,7 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/auth"
+	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/config"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/ingest"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/reconcile"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/relay"
@@ -34,14 +35,18 @@ type Server struct {
 	reconcile *reconcile.Reconciler
 	hub       *ws.Hub
 	verifier  *auth.Verifier
-	log       *slog.Logger
-	router    *echo.Echo
+	// serviceAuthMode gates the optimizer POST /setpoints boundary (RFC-011): trusted_network
+	// (default) accepts it untokened, oidc requires a setpoints:write service token.
+	serviceAuthMode string
+	log             *slog.Logger
+	router          *echo.Echo
 }
 
 // New builds the server and its route tree. verifier gates the surface: nil runs
 // unauthenticated (2a trusted-network posture), non-nil enforces viewer/operator auth.
-func New(store *store.Store, fleet *state.Fleet, ing *ingest.Ingester, relay *relay.Client, reconciler *reconcile.Reconciler, hub *ws.Hub, verifier *auth.Verifier, log *slog.Logger) *Server {
-	s := &Server{store: store, fleet: fleet, ing: ing, relay: relay, reconcile: reconciler, hub: hub, verifier: verifier, log: log}
+// serviceAuthMode additionally gates POST /setpoints (config.ServiceAuthMode*).
+func New(store *store.Store, fleet *state.Fleet, ing *ingest.Ingester, relay *relay.Client, reconciler *reconcile.Reconciler, hub *ws.Hub, verifier *auth.Verifier, serviceAuthMode string, log *slog.Logger) *Server {
+	s := &Server{store: store, fleet: fleet, ing: ing, relay: relay, reconcile: reconciler, hub: hub, verifier: verifier, serviceAuthMode: serviceAuthMode, log: log}
 	router := echo.New()
 	router.HideBanner = true
 	router.HidePort = true
@@ -63,6 +68,9 @@ func (s *Server) routes(router *echo.Echo) {
 	api := router.Group("/api")
 	api.Use(auth.OptionalAuth(s.verifier))
 	operator := auth.RequireOperator(s.verifier)
+	// POST /setpoints is the optimizer's service write path: open in trusted_network mode,
+	// gated to a setpoints:write service token (or operator) in oidc mode (RFC-011).
+	setpointsWriter := auth.RequireSetpointsWrite(s.verifier, s.serviceAuthMode == config.ServiceAuthModeOIDC)
 
 	api.GET("/greenhouses", s.listGreenhouses)
 	api.POST("/greenhouses", s.registerGreenhouse, operator)
@@ -70,6 +78,7 @@ func (s *Server) routes(router *echo.Echo) {
 	api.GET("/greenhouses/:id", s.getGreenhouse)
 	api.DELETE("/greenhouses/:id", s.retireGreenhouse, operator)
 	api.PATCH("/greenhouses/:id/setpoints", s.editSetpoints, operator)
+	api.POST("/greenhouses/:id/setpoints", s.submitSetpoints, setpointsWriter)
 	api.GET("/greenhouses/:id/telemetry", s.getTelemetry)
 	api.GET("/greenhouses/:id/analytics", s.getAnalytics)
 	api.GET("/greenhouses/:id/sim/time-scale", s.getTimeScale)

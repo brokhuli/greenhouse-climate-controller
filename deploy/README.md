@@ -60,6 +60,32 @@ curl -X PATCH localhost:8080/api/greenhouses/gh-a/setpoints \
 `gen-controllers.sh N` is the lever for **performance testing** under different greenhouse counts
 (operations §2). Generated files (`docker-compose.override.yml`, `controllers/`) are git-ignored.
 
+## Service-auth hardening (RFC-011, dormant by default)
+
+Beyond the human viewer/operator auth above, two internal **service** write boundaries can be hardened
+for a multi-host posture. Both are **off by default** — the single-host stack behaves as documented above.
+
+- **Optimizer → `POST /setpoints`.** `PLATFORM_SERVICE_AUTH_MODE` (in the `api` env, default
+  `trusted_network`) gates the optimizer's setpoint write path. Set it to `oidc` and `POST
+  /api/greenhouses/{id}/setpoints` requires a Keycloak **client-credentials** token carrying the narrow
+  `setpoints:write` role (or an operator token); the dormant `optimizer` client lives in
+  [`keycloak/realm.json`](./keycloak/realm.json). Acquire one with the client secret:
+
+  ```sh
+  curl -s -X POST localhost:8080/auth/realms/greenhouse/protocol/openid-connect/token \
+       -d grant_type=client_credentials -d client_id=optimizer -d client_secret=dev-optimizer-secret
+  # → present the access_token as `Authorization: Bearer …` on POST /setpoints (202 on success).
+  ```
+  Rotate `dev-optimizer-secret` for any real deployment. In the default `trusted_network` mode the call
+  is accepted untokened, exactly as today.
+
+- **Platform → controller REST.** Each controller supports an optional `[api].auth_token`; when set it
+  requires a matching `Bearer` on its write endpoints (reads stay open). Run
+  `CONTROLLER_AUTH_TOKENS=1 bash deploy/scripts/gen-controllers.sh N` to mint one per controller — the
+  generator writes it into each controller's TOML and registers the greenhouse with the matching
+  `bearer_token`, so the platform presents it on every downward call. Unset (default) → controllers stay
+  unauthenticated.
+
 ## Inject demo faults
 
 To populate the dashboard's Recent Activity feed (and trip the fleet "degraded" state) without

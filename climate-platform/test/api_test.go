@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/api"
+	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/config"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/domain"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/ingest"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/reconcile"
@@ -28,8 +29,9 @@ import (
 // fakeController stands in for a Phase 1 controller's REST config API: it records the downward
 // PATCH paths the platform delivers and serves current setpoints/zones on GET.
 type fakeController struct {
-	mu      sync.Mutex
-	patched []string
+	mu       sync.Mutex
+	patched  []string
+	lastAuth string
 }
 
 func (f *fakeController) handler() http.Handler {
@@ -44,6 +46,7 @@ func (f *fakeController) handler() http.Handler {
 		case r.Method == http.MethodPatch:
 			f.mu.Lock()
 			f.patched = append(f.patched, r.URL.Path)
+			f.lastAuth = r.Header.Get("Authorization")
 			f.mu.Unlock()
 			_, _ = w.Write([]byte("{}"))
 		default:
@@ -56,6 +59,12 @@ func (f *fakeController) patchedPaths() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]string(nil), f.patched...)
+}
+
+func (f *fakeController) lastAuthHeader() string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.lastAuth
 }
 
 // TestProfileAssignmentHTTP drives the 2b REST surface end to end against a real DB and a fake
@@ -89,7 +98,7 @@ func TestProfileAssignmentHTTP(t *testing.T) {
 	ing := ingest.New(st, fleet, hub, log, "tcp://localhost:1883", 4096, time.Hour)
 	relayClient := relay.New(5 * time.Second)
 	reconciler := reconcile.New(st, relayClient, fleet, hub, log, reconcile.Config{Interval: time.Hour})
-	server := api.New(st, fleet, ing, relayClient, reconciler, hub, nil, log)
+	server := api.New(st, fleet, ing, relayClient, reconciler, hub, nil, config.ServiceAuthModeTrustedNetwork, log)
 	platform := httptest.NewServer(server.Handler())
 	defer platform.Close()
 
@@ -99,7 +108,7 @@ func TestProfileAssignmentHTTP(t *testing.T) {
 	// reconciler delivers rather than defers.
 	client.do(http.MethodPost, "/api/greenhouses", map[string]any{
 		"id": "gh-a", "display_name": "House A",
-		"controller": map[string]any{"rest_base_url": controllerSrv.URL, "mqtt_topic_root": "gh/gh-a"},
+		"controller": map[string]any{"rest_base_url": controllerSrv.URL, "mqtt_topic_root": "gh/gh-a", "bearer_token": "controller-secret"},
 	}, http.StatusCreated)
 	fleet.Observe("gh-a", time.Now().UTC())
 
@@ -133,6 +142,12 @@ func TestProfileAssignmentHTTP(t *testing.T) {
 		t.Fatalf("controller did not receive resolved setpoints, patched: %v", paths)
 	}
 
+	// The per-controller pre-shared token registered above is presented on the downward REST write
+	// (RFC-011): dto → registry → relay round-trip.
+	if got := controller.lastAuthHeader(); got != "Bearer controller-secret" {
+		t.Fatalf("downward call Authorization = %q, want %q", got, "Bearer controller-secret")
+	}
+
 	// A sticky operator edit layers onto intended state and is delivered too.
 	client.do(http.MethodPatch, "/api/greenhouses/gh-a/setpoints", map[string]any{"temperature_day_c": 25.0}, http.StatusOK)
 
@@ -142,6 +157,18 @@ func TestProfileAssignmentHTTP(t *testing.T) {
 	}
 	if current.Revision != 2 || current.Source != domain.SourceOperatorEdit || current.Setpoints.TemperatureDayC != 25 {
 		t.Fatalf("current revision = %+v, want rev2 operator_edit temp 25", current)
+	}
+
+	// The optimizer's POST /setpoints submission is accepted (202) and records optimizer
+	// provenance (RFC-011). In the default trusted_network mode it needs no service token.
+	client.do(http.MethodPost, "/api/greenhouses/gh-a/setpoints", map[string]any{"temperature_day_c": 23.0}, http.StatusAccepted)
+
+	current, found, err = st.CurrentRevision(ctx, "gh-a")
+	if err != nil || !found {
+		t.Fatalf("current revision after optimizer submit found=%v err=%v", found, err)
+	}
+	if current.Revision != 3 || current.Source != domain.SourceOptimizer || current.Setpoints.TemperatureDayC != 23 {
+		t.Fatalf("current revision = %+v, want rev3 optimizer temp 23", current)
 	}
 }
 

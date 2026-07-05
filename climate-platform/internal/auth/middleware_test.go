@@ -19,6 +19,8 @@ func testVerifier() *Verifier {
 			return &Claims{Subject: "u1", Username: "op", Roles: []string{KeycloakOperatorRole}}, nil
 		case "viewer-token":
 			return &Claims{Subject: "u2", Username: "vw", Roles: []string{KeycloakViewerRole}}, nil
+		case "setpoints-write-token":
+			return &Claims{Subject: "svc-optimizer", Username: "service-account-optimizer", Roles: []string{KeycloakSetpointsWriteRole}}, nil
 		default:
 			return nil, errors.New("invalid token")
 		}
@@ -62,6 +64,46 @@ func TestAuthMiddleware(t *testing.T) {
 				target += "?access_token=" + tc.queryToken
 			}
 			req := httptest.NewRequest(http.MethodGet, target, nil)
+			if tc.authHeader != "" {
+				req.Header.Set("Authorization", tc.authHeader)
+			}
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != tc.wantStatus {
+				t.Fatalf("status = %d, want %d (body: %s)", rec.Code, tc.wantStatus, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestRequireSetpointsWrite(t *testing.T) {
+	cases := []struct {
+		name       string
+		verifier   *Verifier
+		enforce    bool
+		authHeader string
+		wantStatus int
+	}{
+		{"oidc disabled passes through", nil, true, "", http.StatusOK},
+		{"trusted_network passes through untokened", testVerifier(), false, "", http.StatusOK},
+		{"trusted_network passes through with any token", testVerifier(), false, "Bearer viewer-token", http.StatusOK},
+		{"oidc anonymous 401", testVerifier(), true, "", http.StatusUnauthorized},
+		{"oidc invalid token 401", testVerifier(), true, "Bearer nope", http.StatusUnauthorized},
+		{"oidc viewer 403", testVerifier(), true, "Bearer viewer-token", http.StatusForbidden},
+		{"oidc setpoints:write 200", testVerifier(), true, "Bearer setpoints-write-token", http.StatusOK},
+		{"oidc operator 200", testVerifier(), true, "Bearer operator-token", http.StatusOK},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			router := echo.New()
+			group := router.Group("/api")
+			group.Use(OptionalAuth(tc.verifier))
+			handler := func(c echo.Context) error { return c.NoContent(http.StatusOK) }
+			group.POST("/greenhouses/:id/setpoints", handler, RequireSetpointsWrite(tc.verifier, tc.enforce))
+
+			req := httptest.NewRequest(http.MethodPost, "/api/greenhouses/gh-a/setpoints", nil)
 			if tc.authHeader != "" {
 				req.Header.Set("Authorization", tc.authHeader)
 			}

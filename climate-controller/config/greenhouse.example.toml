@@ -13,6 +13,11 @@ broker_url = "mqtt://localhost:1883" # native controller connects to the deploy/
 
 [api]
 bind_addr = "127.0.0.1:8080" # REST config/control surface
+# Optional pre-shared bearer token (RFC-011); unset/empty = writes unauthenticated (default). Set it
+# and the REST write endpoints (PATCH/PUT/DELETE) require a matching `Authorization: Bearer <token>`
+# while reads stay open. In a managed deployment the platform holds the matching token (registry)
+# and presents it on every downward call.
+# auth_token = ""
 
 # --- Global climate setpoints (spec §4) ---------------------------------------------------
 [setpoints]

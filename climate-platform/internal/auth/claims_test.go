@@ -24,3 +24,23 @@ func TestClaimsRoles(t *testing.T) {
 		t.Fatal("empty claims should have no roles")
 	}
 }
+
+func TestCanWriteSetpoints(t *testing.T) {
+	service := &Claims{Roles: []string{KeycloakSetpointsWriteRole}}
+	if !service.CanWriteSetpoints() {
+		t.Fatal("setpoints:write token should be allowed to write setpoints")
+	}
+	if service.IsOperator() {
+		t.Fatal("the service role must not grant the full operator role")
+	}
+
+	operator := &Claims{Roles: []string{KeycloakOperatorRole}}
+	if !operator.CanWriteSetpoints() {
+		t.Fatal("operator should be allowed to write setpoints")
+	}
+
+	viewer := &Claims{Roles: []string{KeycloakViewerRole}}
+	if viewer.CanWriteSetpoints() {
+		t.Fatal("viewer must not be allowed to write setpoints")
+	}
+}

@@ -8,6 +8,7 @@
 
 use std::collections::HashMap;
 use std::error::Error;
+use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use tokio::net::TcpListener;
@@ -46,6 +47,7 @@ struct InjectionRecord {
 pub async fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let greenhouse_id = config.controller_id.as_str().to_string();
     let bind_addr = config.api.bind_addr.clone();
+    let auth_token: Option<Arc<str>> = config.api.write_auth_token().map(Arc::from);
     let broker_url = config.mqtt.broker_url.clone();
     let override_timeout = config.safety.override_timeout_secs;
     let injection_default_ttl = config.simulation.sensor_injection_timeout_secs;
@@ -85,15 +87,17 @@ pub async fn run(config: Config) -> Result<(), Box<dyn Error>> {
     publisher.publish_snapshot(&snapshot, time_scale);
 
     // Serve REST on its own task.
+    let write_auth = auth_token.is_some();
     let state = AppState {
         greenhouse_id: greenhouse_id.clone().into(),
         tx: cmd_tx,
         view: view_rx,
         base,
         bounds: plausibility,
+        auth_token,
     };
     let listener = TcpListener::bind(&bind_addr).await?;
-    tracing::info!(%greenhouse_id, "REST listening on {bind_addr}; MQTT → {broker_url}");
+    tracing::info!(%greenhouse_id, write_auth, "REST listening on {bind_addr}; MQTT → {broker_url}");
     tokio::spawn(async move {
         if let Err(err) = axum::serve(listener, router(state)).await {
             tracing::error!("REST server error: {err}");

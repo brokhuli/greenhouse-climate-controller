@@ -5,7 +5,8 @@
   "roles": {
     "realm": [
       { "name": "gh-viewer", "description": "Read fleet, telemetry, analytics, status" },
-      { "name": "gh-operator", "description": "Viewer plus every write-path action (platform security §3)" }
+      { "name": "gh-operator", "description": "Viewer plus every write-path action (platform security §3)" },
+      { "name": "setpoints:write", "description": "Narrow service role: submit setpoints on POST /setpoints only (RFC-011, optimizer service account)" }
     ]
   },
   "clients": [
@@ -22,6 +23,30 @@
       "attributes": {
         "post.logout.redirect.uris": "http://localhost:8080/*"
       },
+      "protocolMappers": [
+        {
+          "name": "climate-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "climate-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "optimizer",
+      "name": "Optimizer (service account)",
+      "description": "Confidential client for the Phase-3 optimizer's client-credentials POST /setpoints token (RFC-011). Dormant unless the platform runs SERVICE_AUTH_MODE=oidc; the dev secret below must be rotated for any real deployment.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "secret": "dev-optimizer-secret",
       "protocolMappers": [
         {
           "name": "climate-api-audience",
@@ -54,6 +79,12 @@
       "lastName": "Viewer",
       "credentials": [{ "type": "password", "value": "viewer", "temporary": false }],
       "realmRoles": ["gh-viewer"]
+    },
+    {
+      "username": "service-account-optimizer",
+      "enabled": true,
+      "serviceAccountClientId": "optimizer",
+      "realmRoles": ["setpoints:write"]
     }
   ]
 }

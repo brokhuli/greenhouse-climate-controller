@@ -79,6 +79,12 @@ Compose file**, not a per-greenhouse config (contrast the controller's TOML).
 Per-greenhouse data lives in the registry and assignments
 ([data model](./03-spec-platform-data-model.md)).
 
+`PLATFORM_SERVICE_AUTH_MODE` (`trusted_network` default | `oidc`) is the config value that gates the
+optimizer → `POST /setpoints` boundary ([security §5](./07-spec-platform-security.md#5-the-2a-unauthenticated-stance--and-the-deferred-service-auth-mode),
+[RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009)).
+It is dormant by default; `oidc` additionally requires `PLATFORM_OIDC_ISSUER_URL` to be set (the service
+token is validated on the human OIDC verifier).
+
 ### Controller services
 
 Phase 1 controllers run as **Docker containers on the same local machine**, not on

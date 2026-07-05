@@ -93,11 +93,11 @@ func run(log *slog.Logger) error {
 		return fmt.Errorf("oidc verifier: %w", err)
 	}
 
-	server := api.New(db, fleet, ing, relayClient, reconciler, hub, verifier, log)
+	server := api.New(db, fleet, ing, relayClient, reconciler, hub, verifier, cfg.ServiceAuthMode, log)
 
 	serverErr := make(chan error, 1)
 	go func() { serverErr <- server.Start(cfg.HTTPAddr) }()
-	log.Info("platform started", "addr", cfg.HTTPAddr, "broker", cfg.MQTTBrokerURL, "retention_days", cfg.RetentionDays, "auth", verifier != nil)
+	log.Info("platform started", "addr", cfg.HTTPAddr, "broker", cfg.MQTTBrokerURL, "retention_days", cfg.RetentionDays, "auth", verifier != nil, "service_auth_mode", cfg.ServiceAuthMode)
 
 	select {
 	case <-ctx.Done():
