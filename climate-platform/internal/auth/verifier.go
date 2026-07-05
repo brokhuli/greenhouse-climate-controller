@@ -83,8 +83,8 @@ func (v *Verifier) Verify(ctx context.Context, rawToken string) (*Claims, error)
 // in progress does not fail API boot outright.
 func discoverWithRetry(ctx context.Context, discoveryURL string) (*oidc.Provider, error) {
 	const (
-		attempts = 30
-		wait     = 2 * time.Second
+		attempts = 10
+		waitStep = time.Second
 	)
 	var lastErr error
 	for i := 0; i < attempts; i++ {
@@ -96,7 +96,7 @@ func discoverWithRetry(ctx context.Context, discoveryURL string) (*oidc.Provider
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case <-time.After(wait):
+		case <-time.After(time.Duration(i+1) * waitStep):
 		}
 	}
 	return nil, lastErr
