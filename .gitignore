@@ -18,6 +18,9 @@ dist/
 **/blob-report/
 **/.playwright/
 
+# Lighthouse CI reports (frontend gate)
+**/.lighthouseci/
+
 # Python
 __pycache__/
 *.py[cod]

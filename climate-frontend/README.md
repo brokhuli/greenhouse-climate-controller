@@ -30,9 +30,15 @@ The 2a feature views (fleet grid, per-greenhouse detail with uPlot charts, setpo
 forms, activity feed) and the **2b backbone** UI — the crop-profile library (`/profiles`),
 per-greenhouse profile assignment, and drift surfacing on the fleet cards + detail — are built.
 
-**Deferred to later slices:** Playwright + Lighthouse (e2e / perf), and the remaining 2b
-observability infra (Prometheus/Grafana). The nginx `proxy`, the `Dockerfile`, and Keycloak/OIDC
-auth have all landed.
+**Verification:** ESLint, `tsc`, and the Vitest suite run in CI, with **Lighthouse CI**
+(`@lhci/cli` — initial-load + accessibility against the static production build) as a blocking gate;
+thresholds live in [`.lighthouserc.json`](./.lighthouserc.json) and the job is in
+[`../.github/workflows/ci.yml`](../.github/workflows/ci.yml). The **Playwright** E2E smoke test
+([`tests/e2e/`](./tests/e2e/)) runs locally against the live deploy stack — wiring it into CI is
+deferred.
+
+**Deferred to later slices:** frontend E2E in CI, and the remaining 2b observability infra
+(Prometheus/Grafana). The nginx `proxy`, the `Dockerfile`, and Keycloak/OIDC auth have all landed.
 
 ## Layout
 
@@ -41,7 +47,7 @@ auth have all landed.
 - `src/components/` — domain-agnostic primitives + the console shell.
 - `src/features/` — one folder per view (placeholders for now).
 - `src/hooks/`, `src/lib/`, `src/styles/` — theme, derivations, design tokens.
-- `tests/unit/` — Vitest + React Testing Library; `tests/e2e/` is reserved for Playwright.
+- `tests/unit/` — Vitest + React Testing Library; `tests/e2e/` holds the Playwright smoke test.
 
 ## Development
 
@@ -54,7 +60,9 @@ npm run build        # tsc --noEmit + vite build → dist/
 npm run lint         # ESLint
 npm run typecheck    # tsc --noEmit (strict)
 npm run test         # Vitest (unit + component)
+npm run test:e2e     # Playwright smoke test (needs the deploy stack — see below)
 npm run format       # Prettier
+npx lhci autorun     # Lighthouse CI against dist/ (run `npm run build` first)
 ```
 
 Node version is pinned in [`.nvmrc`](./.nvmrc).
