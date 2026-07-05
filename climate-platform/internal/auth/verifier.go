@@ -80,7 +80,8 @@ func (v *Verifier) Verify(ctx context.Context, rawToken string) (*Claims, error)
 }
 
 // discoverWithRetry runs OIDC discovery, retrying a slow-to-start Keycloak so a realm import
-// in progress does not fail API boot outright.
+// in progress does not fail API boot outright. Runs a linear backoff up to about 60 seconds 
+// before failing.
 func discoverWithRetry(ctx context.Context, discoveryURL string) (*oidc.Provider, error) {
 	const (
 		attempts = 10
