@@ -10,8 +10,10 @@ running with a single command.
 serves the built React SPA and reverse-proxies `/api` (REST + WebSocket) and `/auth` (Keycloak). The
 `api` is no longer exposed directly. The `proxy` service consolidates the spec's `proxy` + `frontend`
 into one nginx image. The Phase 1 controllers run as **generated containers** (the HAL is pure
-simulation, so there is no hardware dependency). The remaining 2b observability services (Prometheus,
-Grafana) are a deferred slice — commented placeholders in [`docker-compose.yml`](./docker-compose.yml).
+simulation, so there is no hardware dependency). The 2b observability services — **Prometheus** and
+**Grafana** — are now live: Prometheus scrapes the `api`'s `/metrics` (platform-health) and every
+controller's own `/metrics` (controller-health) over the internal network, and Grafana renders the
+dashboards (see [Observability](#observability) below).
 Full topology: [08-spec-platform-operations.md](../docs/specs/design/platform/08-spec-platform-operations.md#2-deployment).
 
 **Auth is on (2b).** Reads are open to anyone — the SPA loads the fleet, dashboards, and live
@@ -85,6 +87,27 @@ for a multi-host posture. Both are **off by default** — the single-host stack 
   generator writes it into each controller's TOML and registers the greenhouse with the matching
   `bearer_token`, so the platform presents it on every downward call. Unset (default) → controllers stay
   unauthenticated.
+
+## Observability
+
+Prometheus and Grafana ship with the stack (operations §1). Prometheus scrapes two sources over the
+internal network — **nothing extra is exposed through the proxy**:
+
+- **`api:8080/metrics`** — platform-health: ingestion rate, API latency/errors, reconciliation
+  actions, per-controller connectivity, and datastore/background-job health (`platform_*`).
+- **each `gh-*:8080/metrics`** — controller-health: tick cadence/compute, MQTT publish + connection,
+  faults/mode, config applies (`controller_*`, labelled by `greenhouse_id`). The controllers are a
+  **dynamic** fleet, so `gen-controllers.sh` also emits a Prometheus file-SD target list at
+  `prometheus/targets/controllers.json` (git-ignored); Prometheus hot-reloads it, so scaling N needs
+  no config change.
+
+```sh
+open http://localhost:3000        # Grafana (admin/admin) → "Platform Health" + "Controller Fleet"
+open http://localhost:9090/targets # Prometheus — platform-api + controllers should be UP
+```
+
+Grafana's Prometheus datasource and both dashboards are auto-provisioned from `deploy/grafana/`; the
+admin login is `GRAFANA_ADMIN` / `GRAFANA_ADMIN_PASSWORD` (default `admin`/`admin`, in `deploy/.env`).
 
 ## Inject demo faults
 

@@ -18,12 +18,26 @@ type Broadcaster interface {
 	Broadcast(frame any)
 }
 
+// metricsRecorder receives ingest observability signals; *metrics.Metrics satisfies it.
+// Kept as a narrow consumer-side interface so ingest does not depend on the metrics package.
+type metricsRecorder interface {
+	IngestMessage(stream string)
+	ConnectivityTransition(status string)
+}
+
+// nopMetrics is the default when no recorder is injected (tests, unauthenticated 2a runs).
+type nopMetrics struct{}
+
+func (nopMetrics) IngestMessage(string)          {}
+func (nopMetrics) ConnectivityTransition(string) {}
+
 // Ingester subscribes to controller telemetry, routes it by greenhouse, persists it
 // through the bounded buffer, maintains the live fleet state, and fans frames out to
 // the dashboard over the WebSocket hub.
 type Ingester struct {
 	fleet        *state.Fleet
 	hub          Broadcaster
+	metrics      metricsRecorder
 	log          *slog.Logger
 	buf          *writer
 	client       mqtt.Client
@@ -35,10 +49,14 @@ type Ingester struct {
 
 // New builds an ingester. sink is the time-series store the buffer writes to; the
 // registry of known greenhouses is seeded via Add/Remove (and Seed at startup).
-func New(sink readingSink, fleet *state.Fleet, hub Broadcaster, log *slog.Logger, brokerURL string, bufferSize int, offlineAfter time.Duration) *Ingester {
+func New(sink readingSink, fleet *state.Fleet, hub Broadcaster, rec metricsRecorder, log *slog.Logger, brokerURL string, bufferSize int, offlineAfter time.Duration) *Ingester {
+	if rec == nil {
+		rec = nopMetrics{}
+	}
 	ing := &Ingester{
 		fleet:        fleet,
 		hub:          hub,
+		metrics:      rec,
 		log:          log,
 		buf:          newWriter(bufferSize, sink, log),
 		offlineAfter: offlineAfter,
@@ -171,6 +189,7 @@ func (ing *Ingester) onReading(payload []byte, topicID string, now time.Time) {
 	if ing.mismatched(topicID, reading.GreenhouseID) {
 		return
 	}
+	ing.metrics.IngestMessage("reading")
 	ing.buf.push(record{reading: &reading})
 	if reading.ZoneID == nil {
 		switch reading.Metric {
@@ -188,6 +207,7 @@ func (ing *Ingester) onReading(payload []byte, topicID string, now time.Time) {
 	live, changed := ing.fleet.Observe(reading.GreenhouseID, now)
 	ing.hub.Broadcast(ws.NewTelemetryReading(reading))
 	if changed {
+		ing.metrics.ConnectivityTransition(string(live.Status))
 		ing.hub.Broadcast(ws.NewStatus(reading.GreenhouseID, reading.TS, live.Status, live.TimeScale))
 	}
 }
@@ -201,10 +221,12 @@ func (ing *Ingester) onActuator(payload []byte, topicID string, now time.Time) {
 	if ing.mismatched(topicID, sample.GreenhouseID) {
 		return
 	}
+	ing.metrics.IngestMessage("actuator")
 	ing.buf.push(record{actuator: &sample})
 	live, changed := ing.fleet.Observe(sample.GreenhouseID, now)
 	ing.hub.Broadcast(ws.NewTelemetryActuator(sample))
 	if changed {
+		ing.metrics.ConnectivityTransition(string(live.Status))
 		ing.hub.Broadcast(ws.NewStatus(sample.GreenhouseID, sample.TS, live.Status, live.TimeScale))
 	}
 }
@@ -218,10 +240,12 @@ func (ing *Ingester) onFault(payload []byte, topicID string, now time.Time) {
 	if ing.mismatched(topicID, event.GreenhouseID) {
 		return
 	}
+	ing.metrics.IngestMessage("event")
 	ing.buf.push(record{event: &event})
 	live, changed := ing.fleet.SetDegraded(event.GreenhouseID, true, now)
 	ing.hub.Broadcast(ws.NewEvent(event))
 	if changed {
+		ing.metrics.ConnectivityTransition(string(live.Status))
 		ing.hub.Broadcast(ws.NewStatus(event.GreenhouseID, event.TS, live.Status, live.TimeScale))
 	}
 }
@@ -235,6 +259,7 @@ func (ing *Ingester) onState(payload []byte, topicID string, now time.Time) {
 	if ing.mismatched(topicID, snapshot.GreenhouseID) {
 		return
 	}
+	ing.metrics.IngestMessage("state")
 	var scale *float64
 	if snapshot.Simulation != nil {
 		scaleValue := snapshot.Simulation.TimeScale
@@ -259,6 +284,9 @@ func (ing *Ingester) onState(payload []byte, topicID string, now time.Time) {
 	}
 	degraded := !snapshot.Controller.Healthy || snapshot.Controller.Mode != "normal"
 	live, statusChanged := ing.fleet.SetDegraded(snapshot.GreenhouseID, degraded, now)
+	if statusChanged {
+		ing.metrics.ConnectivityTransition(string(live.Status))
+	}
 	if statusChanged || scaleChanged {
 		ing.hub.Broadcast(ws.NewStatus(snapshot.GreenhouseID, ts, live.Status, live.TimeScale))
 	}
@@ -290,6 +318,7 @@ func (ing *Ingester) runLiveness(ctx context.Context) {
 		case <-ticker.C:
 			now := time.Now()
 			for id, live := range ing.fleet.Sweep(now) {
+				ing.metrics.ConnectivityTransition(string(live.Status))
 				ing.hub.Broadcast(ws.NewStatus(id, now, live.Status, live.TimeScale))
 			}
 		}

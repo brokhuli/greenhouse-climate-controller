@@ -61,6 +61,10 @@ pub async fn run(config: Config) -> Result<(), Box<dyn Error>> {
     };
     let base = epoch();
 
+    // Controller-health metrics, shared between the tick loop, the MQTT event loop, and the REST
+    // /metrics handler.
+    let metrics = Arc::new(crate::metrics::Metrics::new(&greenhouse_id));
+
     let mut time_scale = config.simulation.time_scale;
     let mut time_scale_updated_at_seconds = 0u64;
     let mut injections: HashMap<InjectionKey, InjectionRecord> = HashMap::new();
@@ -71,7 +75,9 @@ pub async fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let (cmd_tx, mut cmd_rx) = mpsc::channel::<Command>(COMMAND_CAP);
 
     // First tick to seed the read model and the retained MQTT state.
+    let tick_start = std::time::Instant::now();
     let snapshot = pipeline.tick();
+    metrics.record_tick(tick_start.elapsed(), &snapshot, time_scale);
     let meta = ViewMeta {
         time_scale,
         time_scale_updated_at_seconds,
@@ -83,8 +89,9 @@ pub async fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let view0 = build_view(&pipeline, &snapshot, &meta, &injections);
     let (view_tx, view_rx) = watch::channel(view0);
 
-    let mut publisher = crate::mqtt::Publisher::connect(&broker_url, &greenhouse_id);
-    publisher.publish_snapshot(&snapshot, time_scale);
+    let mut publisher =
+        crate::mqtt::Publisher::connect(&broker_url, &greenhouse_id, metrics.clone());
+    metrics.record_publish(publisher.publish_snapshot(&snapshot, time_scale));
 
     // Serve REST on its own task.
     let write_auth = auth_token.is_some();
@@ -95,6 +102,7 @@ pub async fn run(config: Config) -> Result<(), Box<dyn Error>> {
         base,
         bounds: plausibility,
         auth_token,
+        metrics: metrics.clone(),
     };
     let listener = TcpListener::bind(&bind_addr).await?;
     tracing::info!(%greenhouse_id, write_auth, "REST listening on {bind_addr}; MQTT → {broker_url}");
@@ -150,8 +158,10 @@ pub async fn run(config: Config) -> Result<(), Box<dyn Error>> {
         }
         prune_injections(&mut injections, &mut pipeline, probe_count);
 
+        let tick_start = std::time::Instant::now();
         let snapshot = pipeline.tick();
         last_tick = tokio::time::Instant::now();
+        metrics.record_tick(tick_start.elapsed(), &snapshot, time_scale);
         next_tick = last_tick + tick_interval(time_scale);
         let meta = ViewMeta {
             time_scale,
@@ -163,7 +173,7 @@ pub async fn run(config: Config) -> Result<(), Box<dyn Error>> {
         };
         let view = build_view(&pipeline, &snapshot, &meta, &injections);
         let _ = view_tx.send_replace(view);
-        publisher.publish_snapshot(&snapshot, time_scale);
+        metrics.record_publish(publisher.publish_snapshot(&snapshot, time_scale));
     }
 }
 

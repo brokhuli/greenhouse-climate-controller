@@ -42,6 +42,14 @@ platform dashboards. The metric catalog covers, at minimum:
 The proxy exposes nothing extra for metrics; Prometheus scrapes the API directly over
 the internal network.
 
+Prometheus also scrapes **each controller's own `/metrics`** (controller-health — its control
+loop, MQTT publishing, and faults; [controller interfaces §3](../controller/08-spec-controller-interfaces.md#3-rest--the-sole-write-path)),
+discovered via a generated file-SD target list since the controller fleet is dynamic. This is
+complementary, not redundant: `Per-controller connectivity` above is *platform-observed* ("can the
+platform reach/hear it"), while the controller's own metrics are *self-reported* ("is its control
+loop healthy"). Both feed the one Prometheus/Grafana. The Phase 3 optimizer will join the same way
+once it exposes `/metrics` ([optimizer interfaces](../optimizer/09-spec-optimizer-interfaces.md)).
+
 ### Structured logs & audit
 
 The API emits **structured logs** (Go `slog`) for operational events and the audit

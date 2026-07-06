@@ -5,10 +5,12 @@
 //! asserts that running the pipeline and publishing every tick **with no broker reachable** stays
 //! fast — a disconnected broker is a data gap, not a control failure.
 
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use climate_controller::config::Config;
 use climate_controller::hal::SimulatedHal;
+use climate_controller::metrics::Metrics;
 use climate_controller::mqtt::Publisher;
 use climate_controller::pipeline::Pipeline;
 
@@ -24,7 +26,8 @@ async fn publishing_never_blocks_the_tick_when_broker_is_down() {
 
     // Nothing is listening on port 1 — the publisher's event loop retries on its own task while the
     // control loop keeps ticking and publishing through the bounded, non-blocking buffer.
-    let mut publisher = Publisher::connect("mqtt://127.0.0.1:1", "gh-a");
+    let metrics = Arc::new(Metrics::new("gh-a"));
+    let mut publisher = Publisher::connect("mqtt://127.0.0.1:1", "gh-a", metrics);
 
     let start = Instant::now();
     for _ in 0..300 {

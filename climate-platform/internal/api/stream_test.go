@@ -21,7 +21,7 @@ import (
 func TestStreamWebSocket(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	hub := ws.NewHub(logger)
-	srv := New(nil, nil, nil, nil, nil, hub, nil, config.ServiceAuthModeTrustedNetwork, logger)
+	srv := New(nil, nil, nil, nil, nil, hub, nil, config.ServiceAuthModeTrustedNetwork, nil, logger)
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 

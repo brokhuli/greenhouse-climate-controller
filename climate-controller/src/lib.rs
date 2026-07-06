@@ -16,6 +16,7 @@ pub mod control;
 pub mod domain;
 pub mod faults;
 pub mod hal;
+pub mod metrics;
 pub mod mqtt;
 pub mod overrides;
 pub mod pipeline;
