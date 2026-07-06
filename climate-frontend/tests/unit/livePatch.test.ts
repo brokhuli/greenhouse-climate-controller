@@ -59,7 +59,7 @@ describe("pure frame transforms", () => {
 
   it("updates the card temperature + humidity + co2 from house-level readings and ignores zone readings", () => {
     const summary = sampleSummary({
-      climate: { temperature: 20, humidity: 50, co2: 700, setpointTemperature: 24 },
+      climate: { temperature: 20, humidity: 50, co2: 700 },
     });
     const next = applyTelemetryToSummary(summary, telemetryFrame);
     expect(next.climate.temperature).toBe(25);

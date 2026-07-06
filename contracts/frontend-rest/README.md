@@ -71,18 +71,18 @@ nginx-proxied prefix.
 | `GET /api/greenhouses/{greenhouse_id}` | Detail snapshot incl. current setpoints | 2a | 200 `GreenhouseDetail` | 404 |
 | `DELETE /api/greenhouses/{greenhouse_id}` | Retire a greenhouse | 2a | 204 | 404 |
 | `PATCH /api/greenhouses/{greenhouse_id}/setpoints` | Ad-hoc setpoint edit | 2a | 200 `Setpoints` | 404, 422 |
-| `GET /api/greenhouses/{greenhouse_id}/telemetry?from&to` | Historical range query | 2a | 200 `TelemetryRange` | 404, 422 |
-| `GET /api/greenhouses/{greenhouse_id}/analytics?from&to&metric&interval` | Aggregated/derived series | 2a | 200 `AnalyticsResponse` | 404, 422 |
+| `GET /api/greenhouses/{greenhouse_id}/telemetry?window` | Historical range query | 2a | 200 `TelemetryRange` | 404, 422 |
+| `GET /api/greenhouses/{greenhouse_id}/analytics?window&metric&interval` | Aggregated/derived series | 2a | 200 `AnalyticsResponse` | 404, 422 |
 | `GET /api/greenhouses/{greenhouse_id}/sim/time-scale` | Controller sim-clock speed *(sim-only)* | 2a | 200 `TimeScale` | 404 |
 | `PATCH /api/greenhouses/{greenhouse_id}/sim/time-scale` | Set one controller's sim-clock speed *(sim-only)* | 2a | 200 `TimeScale` | 404, 422 |
 | `PATCH /api/sim/time-scale` | Set the whole fleet's sim-clock speed *(sim-only)* | 2a | 200 `FleetTimeScaleResult` | 422 |
 | `GET /api/events?greenhouse_id&kind&severity` | Activity feed | 2a | 200 `EventEntry[]` | — |
-| `GET /api/profiles` | Crop-profile library | 2b | 200 `CropProfile[]` | 401 |
+| `GET /api/profiles` | Crop-profile library | 2b | 200 `CropProfile[]` | — |
 | `POST /api/profiles` | Create a profile | 2b | 201 `CropProfile` | 401, 403, 422 |
-| `GET /api/profiles/{profile_id}` | One profile | 2b | 200 `CropProfile` | 401, 404 |
+| `GET /api/profiles/{profile_id}` | One profile | 2b | 200 `CropProfile` | 404 |
 | `PATCH /api/profiles/{profile_id}` | Edit a profile | 2b | 200 `CropProfile` | 401, 403, 404, 422 |
 | `DELETE /api/profiles/{profile_id}` | Delete a profile | 2b | 204 | 401, 403, 404, 422 |
-| `GET /api/greenhouses/{greenhouse_id}/assignment` | Current assignment | 2b | 200 `Assignment` | 401, 404 |
+| `GET /api/greenhouses/{greenhouse_id}/assignment` | Current assignment | 2b | 200 `Assignment` | 404 |
 | `PUT /api/greenhouses/{greenhouse_id}/assignment` | Assign profile/stage | 2b | 200 `Assignment` | 401, 403, 404, 422 |
 
 The optimizer's single-authority `POST /greenhouses/{id}/setpoints` (RFC-005 write path) is a
@@ -152,11 +152,13 @@ A missing greenhouse, profile, or assignment returns **404**.
 
 **Slice-dependent.** In **2a** the API is **unauthenticated** on the trusted local Docker network
 ([RFC-009](../../docs/decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries));
-2a operations declare `security: []`. In **2b** the operations require a Keycloak OIDC bearer token
-(`bearerAuth`, declared in `components.securitySchemes`): the Go API validates the token (signature,
-issuer, audience, expiry) and maps its roles onto the platform's **viewer** (read) and **operator**
-(read + write) roles. A missing/invalid token is **401**; an authenticated non-operator attempting a
-write is **403**. The capability matrix (which role may call what) is owned by
+2a operations declare `security: []`. In **2b**, **reads stay open to anyone** — the
+anonymous-viewer posture, so read operations also declare `security: []` and never return 401 — while
+**writes** require a Keycloak OIDC bearer token (`bearerAuth`, declared in
+`components.securitySchemes`): the Go API validates the token (signature, issuer, audience, expiry)
+and maps its roles onto the platform's **viewer** (read) and **operator** (read + write) roles. A
+write with a missing/invalid token is **401**; an authenticated non-operator attempting a write is
+**403**. The capability matrix (which role may call what) is owned by
 [platform security §4](../../docs/specs/design/platform/07-spec-platform-security.md) — referenced,
 not restated. This differs from the controller-rest contract, which is unauthenticated in every mode.
 

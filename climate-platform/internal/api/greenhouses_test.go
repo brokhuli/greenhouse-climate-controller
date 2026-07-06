@@ -33,10 +33,6 @@ func TestSummaryOfIncludesLiveClimate(t *testing.T) {
 	if summary.Climate.DLI == nil || *summary.Climate.DLI != 12.6 {
 		t.Fatalf("dli not in summary: %+v", summary.Climate)
 	}
-	// Setpoints are not wired into the fleet summary yet (deferred).
-	if summary.Climate.SetpointTemperature != nil {
-		t.Fatalf("setpoint should be nil until wired, got %v", *summary.Climate.SetpointTemperature)
-	}
 }
 
 func TestSummaryOfOfflineWhenUnknown(t *testing.T) {

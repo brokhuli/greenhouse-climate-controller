@@ -29,7 +29,6 @@ describe("wire → view-model adapters", () => {
     expect(vm.climate.humidity).toBe(58);
     expect(vm.climate.co2).toBe(820);
     expect(vm.climate.dli).toBe(12.6);
-    expect(vm.climate.setpointTemperature).toBe(24);
   });
 
   it("maps a greenhouse detail incl. setpoints + zones + live zone status", () => {

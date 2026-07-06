@@ -66,7 +66,7 @@ does*, not its wire shapes.
 | **WebSockets** | Live fan-out of telemetry, status changes (incl. sim time-scale), drift, and events to the dashboard | 2a |
 | **REST — crop profiles** | CRUD on the profile library and their stage-aware target bundles | 2b |
 | **REST — assignments** | Assign a profile/stage to a greenhouse; trigger apply/reconcile | 2b |
-| **REST — setpoints (`POST`)** | Single-authority setpoint submission (the optimizer's RFC-005 write path) + provenance | 2b |
+| **REST — setpoints (`POST`)** | Single-authority setpoint submission at `POST /api/greenhouses/{id}/setpoints` (the optimizer's RFC-005 write path; `POST /setpoints` for short) + provenance | 2b |
 
 Each surface maps to a concern documented elsewhere: telemetry queries read what
 [ingestion](./04-spec-platform-ingestion.md) stored; profiles/assignments/setpoints drive

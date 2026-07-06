@@ -3,9 +3,9 @@
   "get": {
     "operationId": "getProfile",
     "summary": "One crop profile",
-    "description": "A single profile incl. its stage-aware target bundles (frontend data model §6, key [\"profile\", id]). Requires an authenticated viewer or operator (2b).",
+    "description": "A single profile incl. its stage-aware target bundles (frontend data model §6, key [\"profile\", id]). Open to anyone — reads need no token (anonymous-viewer posture, platform security §4); browsing the library carries the viewer capability (2b).",
     "x-slice": "2b",
-    "security": [{ "bearerAuth": [] }],
+    "security": [],
     "responses": {
       "200": {
         "description": "The profile.",
@@ -15,7 +15,6 @@
           }
         }
       },
-      "401": { "$ref": "../components/responses.json#/Unauthorized" },
       "404": { "$ref": "../components/responses.json#/NotFound" }
     }
   },

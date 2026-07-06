@@ -96,13 +96,12 @@ export const wireGreenhouseSummary = z.object({
   status: connectivity,
   drift: z.boolean().default(false),               // (2b) intended ≠ reported setpoints
   time_scale: z.number().nullable().optional(),    // sim-only: simulated-clock speed (1 = real-time); null/absent on real hardware
-  // compact current-vs-target readout for the fleet card (all fields optional/nullable)
+  // compact live-climate readout for the fleet card (all fields optional/nullable; targets are on the detail, not here)
   climate: z.object({
     temperature: z.number().nullable(),
     humidity: z.number().nullable(),
     co2: z.number().nullable(),
     dli: z.number().nullable(),                     // accumulated Daily Light Integral for the crop day (derived; PAR stays a telemetry metric)
-    setpoint_temperature: z.number().nullable(),    // currently-resolved temperature setpoint
   }).partial().optional(),
 });
 
@@ -118,7 +117,7 @@ export type GreenhouseSummary = {
   status: Connectivity; drift: boolean; timeScale: number | null;
   climate: {
     temperature?: number | null; humidity?: number | null; co2?: number | null;
-    dli?: number | null; setpointTemperature?: number | null;
+    dli?: number | null;
   };
 };
 
@@ -131,7 +130,6 @@ export const toGreenhouseSummary =
       humidity: w.climate?.humidity,
       co2: w.climate?.co2,
       dli: w.climate?.dli,
-      setpointTemperature: w.climate?.setpoint_temperature,
     },
   });
 ```
@@ -376,8 +374,8 @@ entries:
 | `["fleet"]` | `GET /api/greenhouses` | patched by `status` / `drift` frames |
 | `["fleet-sparklines", window]` | `GET /api/greenhouses/sparklines?metric&window` | one batched query backing every fleet card's compact sparkline — avoids an N-request fan-out on the overview |
 | `["greenhouse", id]` | `GET /api/greenhouses/:id` | snapshot incl. current setpoints **and** live `zone_status` |
-| `["telemetry", id, range]` | `GET /api/greenhouses/:id/telemetry?from&to` | historical half of the chart (raw samples, short ranges) |
-| `["analytics", id, range, interval]` | `GET /api/greenhouses/:id/analytics?from&to&interval` | aggregated long-range chart series (replaces raw telemetry past the range threshold — [architecture §4](./03-spec-frontend-architecture.md#4-runtime-data-flow)) |
+| `["telemetry", id, range]` | `GET /api/greenhouses/:id/telemetry?window` | historical half of the chart (raw samples, short ranges) |
+| `["analytics", id, range, interval]` | `GET /api/greenhouses/:id/analytics?window&interval` | aggregated long-range chart series (replaces raw telemetry past the range threshold — [architecture §4](./03-spec-frontend-architecture.md#4-runtime-data-flow)) |
 | `["events", scope]` | `GET /api/events?…` | activity feed; prepended by `event` frames |
 | `["profiles"]` / `["profile", id]` *(2b)* | `GET /api/profiles…` | profile library + editor |
 

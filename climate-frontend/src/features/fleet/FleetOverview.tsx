@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, TriangleAlert } from "lucide-react";
 import { useFleet } from "../../api/queries/greenhouses";
-import { useFleetSparklines } from "../../api/queries/fleet";
+import { fleetStaleNotice, isStreamDegraded, useFleetSparklines } from "../../api/queries/fleet";
+import { useStream } from "../../app/stream-context";
 import { usePersistentRange } from "../../hooks/usePersistentRange";
 import { useRole } from "../../hooks/useRole";
 import { statusRollup } from "../../lib/derivations";
@@ -41,6 +42,11 @@ export default function FleetOverview() {
   const sparklines = useFleetSparklines(windowKey);
   const history = useMemo(() => indexFleetHistory(sparklines.data), [sparklines.data]);
   const windowMs = rangeMs(windowKey);
+
+  // The charts refresh slower (and rely on stale cache) when the live stream is degraded or a poll
+  // fails, so tell the operator rather than let frozen charts read as live.
+  const { connectionState } = useStream();
+  const staleNotice = fleetStaleNotice(isStreamDegraded(connectionState), sparklines.isError);
 
   const summaries = fleet.data ?? [];
   const anySim = summaries.some((summary) => summary.timeScale != null);
@@ -106,6 +112,24 @@ export default function FleetOverview() {
         />
       ) : (
         <>
+          {staleNotice ? (
+            <div
+              role="status"
+              aria-live="polite"
+              className="text-fg-default flex items-center gap-2 rounded-md px-3 py-2 text-sm"
+              style={{
+                backgroundColor: "var(--color-surface-raised)",
+                borderLeft: "3px solid var(--color-status-degraded)",
+              }}
+            >
+              <TriangleAlert
+                size={16}
+                aria-hidden
+                style={{ color: "var(--color-status-degraded)" }}
+              />
+              <span>{staleNotice}</span>
+            </div>
+          ) : null}
           <FleetSummaryBar rollup={statusRollup(summaries)} />
           <div className={GRID} style={GRID_STYLE}>
             {summaries.map((summary) => (
