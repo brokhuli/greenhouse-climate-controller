@@ -15,6 +15,11 @@ prometheus = { version = "0.13", default-features = false }
 rumqttc = "0.25.1"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
+# Cross-platform process self-inspection for the controller_process_* resource metrics. The
+# prometheus crate has no process collector, and its optional built-in one is Linux/procfs-only,
+# which would break the Windows dev/test build; the `system` feature alone (no disk/network/
+# component collection) keeps this lean.
+sysinfo = { version = "0.33", default-features = false, features = ["system"] }
 tokio = { version = "1.52.3", features = ["full"] }
 toml = "1.1.2"
 tracing = "0.1.44"

@@ -86,7 +86,8 @@ The REST API is the only way anything enters the controller. It exposes:
 
 Beyond these control surfaces, the controller also serves an unauthenticated operational
 **`/metrics`** (Prometheus text exposition) reporting *controller-health* — tick cadence and compute
-budget (`P1-PERF-3`), MQTT publish + connection (`P1-RESIL-3`), and fault/mode state. Like `/health`
+budget (`P1-PERF-3`), MQTT publish + connection (`P1-RESIL-3`), fault/mode state, and the controller's
+own process resource footprint (CPU percent + resident memory, sampled from the OS). Like `/health`
 it is a **read** (the optional write-token leaves it open) and, being operational rather than a
 control contract, it sits **outside** the versioned [`contracts/controller-rest/`](../../../../contracts/)
 surface. Prometheus scrapes it directly over the internal network

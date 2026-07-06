@@ -108,6 +108,30 @@
       "targets": [
         { "refId": "A", "expr": "sum by (endpoint) (rate(controller_config_applies_total[5m]))", "legendFormat": "{{endpoint}}", "datasource": { "type": "prometheus", "uid": "prometheus" } }
       ]
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Process CPU usage (% by greenhouse)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "custom": { "drawStyle": "line", "fillOpacity": 10 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "expr": "controller_process_cpu_percent", "legendFormat": "{{greenhouse_id}}", "datasource": { "type": "prometheus", "uid": "prometheus" } }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Process memory RSS (by greenhouse)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "bytes", "min": 0, "custom": { "drawStyle": "line", "fillOpacity": 10 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "expr": "controller_process_resident_memory_bytes", "legendFormat": "{{greenhouse_id}}", "datasource": { "type": "prometheus", "uid": "prometheus" } }
+      ]
     }
   ]
 }

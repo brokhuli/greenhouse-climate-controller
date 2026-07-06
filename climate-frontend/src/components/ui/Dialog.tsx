@@ -28,6 +28,14 @@ export function Dialog({
   const panelRef = useRef<HTMLDivElement>(null);
   const opener = useRef<HTMLElement | null>(null);
 
+  // Track the latest onClose without it being an effect dependency: the parent (e.g. the live-
+  // patched fleet view) re-renders constantly and passes a fresh onClose each time. Keying the
+  // focus effect on that identity would re-run it on every render and yank focus out of the form
+  // mid-type. The effect below depends only on `open`, and the Esc handler reads the current
+  // callback here.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
     if (!open) return;
     opener.current = document.activeElement as HTMLElement | null;
@@ -39,7 +47,7 @@ export function Dialog({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key === "Tab" && panel) {
@@ -65,7 +73,7 @@ export function Dialog({
       document.removeEventListener("keydown", onKeyDown, true);
       opener.current?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 

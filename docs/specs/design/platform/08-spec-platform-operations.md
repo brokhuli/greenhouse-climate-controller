@@ -43,7 +43,7 @@ The proxy exposes nothing extra for metrics; Prometheus scrapes the API directly
 the internal network.
 
 Prometheus also scrapes **each controller's own `/metrics`** (controller-health — its control
-loop, MQTT publishing, and faults; [controller interfaces §3](../controller/08-spec-controller-interfaces.md#3-rest--the-sole-write-path)),
+loop, MQTT publishing, faults, and process resource usage (CPU/memory); [controller interfaces §3](../controller/08-spec-controller-interfaces.md#3-rest--the-sole-write-path)),
 discovered via a generated file-SD target list since the controller fleet is dynamic. This is
 complementary, not redundant: `Per-controller connectivity` above is *platform-observed* ("can the
 platform reach/hear it"), while the controller's own metrics are *self-reported* ("is its control

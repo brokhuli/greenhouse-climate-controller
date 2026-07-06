@@ -2,8 +2,9 @@
 //!
 //! The controller is its **own source of truth**: it measures its control loop (tick cadence and
 //! compute budget, `P1-PERF-3`), its MQTT publish path (published/dropped frames + connection, the
-//! `P1-RESIL-3` backpressure signal), its fault/mode state, and the config applies it accepts over
-//! REST. The metrics are served unauthenticated at `GET /metrics` (a read, so the write-auth
+//! `P1-RESIL-3` backpressure signal), its fault/mode state, the config applies it accepts over
+//! REST, and its own process resource footprint (CPU / resident memory, sampled by
+//! [`sample_current_process`]). The metrics are served unauthenticated at `GET /metrics` (a read, so the write-auth
 //! middleware leaves it open) for Prometheus to scrape directly over the internal network — the
 //! metrics sibling of the `/health` surface, distinct from the MQTT telemetry it publishes.
 //!
@@ -18,6 +19,7 @@ use prometheus::{
     Encoder, Gauge, Histogram, HistogramOpts, IntCounter, IntCounterVec, IntGauge, Opts, Registry,
     TextEncoder,
 };
+use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System};
 
 use crate::faults::{FaultType, Mode};
 use crate::state::Snapshot;
@@ -50,6 +52,8 @@ pub struct Metrics {
     faults: IntCounterVec,
     mode: IntGauge,
     config_applies: IntCounterVec,
+    process_cpu_percent: Gauge,
+    process_resident_memory_bytes: IntGauge,
     /// Faults active at the last tick, so `faults_total` counts each fault on its rising edge only
     /// (mirroring the edge-triggered MQTT fault events) rather than every tick it persists.
     prev_faults: Mutex<BTreeSet<FaultKey>>,
@@ -121,6 +125,16 @@ impl Metrics {
             &["endpoint"],
         )
         .expect("config applies metric");
+        let process_cpu_percent = Gauge::new(
+            "controller_process_cpu_percent",
+            "Process CPU usage percent (may exceed 100% across multiple cores).",
+        )
+        .expect("process cpu metric");
+        let process_resident_memory_bytes = IntGauge::new(
+            "controller_process_resident_memory_bytes",
+            "Process resident set size (RSS) in bytes.",
+        )
+        .expect("process memory metric");
 
         for collector in [
             Box::new(ticks.clone()) as Box<dyn prometheus::core::Collector>,
@@ -134,6 +148,8 @@ impl Metrics {
             Box::new(faults.clone()),
             Box::new(mode.clone()),
             Box::new(config_applies.clone()),
+            Box::new(process_cpu_percent.clone()),
+            Box::new(process_resident_memory_bytes.clone()),
         ] {
             registry.register(collector).expect("register collector");
         }
@@ -151,6 +167,8 @@ impl Metrics {
             faults,
             mode,
             config_applies,
+            process_cpu_percent,
+            process_resident_memory_bytes,
             prev_faults: Mutex::new(BTreeSet::new()),
         }
     }
@@ -193,6 +211,14 @@ impl Metrics {
         self.config_applies.with_label_values(&[endpoint]).inc();
     }
 
+    /// Record the latest sampled process resource usage (CPU percent + resident bytes), as produced
+    /// by [`sample_current_process`].
+    pub fn set_process_usage(&self, cpu_percent: f64, resident_bytes: u64) {
+        self.process_cpu_percent.set(cpu_percent);
+        self.process_resident_memory_bytes
+            .set(resident_bytes as i64);
+    }
+
     /// Render the Prometheus text exposition for the `/metrics` handler.
     pub fn render(&self) -> String {
         let mut buffer = Vec::new();
@@ -205,6 +231,20 @@ impl Metrics {
         }
         String::from_utf8(buffer).unwrap_or_default()
     }
+}
+
+/// Refresh `pid` in `sys` and read its `(cpu_percent, resident_bytes)`, or `None` if the process is
+/// not visible to sysinfo. `sys` must be reused across calls: CPU usage is a delta since the prior
+/// refresh, so the first call after `System::new()` reports 0% (it only establishes the baseline),
+/// and callers should space refreshes by at least [`sysinfo::MINIMUM_CPU_UPDATE_INTERVAL`].
+pub fn sample_current_process(sys: &mut System, pid: Pid) -> Option<(f64, u64)> {
+    sys.refresh_processes_specifics(
+        ProcessesToUpdate::Some(&[pid]),
+        true,
+        ProcessRefreshKind::nothing().with_cpu().with_memory(),
+    );
+    let process = sys.process(pid)?;
+    Some((process.cpu_usage() as f64, process.memory()))
 }
 
 fn mode_code(mode: Mode) -> i64 {
@@ -362,6 +402,36 @@ mod tests {
                 "controller_config_applies_total{endpoint=\"setpoints\",greenhouse_id=\"gh-a\"} 1"
             ),
             "{text}"
+        );
+    }
+
+    #[test]
+    fn exposes_process_resource_gauges() {
+        let m = Metrics::new("gh-a");
+        m.set_process_usage(12.5, 1_048_576);
+        let text = m.render();
+        assert!(
+            text.contains("controller_process_cpu_percent{greenhouse_id=\"gh-a\"} 12.5"),
+            "{text}"
+        );
+        assert!(
+            text.contains(
+                "controller_process_resident_memory_bytes{greenhouse_id=\"gh-a\"} 1048576"
+            ),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn samples_the_current_process_memory() {
+        let pid = sysinfo::get_current_pid().expect("current pid");
+        let mut sys = System::new();
+        // First refresh establishes the CPU baseline (reports 0%); memory is valid immediately.
+        let (_cpu, resident) =
+            sample_current_process(&mut sys, pid).expect("current process is visible");
+        assert!(
+            resident > 0,
+            "resident memory should be positive, got {resident}"
         );
     }
 }

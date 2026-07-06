@@ -29,6 +29,10 @@ use crate::telemetry::{OutputState, actuator_name, epoch, instant_ts};
 const TICK_PERIOD_MS: f64 = 1000.0;
 /// Latched-command channel capacity.
 const COMMAND_CAP: usize = 64;
+/// How often the resource sampler inspects this process's CPU/memory. Comfortably above sysinfo's
+/// per-OS `MINIMUM_CPU_UPDATE_INTERVAL` (so CPU deltas are valid) and fresh within Prometheus's 15 s
+/// scrape interval.
+const RESOURCE_SAMPLE_PERIOD: std::time::Duration = std::time::Duration::from_secs(5);
 
 /// The wall-clock interval between ticks at a given time-scale: `tick_period / scale`, never below
 /// 1 ms. Determinism is preserved because only the cadence changes, not the per-tick step.
@@ -64,6 +68,10 @@ pub async fn run(config: Config) -> Result<(), Box<dyn Error>> {
     // Controller-health metrics, shared between the tick loop, the MQTT event loop, and the REST
     // /metrics handler.
     let metrics = Arc::new(crate::metrics::Metrics::new(&greenhouse_id));
+
+    // Sample this process's own CPU/memory on a dedicated task, off the control-loop hot path
+    // (sysinfo does syscalls), so a slow read never stalls a tick (`P1-RESIL-3`).
+    spawn_resource_sampler(metrics.clone());
 
     let mut time_scale = config.simulation.time_scale;
     let mut time_scale_updated_at_seconds = 0u64;
@@ -175,6 +183,30 @@ pub async fn run(config: Config) -> Result<(), Box<dyn Error>> {
         let _ = view_tx.send_replace(view);
         metrics.record_publish(publisher.publish_snapshot(&snapshot, time_scale));
     }
+}
+
+/// Spawn the background task that samples this process's CPU/memory into `metrics` every
+/// [`RESOURCE_SAMPLE_PERIOD`]. A reused [`sysinfo::System`] lets sysinfo compute CPU as a delta
+/// since the previous refresh (the first sample reports 0% while it seeds the baseline).
+fn spawn_resource_sampler(metrics: Arc<crate::metrics::Metrics>) {
+    let pid = match sysinfo::get_current_pid() {
+        Ok(pid) => pid,
+        Err(err) => {
+            tracing::warn!("resource metrics disabled: cannot resolve current pid: {err}");
+            return;
+        }
+    };
+    tokio::spawn(async move {
+        let mut sys = sysinfo::System::new();
+        loop {
+            if let Some((cpu_percent, resident_bytes)) =
+                crate::metrics::sample_current_process(&mut sys, pid)
+            {
+                metrics.set_process_usage(cpu_percent, resident_bytes);
+            }
+            tokio::time::sleep(RESOURCE_SAMPLE_PERIOD).await;
+        }
+    });
 }
 
 /// Apply one latched command to the pipeline + sim registries.
