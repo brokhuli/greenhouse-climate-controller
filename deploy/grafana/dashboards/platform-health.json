@@ -72,7 +72,7 @@
         "orientation": "auto"
       },
       "targets": [
-        { "refId": "A", "expr": "sum(rate(platform_http_request_duration_seconds_count{status=~\"5..\"}[5m])) / clamp_min(sum(rate(platform_http_request_duration_seconds_count[5m])), 1)", "legendFormat": "5xx share", "datasource": { "type": "prometheus", "uid": "prometheus" } }
+        { "refId": "A", "expr": "(sum(rate(platform_http_request_duration_seconds_count{status=~\"5..\"}[5m])) or vector(0)) / clamp_min((sum(rate(platform_http_request_duration_seconds_count[5m])) or vector(0)), 1)", "legendFormat": "5xx share", "datasource": { "type": "prometheus", "uid": "prometheus" } }
       ]
     },
     {
