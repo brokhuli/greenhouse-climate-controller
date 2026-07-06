@@ -51,6 +51,17 @@ type Broadcaster interface {
 	Broadcast(frame any)
 }
 
+// metricsRecorder counts reconciliation actions; *metrics.Metrics satisfies it. Kept as a
+// narrow consumer-side interface so reconcile does not depend on the metrics package.
+type metricsRecorder interface {
+	ReconcileAction(action string)
+}
+
+// nopMetrics is the default when no recorder is injected (tests, unauthenticated 2a runs).
+type nopMetrics struct{}
+
+func (nopMetrics) ReconcileAction(string) {}
+
 // Config tunes the reconciliation loop.
 type Config struct {
 	Interval   time.Duration // reconcile cycle cadence (P2-REL-1)
@@ -60,25 +71,29 @@ type Config struct {
 
 // Reconciler owns intended state and the control-down loop.
 type Reconciler struct {
-	store Store
-	relay Relayer
-	fleet FleetView
-	hub   Broadcaster
-	log   *slog.Logger
-	cfg   Config
-	now   func() time.Time
+	store   Store
+	relay   Relayer
+	fleet   FleetView
+	hub     Broadcaster
+	metrics metricsRecorder
+	log     *slog.Logger
+	cfg     Config
+	now     func() time.Time
 }
 
 // New builds a reconciler, applying defaults for a zero Config.
-func New(store Store, relayer Relayer, fleet FleetView, hub Broadcaster, log *slog.Logger, cfg Config) *Reconciler {
+func New(store Store, relayer Relayer, fleet FleetView, hub Broadcaster, rec metricsRecorder, log *slog.Logger, cfg Config) *Reconciler {
 	if cfg.Interval <= 0 {
 		cfg.Interval = 30 * time.Second
 	}
 	if cfg.MaxRetries <= 0 {
 		cfg.MaxRetries = 5
 	}
+	if rec == nil {
+		rec = nopMetrics{}
+	}
 	return &Reconciler{
-		store: store, relay: relayer, fleet: fleet, hub: hub, log: log, cfg: cfg,
+		store: store, relay: relayer, fleet: fleet, hub: hub, metrics: rec, log: log, cfg: cfg,
 		now: func() time.Time { return time.Now().UTC() },
 	}
 }
@@ -158,6 +173,12 @@ func (r *Reconciler) record(ctx context.Context, greenhouseID string, intended d
 		return ApplyOutcome{}, err
 	}
 	r.emitApplyEvent(ctx, greenhouseID, source, delivery)
+	switch delivery {
+	case store.DeliveryDelivered:
+		r.metrics.ReconcileAction("apply")
+	case store.DeliveryDeferred:
+		r.metrics.ReconcileAction("deferred")
+	}
 	if wasDrift && delivery == store.DeliveryDelivered {
 		r.broadcastDrift(greenhouseID, false)
 	}
@@ -294,6 +315,7 @@ func (r *Reconciler) reassert(ctx context.Context, greenhouseID string, endpoint
 	recon.LastDeliveredRevision = &current.Revision
 	recon.DeliveryStatus = store.DeliveryDelivered
 	recon.FailCount = 0
+	r.metrics.ReconcileAction("reassert")
 	r.log.Info("reconcile: re-asserted intended state", "id", greenhouseID, "revision", current.Revision)
 	return r.store.UpsertReconState(ctx, *recon)
 }
@@ -315,6 +337,7 @@ func (r *Reconciler) handleDrift(ctx context.Context, greenhouseID string, endpo
 		if err != nil || !ok2xx(status) {
 			r.log.Warn("reconcile: drift correction failed", "id", greenhouseID, "status", status, "err", err)
 		} else {
+			r.metrics.ReconcileAction("drift_corrected")
 			r.log.Info("reconcile: drift correction re-asserted", "id", greenhouseID, "revision", current.Revision)
 		}
 	}
@@ -322,6 +345,7 @@ func (r *Reconciler) handleDrift(ctx context.Context, greenhouseID string, endpo
 		return err
 	}
 	if newlyDrifted {
+		r.metrics.ReconcileAction("drift_detected")
 		r.emitDriftEvent(ctx, greenhouseID)
 		r.broadcastDrift(greenhouseID, true)
 	}

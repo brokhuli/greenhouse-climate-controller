@@ -25,9 +25,13 @@ TEMPLATE="$REPO_DIR/climate-controller/config/greenhouse.example.toml"
 OUT_DIR="$DEPLOY_DIR/controllers"
 OVERRIDE="$DEPLOY_DIR/docker-compose.override.yml"
 REGISTER="$OUT_DIR/register.sh"
+# Prometheus file-based service discovery: the controllers' /metrics targets (operations §1). The
+# prometheus service watches this dir, so regenerating the fleet re-points scraping with no restart.
+TARGETS_DIR="$DEPLOY_DIR/prometheus/targets"
+TARGETS_FILE="$TARGETS_DIR/controllers.json"
 
 [[ -f "$TEMPLATE" ]] || { echo "template not found: $TEMPLATE" >&2; exit 1; }
-mkdir -p "$OUT_DIR"
+mkdir -p "$OUT_DIR" "$TARGETS_DIR"
 
 # Optional per-controller pre-shared bearer token (RFC-011, dormant by default). Set
 # CONTROLLER_AUTH_TOKENS=1 to mint a random token per controller: the controller then requires it on
@@ -61,10 +65,14 @@ id_for() {
   echo 'AUTH=(); [[ -n "$TOKEN" ]] && AUTH=(-H "Authorization: Bearer $TOKEN")'
 } > "$REGISTER"
 
+targets_json=""
 for (( i = 0; i < N; i++ )); do
   id="$(id_for "$i")"
   toml="$OUT_DIR/$id.toml"
   seed=$(( 6582955728036744000 + i ))
+  # Each controller's REST server (and thus /metrics) is internal at <id>:8080; add it to the
+  # Prometheus file-SD target list. greenhouse_id is a metric const label, so it's not set here.
+  targets_json+="${targets_json:+, }\"$id:8080\""
 
   # When minting, uncomment the template's auth_token and echo the same token into the registration
   # body so the controller and the platform share it. Off by default → both stay untokened.
@@ -107,12 +115,23 @@ EOF
     "$id" "${id#gh-}" "$id" "$id" "$bearer_json" "$id" >> "$REGISTER"
 done
 
+# Prometheus file-SD: one target group for the whole controller fleet (operations §1).
+cat > "$TARGETS_FILE" <<EOF
+[
+  {
+    "labels": { "job": "controllers" },
+    "targets": [$targets_json]
+  }
+]
+EOF
+
 chmod +x "$REGISTER" 2>/dev/null || true
 
 echo "Generated $N controller service(s):"
 echo "  override : $OVERRIDE"
 echo "  configs  : $OUT_DIR/<id>.toml"
 echo "  register : $REGISTER"
+echo "  scrape   : $TARGETS_FILE"
 echo
 echo "Next:"
 echo "  docker compose --env-file deploy/.env -f deploy/docker-compose.yml -f deploy/docker-compose.override.yml up -d --build"

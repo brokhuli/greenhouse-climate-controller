@@ -95,10 +95,10 @@ func TestProfileAssignmentHTTP(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	fleet := state.NewFleet(time.Hour)
 	hub := ws.NewHub(log)
-	ing := ingest.New(st, fleet, hub, log, "tcp://localhost:1883", 4096, time.Hour)
+	ing := ingest.New(st, fleet, hub, nil, log, "tcp://localhost:1883", 4096, time.Hour)
 	relayClient := relay.New(5 * time.Second)
-	reconciler := reconcile.New(st, relayClient, fleet, hub, log, reconcile.Config{Interval: time.Hour})
-	server := api.New(st, fleet, ing, relayClient, reconciler, hub, nil, config.ServiceAuthModeTrustedNetwork, log)
+	reconciler := reconcile.New(st, relayClient, fleet, hub, nil, log, reconcile.Config{Interval: time.Hour})
+	server := api.New(st, fleet, ing, relayClient, reconciler, hub, nil, config.ServiceAuthModeTrustedNetwork, nil, log)
 	platform := httptest.NewServer(server.Handler())
 	defer platform.Close()
 

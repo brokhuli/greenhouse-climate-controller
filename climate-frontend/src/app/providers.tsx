@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import { ThemeProvider } from "../hooks/ThemeProvider";
 import { ToastProvider } from "../components/ui/ToastProvider";
 import { AuthProvider } from "../features/auth/AuthProvider";
+import { shouldRetryQuery, queryRetryDelay } from "../api/retryPolicy";
 import { StreamProvider } from "./StreamProvider";
 
 /**
@@ -19,8 +20,12 @@ export function Providers({ children }: { children: ReactNode }) {
         defaultOptions: {
           queries: {
             staleTime: 5_000,
-            retry: 2,
-            refetchOnWindowFocus: true,
+            // Retry only transient network failures (once), never server overload/dependency errors,
+            // and don't re-fire every query on tab focus — so the browser backs off instead of
+            // amplifying load when the platform is struggling.
+            retry: shouldRetryQuery,
+            retryDelay: queryRetryDelay,
+            refetchOnWindowFocus: false,
           },
         },
       }),

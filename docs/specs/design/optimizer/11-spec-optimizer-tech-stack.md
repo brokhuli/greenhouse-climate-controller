@@ -199,9 +199,9 @@
 
 ## Observability
 
-### Structured logging (`logging`, JSON) + optional `prometheus-client`
+### Structured logging (`logging`, JSON) + `prometheus-client`
 
-- **What:** Structured operational logs and, optionally, a `/metrics` surface.
+- **What:** Structured operational logs plus a Prometheus `/metrics` surface.
 - **Why:** `P3-OBS-1` requires every applied or escalated plan to be **traceable by
   `optimizer_run_id`**, and planner failover / twin divergence are logged and traced
   ([planning — determinism](./04-spec-optimizer-planning.md#determinism--reproducibility),
@@ -209,8 +209,13 @@
   with a JSON handler needs no extra dependency and mirrors the platform's `slog` stream
   ([platform tech stack](../platform/10-spec-platform-tech-stack.md)).
 - **How:** Each cycle logs a JSON record carrying `optimizer_run_id`, the input-gate / twin outcome,
-  and whether the plan was applied or escalated. `prometheus-client` is **optional** and deferred
-  alongside the platform's 2b observability stack, not a Phase 3 baseline requirement.
+  and whether the plan was applied or escalated. `prometheus-client` exposes a **`/metrics`** surface
+  on the optimizer's FastAPI service ([interfaces §9](./09-spec-optimizer-interfaces.md)) — *optimizer-health*
+  (cycle rate/duration, twin divergence, planner failover, applied-vs-escalated), the metrics sibling
+  of its `/health` endpoint. It joins the platform's shared Prometheus/Grafana
+  ([platform operations §1](../platform/08-spec-platform-operations.md#1-observability)) as a third
+  scrape target, the same way each controller does. The exporter lands with the optimizer itself in
+  Phase 3, not the 2b platform slice; the surface is defined here so the observability story is whole.
 
 ---
 

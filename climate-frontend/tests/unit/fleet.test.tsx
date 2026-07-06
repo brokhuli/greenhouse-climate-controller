@@ -1,9 +1,38 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, screen } from "@testing-library/react";
 import FleetOverview from "../../src/features/fleet/FleetOverview";
 import { queryKeys } from "../../src/api/queries/keys";
-import type { Assignment, CropProfile } from "../../src/api/schemas";
+import type { WsConnectionState } from "../../src/api/ws";
+import type { Assignment, CropProfile, FleetSparklines } from "../../src/api/schemas";
 import { makeClient, renderWithProviders, sampleSetpoints, sampleSummary } from "../utils";
+
+// Drive `useStream` directly so tests can put the live stream into a degraded state without a real
+// socket; default to a healthy "open" so the other cases are unaffected.
+vi.mock("../../src/app/stream-context", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../src/app/stream-context")>();
+  return {
+    ...actual,
+    useStream: vi.fn(() => ({ connectionState: "open", subscribeTelemetry: () => () => {} })),
+  };
+});
+import { useStream } from "../../src/app/stream-context";
+
+const mockedUseStream = vi.mocked(useStream);
+const setStream = (connectionState: WsConnectionState) =>
+  mockedUseStream.mockReturnValue({ connectionState, subscribeTelemetry: () => () => {} });
+
+/** Seed the sparklines cache so the poll query resolves offline (isError stays false). */
+const seedSparklines = (client: ReturnType<typeof makeClient>) => {
+  const sparklines: FleetSparklines = {
+    from: new Date("2026-06-29T00:00:00.000Z"),
+    to: new Date("2026-06-29T01:00:00.000Z"),
+    metric: "temperature",
+    series: [],
+  };
+  client.setQueryData(queryKeys.fleetSparklines("1h"), sparklines);
+};
+
+beforeEach(() => setStream("open"));
 
 const profile = (): CropProfile => ({
   id: "lettuce",
@@ -90,7 +119,7 @@ describe("FleetOverview", () => {
       sampleSummary({
         id: "gh-a",
         displayName: "Greenhouse A",
-        climate: { temperature: 23.4, humidity: 58, co2: 820, dli: 12.6, setpointTemperature: 24 },
+        climate: { temperature: 23.4, humidity: 58, co2: 820, dli: 12.6 },
       }),
     ]);
     renderWithProviders(<FleetOverview />, { client });
@@ -105,5 +134,33 @@ describe("FleetOverview", () => {
     expect(screen.getByText("12.6")).toBeInTheDocument();
     // The setpoint readout was removed from the tiles (data path undecided).
     expect(screen.queryByText("Setpoint")).not.toBeInTheDocument();
+  });
+
+  it("flags stale charts when the live stream is degraded, while still rendering cards", () => {
+    setStream("reconnecting");
+    const client = makeClient();
+    client.setQueryData(queryKeys.fleet(), [
+      sampleSummary({ id: "gh-a", displayName: "Greenhouse A" }),
+    ]);
+    seedSparklines(client);
+    renderWithProviders(<FleetOverview />, { client });
+
+    expect(screen.getByText(/live stream degraded/i)).toBeInTheDocument();
+    // Cached cards stay visible — the banner marks them stale, it doesn't replace them.
+    expect(screen.getByText("Greenhouse A")).toBeInTheDocument();
+  });
+
+  it("shows no stale banner when the stream is live and the poll is healthy", () => {
+    setStream("open");
+    const client = makeClient();
+    client.setQueryData(queryKeys.fleet(), [
+      sampleSummary({ id: "gh-a", displayName: "Greenhouse A" }),
+    ]);
+    seedSparklines(client);
+    renderWithProviders(<FleetOverview />, { client });
+
+    expect(screen.getByText("Greenhouse A")).toBeInTheDocument();
+    expect(screen.queryByText(/live stream degraded/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/last known data/i)).not.toBeInTheDocument();
   });
 });

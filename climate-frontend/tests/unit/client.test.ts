@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, apiClient } from "../../src/api/client";
+import { ApiError, apiClient, getHttpStatus } from "../../src/api/client";
 import { wireGreenhouseDetail } from "../../src/api/schemas";
 import { restFixture } from "../fixtures";
 
@@ -66,6 +66,13 @@ describe("apiClient", () => {
     mockFetch(async () => jsonResponse(200, { id: "BAD UPPER", display_name: 5 }));
     const error = await apiClient.get("/x", wireGreenhouseDetail).catch((e) => e);
     expect(error).toMatchObject({ kind: "parse" });
+  });
+
+  it("exposes the HTTP status of an ApiError via getHttpStatus, undefined otherwise", () => {
+    expect(getHttpStatus(new ApiError("server", "boom", { status: 500 }))).toBe(500);
+    expect(getHttpStatus(new ApiError("network", "offline"))).toBeUndefined();
+    expect(getHttpStatus(new Error("plain"))).toBeUndefined();
+    expect(getHttpStatus(undefined)).toBeUndefined();
   });
 
   it("returns undefined for a 204 delete and uses the DELETE method", async () => {

@@ -84,6 +84,15 @@ The REST API is the only way anything enters the controller. It exposes:
   ([Simulation control](#simulation-control-simulated-hal-only)). A diagnostic/test surface,
   not a production control path.
 
+Beyond these control surfaces, the controller also serves an unauthenticated operational
+**`/metrics`** (Prometheus text exposition) reporting *controller-health* — tick cadence and compute
+budget (`P1-PERF-3`), MQTT publish + connection (`P1-RESIL-3`), fault/mode state, and the controller's
+own process resource footprint (CPU percent + resident memory, sampled from the OS). Like `/health`
+it is a **read** (the optional write-token leaves it open) and, being operational rather than a
+control contract, it sits **outside** the versioned [`contracts/controller-rest/`](../../../../contracts/)
+surface. Prometheus scrapes it directly over the internal network
+([platform operations §1](../platform/08-spec-platform-operations.md#1-observability)).
+
 Writes are **latched, not applied mid-tick**: an edit updates controller state and
 takes effect on the next tick
 ([architecture §3](./02-spec-controller-architecture.md#3-real-time--scheduling-model)).

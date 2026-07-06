@@ -43,6 +43,7 @@ const telemetryFrame: TelemetryFrame = {
   readings: [
     { metric: "temperature", value: 25, unit: "°C" },
     { metric: "humidity", value: 61, unit: "%RH" },
+    { metric: "co2", value: 812, unit: "ppm" },
   ],
 };
 
@@ -56,13 +57,14 @@ describe("pure frame transforms", () => {
     expect(applyStatusToSummary(next, statusFrame)).toBe(next);
   });
 
-  it("updates the card temperature + humidity from house-level readings and ignores zone readings", () => {
+  it("updates the card temperature + humidity + co2 from house-level readings and ignores zone readings", () => {
     const summary = sampleSummary({
-      climate: { temperature: 20, humidity: 50, setpointTemperature: 24 },
+      climate: { temperature: 20, humidity: 50, co2: 700 },
     });
     const next = applyTelemetryToSummary(summary, telemetryFrame);
     expect(next.climate.temperature).toBe(25);
     expect(next.climate.humidity).toBe(61);
+    expect(next.climate.co2).toBe(812);
     const zoneFrame: TelemetryFrame = { ...telemetryFrame, zone_id: "bench-a" };
     expect(applyTelemetryToSummary(summary, zoneFrame)).toBe(summary);
   });

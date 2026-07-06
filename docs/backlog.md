@@ -11,9 +11,20 @@ the relevant ADR / RFC.
 | Item | Why | Blocked on / When | Reference |
 |---|---|---|---|
 | Extend CI: coverage + per-phase gates | The CI pipeline now re-runs the Rust gate and the contract harness on push/PR ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)), but coverage is not yet enforced (`P1-TEST-1`, `cargo llvm-cov`), and the Go, Python, frontend, and load gates are not wired. | Coverage is wireable now; the per-phase gates land with the phase they verify (Phase 2 Go, Phase 3 Python, frontend). | [RFC-010](./decisions/request-for-comments.md#rfc-010-verification--continuous-integration-strategy); [`spec-verification.md §4`](./specs/design/spec-verification.md#4-tooling-matrix), [`§6`](./specs/design/spec-verification.md#6-ci-topology) |
-| Ship the remaining 2b infra: observability | The 2b backbone landed without Prometheus/Grafana. The Go API does not yet expose `/metrics`, so ingestion rate, API latency, reconciliation actions, and datastore/background-job health (incl. the provenance-prune `add_job` registered by `EnsureProvenancePrune`) are not yet scraped or dashboarded. | With the deferred **2b observability slice**. | [platform operations §1–2](./specs/design/platform/08-spec-platform-operations.md) |
 
 ### Notes
+
+**2b observability slice landed (2026-07-05).** Prometheus + Grafana now ship in the Compose stack
+(removing the item formerly listed above). The Go `api` exposes **`/metrics`** (`platform_*` — ingestion
+rate, API latency/errors, reconciliation actions, per-controller connectivity, and pgx-pool +
+TimescaleDB background-job health, incl. the provenance-prune `add_job`). As an additive extension, each
+Rust controller exposes its **own** `/metrics` (`controller_*` — tick cadence/compute, MQTT
+publish/connection, faults/mode, config applies), scraped as its own source of truth. Prometheus scrapes
+the API (static) and the dynamic controller fleet (file-SD emitted by `gen-controllers.sh`); Grafana
+auto-provisions *Platform Health* + *Controller Fleet*. The Phase 3 optimizer's `/metrics` is now a
+**defined** (no longer optional) surface in its spec, to join the same Prometheus/Grafana when it lands.
+Outcome recorded in the [2026-07-05 ADR entry](./decisions/architecture-design-record.md) and
+[operations §1](./specs/design/platform/08-spec-platform-operations.md#1-observability).
 
 **CI pipeline scope.** The clean-environment runner is **adopted** (GitHub Actions,
 [2026-06-22](./decisions/local-environment-record.md)): it re-runs, on push/PR, the Rust gate

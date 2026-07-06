@@ -11,6 +11,10 @@
       "mqtt_topic_root": {
         "type": "string",
         "description": "Root of the controller's MQTT topic tree (e.g. gh/gh-a)."
+      },
+      "bearer_token": {
+        "type": ["string", "null"],
+        "description": "Optional per-controller pre-shared bearer token (RFC-011 service-auth hardening, dormant by default). Present only when the controller is hardened to require a token on its REST write endpoints; the platform then presents it on every downward write. Omitted/null when the controller is unauthenticated (the single-host default)."
       }
     },
     "required": ["rest_base_url", "mqtt_topic_root"],
@@ -18,7 +22,7 @@
   },
   "GreenhouseSummary": {
     "type": "object",
-    "description": "One greenhouse's identity and live rollup for the fleet view (frontend purpose-and-views §1). A compact current-vs-target readout backs the fleet card; the full target bundle is on the detail endpoint.",
+    "description": "One greenhouse's identity and live rollup for the fleet view (frontend purpose-and-views §1). A compact live-climate readout backs the fleet card; the target bundle is on the detail endpoint, not here.",
     "properties": {
       "id": { "$ref": "./common.json#/Slug" },
       "display_name": {
@@ -43,7 +47,7 @@
       },
       "climate": {
         "type": "object",
-        "description": "Compact current-vs-target readout for the fleet card.",
+        "description": "Compact live-climate readout for the fleet card.",
         "properties": {
           "temperature": {
             "type": ["number", "null"],
@@ -60,10 +64,6 @@
           "dli": {
             "type": ["number", "null"],
             "description": "Latest accumulated Daily Light Integral (mol·m⁻²·d⁻¹) for the current crop day, or null when unavailable. A derived value; the underlying instantaneous PAR remains available as a sensor metric on the telemetry endpoints."
-          },
-          "setpoint_temperature": {
-            "type": ["number", "null"],
-            "description": "Currently-resolved temperature setpoint (°C), or null when unavailable."
           }
         },
         "additionalProperties": false

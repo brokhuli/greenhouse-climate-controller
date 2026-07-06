@@ -19,6 +19,7 @@ import (
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/auth"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/config"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/ingest"
+	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/metrics"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/reconcile"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/relay"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/state"
@@ -38,6 +39,7 @@ type Server struct {
 	// serviceAuthMode gates the optimizer POST /setpoints boundary (RFC-011): trusted_network
 	// (default) accepts it untokened, oidc requires a setpoints:write service token.
 	serviceAuthMode string
+	metrics         *metrics.Metrics
 	log             *slog.Logger
 	router          *echo.Echo
 }
@@ -45,12 +47,13 @@ type Server struct {
 // New builds the server and its route tree. verifier gates the surface: nil runs
 // unauthenticated (2a trusted-network posture), non-nil enforces viewer/operator auth.
 // serviceAuthMode additionally gates POST /setpoints (config.ServiceAuthMode*).
-func New(store *store.Store, fleet *state.Fleet, ing *ingest.Ingester, relay *relay.Client, reconciler *reconcile.Reconciler, hub *ws.Hub, verifier *auth.Verifier, serviceAuthMode string, log *slog.Logger) *Server {
-	s := &Server{store: store, fleet: fleet, ing: ing, relay: relay, reconcile: reconciler, hub: hub, verifier: verifier, serviceAuthMode: serviceAuthMode, log: log}
+func New(store *store.Store, fleet *state.Fleet, ing *ingest.Ingester, relay *relay.Client, reconciler *reconcile.Reconciler, hub *ws.Hub, verifier *auth.Verifier, serviceAuthMode string, metrics *metrics.Metrics, log *slog.Logger) *Server {
+	s := &Server{store: store, fleet: fleet, ing: ing, relay: relay, reconcile: reconciler, hub: hub, verifier: verifier, serviceAuthMode: serviceAuthMode, metrics: metrics, log: log}
 	router := echo.New()
 	router.HideBanner = true
 	router.HidePort = true
 	router.Use(middleware.Recover())
+	router.Use(s.metricsMiddleware())
 	router.Use(s.requestLogger())
 	s.routes(router)
 	s.router = router
@@ -59,6 +62,12 @@ func New(store *store.Store, fleet *state.Fleet, ing *ingest.Ingester, relay *re
 
 func (s *Server) routes(router *echo.Echo) {
 	router.GET("/healthz", func(c echo.Context) error { return c.JSON(http.StatusOK, map[string]string{"status": "ok"}) })
+
+	// Prometheus scrapes /metrics directly over the internal network (operations §1); it
+	// sits outside the /api auth group — unauthenticated, and never exposed via the proxy.
+	if s.metrics != nil {
+		router.GET("/metrics", echo.WrapHandler(s.metrics.Handler()))
+	}
 
 	// When OIDC is configured, reads (REST GETs + the WS handshake) are open to anyone,
 	// including anonymous visitors; writes are additionally gated to the operator role
@@ -110,6 +119,24 @@ func (s *Server) Shutdown(ctx context.Context) error { return s.router.Shutdown(
 func (s *Server) stream(c echo.Context) error {
 	s.hub.Handle(c.Response(), c.Request())
 	return nil
+}
+
+// metricsMiddleware records each served request's latency into the HTTP histogram,
+// labelled by the route template (c.Path(), e.g. /api/greenhouses/:id) rather than the
+// raw URI so path parameters do not explode label cardinality.
+func (s *Server) metricsMiddleware() echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			start := time.Now()
+			err := next(c)
+			route := c.Path()
+			if route == "" {
+				route = "unmatched"
+			}
+			s.metrics.ObserveHTTP(c.Request().Method, route, c.Response().Status, time.Since(start))
+			return err
+		}
+	}
 }
 
 func (s *Server) requestLogger() echo.MiddlewareFunc {

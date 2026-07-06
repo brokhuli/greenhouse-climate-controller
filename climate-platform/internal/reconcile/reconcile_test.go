@@ -157,7 +157,7 @@ func (f *fakeHub) eventFrames() []ws.EventFrame {
 
 func newTestReconciler(fs *fakeStore, fr *fakeRelay, ff fakeFleet, fh *fakeHub) *Reconciler {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	return New(fs, fr, ff, fh, log, Config{Interval: time.Hour, Jitter: 0, MaxRetries: 3})
+	return New(fs, fr, ff, fh, nil, log, Config{Interval: time.Hour, Jitter: 0, MaxRetries: 3})
 }
 
 func onlineFleet(id string) fakeFleet {

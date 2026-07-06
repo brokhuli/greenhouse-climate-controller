@@ -19,7 +19,8 @@ greenhouse is the fleet-of-one case. Its monitoring and setpoint-edit core ships
 ## 1. Capabilities
 
 - **Fleet overview** *(2a)* — every greenhouse at the site, its crop, status
-  (online/degraded/drift), and a glance at current climate vs target.
+  (online/degraded/drift), and a glance at current climate. Target setpoints are shown on the
+  per-greenhouse detail, not the fleet card.
 - **Per-greenhouse detail** *(2a)* — real-time charts of readings vs setpoints,
   actuator states, and event history, fed by the WebSocket stream.
 - **Profile management** *(2b)* — browse/edit the crop-profile library; assign a

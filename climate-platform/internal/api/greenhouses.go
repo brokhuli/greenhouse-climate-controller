@@ -161,7 +161,7 @@ func (s *Server) summaryOf(greenhouse store.Greenhouse, drift bool) greenhouseSu
 		Status:      live.Status,
 		Drift:       drift,
 		TimeScale:   live.TimeScale,
-		Climate:     climateDTO{Temperature: live.Temperature, Humidity: live.Humidity, CO2: live.CO2, DLI: live.DLI, SetpointTemperature: nil},
+		Climate:     climateDTO{Temperature: live.Temperature, Humidity: live.Humidity, CO2: live.CO2, DLI: live.DLI},
 	}
 }
 

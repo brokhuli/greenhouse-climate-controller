@@ -8,6 +8,43 @@ alternatives and tradeoffs.
 
 ---
 
+## 2026-07-05 — 2b observability implemented (platform + controller `/metrics`, Prometheus + Grafana)
+
+**Decision:** Build the deferred 2b observability slice the
+[2026-06-04 decision](#2026-06-04--phase-2-observability-prometheus--grafana) specified, and extend it
+into a **whole-system** story rather than platform-only:
+
+1. **Platform `/metrics` (`platform_*`).** The Go `api` gained a `internal/metrics` package
+   (`prometheus/client_golang`, the spec's chosen client) exposed at a root-level, unauthenticated
+   **`/metrics`** (outside the `/api` auth group; internal-only, never proxied). It covers the spec's
+   five areas: ingestion rate + backlog, API latency/errors (histogram), reconciliation actions,
+   per-controller connectivity (a scrape-time collector over the live fleet), and datastore health — pgx
+   pool stats plus **TimescaleDB background-job health** read from `job_stats` (the retention +
+   provenance-prune `add_job`).
+2. **Controller `/metrics` (`controller_*`), additive.** Each Rust controller now exposes its **own**
+   `/metrics` on its existing axum server (a read, so the optional write-token leaves it open; outside
+   the versioned `controller-rest` contract) as its own source of truth for *controller-health*: tick
+   cadence/compute (`P1-PERF-3`), MQTT publish/connection (`P1-RESIL-3`), fault/mode, config applies —
+   every series carrying a `greenhouse_id` const label. This complements the platform's *observed*
+   connectivity with the controller's *self-reported* health.
+3. **Scrape + dashboards.** Prometheus scrapes the API (static) and the **dynamic** controller fleet via
+   file-based SD — `gen-controllers.sh` now emits `prometheus/targets/controllers.json` alongside the
+   override, so scaling N re-points scraping with no config edit. Grafana auto-provisions the datasource
+   and two dashboards (*Platform Health*, *Controller Fleet*); both run as Compose services on host ports
+   3000/9090.
+
+**Scope:** implementation + tests (Go unit + a `JobStats` testcontainers integration test; Rust unit
+tests over the exposition) + deploy (Compose services, `prometheus.yml`, Grafana provisioning,
+`.env.example`, `.gitignore`) + docs. New runtime deps: Go `prometheus/client_golang`, Rust `prometheus`
+(text-only) — both pre-sanctioned by the tech-stack specs. The Phase 3 **optimizer's** `/metrics` was
+promoted from "optional/deferred" to a **defined** surface in its spec (served on its FastAPI service) so
+it can join the same Prometheus/Grafana when it lands — spec only, no Phase 3 code.
+
+**Basis:** The deferred 2b observability slice; whole-system extension operator-directed.
+**Prior decision:** [2026-06-04 — Phase 2 observability: Prometheus + Grafana](#2026-06-04--phase-2-observability-prometheus--grafana).
+
+---
+
 ## 2026-07-04 — Service-auth hardening implemented (both RFC-011 write boundaries wired, dormant by default)
 
 **Decision:** Build the two service-auth boundaries the [2026-06-21 decision](#2026-06-21--internal-trust-model-reopened-service-to-service-auth-adopted-as-a-config-gated-off-by-default-hardening-mode)

@@ -11,7 +11,8 @@ provenance ledger, and **reconciliation** (apply-on-change, re-assert on reconne
 detection). The platform is now the single setpoint authority (RFC-005). **Auth has landed**:
 Keycloak-issued OIDC tokens are validated by the API, which gates every write to the **operator**
 role — reads stay open (a missing token is served as an anonymous viewer; an invalid one is
-rejected). Prometheus/Grafana observability is the one remaining 2b slice and is still **deferred**
+rejected). **Observability has landed** too: the API exposes `/metrics`, scraped by Prometheus and
+rendered in Grafana alongside each controller's own `/metrics` — so the 2b platform slice is complete
 (see `../docs/backlog.md`).
 
 ## Layout
@@ -41,8 +42,8 @@ rejected). Prometheus/Grafana observability is the one remaining 2b slice and is
 | `GET/POST /api/greenhouses` | fleet list / register | 2a |
 | `GET/DELETE /api/greenhouses/{id}` | detail (incl. `drift`) / retire | 2a |
 | `PATCH /api/greenhouses/{id}/setpoints` | ad-hoc edit — sticky intended state, reconciled | 2a/2b |
-| `GET /api/greenhouses/{id}/telemetry?from&to` | raw range | 2a |
-| `GET /api/greenhouses/{id}/analytics?from&to&metric?&interval?` | time-bucketed aggregates | 2a |
+| `GET /api/greenhouses/{id}/telemetry?window` | raw range | 2a |
+| `GET /api/greenhouses/{id}/analytics?window&metric?&interval?` | time-bucketed aggregates | 2a |
 | `GET/PATCH /api/greenhouses/{id}/sim/time-scale` · `PATCH /api/sim/time-scale` | sim-only speed relay | 2a |
 | `GET /api/events?greenhouse_id?&kind?&severity?` | activity feed | 2a |
 | `GET /api/stream` | WebSocket live fan-out (telemetry / status / event / drift) | 2a/2b |

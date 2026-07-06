@@ -143,10 +143,10 @@ the two internal **write** boundaries are **trusted on the Docker network by def
 
 | Boundary | Default (single-host local) | Hardened mode | Selector |
 |---|---|---|---|
-| Optimizer → Phase 2 `POST /setpoints` | accepted untokened | requires a Keycloak `setpoints:write` client-credentials token ([§3](#two-actor-types-human-and-service)) | `SERVICE_AUTH_MODE=trusted_network` \| `oidc` |
+| Optimizer → Phase 2 `POST /setpoints` (the greenhouse-scoped `POST /api/greenhouses/{id}/setpoints`) | accepted untokened | requires a Keycloak `setpoints:write` client-credentials token ([§3](#two-actor-types-human-and-service)) | `SERVICE_AUTH_MODE=trusted_network` \| `oidc` |
 | Platform → controller REST writes | accepted untokened | requires a per-controller pre-shared bearer token ([controller interfaces §3](../controller/08-spec-controller-interfaces.md#3-rest--the-sole-write-path)) | controller token set / unset |
 
-`SERVICE_AUTH_MODE` is a Phase 2 API config value
+`PLATFORM_SERVICE_AUTH_MODE` is the Phase 2 API config value carrying this `SERVICE_AUTH_MODE` selector
 ([operations — deployment](./08-spec-platform-operations.md#2-deployment)); the controller token is an
 optional TOML field whose **presence** turns the check on
 ([controller config](../controller/07-spec-controller-config-and-parameters.md)). MQTT stays anonymous
@@ -183,5 +183,5 @@ platform-authenticated — the instant a deployment leaves the single-host model
 | The surfaces these roles gate | gates | [`09-spec-platform-interfaces.md`](./09-spec-platform-interfaces.md#3-api-surface-inventory) |
 | The browser-side OIDC client | paired with | [frontend tech stack](../frontend/04-spec-frontend-tech-stack.md) |
 | Internal trust boundary; service-auth mode | defers to | [RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009) (supersedes [RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)) |
-| `SERVICE_AUTH_MODE` config value | set in | [`08-spec-platform-operations.md`](./08-spec-platform-operations.md#2-deployment) |
+| `PLATFORM_SERVICE_AUTH_MODE` config value (the `SERVICE_AUTH_MODE` selector) | set in | [`08-spec-platform-operations.md`](./08-spec-platform-operations.md#2-deployment) |
 | `P2-SEC-1` | cited | [NFR doc](../../artifacts/non-functional-requirements.md) |

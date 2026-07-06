@@ -65,7 +65,10 @@ and the platform's operational resilience
 - **Health & cadence watchdog.** The FastAPI surface ([interfaces](./09-spec-optimizer-interfaces.md))
   exposes a health endpoint reporting DB and Phase 2 reachability, the last-successful-cycle time, and
   the current escalation backlog, so a supervisor can restart an unresponsive container and an operator
-  can see a stalled loop. A cycle that overruns its cadence — LLM latency past the
+  can see a stalled loop. The same surface exposes a Prometheus **`/metrics`** endpoint
+  ([tech stack §Observability](./11-spec-optimizer-tech-stack.md#observability)) — last-successful-cycle
+  age, cycle duration, twin divergence, and planner-failover counts make the same stall/overrun
+  conditions graphable and alertable in the platform's shared Grafana, not just pollable point-in-time. A cycle that overruns its cadence — LLM latency past the
   [P3-PERF-2](../../artifacts/non-functional-requirements.md) bound, or a hung read — is **timed out**
   (`service.cycle_timeout_seconds`, [configuration](./10-spec-optimizer-configuration.md)) and the
   current plan extended ([P3-PERF-2](../../artifacts/non-functional-requirements.md)): the cadence is a

@@ -29,6 +29,10 @@ use crate::telemetry::{OutputState, actuator_name, epoch, instant_ts};
 const TICK_PERIOD_MS: f64 = 1000.0;
 /// Latched-command channel capacity.
 const COMMAND_CAP: usize = 64;
+/// How often the resource sampler inspects this process's CPU/memory. Comfortably above sysinfo's
+/// per-OS `MINIMUM_CPU_UPDATE_INTERVAL` (so CPU deltas are valid) and fresh within Prometheus's 15 s
+/// scrape interval.
+const RESOURCE_SAMPLE_PERIOD: std::time::Duration = std::time::Duration::from_secs(5);
 
 /// The wall-clock interval between ticks at a given time-scale: `tick_period / scale`, never below
 /// 1 ms. Determinism is preserved because only the cadence changes, not the per-tick step.
@@ -61,6 +65,14 @@ pub async fn run(config: Config) -> Result<(), Box<dyn Error>> {
     };
     let base = epoch();
 
+    // Controller-health metrics, shared between the tick loop, the MQTT event loop, and the REST
+    // /metrics handler.
+    let metrics = Arc::new(crate::metrics::Metrics::new(&greenhouse_id));
+
+    // Sample this process's own CPU/memory on a dedicated task, off the control-loop hot path
+    // (sysinfo does syscalls), so a slow read never stalls a tick (`P1-RESIL-3`).
+    spawn_resource_sampler(metrics.clone());
+
     let mut time_scale = config.simulation.time_scale;
     let mut time_scale_updated_at_seconds = 0u64;
     let mut injections: HashMap<InjectionKey, InjectionRecord> = HashMap::new();
@@ -71,7 +83,9 @@ pub async fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let (cmd_tx, mut cmd_rx) = mpsc::channel::<Command>(COMMAND_CAP);
 
     // First tick to seed the read model and the retained MQTT state.
+    let tick_start = std::time::Instant::now();
     let snapshot = pipeline.tick();
+    metrics.record_tick(tick_start.elapsed(), &snapshot, time_scale);
     let meta = ViewMeta {
         time_scale,
         time_scale_updated_at_seconds,
@@ -83,8 +97,9 @@ pub async fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let view0 = build_view(&pipeline, &snapshot, &meta, &injections);
     let (view_tx, view_rx) = watch::channel(view0);
 
-    let mut publisher = crate::mqtt::Publisher::connect(&broker_url, &greenhouse_id);
-    publisher.publish_snapshot(&snapshot, time_scale);
+    let mut publisher =
+        crate::mqtt::Publisher::connect(&broker_url, &greenhouse_id, metrics.clone());
+    metrics.record_publish(publisher.publish_snapshot(&snapshot, time_scale));
 
     // Serve REST on its own task.
     let write_auth = auth_token.is_some();
@@ -95,6 +110,7 @@ pub async fn run(config: Config) -> Result<(), Box<dyn Error>> {
         base,
         bounds: plausibility,
         auth_token,
+        metrics: metrics.clone(),
     };
     let listener = TcpListener::bind(&bind_addr).await?;
     tracing::info!(%greenhouse_id, write_auth, "REST listening on {bind_addr}; MQTT → {broker_url}");
@@ -150,8 +166,10 @@ pub async fn run(config: Config) -> Result<(), Box<dyn Error>> {
         }
         prune_injections(&mut injections, &mut pipeline, probe_count);
 
+        let tick_start = std::time::Instant::now();
         let snapshot = pipeline.tick();
         last_tick = tokio::time::Instant::now();
+        metrics.record_tick(tick_start.elapsed(), &snapshot, time_scale);
         next_tick = last_tick + tick_interval(time_scale);
         let meta = ViewMeta {
             time_scale,
@@ -163,8 +181,32 @@ pub async fn run(config: Config) -> Result<(), Box<dyn Error>> {
         };
         let view = build_view(&pipeline, &snapshot, &meta, &injections);
         let _ = view_tx.send_replace(view);
-        publisher.publish_snapshot(&snapshot, time_scale);
+        metrics.record_publish(publisher.publish_snapshot(&snapshot, time_scale));
     }
+}
+
+/// Spawn the background task that samples this process's CPU/memory into `metrics` every
+/// [`RESOURCE_SAMPLE_PERIOD`]. A reused [`sysinfo::System`] lets sysinfo compute CPU as a delta
+/// since the previous refresh (the first sample reports 0% while it seeds the baseline).
+fn spawn_resource_sampler(metrics: Arc<crate::metrics::Metrics>) {
+    let pid = match sysinfo::get_current_pid() {
+        Ok(pid) => pid,
+        Err(err) => {
+            tracing::warn!("resource metrics disabled: cannot resolve current pid: {err}");
+            return;
+        }
+    };
+    tokio::spawn(async move {
+        let mut sys = sysinfo::System::new();
+        loop {
+            if let Some((cpu_percent, resident_bytes)) =
+                crate::metrics::sample_current_process(&mut sys, pid)
+            {
+                metrics.set_process_usage(cpu_percent, resident_bytes);
+            }
+            tokio::time::sleep(RESOURCE_SAMPLE_PERIOD).await;
+        }
+    });
 }
 
 /// Apply one latched command to the pipeline + sim registries.

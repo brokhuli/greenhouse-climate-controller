@@ -13,7 +13,7 @@ use std::sync::Arc;
 use axum::Json;
 use axum::Router;
 use axum::extract::{Path, Query, Request, State};
-use axum::http::header::AUTHORIZATION;
+use axum::http::header::{AUTHORIZATION, CONTENT_TYPE};
 use axum::http::{HeaderMap, Method, StatusCode};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
@@ -25,6 +25,7 @@ use crate::config::{Bounds, Setpoints, Zone};
 use crate::domain::{Actuator, Slug, TimeOfDay};
 use crate::faults::{FaultType, Mode, Severity};
 use crate::hal::ActuatorId;
+use crate::metrics::Metrics;
 use crate::telemetry::{OutputState, actuator_name, instant_ts, is_on_off};
 use crate::validation::FieldViolation;
 
@@ -345,6 +346,8 @@ pub struct AppState {
     /// Optional pre-shared bearer token guarding the write endpoints (RFC-011). `None` → writes are
     /// unauthenticated (today's default); `Some` → PATCH/PUT/DELETE require a matching bearer.
     pub auth_token: Option<Arc<str>>,
+    /// Controller-health metrics, shared with the tick task. Served at `GET /metrics`.
+    pub metrics: Arc<Metrics>,
 }
 
 impl AppState {
@@ -389,11 +392,23 @@ pub fn router(state: AppState) -> Router {
             "/greenhouses/{greenhouse_id}/sim/time-scale",
             get(get_time_scale).put(put_time_scale),
         )
+        // Operational metrics for Prometheus — top-level (not greenhouse-scoped) and a GET, so the
+        // write-auth middleware leaves it open. Outside the versioned controller-rest contract.
+        .route("/metrics", get(get_metrics))
         .layer(middleware::from_fn_with_state(
             auth_token,
             require_bearer_on_writes,
         ))
         .with_state(state)
+}
+
+/// Serve the controller's Prometheus text exposition (controller-health).
+async fn get_metrics(State(s): State<AppState>) -> Response {
+    (
+        [(CONTENT_TYPE, "text/plain; version=0.0.4; charset=utf-8")],
+        s.metrics.render(),
+    )
+        .into_response()
 }
 
 // ───────────────────────────── write authentication (optional, RFC-011) ─────────────────────────────
@@ -534,6 +549,7 @@ async fn patch_setpoints(
     let _ =
         s.tx.send(Command::SetSetpoints(Box::new(candidate.clone())))
             .await;
+    s.metrics.record_config_apply("setpoints");
     ok(candidate)
 }
 
@@ -660,6 +676,7 @@ async fn patch_zone(
     status.schedule = zone.schedule.to_string();
 
     let _ = s.tx.send(Command::SetZone(Box::new(zone))).await;
+    s.metrics.record_config_apply("zones");
     ok(status)
 }
 
@@ -732,6 +749,7 @@ async fn put_override(
             ttl_secs: ttl,
         })
         .await;
+    s.metrics.record_config_apply("overrides");
 
     let (actuator_str, zone_id) = match &id {
         ActuatorId::House(a) => (actuator_name(*a), None),
@@ -768,6 +786,7 @@ async fn delete_override(
         other => ActuatorId::House(other),
     };
     let _ = s.tx.send(Command::ClearOverride(id)).await;
+    s.metrics.record_config_apply("overrides");
     StatusCode::NO_CONTENT.into_response()
 }
 

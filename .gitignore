@@ -35,6 +35,8 @@ venv/
 # Generated controller fleet (deploy/scripts/gen-controllers.sh)
 deploy/docker-compose.override.yml
 deploy/controllers/
+# Generated Prometheus file-SD targets for the controller fleet (same generator)
+deploy/prometheus/targets/
 
 # OS / editor
 .DS_Store

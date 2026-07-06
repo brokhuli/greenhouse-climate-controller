@@ -31,7 +31,7 @@ export function applyStatusToSummary(
   return { ...summary, status: frame.status, timeScale };
 }
 
-/** House-level `temperature`/`humidity` readings keep the fleet card's metric tiles live. */
+/** House-level `temperature`/`humidity`/`co2` readings keep the fleet card's metric tiles live. */
 export function applyTelemetryToSummary(
   summary: GreenhouseSummary,
   frame: TelemetryFrame,
@@ -39,17 +39,25 @@ export function applyTelemetryToSummary(
   if (frame.zone_id !== null) return summary; // zone readings don't drive the house tiles
   const temperature = frame.readings.find((reading) => reading.metric === "temperature");
   const humidity = frame.readings.find((reading) => reading.metric === "humidity");
+  const co2 = frame.readings.find((reading) => reading.metric === "co2");
   const nextTemperature = temperature ? temperature.value : summary.climate.temperature;
   const nextHumidity = humidity ? humidity.value : summary.climate.humidity;
+  const nextCo2 = co2 ? co2.value : summary.climate.co2;
   if (
     nextTemperature === summary.climate.temperature &&
-    nextHumidity === summary.climate.humidity
+    nextHumidity === summary.climate.humidity &&
+    nextCo2 === summary.climate.co2
   ) {
     return summary;
   }
   return {
     ...summary,
-    climate: { ...summary.climate, temperature: nextTemperature, humidity: nextHumidity },
+    climate: {
+      ...summary.climate,
+      temperature: nextTemperature,
+      humidity: nextHumidity,
+      co2: nextCo2,
+    },
   };
 }
 

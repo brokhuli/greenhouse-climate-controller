@@ -19,6 +19,7 @@ func newTestIngester(known ...string) (*Ingester, *fakeBroadcaster) {
 	ing := &Ingester{
 		fleet:        state.NewFleet(10 * time.Second),
 		hub:          hub,
+		metrics:      nopMetrics{},
 		log:          discardLogger(),
 		buf:          newWriter(8, &fakeSink{}, discardLogger()),
 		offlineAfter: 10 * time.Second,
@@ -57,6 +58,44 @@ func TestReadingAcceptsMatchingID(t *testing.T) {
 	ing.onReading([]byte(readingMatch), "gh-a", time.Now())
 	if hub.frames == 0 || len(ing.buf.ch) != 1 {
 		t.Fatalf("matching payload must be stored and broadcast: frames=%d buffered=%d", hub.frames, len(ing.buf.ch))
+	}
+}
+
+const actuatorMatch = `{"schema_version":1,"greenhouse_id":"gh-a","zone_id":null,"ts":"2026-06-07T14:03:00.000Z","actuator":"heater","commanded":{"on":true,"level_pct":50.0},"observed":{"on":true,"level_pct":50.0}}`
+const faultMatch = `{"schema_version":1,"greenhouse_id":"gh-a","zone_id":null,"ts":"2026-06-07T14:03:00.000Z","component":"temperature","fault_type":"out_of_range","severity":"warning","message":"test"}`
+
+// countingMetrics records recorder calls so tests can assert ingest instrumentation fires.
+type countingMetrics struct {
+	streams     map[string]int
+	transitions map[string]int
+}
+
+func newCountingMetrics() *countingMetrics {
+	return &countingMetrics{streams: map[string]int{}, transitions: map[string]int{}}
+}
+
+func (c *countingMetrics) IngestMessage(stream string)          { c.streams[stream]++ }
+func (c *countingMetrics) ConnectivityTransition(status string) { c.transitions[status]++ }
+
+func TestMetricsRecordedPerStream(t *testing.T) {
+	ing, _ := newTestIngester("gh-a")
+	rec := newCountingMetrics()
+	ing.metrics = rec
+	now := time.Now()
+
+	ing.onReading([]byte(readingMatch), "gh-a", now)   // reading + first-contact online transition
+	ing.onActuator([]byte(actuatorMatch), "gh-a", now) // actuator
+	ing.onFault([]byte(faultMatch), "gh-a", now)       // event + degraded transition
+	ing.onState([]byte(stateMatch), "gh-a", now)       // state
+
+	for stream, want := range map[string]int{"reading": 1, "actuator": 1, "event": 1, "state": 1} {
+		if rec.streams[stream] != want {
+			t.Errorf("IngestMessage(%q) = %d, want %d", stream, rec.streams[stream], want)
+		}
+	}
+	// The first reading brings gh-a online; the fault degrades it — both are transitions.
+	if rec.transitions["online"] < 1 || rec.transitions["degraded"] < 1 {
+		t.Errorf("connectivity transitions not recorded: %+v", rec.transitions)
 	}
 }
 

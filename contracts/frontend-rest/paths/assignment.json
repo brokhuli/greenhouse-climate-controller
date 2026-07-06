@@ -3,9 +3,9 @@
   "get": {
     "operationId": "getAssignment",
     "summary": "Current profile/stage assignment",
-    "description": "Which profile and growth stage are currently assigned to the greenhouse (2b). Requires an authenticated viewer or operator.",
+    "description": "Which profile and growth stage are currently assigned to the greenhouse (2b). Open to anyone — reads need no token (anonymous-viewer posture, platform security §4).",
     "x-slice": "2b",
-    "security": [{ "bearerAuth": [] }],
+    "security": [],
     "responses": {
       "200": {
         "description": "The current assignment.",
@@ -15,7 +15,6 @@
           }
         }
       },
-      "401": { "$ref": "../components/responses.json#/Unauthorized" },
       "404": { "$ref": "../components/responses.json#/NotFound" }
     }
   },

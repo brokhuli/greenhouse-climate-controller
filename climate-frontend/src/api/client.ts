@@ -41,6 +41,10 @@ export class ApiError extends Error {
   }
 }
 
+/** The HTTP status carried by an `ApiError`, or `undefined` for non-HTTP failures (network/parse). */
+export const getHttpStatus = (error: unknown): number | undefined =>
+  error instanceof ApiError ? error.status : undefined;
+
 const apiBase = (): string => import.meta.env.VITE_API_BASE ?? "";
 
 const url = (path: string): string => `${apiBase()}/api${path}`;

@@ -19,6 +19,7 @@ import (
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/auth"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/config"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/ingest"
+	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/metrics"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/reconcile"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/relay"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/state"
@@ -60,9 +61,26 @@ func run(log *slog.Logger) error {
 		return fmt.Errorf("ensure provenance prune: %w", err)
 	}
 
+	// Platform-health metrics (operations §1): the registry is built here and injected into
+	// the components that record; the scrape-time collectors are registered as their data
+	// sources come up. Served at /metrics for Prometheus.
+	met := metrics.New()
+	met.RegisterDatastore(func() metrics.PoolStat {
+		st := db.Pool().Stat()
+		return metrics.PoolStat{
+			Acquired:     st.AcquiredConns(),
+			Idle:         st.IdleConns(),
+			Total:        st.TotalConns(),
+			Max:          st.MaxConns(),
+			Constructing: st.ConstructingConns(),
+		}
+	}, db)
+
 	fleet := state.NewFleet(cfg.OfflineAfter)
+	met.RegisterFleet(fleet)
 	hub := ws.NewHub(log)
-	ing := ingest.New(db, fleet, hub, log, cfg.MQTTBrokerURL, cfg.IngestBufferSize, cfg.OfflineAfter)
+	ing := ingest.New(db, fleet, hub, met, log, cfg.MQTTBrokerURL, cfg.IngestBufferSize, cfg.OfflineAfter)
+	met.RegisterIngestDropped(func() float64 { return float64(ing.Dropped()) })
 
 	// Seed the ingester's known-greenhouse set so existing registrations route on boot.
 	endpoints, err := db.ListEndpoints(ctx)
@@ -79,7 +97,7 @@ func run(log *slog.Logger) error {
 	}
 
 	relayClient := relay.New(cfg.RelayTimeout)
-	reconciler := reconcile.New(db, relayClient, fleet, hub, log, reconcile.Config{
+	reconciler := reconcile.New(db, relayClient, fleet, hub, met, log, reconcile.Config{
 		Interval:   cfg.ReconcileInterval,
 		Jitter:     cfg.ReassertJitter,
 		MaxRetries: cfg.DriftMaxRetries,
@@ -93,7 +111,7 @@ func run(log *slog.Logger) error {
 		return fmt.Errorf("oidc verifier: %w", err)
 	}
 
-	server := api.New(db, fleet, ing, relayClient, reconciler, hub, verifier, cfg.ServiceAuthMode, log)
+	server := api.New(db, fleet, ing, relayClient, reconciler, hub, verifier, cfg.ServiceAuthMode, met, log)
 
 	serverErr := make(chan error, 1)
 	go func() { serverErr <- server.Start(cfg.HTTPAddr) }()

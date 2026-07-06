@@ -9,10 +9,12 @@
 //! subscriber.
 
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use rumqttc::{AsyncClient, MqttOptions, QoS};
 
+use crate::metrics::{Metrics, PublishStats};
 use crate::state::Snapshot;
 use crate::telemetry::{FaultKey, active_fault_keys, epoch, telemetry_frames};
 
@@ -36,20 +38,25 @@ pub struct Publisher {
 
 impl Publisher {
     /// Connect to the broker and spawn the event-loop task (which auto-reconnects). Must be called
-    /// inside a Tokio runtime.
-    pub fn connect(broker_url: &str, greenhouse_id: &str) -> Self {
+    /// inside a Tokio runtime. `metrics` receives the connection-state gauge from the event loop.
+    pub fn connect(broker_url: &str, greenhouse_id: &str, metrics: Arc<Metrics>) -> Self {
         let (host, port) = parse_broker_url(broker_url);
         let mut options = MqttOptions::new(format!("controller-{greenhouse_id}"), host, port);
         options.set_keep_alive(std::time::Duration::from_secs(KEEP_ALIVE_SECS));
         let (client, mut eventloop) = AsyncClient::new(options, OUTBOUND_CAP);
 
         // Drive the event loop on its own task: this performs the actual network I/O and reconnects
-        // on failure. The control tick never touches it.
+        // on failure. The control tick never touches it. Each poll outcome updates the connection
+        // gauge — a successful poll means the link is live; an error means it dropped.
         tokio::spawn(async move {
             loop {
-                if let Err(err) = eventloop.poll().await {
-                    tracing::warn!("mqtt event loop error (will retry): {err}");
-                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                match eventloop.poll().await {
+                    Ok(_) => metrics.set_mqtt_connected(true),
+                    Err(err) => {
+                        metrics.set_mqtt_connected(false);
+                        tracing::warn!("mqtt event loop error (will retry): {err}");
+                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                    }
                 }
             }
         });
@@ -64,8 +71,10 @@ impl Publisher {
 
     /// Publish all telemetry frames for a committed snapshot. Non-blocking: a frame that cannot be
     /// enqueued (broker backpressure) is dropped, never awaited. Fault events fire only on the
-    /// rising edge; the set of currently-active faults is carried to the next call.
-    pub fn publish_snapshot(&mut self, snapshot: &Snapshot, time_scale: f64) {
+    /// rising edge; the set of currently-active faults is carried to the next call. Returns the
+    /// published/dropped tally for the controller's own metrics.
+    pub fn publish_snapshot(&mut self, snapshot: &Snapshot, time_scale: f64) -> PublishStats {
+        let mut stats = PublishStats::default();
         for frame in telemetry_frames(
             snapshot,
             &self.greenhouse_id,
@@ -73,15 +82,22 @@ impl Publisher {
             time_scale,
             &self.prev_faults,
         ) {
-            if let Err(err) =
-                self.client
-                    .try_publish(frame.topic, QoS::AtLeastOnce, frame.retain, frame.payload)
-            {
-                // Bounded-buffer drop under backpressure — expected when the broker is unreachable.
-                tracing::trace!("dropping telemetry frame under backpressure: {err}");
+            match self.client.try_publish(
+                frame.topic,
+                QoS::AtLeastOnce,
+                frame.retain,
+                frame.payload,
+            ) {
+                Ok(()) => stats.published += 1,
+                Err(err) => {
+                    // Bounded-buffer drop under backpressure — expected when the broker is unreachable.
+                    stats.dropped += 1;
+                    tracing::trace!("dropping telemetry frame under backpressure: {err}");
+                }
             }
         }
         self.prev_faults = active_fault_keys(snapshot);
+        stats
     }
 }
 

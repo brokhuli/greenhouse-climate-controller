@@ -157,14 +157,69 @@ services:
           cpus: "0.5"
           memory: 128M
 
-  # --- Deferred 2b observability (separate slice — see 08-spec-platform-operations.md §1) ---
-  # prometheus:  # (2b) scrapes the api's /metrics
-  #   image: prom/prometheus:latest
-  #
-  # grafana:     # (2b) platform dashboards over Prometheus
-  #   image: grafana/grafana:latest
+  prometheus: # (2b) scrapes the api's /metrics (platform-health) and every controller's /metrics
+    # (controller-health) over the internal network — nothing extra is exposed via the proxy
+    # (operations §1). The api is a static target; the generated controllers are discovered via the
+    # file-SD targets file that gen-controllers.sh writes into ./prometheus/targets/.
+    image: prom/prometheus:v3.1.0
+    container_name: greenhouse-prometheus
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "9090:9090" # Prometheus UI (host) — handy for /targets debugging; scraping is internal
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/targets:/etc/prometheus/targets:ro # file-SD (generated, git-ignored)
+      - prometheus_data:/prometheus
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  grafana: # (2b) platform + controller dashboards over Prometheus (operations §1). Dashboards and the
+    # Prometheus datasource are auto-provisioned from ./grafana/; the admin login is GRAFANA_ADMIN[_PASSWORD].
+    image: grafana/grafana:11.4.0
+    container_name: greenhouse-grafana
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    ports:
+      - "3000:3000" # Grafana UI (host)
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      # Anonymous read-only access — open the dashboards with no login (local dev). The admin login
+      # above still gates edits; anonymous users get the Viewer role.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
 
 volumes:
   mosquitto_data:
   mosquitto_log:
   db_data: # (2a) TimescaleDB data
+  prometheus_data: # (2b) Prometheus TSDB
+  grafana_data: # (2b) Grafana state (dashboards are provisioned read-only; this holds its own db)
