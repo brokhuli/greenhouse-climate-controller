@@ -109,6 +109,16 @@ open http://localhost:9090/targets # Prometheus — platform-api + controllers s
 Grafana's Prometheus datasource and both dashboards are auto-provisioned from `deploy/grafana/`; the
 admin login is `GRAFANA_ADMIN` / `GRAFANA_ADMIN_PASSWORD` (default `admin`/`admin`, in `deploy/.env`).
 
+Both dashboards read top-down as **operational health boards**, not a wall of line charts: a "right
+now" row of **stat** panels (API p95 / 5xx / ingest drops; fleet interlock / degraded / fault
+counts) with green→amber→red thresholds, then **state timelines** for discrete states (platform
+connectivity, controller mode, MQTT up/down), then **bar gauges** ranking greenhouses by tick p95 /
+CPU / RSS, a **table** of background-job health, **heatmaps** for latency/tick distributions, and
+**bar charts** for categorical counts (reconciliation actions, faults by type). Time series is kept
+only for genuine rates/trends (ingestion, tick rate, MQTT publish vs dropped, and per-greenhouse
+CPU / memory trends — so resource use has both a current bar gauge and a trend line). Controller
+Fleet has a `$greenhouse` template variable to filter the fleet down to one or more controllers.
+
 ## Inject demo faults
 
 To populate the dashboard's Recent Activity feed (and trip the fleet "degraded" state) without
