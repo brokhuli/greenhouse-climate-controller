@@ -27,7 +27,7 @@ The gate checks:
 | **Freshness** | The latest reading for each required metric is no older than `max_telemetry_age_minutes` ([configuration](./10-spec-optimizer-configuration.md)). Age is computed from the reading's `ts`. |
 | **Completeness** | All `required_metrics` are present, and the history window contains at least `min_history_coverage` of its expected samples — a window pocked with large gaps is not a basis for simulation. |
 | **Sensor / actuator health** | Inputs are untrusted if a metric the plan depends on is faulted or the controller is degraded — read from the signals the controller already publishes: the `system-state` snapshot's active-fault array and controller `mode` (normal / degraded / interlock), per-sensor fault events (`stuck`, `out_of_range`, `sensor_disagreement`, `temperature_unavailable`), and actuator-state `health` (`ok` / `stuck` / `no_response`). |
-| **Identity consistency** | Every row Data Access reads carries the `greenhouse_id` it queried for, zone-scoped rows carry a non-null `zone_id` valid for that greenhouse, and every payload's `schema_version` is one the optimizer understands ([RFC-007 identity & envelope](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)). A view returning another greenhouse's rows, a `zone_id` polarity violation, or an unknown `schema_version` means the read surface or a contract has **drifted** — the window is not a trustworthy basis for planning. |
+| **Identity consistency** | Every row or object Data Access reads carries the `greenhouse_id` it queried for, zone-scoped rows carry a non-null `zone_id` valid for that greenhouse, and every payload's `schema_version` is one the optimizer understands ([RFC-007 identity & envelope](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)). A REST response returning another greenhouse's rows, a `zone_id` polarity violation, or an unknown `schema_version` means the read API or a contract has **drifted** — the window is not a trustworthy basis for planning. |
 | **Clock mode** *(simulated greenhouses)* | The greenhouse's reported simulation `time_scale` ([controller HAL §7](../controller/03-spec-controller-hal-simulation.md#time-scale-speed-without-breaking-determinism)) is **1.0** (real-time). The optimizer's fixed planning cadence and horizons are wall-clock-paced, so an **accelerated or slowed** controller (`time_scale ≠ 1.0`) is outside its operating envelope — telemetry arrives faster/slower than wall-clock and a wall-clock-anchored plan would desync from the plant. Phase 3 is explicitly allowed not to operate off 1× ([scope](./12-spec-optimizer-scope.md)); this is a **transient** hold like freshness — returning the controller to 1× clears it. The field is sim-only; a real-hardware controller never reports a non-1× scale. |
 
 **When the gate fails, the optimizer degrades rather than plans on bad data** — mirroring the
@@ -47,10 +47,11 @@ accelerated simulation, where setpoint refinement is intentionally out of scope.
 baseline stays in force regardless ([P3-RESIL-1](../../artifacts/non-functional-requirements.md)), a held
 cycle never destabilizes control — it only forgoes refinement until trusted inputs return.
 
-> **Read-surface note (follow-up).** The optimizer can compute every signal above today from existing
+> **Read-API note (follow-up).** The optimizer can compute every signal above today from existing
 > contracts — `ts` on each reading for age, plus the controller's fault-event and `system-state`
 > streams for health. Exposing per-metric last-update age and fault status **directly on the RFC-008
-> telemetry views** would let the gate read them as plain columns and is the clean long-term home;
-> which columns the views carry is an open question on
-> [RFC-008](../../../decisions/request-for-comments.md#rfc-008-phase-3-telemetry-read-path) (exact view
-> set) to resolve when the read surface is authored.
+> telemetry read API** would let the gate consume them as plain response fields and is the clean
+> long-term home; which fields the API carries is an open question on
+> [RFC-008](../../../decisions/request-for-comments.md#rfc-008-phase-3-telemetry-read-path) to resolve
+> when the REST contract is authored. The platform can still compute those fields from internal SQL
+> views or aggregates.

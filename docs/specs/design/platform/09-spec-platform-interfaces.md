@@ -1,10 +1,10 @@
 # Platform — Interfaces & API Surface
 
 > **Purpose:** Define the platform's interface boundaries on both sides. First, the
-> three cross-component interfaces the platform sits across — MQTT up from the
+> cross-component interfaces the platform sits across — MQTT up from the
 > controllers, controller REST down to them, and WebSockets out to the frontend.
 > Then, the **responsibilities** of the Go API's own outward surface — REST for
-> request/response and WebSockets for live push — and which delivery slice each lands
+> request/response, including the Phase 3 optimizer read/write API, and WebSockets for live push — and which delivery slice each lands
 > in. This file lists *which interface does what* and *what the surface does*, not its
 > wire shapes: topic maps, REST shapes, and message schemas are owned by
 > [`contracts/`](../../../../contracts/) and the
@@ -14,13 +14,14 @@
 
 ---
 
-## 1. The three interfaces
+## 1. The core interfaces
 
 | Interface | Direction | Role |
 |---|---|---|
 | **MQTT** | Controller → platform | Telemetry ingest: readings, actuator states, fault/state events |
 | **Controller REST** | Platform → controller | Setpoint resolution (profile apply/reconcile) + ad-hoc setpoint edits |
 | **WebSockets** | Platform → frontend | Live fan-out of telemetry, status, drift, events |
+| **Platform REST** | Platform → optimizer | Phase 3 planning-context/history reads; optimizer setpoint submissions back into the platform authority |
 
 Each maps to one of the platform's [data flows](./02-spec-platform-architecture.md#3-three-data-flows):
 MQTT is the **up** flow ([ingestion](./04-spec-platform-ingestion.md)), controller REST is
@@ -41,8 +42,8 @@ This keeps the two directions on separate transports with separate trust and del
 semantics, and mirrors the controller's own
 [headless contract](../controller/08-spec-controller-interfaces.md#1-the-headless-principle).
 
-When Phase 3 lands, the optimizer does **not** add a fourth interface to the
-controller: it submits refined targets through the platform's own setpoint write path
+When Phase 3 lands, the optimizer does **not** add another interface to the
+controller: it reads planning context through the platform REST API, then submits refined targets through the platform's own setpoint write path
 ([crop profiles §4](./05-spec-platform-crop-profiles.md#4-boundary-with-phase-3--single-setpoint-authority)),
 and the platform remains the sole party speaking the controller REST API.
 
@@ -67,11 +68,13 @@ does*, not its wire shapes.
 | **REST — crop profiles** | CRUD on the profile library and their stage-aware target bundles | 2b |
 | **REST — assignments** | Assign a profile/stage to a greenhouse; trigger apply/reconcile | 2b |
 | **REST — setpoints (`POST`)** | Single-authority setpoint submission at `POST /api/greenhouses/{id}/setpoints` (the optimizer's RFC-005 write path; `POST /setpoints` for short) + provenance | 2b |
+| **REST — optimizer telemetry read API** | Phase 3 read path: bounded planning-context/history reads for one greenhouse, including telemetry, actuator state, current setpoints, and data-quality/freshness signals. Implemented by the platform over internal SQL views or continuous aggregates so the optimizer consumes REST rather than the database schema. | 2b / 3 |
 
 Each surface maps to a concern documented elsewhere: telemetry queries read what
 [ingestion](./04-spec-platform-ingestion.md) stored; profiles/assignments/setpoints drive
 [crop profiles & reconciliation](./05-spec-platform-crop-profiles.md); the WebSocket
-channel is consumed by the [dashboard](./06-spec-platform-dashboard.md).
+channel is consumed by the [dashboard](./06-spec-platform-dashboard.md); the optimizer telemetry read
+API is the Phase 3 REST wrapper over the platform-owned read model.
 
 ---
 

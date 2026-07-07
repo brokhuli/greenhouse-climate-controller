@@ -109,7 +109,7 @@
 | LLM Integration | LangChain (`langchain-anthropic`, `langchain-openai`, `langchain-community`) — `ChatAnthropic`/`ChatOpenAI` primary, `ChatOllama` fallback via `.with_fallbacks()`; see [RFC-004](../../decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface) |
 | Simulation Engine | NumPy + SciPy |
 | Digital Twin | Custom greenhouse physics model |
-| Data Access | TimescaleDB (Phase 2 store) via SQLAlchemy |
+| Data Access | Phase 2 REST API via HTTP client |
 | Safety Layer | Constraint engine in Python |
 | Actuator Delivery | Phase 2 REST API |
 | Deployment | Docker Compose (local) |
@@ -124,7 +124,8 @@
 - **Backend-agnostic invocation strategy** — fixed token budget, hourly summaries, adaptive horizon, state-change gate, and fixed cadence applied before any backend call; strategy is identical for both backends
 - **NumPy/SciPy** — simulation of heat, humidity, and CO₂ dynamics
 - **Constraint engine** — validates LLM-generated actuator plans before execution
-- **TimescaleDB** — historical data from Phase 2 feeds the optimizer
+- **Phase 2 REST API** — historical data from Phase 2 feeds the optimizer through a platform-owned
+  REST contract, backed internally by SQL views/aggregates where useful
 - **Flexible by design** — this layer evolves as LLM capabilities do
 
 > **Layer archetype:** AI systems + digital twin + agentic planning

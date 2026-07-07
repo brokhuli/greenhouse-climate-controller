@@ -1,6 +1,6 @@
 # Optimizer — Configuration
 
-> **Purpose:** Catalogue the optimizer's service configuration — data-store DSN, Phase
+> **Purpose:** Catalogue the optimizer's service configuration — Phase
 > 2 endpoint and its service-auth mode ([RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009)), LLM provider/sampling, objective weights, local
 > cost schedule, and the data-quality, twin-robustness, application-gate, and service thresholds — and
 > how it is supplied via environment variables / the Compose file rather than a per-greenhouse TOML.
@@ -14,7 +14,7 @@ referenced throughout the set (e.g.
 
 ---
 
-The optimizer's service configuration — data-store DSN, Phase 2 API endpoint, LLM provider/endpoint,
+The optimizer's service configuration — Phase 2 API endpoint, LLM provider/endpoint,
 sampling parameters, objective weights, the local time-of-use cost schedule, the input data-quality thresholds, the twin-robustness and
 service-resilience thresholds, and the application-gate thresholds — is supplied via **environment
 variables / the Compose file**, mirroring the Phase 2
@@ -23,7 +23,6 @@ convention rather than a per-greenhouse TOML (contrast the controller's config).
 
 ```toml
 [data]
-postgres_dsn = "postgresql://optimizer_ro:***@platform-db:5432/greenhouse"  # read-only role; SELECT on the RFC-008 view surface only
 platform_api_url = "https://platform/api"
 
 [platform_auth]

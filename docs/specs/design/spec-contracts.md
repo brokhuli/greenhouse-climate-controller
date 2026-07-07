@@ -42,7 +42,7 @@ is versioned and accompanied by an ADR, per [`contracts/README.md`](../../../con
 | 4 | Phase 2 operator/fleet REST API | SPA / operator → platform | OpenAPI 3.1 | 2a (telemetry/registration/edits) / 2b (profiles/assignments) | [P2 API surface](./platform/09-spec-platform-interfaces.md#3-api-surface-inventory) |
 | 5 | Phase 2 WebSocket fan-out | Platform → SPA | WebSocket message schema | 2a | [P2 API surface](./platform/09-spec-platform-interfaces.md#3-api-surface-inventory) |
 | 6 | Optimizer plan schema | Planner → constraint engine / applier | Structured schema (JSON Schema) | 3 | [RFC-004](../../decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface) |
-| 7 | Telemetry read-surface views | Platform → optimizer | Versioned SQL views | 2b / 3 | [RFC-008](../../decisions/request-for-comments.md#rfc-008-phase-3-telemetry-read-path) |
+| 7 | Phase 3 telemetry read API | Platform → optimizer | REST (OpenAPI-style), backed by internal SQL views | 2b / 3 | [RFC-008 revision](../../decisions/request-for-comments.md#rfc-008-phase-3-telemetry-read-path) |
 
 ### 2.1 MQTT telemetry schemas
 
@@ -116,16 +116,16 @@ is versioned and accompanied by an ADR, per [`contracts/README.md`](../../../con
 | **Location** | [`contracts/`](../../../contracts/), to be created |
 | **Status** | To author |
 
-### 2.7 Telemetry read-surface views
+### 2.7 Phase 3 telemetry read API
 
 | | |
 |---|---|
-| **Purpose** | The optimizer's read path into the platform's history: a small set of named, versioned views (e.g. `optimizer_sensor_readings`, `optimizer_actuator_states`, `optimizer_current_setpoints`) the optimizer reads via a read-only role — not the raw hypertables. |
-| **Parties / direction** | Platform (owns the views) → optimizer (`optimizer_ro` role, read) |
-| **Format** | Versioned SQL views (TimescaleDB / PostgreSQL); breaking change is an ADR event |
-| **Phase introduced** | Phase 2 (the views) / Phase 3 (the consumer) |
-| **Governing decision** | [RFC-008](../../decisions/request-for-comments.md#rfc-008-phase-3-telemetry-read-path) |
-| **Location** | Platform migrations; to be created |
+| **Purpose** | The optimizer's read path into the platform's history: REST endpoints that return historical telemetry, actuator states, current setpoints, and data-quality/freshness signals for one greenhouse. The platform may back those handlers with internal SQL views or continuous aggregates, but the optimizer consumes the REST contract rather than connecting to the database. |
+| **Parties / direction** | Platform REST API → optimizer (read) |
+| **Format** | REST request/response (OpenAPI-style), with stable JSON response schemas. Internal SQL views are platform implementation details; breaking changes to the REST shape are ADR events. |
+| **Phase introduced** | Phase 2 (the REST surface and internal views) / Phase 3 (the consumer) |
+| **Governing decision** | [RFC-008 revision](../../decisions/request-for-comments.md#rfc-008-phase-3-telemetry-read-path) |
+| **Location** | [`contracts/`](../../../contracts/), to be created |
 | **Status** | To author |
 
 ---

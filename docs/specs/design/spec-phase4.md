@@ -297,8 +297,8 @@ Phase 4 adds exactly one new ingress — the weather feed — and reuses every e
 | Interface | Direction | Role |
 |---|---|---|
 | **External Weather API** | Provider → optimizer | New ingress: live outdoor conditions + site-wide forecast for the planning horizon |
-| **TimescaleDB** | Phase 2 store → optimizer | Unchanged — read-only history per greenhouse ([P3 §8](./optimizer/09-spec-optimizer-interfaces.md)) |
-| **Phase 2 REST API** | Optimizer → platform | Unchanged — write refined setpoint bundles; platform reconciles to the controller |
+| **Phase 2 REST API (read)** | Platform → optimizer | Unchanged — read planning context/history per greenhouse ([P3 §8](./optimizer/09-spec-optimizer-interfaces.md)); platform may back it with internal SQL views |
+| **Phase 2 REST API (write)** | Optimizer → platform | Unchanged — write refined setpoint bundles; platform reconciles to the controller |
 | **MQTT / REST (controller)** | Platform ↔ controller | Unchanged — the burner appears as additional actuator state/commands per [`contracts/`](../../../contracts/) |
 
 The downward path is **identical to Phase 3**: the optimizer writes setpoints **through Phase 2**,

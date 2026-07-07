@@ -30,9 +30,9 @@ and the platform's operational resilience
   the degrade fallbacks ([input gating](./06-spec-optimizer-input-gating.md),
   [twin robustness](./03-spec-optimizer-digital-twin.md#2-robustness--fidelity)) — is
   **reconstructable** by reading current setpoints and recent telemetry from Phase 2 on startup. A
-  restart re-reads config, reconnects the `optimizer_ro` role
-  ([RFC-008](../../../decisions/request-for-comments.md#rfc-008-phase-3-telemetry-read-path)) and the
-  Phase 2 API, and resumes on the next cadence tick; there is nothing to replay. While the optimizer
+  restart re-reads config, reconnects to the Phase 2 REST API
+  ([RFC-008](../../../decisions/request-for-comments.md#rfc-008-phase-3-telemetry-read-path)), and
+  resumes on the next cadence tick; there is nothing to replay. While the optimizer
   is down, the Phase 2 baseline continues unchanged
   ([P3-RESIL-1](../../artifacts/non-functional-requirements.md)) and the controller holds its last
   accepted setpoints ([P3-REL-1](../../artifacts/non-functional-requirements.md)) — a restart costs a
@@ -43,8 +43,8 @@ and the platform's operational resilience
   is validated **on startup**; an invalid config **blocks the service from coming up** rather than
   letting it run on silent defaults — the same startup-gate discipline the platform applies to schema
   migrations ([08-spec-platform-operations.md](../platform/08-spec-platform-operations.md)). Validation covers
-  presence and ranges (thresholds in `[0, 1]`, positive intervals and horizons, a reachable DSN and
-  Phase 2 endpoint, a known LLM provider with credentials, and a **pinned model id matching the
+  presence and ranges (thresholds in `[0, 1]`, positive intervals and horizons, a reachable Phase 2
+  endpoint, a known LLM provider with credentials, and a **pinned model id matching the
   [evaluation](./07-spec-optimizer-evaluation.md) baseline**). Because the active model id pins
   the regression baselines ([planning](./04-spec-optimizer-planning.md#1-llm-driven-planning)), a config
   that changes it without the corresponding ADR entry and baseline recapture is a reviewable event, not

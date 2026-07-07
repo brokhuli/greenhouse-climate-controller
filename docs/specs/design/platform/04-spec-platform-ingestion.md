@@ -94,7 +94,7 @@ custom eviction code.
   ([§6](#6-ingest-backpressure--load-shedding)). This is distinct from any *read-path*
   continuous aggregate that accelerates summary queries **within** the window
   ([RFC-008](../../../decisions/request-for-comments.md#rfc-008-phase-3-telemetry-read-path)),
-  which is a query optimization, not a retention mechanism.
+  which is a query optimization behind the Phase 3 REST read API, not a retention mechanism.
 - **Footprint scales with the window.** On-disk size is the horizon multiplied by the
   ingest rate, so it grows with fleet size and with elevated `time_scale` load-test modes
   ([§6](#6-ingest-backpressure--load-shedding)); shrink the horizon if a deployment needs
