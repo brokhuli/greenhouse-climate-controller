@@ -1,0 +1,8 @@
+{
+  "_comment": "Fixture-validation manifest for the contract harness (scripts/validate-contracts.mjs). Mirrors the fixture table in this contract's README. `schema` is `<component-file>#/<ComponentName>` under components/schemas/.",
+  "cases": [
+    { "fixture": "planning-context.json", "schema": "planning-context.json#/PlanningContext", "expect": "pass" },
+    { "fixture": "summary-series.json", "schema": "planning-context.json#/MetricSummarySeries", "expect": "pass" },
+    { "fixture": "planning-context.bad-range.json", "schema": "planning-context.json#/PlanningContext", "expect": "fail" }
+  ]
+}

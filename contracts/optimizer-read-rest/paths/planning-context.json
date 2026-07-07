@@ -1,0 +1,26 @@
+{
+  "parameters": [
+    { "$ref": "../components/parameters.json#/GreenhouseId" },
+    { "$ref": "../components/parameters.json#/Window" },
+    { "$ref": "../components/parameters.json#/Interval" }
+  ],
+  "get": {
+    "operationId": "getPlanningContext",
+    "summary": "Read a greenhouse's planning context (Phase 3 optimizer read path)",
+    "description": "One bounded read of a greenhouse's planning context for the optimizer's Data Access component (catalog #7, RFC-008 revised 2026-07-07): current setpoints, bucketed telemetry history as (min, mean, max) summaries, latest actuator states, and the data-quality/freshness signals the input gate runs before planning. The trailing `window` is resolved server-side against the greenhouse's latest stored (simulated) timestamp; `interval` sets the summary bucket width. The response `from`/`to` report the resolved span and `schema_version` is the drift signal the optimizer's identity-consistency check reads. The platform may back this handler with internal SQL views or TimescaleDB continuous aggregates — those are implementation details, not part of the contract. Read-only: it carries no authority and is unauthenticated on the trusted Docker network (RFC-011 scopes service auth to the write boundaries). An unknown window/interval is rejected 422.",
+    "x-slice": "3",
+    "security": [],
+    "responses": {
+      "200": {
+        "description": "The greenhouse's planning context over the resolved window.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "../components/schemas/planning-context.json#/PlanningContext" }
+          }
+        }
+      },
+      "404": { "$ref": "../components/responses.json#/NotFound" },
+      "422": { "$ref": "../components/responses.json#/ValidationFailed" }
+    }
+  }
+}

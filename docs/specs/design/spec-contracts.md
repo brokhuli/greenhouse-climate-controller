@@ -77,8 +77,8 @@ is versioned and accompanied by an ADR, per [`contracts/README.md`](../../../con
 | **Format** | OpenAPI 3.1 (uses the JSON Schema 2020-12 dialect); `/api`-prefixed, greenhouse-scoped path; accept (202) / reject with violated bound (422). Shares the `Setpoints` / `SetpointsPatch` body shape with the operator/fleet contract's ad-hoc `PATCH` (#2.4), kept as a local copy per the self-contained-contract convention. |
 | **Phase introduced** | Phase 2b (the bounds-enforcing endpoint); first cross-phase consumer in Phase 3 |
 | **Governing decision** | [RFC-005](../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain) (single authority), [RFC-011](../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009) (config-gated `SERVICE_AUTH_MODE` service boundary — untokened by default, `setpoints:write` under `oidc`) |
-| **Location** | [`contracts/setpoints-rest/`](../../../contracts/setpoints-rest/) |
-| **Status** | Authored — `openapi.json` + README + example fixtures exist under [`contracts/setpoints-rest/`](../../../contracts/setpoints-rest/) |
+| **Location** | [`contracts/optimizer-write-rest/`](../../../contracts/optimizer-write-rest/) |
+| **Status** | Authored — `openapi.json` + README + example fixtures exist under [`contracts/optimizer-write-rest/`](../../../contracts/optimizer-write-rest/) |
 
 ### 2.4 Phase 2 operator/fleet REST API
 
@@ -125,8 +125,8 @@ is versioned and accompanied by an ADR, per [`contracts/README.md`](../../../con
 | **Format** | REST request/response (OpenAPI-style), with stable JSON response schemas. Internal SQL views are platform implementation details; breaking changes to the REST shape are ADR events. |
 | **Phase introduced** | Phase 2 (the REST surface and internal views) / Phase 3 (the consumer) |
 | **Governing decision** | [RFC-008 revision](../../decisions/request-for-comments.md#rfc-008-phase-3-telemetry-read-path) |
-| **Location** | [`contracts/`](../../../contracts/), to be created |
-| **Status** | To author |
+| **Location** | [`contracts/optimizer-read-rest/`](../../../contracts/optimizer-read-rest/) |
+| **Status** | Authored — `openapi.json` + README + example fixtures exist under [`contracts/optimizer-read-rest/`](../../../contracts/optimizer-read-rest/). One consolidated `GET /api/greenhouses/{id}/planning-context` returning current setpoints, `(min, mean, max)` telemetry summaries, actuator states, and data-quality/freshness signals. |
 
 ---
 

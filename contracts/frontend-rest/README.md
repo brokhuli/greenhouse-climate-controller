@@ -86,7 +86,7 @@ nginx-proxied prefix.
 | `PUT /api/greenhouses/{greenhouse_id}/assignment` | Assign profile/stage | 2b | 200 `Assignment` | 401, 403, 404, 422 |
 
 The optimizer's single-authority `POST /greenhouses/{id}/setpoints` (RFC-005 write path) is a
-**different** contract ([`setpoints-rest/`](../setpoints-rest/), catalog #3) and is not here; the
+**different** contract ([`optimizer-write-rest/`](../optimizer-write-rest/), catalog #3) and is not here; the
 ad-hoc edit above is the operator's path.
 
 The `sim/time-scale` paths are a **simulation-only** surface (marked `x-simulation-only`): they read

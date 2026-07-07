@@ -141,7 +141,7 @@ covers it). `security-defined` and `operation-4xx-response` stay **on**: the POS
 declared `bearerAuth` scheme and has 4xx error paths.
 
 ```
-npx @redocly/cli lint --config contracts/setpoints-rest/redocly.yaml contracts/setpoints-rest/openapi.json
+npx @redocly/cli lint --config contracts/optimizer-write-rest/redocly.yaml contracts/optimizer-write-rest/openapi.json
 ```
 
 This check is **automated** by the repo's contract harness —

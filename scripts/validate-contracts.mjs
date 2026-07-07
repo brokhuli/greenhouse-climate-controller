@@ -55,7 +55,8 @@ const CONTRACTS = [
   { dir: 'contracts/frontend-ws', kind: 'jsonschema' },
   { dir: 'contracts/controller-rest', kind: 'openapi' },
   { dir: 'contracts/frontend-rest', kind: 'openapi' },
-  { dir: 'contracts/setpoints-rest', kind: 'openapi' },
+  { dir: 'contracts/optimizer-write-rest', kind: 'openapi' },
+  { dir: 'contracts/optimizer-read-rest', kind: 'openapi' },
 ];
 
 const results = []; // { contract, name, ok, detail }

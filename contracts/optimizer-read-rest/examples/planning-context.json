@@ -1,0 +1,112 @@
+{
+  "greenhouse_id": "gh-a",
+  "schema_version": 1,
+  "from": "2026-06-17T00:00:00.000Z",
+  "to": "2026-06-17T12:00:00.000Z",
+  "interval": "1h",
+  "setpoints": {
+    "source": "profile",
+    "updated_at": "2026-06-16T22:00:00.000Z",
+    "targets": {
+      "temperature_day_c": 24.0,
+      "temperature_night_c": 18.0,
+      "day_start": "06:00",
+      "day_end": "20:00",
+      "humidity_low_pct": 55.0,
+      "humidity_high_pct": 80.0,
+      "humidity_deadband_pct": 5.0,
+      "co2_target_ppm": 1000,
+      "co2_vent_interlock_threshold_pct": 15.0,
+      "vpd_target_kpa": 0.9,
+      "dli_target_mol": 17.0,
+      "zones": [
+        {
+          "zone_id": "bench-a",
+          "moisture_low_threshold": 0.4,
+          "moisture_high_threshold": 0.6,
+          "drain_period_secs": 300,
+          "schedule": "06:00,12:00,18:00"
+        }
+      ]
+    }
+  },
+  "telemetry": [
+    {
+      "metric": "temperature",
+      "zone_id": null,
+      "buckets": [
+        { "bucket_start": "2026-06-17T10:00:00.000Z", "min": 22.8, "mean": 23.4, "max": 24.1, "count": 60 },
+        { "bucket_start": "2026-06-17T11:00:00.000Z", "min": 23.2, "mean": 23.9, "max": 24.7, "count": 60 }
+      ]
+    },
+    {
+      "metric": "co2",
+      "zone_id": null,
+      "buckets": [
+        { "bucket_start": "2026-06-17T10:00:00.000Z", "min": 940.0, "mean": 985.0, "max": 1020.0, "count": 60 },
+        { "bucket_start": "2026-06-17T11:00:00.000Z", "min": 955.0, "mean": 998.0, "max": 1035.0, "count": 60 }
+      ]
+    },
+    {
+      "metric": "soil_moisture",
+      "zone_id": "bench-a",
+      "buckets": [
+        { "bucket_start": "2026-06-17T10:00:00.000Z", "min": 0.41, "mean": 0.47, "max": 0.52, "count": 12 },
+        { "bucket_start": "2026-06-17T11:00:00.000Z", "min": 0.40, "mean": 0.45, "max": 0.50, "count": 12 }
+      ]
+    }
+  ],
+  "actuators": [
+    {
+      "actuator": "roof_vents",
+      "zone_id": null,
+      "commanded": 20.0,
+      "observed": 19.5,
+      "health": "ok",
+      "ts": "2026-06-17T11:59:00.000Z"
+    },
+    {
+      "actuator": "irrigation_valve",
+      "zone_id": "bench-a",
+      "commanded": 0.0,
+      "observed": null,
+      "health": "no_response",
+      "ts": "2026-06-17T11:58:00.000Z"
+    }
+  ],
+  "data_quality": {
+    "controller_mode": "normal",
+    "time_scale": 1.0,
+    "freshness": [
+      {
+        "metric": "temperature",
+        "zone_id": null,
+        "latest_ts": "2026-06-17T11:59:00.000Z",
+        "age_seconds": 60.0,
+        "sample_count": 120
+      },
+      {
+        "metric": "co2",
+        "zone_id": null,
+        "latest_ts": "2026-06-17T11:59:00.000Z",
+        "age_seconds": 60.0,
+        "sample_count": 120
+      },
+      {
+        "metric": "soil_moisture",
+        "zone_id": "bench-a",
+        "latest_ts": "2026-06-17T11:55:00.000Z",
+        "age_seconds": 300.0,
+        "sample_count": 24
+      }
+    ],
+    "faults": [
+      {
+        "metric": "soil_moisture",
+        "zone_id": "bench-a",
+        "kind": "stuck",
+        "since": "2026-06-17T09:30:00.000Z"
+      }
+    ]
+  }
+}

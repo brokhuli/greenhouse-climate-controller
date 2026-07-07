@@ -1,0 +1,21 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Greenhouse Platform — Read API (Phase 3 optimizer planning-context read path)",
+    "version": "1.0.0",
+    "description": "The platform Go API's Phase 3 telemetry read path (catalog contract #7) — the request/response contract the optimizer (Phase 3) uses to read one greenhouse's planning context from the platform's history. One endpoint: `GET /api/greenhouses/{greenhouse_id}/planning-context`, returning current setpoints, bucketed telemetry summaries, latest actuator states, and data-quality/freshness signals in a single bounded read per planning cycle. This is the optimizer's read counterpart to its setpoint write path (`optimizer-write-rest`, catalog #3). Per the revised RFC-008 (ADR 2026-07-07), the cross-service boundary is REST: the platform may back these handlers with internal SQL views or TimescaleDB continuous aggregates, but those database objects are platform-internal implementation details, not the contract, and the optimizer never connects to the database directly. History is returned as `(min, mean, max)` summaries per metric per bucket (RFC-004), not raw readings, keeping the payload bounded. The response carries a top-level `schema_version` — unlike the write contracts — because the optimizer's input-gate identity-consistency check reads it to detect read-API/contract drift. Identity, units, and timestamps follow RFC-007: the same `greenhouse_id` slug that keys MQTT topics, controller REST paths, and DB rows; field names are snake_case; timestamps are RFC 3339 UTC, millisecond precision. The read carries no authority and no safety concern, so it is unauthenticated on the trusted Docker network — RFC-011 scopes config-gated service auth to the write boundaries, not this read. `info.version` is the contract version; its major bumps on a breaking change, recorded in an ADR (RFC-007), and `schema_version` tracks that major. This document is split: the single path is a file under `paths/`, and shared schemas, parameters, and responses live under `components/`; run `redocly bundle` to emit a single self-contained file."
+  },
+  "servers": [
+    {
+      "url": "http://{platform_host}:{port}",
+      "description": "The platform's nginx entry point, which reverse-proxies `/api` to the Go API. The optimizer reaches this read path over the internal Docker network.",
+      "variables": {
+        "platform_host": { "default": "localhost" },
+        "port": { "default": "8080" }
+      }
+    }
+  ],
+  "paths": {
+    "/api/greenhouses/{greenhouse_id}/planning-context": { "$ref": "./paths/planning-context.json" }
+  }
+}
