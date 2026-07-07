@@ -1,0 +1,42 @@
+{
+  "Slug": {
+    "type": "string",
+    "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+    "description": "Lowercase kebab slug (RFC-007 identity), e.g. gh-a, bench-a. The same slug keys MQTT topics, controller REST paths, and DB rows — no translation layer."
+  },
+  "Error": {
+    "type": "object",
+    "description": "A generic error body.",
+    "properties": {
+      "error": {
+        "type": "string",
+        "description": "Human-readable description of what went wrong."
+      }
+    },
+    "required": ["error"],
+    "additionalProperties": false
+  },
+  "ValidationError": {
+    "type": "object",
+    "description": "A rejected write, naming the field and the bound it violated — the same shape the controller REST contract returns and the platform relays when a setpoint is refused (RFC-005).",
+    "properties": {
+      "error": {
+        "type": "string",
+        "description": "Human-readable description of the violation."
+      },
+      "field": {
+        "type": "string",
+        "description": "The offending field (e.g. humidity_low_pct)."
+      },
+      "bound": {
+        "type": "string",
+        "description": "The violated constraint (e.g. \"0..100\" or \"must be < humidity_high_pct\")."
+      },
+      "value": {
+        "description": "The rejected value, echoed back."
+      }
+    },
+    "required": ["error", "field", "bound"],
+    "additionalProperties": false
+  }
+}

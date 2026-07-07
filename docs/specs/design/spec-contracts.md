@@ -38,7 +38,7 @@ is versioned and accompanied by an ADR, per [`contracts/README.md`](../../../con
 |---|---|---|---|---|---|
 | 1 | MQTT telemetry schemas | Controller → platform, optimizer | JSON Schema (Draft 2020-12) | 1 | [RFC-007](../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format), [RFC-001](../../decisions/request-for-comments.md#rfc-001-mqtt-broker-selection) |
 | 2 | Controller REST API | Controller → platform | OpenAPI 3.1 | 1 | [RFC-005](../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain), [RFC-011](../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009) (supersedes [RFC-009](../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)) |
-| 3 | Phase 2 Setpoint API | Optimizer (+ Phase 4) → platform | REST (OpenAPI-style) | 2b / 3 | [RFC-005](../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain) |
+| 3 | Phase 2 Setpoint API | Optimizer (+ Phase 4) → platform | OpenAPI 3.1 | 2b / 3 | [RFC-005](../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain), [RFC-011](../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009) |
 | 4 | Phase 2 operator/fleet REST API | SPA / operator → platform | OpenAPI 3.1 | 2a (telemetry/registration/edits) / 2b (profiles/assignments) | [P2 API surface](./platform/09-spec-platform-interfaces.md#3-api-surface-inventory) |
 | 5 | Phase 2 WebSocket fan-out | Platform → SPA | WebSocket message schema | 2a | [P2 API surface](./platform/09-spec-platform-interfaces.md#3-api-surface-inventory) |
 | 6 | Optimizer plan schema | Planner → constraint engine / applier | Structured schema (JSON Schema) | 3 | [RFC-004](../../decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface) |
@@ -72,13 +72,13 @@ is versioned and accompanied by an ADR, per [`contracts/README.md`](../../../con
 
 | | |
 |---|---|
-| **Purpose** | The single setpoint-authority endpoint (`POST /greenhouses/{id}/setpoints`): the optimizer submits refined targets; the platform validates against crop-safe bounds, records provenance, and delivers to the controller. |
+| **Purpose** | The single setpoint-authority endpoint (`POST /greenhouses/{id}/setpoints`): the optimizer submits refined targets; the platform validates against crop-safe bounds, records provenance (`source = optimizer`), and delivers to the controller. Returns the resulting intended state as `202 Accepted`. |
 | **Parties / direction** | Optimizer (and Phase 4 planner) → platform (write) |
-| **Format** | REST request/response — accept (202) / reject with violated bound (422) |
+| **Format** | OpenAPI 3.1 (uses the JSON Schema 2020-12 dialect); `/api`-prefixed, greenhouse-scoped path; accept (202) / reject with violated bound (422). Shares the `Setpoints` / `SetpointsPatch` body shape with the operator/fleet contract's ad-hoc `PATCH` (#2.4), kept as a local copy per the self-contained-contract convention. |
 | **Phase introduced** | Phase 2b (the bounds-enforcing endpoint); first cross-phase consumer in Phase 3 |
-| **Governing decision** | [RFC-005](../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain) |
-| **Location** | To be created |
-| **Status** | To author |
+| **Governing decision** | [RFC-005](../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain) (single authority), [RFC-011](../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009) (config-gated `SERVICE_AUTH_MODE` service boundary — untokened by default, `setpoints:write` under `oidc`) |
+| **Location** | [`contracts/setpoints-rest/`](../../../contracts/setpoints-rest/) |
+| **Status** | Authored — `openapi.json` + README + example fixtures exist under [`contracts/setpoints-rest/`](../../../contracts/setpoints-rest/) |
 
 ### 2.4 Phase 2 operator/fleet REST API
 

@@ -8,6 +8,62 @@ alternatives and tradeoffs.
 
 ---
 
+## 2026-07-07 — Setpoint API contract authored (OpenAPI 3.1); optimizer POST relocated out of frontend-rest
+
+**Decision:** Authored the platform's single-authority setpoint write path under
+`contracts/setpoints-rest/` as an **OpenAPI 3.1** document (`openapi.json`) plus a README and example
+fixtures — filling the §2.3 "Phase 2 Setpoint API" entry in the
+[contract catalog](../specs/design/spec-contracts.md) that was previously "to author," and giving the
+optimizer (Phase 3) and the Phase 4 planner one normative artifact to build their setpoint submissions
+against. The surface is a single greenhouse-scoped operation, `POST
+/api/greenhouses/{greenhouse_id}/setpoints`: a partial (merge) `SetpointsPatch` in, the resulting
+intended-state `Setpoints` bundle out at `202 Accepted`, recorded with `source = optimizer` provenance
+([RFC-005](./request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain)). This is a
+**contract-authoring** change: the backing Go endpoint (`submitSetpoints`) already exists and is
+unchanged; the artifact documents it. Shape choices settled while authoring:
+
+- **A distinct contract, not a `frontend-rest` operation.** The catalog has always listed this as a
+  separate contract (#3) from the operator/fleet REST API (#4): different audience (the optimizer, a
+  machine-to-machine caller, vs. the browser SPA), different provenance (`optimizer` vs.
+  `operator_edit`), and its own RFC-011 service-auth story. The `POST` had been pragmatically stashed
+  inside `frontend-rest/paths/setpoints.json` even though that contract's README already disclaimed it;
+  it is now **relocated** here so there is one canonical definition, and `frontend-rest` is left with
+  only the operator's ad-hoc `PATCH` (matching its own README and file-layout comment).
+- **Directory named by transport (`setpoints-rest/`).** Follows the `<x>-rest` naming of
+  `controller-rest/` / `frontend-rest/`; the platform serves this optimizer-facing setpoint API
+  alongside the operator/fleet surface, so a server-based `platform-rest/` name would be ambiguous.
+- **Self-contained `Setpoints` copy.** The `Setpoints` / `SetpointsPatch` / `ZoneTargets` schemas are a
+  verbatim copy of `frontend-rest`'s (the same Go DTO backs both the operator `PATCH` and this `POST`),
+  kept local rather than cross-contract `$ref`'d — the same convention the other contracts use for
+  shared definitions, and what the per-directory validation harness expects.
+- **Config-gated auth, contract identical in both modes.** A `bearerAuth` (Keycloak client-credentials
+  / JWT) scheme carrying the narrow `setpoints:write` role is declared and applied as an **optional**
+  scheme (`security: [{}, { bearerAuth: [] }]`): with `SERVICE_AUTH_MODE=trusted_network` (default) the
+  untokened internal call is accepted; with `SERVICE_AUTH_MODE=oidc` a missing/invalid token is `401`
+  and a token lacking the role is `403`
+  ([RFC-011](./request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009)).
+
+A rejected submission returns **422** with a `ValidationError` naming the violated `field` and `bound`
+— the same shape the controller-rest and frontend-rest contracts return — and is not recorded as
+intended state. Validation mirrors the other contracts (a 3.1-aware Redocly lint of `openapi.json` plus
+an Ajv (Draft 2020-12) run of each fixture against its component schema, with one negative fixture that
+must fail) and is wired into the same `scripts/validate-contracts.mjs` harness (`npm run
+validate:contracts`).
+
+**Why:** `contracts/` is the single artifact all phases conform to, and this setpoint write path — the
+only cross-phase interface the unbuilt Phase 3 optimizer will hold with the platform — had a catalog
+entry and a live Go endpoint but no normative schema, with its definition awkwardly split into a
+sibling contract that disclaimed owning it. Authoring it as its own document gives the optimizer one
+artifact to build against, removes the `frontend-rest` inconsistency, and keeps one validation
+discipline (OpenAPI 3.1 / JSON Schema 2020-12) across MQTT, controller-rest, frontend-rest, and this
+contract.
+
+**RFC:** [RFC-005](./request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain),
+[RFC-011](./request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009),
+[RFC-007](./request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)
+
+---
+
 ## 2026-07-07 — Phase 3 telemetry read path revised: platform REST API backed by internal SQL views
 
 **Decision:** Replace the Phase 3 direct-DB telemetry read contract from

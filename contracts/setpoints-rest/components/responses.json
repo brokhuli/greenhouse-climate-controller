@@ -1,0 +1,42 @@
+{
+  "NotFound": {
+    "description": "The greenhouse does not exist.",
+    "content": {
+      "application/json": {
+        "schema": { "$ref": "./schemas/common.json#/Error" }
+      }
+    }
+  },
+  "ValidationFailed": {
+    "description": "A value is out of range or violates a setpoint invariant (e.g. humidity_low_pct < humidity_high_pct); the body names the violated bound. The submission is not recorded as intended state.",
+    "content": {
+      "application/json": {
+        "schema": { "$ref": "./schemas/common.json#/ValidationError" }
+      }
+    }
+  },
+  "ServiceUnavailable": {
+    "description": "The greenhouse exists and the submission validated, but its controller could not be reached to deliver the change. The intended state is recorded and re-asserted once the controller reconnects; retry is not required.",
+    "content": {
+      "application/json": {
+        "schema": { "$ref": "./schemas/common.json#/Error" }
+      }
+    }
+  },
+  "Unauthorized": {
+    "description": "Missing or invalid bearer token. Occurs only under `SERVICE_AUTH_MODE=oidc`; with the default `SERVICE_AUTH_MODE=trusted_network` the untokened call is accepted and this response does not occur (RFC-011).",
+    "content": {
+      "application/json": {
+        "schema": { "$ref": "./schemas/common.json#/Error" }
+      }
+    }
+  },
+  "Forbidden": {
+    "description": "Authenticated but the token lacks the `setpoints:write` service role (or the operator role) required to submit setpoints. Occurs only under `SERVICE_AUTH_MODE=oidc` (RFC-011, platform security §4).",
+    "content": {
+      "application/json": {
+        "schema": { "$ref": "./schemas/common.json#/Error" }
+      }
+    }
+  }
+}

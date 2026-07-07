@@ -1,0 +1,9 @@
+{
+  "GreenhouseId": {
+    "name": "greenhouse_id",
+    "in": "path",
+    "required": true,
+    "description": "Site-unique greenhouse identity; the same slug used in MQTT topics, controller REST paths, and DB rows (RFC-007).",
+    "schema": { "$ref": "./schemas/common.json#/Slug" }
+  }
+}

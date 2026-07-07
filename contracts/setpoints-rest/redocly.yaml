@@ -1,0 +1,11 @@
+# Redocly lint config for the Setpoint API (single-authority write path) contract.
+# Starts from the recommended ruleset, with one intentional exception:
+extends:
+  - recommended
+rules:
+  # This is an internal cross-component contract; licensing is covered by the repo LICENSE.md,
+  # not per-document (same posture as the controller-rest and frontend-rest contracts).
+  info-license: off
+  # security-defined stays ON: the POST references the declared `bearerAuth` scheme as an optional
+  # scheme (security: [{}, { bearerAuth: [] }]) — enforcement is gated on SERVICE_AUTH_MODE (RFC-011).
+  # operation-4xx-response stays ON: the single write operation has 401/403/404/422/503 error paths.
