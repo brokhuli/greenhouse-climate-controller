@@ -674,6 +674,12 @@ integer `schema_version` major (additive changes do not bump). See ADR entry 202
 | Decided | 2026-06-08 |
 | Priority | Medium — blocks Phase 3 data-access implementation |
 
+> **Revision (2026-07-07):** The accepted direct-DB resolution below has been revised by
+> [ADR 2026-07-07](./architecture-design-record.md#2026-07-07--phase-3-telemetry-read-path-revised-platform-rest-api-backed-by-internal-sql-views).
+> The optimizer now consumes a **Phase 2 REST telemetry read API**. SQL views and TimescaleDB
+> continuous aggregates remain allowed, but only as platform-internal implementation details behind
+> that REST handler, not as the cross-service contract and not as a direct optimizer connection.
+
 ### Summary
 
 Ratify the optimizer's **direct, read-only access to Phase 2's TimescaleDB** as the telemetry read

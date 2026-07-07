@@ -133,7 +133,8 @@ Host tooling:
   `langchain-community`.
 - **Hosted LLM API key** for the configured primary provider, supplied through environment/secret.
 - **Ollama runtime** for the local fallback backend.
-- **Phase 2 TimescaleDB access** through the read-only optimizer view surface once authored.
+- **Phase 2 REST API access** through the optimizer telemetry read API once authored; the platform may
+  back it with internal SQL views, but no host DB access is required for the optimizer.
 
 See [RFC-004](../../decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface),
 [`tech-stack-decisions.md`](./tech-stack-decisions.md#phase-3--llm-climate-optimizer-python-only),

@@ -3,7 +3,7 @@
 > **Purpose:** The recommended optimizer dependency set, going one level deeper than
 > [tech-stack-decisions.md](../tech-stack-decisions.md#phase-3--llm-climate-optimizer-python-only),
 > which fixes only the load-bearing choices (Python · FastAPI · LangChain · NumPy/SciPy ·
-> SQLAlchemy). Each entry states **what** it is, **why** it's chosen over alternatives, and **how**
+> httpx). Each entry states **what** it is, **why** it's chosen over alternatives, and **how**
 > it's used here. Choices are constrained by the
 > [NFR doc](../../artifacts/non-functional-requirements.md)
 > (`P3-PERF-2` LLM call < 60 s; `P3-MOD-1` backend-agnostic invocation; `P3-TEST-1` every plan
@@ -118,31 +118,28 @@
 
 ---
 
-## Data access (Phase 2 store) ⚑
+## Data access (Phase 2 REST read API) ⚑
 
-### SQLAlchemy Core + psycopg (v3), sync — `sqlalchemy`, `psycopg`
+### httpx — `httpx`
 
-- **What:** The read path into Phase 2's TimescaleDB.
-- **Why:** SQLAlchemy is fixed by
-  [tech-stack-decisions.md](../tech-stack-decisions.md#phase-3--llm-climate-optimizer-python-only);
-  the driver and the sync-vs-async decision are the discretionary part. Per
-  [RFC-008](../../../decisions/request-for-comments.md#rfc-008-phase-3-telemetry-read-path) the
-  optimizer connects as the dedicated `optimizer_ro` role with `SELECT`-only grants on a small set
-  of named **views** (not the raw hypertables). SQLAlchemy **Core** (expression language, not the
-  ORM) keeps that SQL explicit against the versioned view surface, mirroring the platform's
-  no-ORM / hand-written-`pgx` discipline
-  ([platform tech stack](../platform/10-spec-platform-tech-stack.md)).
-- **How:** Reads historical telemetry, actuator states, and current setpoints for one greenhouse
-  ([interfaces](./09-spec-optimizer-interfaces.md)); the DSN comes from
-  [configuration](./10-spec-optimizer-configuration.md) and the connection **never writes**. The
-  hourly `(min, mean, max)` summaries the planner context needs may be served by a TimescaleDB
-  continuous aggregate exposed through the read surface (`RFC-008`), so the reduction happens in the
-  store rather than in Python.
-- **⚑ Alternatives & trip-wire:** **asyncpg / async SQLAlchemy** (unnecessary — reads are periodic
-  on the 30-minute cycle cadence, not latency-bound, so a sync driver keeps the read path simple);
-  **the SQLAlchemy ORM** (obscures the view contract this layer is deliberately coupled to); **raw
-  `psycopg` without SQLAlchemy** (loses pooling and parameter-binding niceties). Revisit async only
-  if the read workload ever becomes latency-bound.
+- **What:** The HTTP client for the optimizer's read path into Phase 2.
+- **Why:** The revised
+  [RFC-008](../../../decisions/request-for-comments.md#rfc-008-phase-3-telemetry-read-path) makes the
+  telemetry read path a platform REST contract for consistency with the rest of the system. The
+  platform may use internal SQL views or continuous aggregates behind that endpoint, but the optimizer
+  stays decoupled from Postgres schema details. `httpx` is async-native and shares the FastAPI service
+  model.
+- **How:** Reads planning context, historical telemetry, actuator states, current setpoints, and
+  data-quality/freshness signals for one greenhouse from Phase 2
+  ([interfaces](./09-spec-optimizer-interfaces.md)); `platform_api_url` comes from
+  [configuration](./10-spec-optimizer-configuration.md). The hourly `(min, mean, max)` summaries the
+  planner context needs may still be computed by TimescaleDB internal views or continuous aggregates,
+  but that is a platform implementation detail.
+- **⚑ Alternatives & trip-wire:** **Direct SQL via SQLAlchemy/psycopg** (faster and closer to
+  TimescaleDB, but inconsistent with the rest of the system's REST contract posture and exposes a DB
+  integration boundary); **replicating telemetry into an optimizer-owned store** (duplicates Phase 2's
+  storage/retention problem). Revisit direct SQL only if REST serialization or query shaping becomes a
+  measured bottleneck.
 
 ---
 
@@ -150,9 +147,8 @@
 
 ### httpx — `httpx`
 
-- **What:** The HTTP client that submits refined setpoints to Phase 2.
-- **Why:** `httpx` is async-native and shares the service's async model; the write path is a single
-  small `POST`, so a full client stack is unwarranted.
+- **What:** The same HTTP client also submits refined setpoints to Phase 2.
+- **Why:** The write path is a single small `POST`, so a full client stack is unwarranted.
 - **How:** Writes refined setpoint bundles via `POST /greenhouses/{id}/setpoints`
   ([interfaces](./09-spec-optimizer-interfaces.md)); Phase 2 remains the single authority and
   reconciles to the controller ([RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain)).
@@ -256,7 +252,7 @@
 - **How:** The `optimizer` service is configured entirely by environment / secret
   ([configuration](./10-spec-optimizer-configuration.md)); the `ollama` service backs
   `fallback_endpoint` (`http://ollama:11434`). The optimizer is a **client** of Phase 2
-  ([architecture](./02-spec-optimizer-architecture.md)) — it reads Phase 2's store and writes through
+  ([architecture](./02-spec-optimizer-architecture.md)) — it reads and writes through
   Phase 2's API; it opens **no** channel to a Phase 1 controller.
 
 ---
@@ -272,10 +268,8 @@ Recorded so the choice isn't re-litigated:
   superseded by LangChain per
   [RFC-004](../../../decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface)
   (revised).
-- **An ORM (SQLAlchemy ORM / Django ORM) for reads** — the read surface is a few versioned views;
-  SQLAlchemy Core keeps the SQL explicit, mirroring the platform's no-ORM stance.
-- **An async DB driver (asyncpg) as the default** — reads are periodic and not latency-bound; sync
-  `psycopg` is simpler (see [Data access ⚑](#data-access-phase-2-store-)).
+- **A direct DB client (SQLAlchemy / psycopg / asyncpg) as the default** — the optimizer reads Phase
+  2 through REST; internal SQL views remain platform implementation detail.
 - **Poetry, or raw `pip` + `venv` + `pip-tools`** — `uv` is the chosen single, lockfile-first tool;
   the others are slower or more moving parts for the same result.
 - **Direct MQTT setpoint publish / a second channel to the Phase 1 controller** — all downward
@@ -284,7 +278,7 @@ Recorded so the choice isn't re-litigated:
   the optimizer opens no controller channel.
 - **Replicating telemetry into an optimizer-owned store** — rejected by
   [RFC-008](../../../decisions/request-for-comments.md#rfc-008-phase-3-telemetry-read-path); the
-  optimizer reads directly via `SELECT` on Phase 2's views.
+  optimizer reads the platform-owned history through Phase 2's REST API.
 - **A vector database / LLM-ops platform** — planning is stateless per cycle against a fixed token
   budget ([planning](./04-spec-optimizer-planning.md#1-llm-driven-planning)); there is no retrieval
   corpus to index.

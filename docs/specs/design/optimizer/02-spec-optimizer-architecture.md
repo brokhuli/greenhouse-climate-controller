@@ -11,13 +11,13 @@ each component named below is detailed in its own document.
 ---
 
 The optimizer runs a planning cycle per greenhouse: read history → **validate input quality** →
-simulate forward → plan → validate → apply. It **reads** telemetry directly from Phase 2's time-series
-store and **writes** refined setpoints back through the Phase 2 REST API, which remains the single
-authority on intended state.
+simulate forward → plan → validate → apply. It **reads** telemetry through the Phase 2 REST API,
+whose handlers are backed by platform-owned SQL views or aggregates, and **writes** refined setpoints
+back through the Phase 2 REST API, which remains the single authority on intended state.
 
 ```
-Phase 2 TimescaleDB
-      │  historical telemetry (read-only)
+Phase 2 REST API
+      │  planning context / historical telemetry (read-only)
       ▼
 Data Access                          ← loads recent readings, actuator states, current setpoints
       │
@@ -48,13 +48,13 @@ Phase 1 Controller
 
 | Component | Responsibility |
 |---|---|
-| Data Access | Read historical telemetry, actuator states, and current setpoints for one greenhouse from Phase 2's store; never writes. Runs the input data-quality / freshness gate ([input gating](./06-spec-optimizer-input-gating.md)) before planning |
+| Data Access | Read historical telemetry, actuator states, current setpoints, and data-quality/freshness signals for one greenhouse from Phase 2's REST API; never writes. Runs the input data-quality / freshness gate ([input gating](./06-spec-optimizer-input-gating.md)) before planning |
 | Digital Twin / Simulation | Roll heat / humidity / CO₂ / VPD / DLI forward over the planning horizon under candidate setpoints |
 | LLM Planner | Propose refined setpoint trajectories from the simulated trajectory and objectives, accounting for actuator coupling without issuing actuator commands |
 | Constraint Engine | Validate every candidate plan against crop-safe bounds and physical limits before it can be applied |
 | Plan Applier | Write within-bounds plans down via the Phase 2 REST API; route the rest to operator escalation |
 | Service / API | FastAPI surface for triggering cycles, inspecting plans, and exposing escalations; service config & health |
 
-The optimizer is a **client** of Phase 2, not a peer of Phase 1: it reads from Phase 2's history and
-writes through Phase 2's setpoint API exactly as an operator edit would, layered on the crop-profile
-baseline ([P2 crop profiles](../platform/05-spec-platform-crop-profiles.md)).
+The optimizer is a **client** of Phase 2, not a peer of Phase 1: it reads history through Phase 2's
+optimizer read API and writes through Phase 2's setpoint API exactly as an operator edit would,
+layered on the crop-profile baseline ([P2 crop profiles](../platform/05-spec-platform-crop-profiles.md)).

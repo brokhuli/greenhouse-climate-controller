@@ -8,6 +8,35 @@ alternatives and tradeoffs.
 
 ---
 
+## 2026-07-07 — Phase 3 telemetry read path revised: platform REST API backed by internal SQL views
+
+**Decision:** Replace the Phase 3 direct-DB telemetry read contract from
+[RFC-008](./request-for-comments.md#rfc-008-phase-3-telemetry-read-path) with a **platform REST API**
+contract. The optimizer reads planning context, historical telemetry, actuator state, current
+setpoints, and data-quality/freshness signals through the Phase 2 API. The platform may still use
+internal SQL views, TimescaleDB continuous aggregates, or ordinary queries to serve that endpoint, but
+those database objects are now implementation details owned by the platform, not a cross-service
+contract and not something the optimizer connects to directly.
+
+**Why:** This keeps Phase 3 consistent with the rest of the system's contract posture: cross-component
+boundaries are REST, WebSocket, MQTT, or JSON schema artifacts, not shared database access. The earlier
+view-based design was efficient and still protected raw tables, but it exposed PostgreSQL as an
+integration boundary and required the optimizer to carry DB credentials and SQL coupling. A REST read
+API gives the platform one authority over its data model and lets the optimizer use the same
+transport/security/client discipline as its setpoint write path. Keeping internal SQL views behind the
+handler preserves the main benefit of the old design: Phase 2 can maintain a stable, query-friendly
+read model over raw TimescaleDB tables without making that model the external protocol.
+
+**Tradeoff accepted:** The platform now owns a bounded telemetry/query REST surface and pays JSON
+serialization overhead for optimizer reads. That is accepted for architectural consistency and a
+cleaner service boundary. If REST query shaping becomes a measured bottleneck, the internal SQL views
+and aggregates remain the right place to optimize before reconsidering direct DB access.
+
+**Revises:** [2026-06-08 — Phase 3 telemetry read path: direct read-only DB access via a versioned view surface](#2026-06-08--phase-3-telemetry-read-path-direct-read-only-db-access-via-a-versioned-view-surface),
+[RFC-008](./request-for-comments.md#rfc-008-phase-3-telemetry-read-path).
+
+---
+
 ## 2026-07-05 — 2b observability implemented (platform + controller `/metrics`, Prometheus + Grafana)
 
 **Decision:** Build the deferred 2b observability slice the
@@ -96,9 +125,11 @@ the single-host model" are now specified, dormant, ready to flip:
    the **registry's controller-endpoint record** and presents it on every downward call. No OIDC in the
    minimal Rust controller — a single trusted caller does not warrant a relying-party implementation.
 
-`optimizer_ro` DB access ([RFC-008](./request-for-comments.md#rfc-008-phase-3-telemetry-read-path)) and
-anonymous telemetry-only MQTT ([RFC-001](./request-for-comments.md#rfc-001-mqtt-broker-selection)) are
-**unchanged** — neither is a service write boundary. This **resolves RFC-009's open question** toward a
+The optimizer telemetry read path and anonymous telemetry-only MQTT
+([RFC-001](./request-for-comments.md#rfc-001-mqtt-broker-selection)) are **unchanged by this write-auth
+decision** — neither is a service write boundary. The read path was later revised by the
+[2026-07-07 ADR](#2026-07-07--phase-3-telemetry-read-path-revised-platform-rest-api-backed-by-internal-sql-views)
+from direct DB access to a platform REST API. This **resolves RFC-009's open question** toward a
 narrow service role and re-adopts RFC-009's original *Proposal*, which its Resolution had rejected.
 
 **Scope:** specs + decision records only. Phase 2 (Go API) and Phase 3 (optimizer) are unimplemented
@@ -692,6 +723,9 @@ envelope `zone_id`.
 
 ## 2026-06-08 — Internal trust model: no service-to-service auth; authentication is human-only
 
+> Revised 2026-06-21 for service write auth and 2026-07-07 for the optimizer read path. This entry is
+> retained as the superseded trust-model deliberation record.
+
 **Decision:** Authenticate **human actors only**; the non-human, service-to-service boundaries are
 **not** authenticated and rely on the trusted local Docker Compose network. This **reverses the
 RFC-009 proposal** (a Keycloak service-account client-credentials grant for the optimizer plus a
@@ -724,6 +758,10 @@ account.
 ---
 
 ## 2026-06-08 — Phase 3 telemetry read path: direct read-only DB access via a versioned view surface
+
+> Revised 2026-07-07: the cross-service read contract is now the platform REST API, backed by
+> platform-internal SQL views/aggregates where useful. This entry is retained as the superseded
+> deliberation record.
 
 **Decision:** The optimizer reads historical telemetry by connecting **directly** to Phase 2's
 TimescaleDB, but the schema coupling is contained. (1) It connects as a dedicated `optimizer_ro`
