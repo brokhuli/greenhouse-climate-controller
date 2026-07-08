@@ -117,6 +117,9 @@ services:
       KC_HTTP_ENABLED: "true"
     volumes:
       - ./keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro
+      # Custom "Verdant" login theme (realm loginTheme=greenhouse); start-dev leaves
+      # theme caching off, so edits under here hot-reload on a browser refresh.
+      - ./keycloak/themes:/opt/keycloak/themes:ro
     healthcheck:
       # Keycloak's image ships bash but no curl/wget, so probe the realm's OIDC discovery endpoint
       # over bash's /dev/tcp: "healthy" means the realm is imported and discovery is actually being

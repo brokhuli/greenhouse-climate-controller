@@ -1,0 +1,386 @@
+/*
+ * Greenhouse "Verdant" login theme — override layer.
+ *
+ * Loaded after the base `keycloak` login.css (see theme.properties), this file
+ * re-skins the classic PatternFly-3 login markup to match the React console. The
+ * design tokens below are copied verbatim from
+ * climate-frontend/src/styles/tokens.css so the palette, radii, and type stay in
+ * sync. The console picks dark/light at runtime via a `data-theme` toggle; the
+ * login page has no toggle, so it follows the OS via `prefers-color-scheme`
+ * (mirroring how the frontend resolves its *initial* theme).
+ *
+ * `!important` is used sparingly, only where the PatternFly base sets a hard-coded
+ * background / border / shadow that a plain selector can't otherwise beat.
+ */
+
+/* ── Design tokens: dark (control-room default) ───────────────────────────── */
+:root {
+  --color-bg: #1a1813;
+  --color-surface-1: #201e18;
+  --color-surface-2: #252319;
+  --color-surface-3: #302d23;
+  --color-fg-default: #f5f0e7;
+  --color-fg-muted: #c7bfb3;
+  --color-fg-subtle: #8d867d;
+  --color-fg-on-accent: #111211;
+  --color-accent: #f1dfc2;
+  --color-accent-hover: #ead2ad;
+  --color-border: #3a362c;
+  --color-border-strong: #524d3f;
+  --color-fault: #ff4d3d;
+  --color-warning: #ffb020;
+  --color-info: #6ea8ff;
+  --color-status-online: #9ccc65;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 14px;
+  --text-lg: 20px;
+  --text-xl: 24px;
+
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+
+  --size-control-md: 36px;
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.28);
+  --motion-instant: 80ms;
+  --ease-out: cubic-bezier(0.25, 1, 0.5, 1);
+
+  /* Logo silhouette: leave the warm-beige leaf as-is on dark. */
+  --logo-filter: none;
+}
+
+/* ── Design tokens: light (matches OS light appearance) ───────────────────── */
+@media (prefers-color-scheme: light) {
+  :root {
+    --color-bg: #f7f2ea;
+    --color-surface-1: #fffdf8;
+    --color-surface-2: #f5efe6;
+    --color-surface-3: #ece4d8;
+    --color-fg-default: #111111;
+    --color-fg-muted: #4f4a43;
+    --color-fg-subtle: #8a8175;
+    --color-fg-on-accent: #ffffff;
+    --color-accent: #111111;
+    --color-accent-hover: #2a2927;
+    --color-border: #ded6ca;
+    --color-border-strong: #c8bdae;
+    --color-fault: #e11900;
+    --color-warning: #d97706;
+    --color-info: #2563eb;
+    --color-status-online: #111111;
+    --shadow-md: 0 8px 24px rgba(32, 24, 16, 0.08);
+
+    /* The pale-beige leaf would vanish on cream; render it as a dark silhouette
+       matching the light accent. */
+    --logo-filter: brightness(0);
+  }
+}
+
+/* ── Page background & base type ──────────────────────────────────────────── */
+.login-pf body,
+body.login-pf,
+body {
+  background: var(--color-bg) !important;
+  background-image: none !important;
+  color: var(--color-fg-default);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Brand header: Verdant leaf + wordmark (realm displayName renders here) ── */
+#kc-header-wrapper {
+  color: var(--color-fg-default);
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-semibold);
+  text-transform: none;
+  letter-spacing: 0;
+  line-height: 1.2;
+  padding: var(--space-6) var(--space-4) var(--space-4);
+  white-space: normal;
+  text-overflow: clip;
+}
+
+#kc-header-wrapper::before {
+  content: "";
+  display: block;
+  width: 48px;
+  height: 48px;
+  margin: 0 auto var(--space-3);
+  background: url(../img/logo.svg) center / contain no-repeat;
+  filter: var(--logo-filter);
+}
+
+/* ── Login card ───────────────────────────────────────────────────────────── */
+.card-pf {
+  background-color: var(--color-surface-1);
+  border: 1px solid var(--color-border);
+  border-top: 1px solid var(--color-border); /* classic theme adds a bright top border */
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-6);
+}
+
+#kc-page-title {
+  color: var(--color-fg-default);
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* ── Labels & help text ───────────────────────────────────────────────────── */
+label,
+.control-label,
+.pf-c-form__label,
+.pf-c-form__label-text {
+  color: var(--color-fg-default);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+#kc-form-options,
+.pf-c-form__helper-text,
+#kc-info-message,
+#kc-info-wrapper {
+  color: var(--color-fg-muted);
+  font-size: var(--text-sm);
+}
+
+/* ── Inputs ───────────────────────────────────────────────────────────────── */
+.form-control,
+input[type="text"],
+input[type="password"],
+input[type="email"],
+input[type="number"],
+input[type="tel"] {
+  background-color: var(--color-surface-2);
+  color: var(--color-fg-default);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  height: var(--size-control-md);
+  padding: 0 var(--space-3);
+  font-size: var(--text-base);
+  font-family: var(--font-sans);
+  box-shadow: none;
+  transition: border-color var(--motion-instant) var(--ease-out);
+}
+
+.form-control:hover {
+  border-color: var(--color-border-strong);
+}
+
+.form-control:focus {
+  border-color: var(--color-accent);
+  box-shadow: none;
+  outline: none;
+}
+
+.form-control::placeholder {
+  color: var(--color-fg-subtle);
+}
+
+.form-control[aria-invalid="true"],
+.pf-c-form-control.pf-m-error {
+  border-color: var(--color-fault);
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--color-accent);
+}
+
+/* ── Input group (password show/hide toggle) ──────────────────────────────────
+   Keycloak wraps the password field in a `.pf-c-input-group` with a `pf-m-control`
+   toggle button. The base theme leaves that button — and the group behind the input's
+   rounded corners — white, which shows as pale corners on dark. Let the group own the
+   border + radius and make its children flush/transparent so it reads as one control. */
+.pf-c-input-group {
+  display: flex;
+  align-items: stretch;
+  height: var(--size-control-md);
+  box-sizing: border-box;
+  background-color: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: border-color var(--motion-instant) var(--ease-out);
+}
+
+.pf-c-input-group > .pf-c-form-control,
+.pf-c-input-group > input {
+  height: auto;
+  background-color: transparent;
+  border: none;
+  border-radius: 0;
+}
+
+.pf-c-input-group > .pf-c-form-control:focus,
+.pf-c-input-group > input:focus {
+  border: none;
+  outline: none;
+}
+
+.pf-c-input-group > .pf-c-button.pf-m-control {
+  height: auto;
+  padding: 0 var(--space-3);
+  background-color: transparent;
+  color: var(--color-fg-muted);
+  border: none;
+  border-left: 1px solid var(--color-border);
+  border-radius: 0;
+  box-shadow: none;
+  transition: background-color var(--motion-instant) var(--ease-out);
+}
+
+.pf-c-input-group > .pf-c-button.pf-m-control:hover {
+  background-color: var(--color-surface-3);
+  color: var(--color-fg-default);
+}
+
+/* PatternFly draws the control button's border via an `::after` pseudo-element
+   (default light gray), which the `border` reset above can't reach — that's the
+   white outline around the eye button. Remove it in every state. */
+.pf-c-input-group > .pf-c-button.pf-m-control::after,
+.pf-c-input-group > .pf-c-button.pf-m-control:hover::after,
+.pf-c-input-group > .pf-c-button.pf-m-control:focus::after,
+.pf-c-input-group > .pf-c-button.pf-m-control:active::after {
+  border: 0;
+  box-shadow: none;
+}
+
+/* Focus: recolor the group border (mouse + keyboard), and lift the keyboard ring
+   onto the rounded group instead of the borderless inner input. */
+.pf-c-input-group:focus-within {
+  border-color: var(--color-accent);
+}
+.pf-c-input-group:has(> :focus-visible) {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+.pf-c-input-group > :focus-visible {
+  outline: none;
+}
+
+/* ── Shared keyboard focus ring (from frontend global.css) ────────────────── */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* ── Primary button ───────────────────────────────────────────────────────── */
+#kc-login,
+.btn-primary,
+input[type="submit"].btn-primary,
+button.btn-primary {
+  background-color: var(--color-accent);
+  color: var(--color-fg-on-accent);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  min-height: var(--size-control-md);
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-medium);
+  text-shadow: none;
+  box-shadow: none;
+  transition: background-color var(--motion-instant) var(--ease-out);
+}
+
+#kc-login:hover,
+.btn-primary:hover,
+input[type="submit"].btn-primary:hover,
+button.btn-primary:hover {
+  background-color: var(--color-accent-hover);
+  color: var(--color-fg-on-accent);
+}
+
+#kc-login:disabled,
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Secondary / default buttons (e.g. multi-step "Cancel", social providers). */
+.btn-default,
+.btn:not(.btn-primary) {
+  background-color: var(--color-surface-1);
+  color: var(--color-fg-default);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: none;
+}
+
+.btn-default:hover,
+.btn:not(.btn-primary):hover {
+  background-color: var(--color-surface-3);
+}
+
+/* ── Links ────────────────────────────────────────────────────────────────── */
+a,
+#kc-registration a,
+#kc-info a,
+#kc-form-options a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+a:hover,
+#kc-registration a:hover,
+#kc-info a:hover,
+#kc-form-options a:hover {
+  color: var(--color-accent-hover);
+  text-decoration: underline;
+}
+
+/* ── Alerts / feedback ────────────────────────────────────────────────────── */
+.alert,
+.pf-c-alert {
+  background-color: var(--color-surface-2);
+  color: var(--color-fg-default);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: none;
+}
+
+.alert-error,
+.pf-c-alert.pf-m-danger {
+  border-color: var(--color-fault);
+}
+.alert-error .pf-c-alert__icon,
+.alert-error .kc-feedback-text {
+  color: var(--color-fault);
+}
+
+.alert-warning,
+.pf-c-alert.pf-m-warning {
+  border-color: var(--color-warning);
+}
+
+.alert-success,
+.pf-c-alert.pf-m-success {
+  border-color: var(--color-status-online);
+}
+
+.alert-info,
+.pf-c-alert.pf-m-info {
+  border-color: var(--color-info);
+}
+
+/* ── Respect reduced-motion, like the frontend ────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
