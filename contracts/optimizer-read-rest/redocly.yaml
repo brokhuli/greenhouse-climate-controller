@@ -1,0 +1,14 @@
+# Redocly lint config for the platform Read API (Phase 3 optimizer planning-context read path).
+# Starts from the recommended ruleset, with two intentional exceptions:
+extends:
+  - recommended
+rules:
+  # This is an internal cross-component contract; licensing is covered by the repo LICENSE.md,
+  # not per-document (same posture as the controller-rest, frontend-rest, and optimizer-write-rest contracts).
+  info-license: off
+  # security-defined is off because this contract is entirely unauthenticated: the read carries no
+  # authority and no safety concern and is trusted on the Docker network (RFC-008 read path, RFC-011
+  # scopes service auth to the write boundaries). The single operation declares `security: []` to mark
+  # it explicitly public, and no `securitySchemes` are defined — so there is no scheme for the rule to
+  # check. operation-4xx-response stays ON: the GET has 404/422 error paths.
+  security-defined: off

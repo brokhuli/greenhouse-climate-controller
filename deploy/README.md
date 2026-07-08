@@ -100,24 +100,34 @@ internal network — **nothing extra is exposed through the proxy**:
   **dynamic** fleet, so `gen-controllers.sh` also emits a Prometheus file-SD target list at
   `prometheus/targets/controllers.json` (git-ignored); Prometheus hot-reloads it, so scaling N needs
   no config change.
+- **`cadvisor:8080/metrics`** — container-resources: per-container CPU, memory, network, and uptime
+  (`container_*`) for *every* service in the stack, not just the app. This is infra-level visibility
+  the `platform_*`/`controller_*` app metrics can't give ("is a container starving or leaking?"). The
+  `cadvisor` service reads Docker/cgroup stats; its own UI is on the host at
+  [http://localhost:8081](http://localhost:8081) for debugging.
 
 ```sh
-open http://localhost:3000        # Grafana (admin/admin) → "Platform Health" + "Controller Fleet"
-open http://localhost:9090/targets # Prometheus — platform-api + controllers should be UP
+open http://localhost:3000        # Grafana (admin/admin) → "Platform Health" + "Controller Fleet" + "Container Resources"
+open http://localhost:9090/targets # Prometheus — platform-api + controllers + cadvisor should be UP
 ```
 
-Grafana's Prometheus datasource and both dashboards are auto-provisioned from `deploy/grafana/`; the
-admin login is `GRAFANA_ADMIN` / `GRAFANA_ADMIN_PASSWORD` (default `admin`/`admin`, in `deploy/.env`).
+Grafana's Prometheus datasource and all three dashboards are auto-provisioned from `deploy/grafana/`
+(dropping a JSON into `grafana/dashboards/` is enough — the provider globs the directory); the admin
+login is `GRAFANA_ADMIN` / `GRAFANA_ADMIN_PASSWORD` (default `admin`/`admin`, in `deploy/.env`).
 
-Both dashboards read top-down as **operational health boards**, not a wall of line charts: a "right
-now" row of **stat** panels (API p95 / 5xx / ingest drops; fleet interlock / degraded / fault
-counts) with green→amber→red thresholds, then **state timelines** for discrete states (platform
-connectivity, controller mode, MQTT up/down), then **bar gauges** ranking greenhouses by tick p95 /
-CPU / RSS, a **table** of background-job health, **heatmaps** for latency/tick distributions, and
-**bar charts** for categorical counts (reconciliation actions, faults by type). Time series is kept
-only for genuine rates/trends (ingestion, tick rate, MQTT publish vs dropped, and per-greenhouse
-CPU / memory trends — so resource use has both a current bar gauge and a trend line). Controller
-Fleet has a `$greenhouse` template variable to filter the fleet down to one or more controllers.
+Platform Health and Controller Fleet read top-down as **operational health boards**, not a wall of
+line charts: a "right now" row of **stat** panels (API p95 / 5xx / ingest drops; fleet interlock /
+degraded / fault counts) with green→amber→red thresholds, then **state timelines** for discrete
+states (platform connectivity, controller mode, MQTT up/down), then **bar gauges** ranking
+greenhouses by tick p95 / CPU / RSS, a **table** of background-job health, **heatmaps** for
+latency/tick distributions, and **bar charts** for categorical counts (reconciliation actions, faults
+by type). Time series is kept only for genuine rates/trends (ingestion, tick rate, MQTT publish vs
+dropped, and per-greenhouse CPU / memory trends — so resource use has both a current bar gauge and a
+trend line). Controller Fleet has a `$greenhouse` template variable to filter the fleet down to one
+or more controllers. **Container Resources** follows the same layout for the cAdvisor `container_*`
+metrics — a "right now" row (containers running / total CPU / total memory), per-container CPU and
+memory bar gauges, an uptime table, and CPU / memory / network trend lines — scoped to the stack via
+`{name=~"greenhouse-.+"}`.
 
 ## Inject demo faults
 

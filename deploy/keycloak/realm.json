@@ -2,6 +2,9 @@
   "realm": "greenhouse",
   "enabled": true,
   "sslRequired": "none",
+  "displayName": "Verdant",
+  "displayNameHtml": "<span>Verdant</span>",
+  "loginTheme": "greenhouse",
   "roles": {
     "realm": [
       { "name": "gh-viewer", "description": "Read fleet, telemetry, analytics, status" },

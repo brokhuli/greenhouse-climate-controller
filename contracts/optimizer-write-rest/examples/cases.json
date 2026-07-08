@@ -1,0 +1,8 @@
+{
+  "_comment": "Fixture-validation manifest for the contract harness (scripts/validate-contracts.mjs). Mirrors the fixture table in this contract's README. `schema` is `<component-file>#/<ComponentName>` under components/schemas/.",
+  "cases": [
+    { "fixture": "setpoints.patch.json", "schema": "setpoints.json#/SetpointsPatch", "expect": "pass" },
+    { "fixture": "setpoints.json", "schema": "setpoints.json#/Setpoints", "expect": "pass" },
+    { "fixture": "setpoints.bad-range.json", "schema": "setpoints.json#/Setpoints", "expect": "fail" }
+  ]
+}

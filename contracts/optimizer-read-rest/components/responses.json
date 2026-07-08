@@ -1,0 +1,18 @@
+{
+  "NotFound": {
+    "description": "The greenhouse does not exist.",
+    "content": {
+      "application/json": {
+        "schema": { "$ref": "./schemas/common.json#/Error" }
+      }
+    }
+  },
+  "ValidationFailed": {
+    "description": "A query parameter is out of range — an unknown `window` or `interval`; the body names the violated field and bound. Mirrors the 422 shape the platform's other REST contracts return.",
+    "content": {
+      "application/json": {
+        "schema": { "$ref": "./schemas/common.json#/ValidationError" }
+      }
+    }
+  }
+}

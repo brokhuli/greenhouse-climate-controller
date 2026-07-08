@@ -8,6 +8,121 @@ alternatives and tradeoffs.
 
 ---
 
+## 2026-07-07 — Phase 3 telemetry read contract authored (OpenAPI 3.1) as a consolidated planning-context read
+
+**Decision:** Authored the Phase 3 telemetry read path under `contracts/optimizer-read-rest/` as an
+**OpenAPI 3.1** document (`openapi.json`) plus a README and example fixtures — filling the §2.7 "Phase 3
+telemetry read API" entry in the [contract catalog](../specs/design/spec-contracts.md) that was
+"to author," and implementing the
+[2026-07-07 read-path revision](#2026-07-07--phase-3-telemetry-read-path-revised-platform-rest-api-backed-by-internal-sql-views)
+as a concrete REST contract. It is the optimizer's read counterpart to its setpoint write path
+(`optimizer-write-rest/`, #3). This is a **contract-authoring** change: the backing Go query handler is
+platform-owned and out of scope; the artifact defines the wire shape. Shape choices settled while
+authoring (resolving RFC-008's open questions):
+
+- **One consolidated endpoint, not per-resource reads.** A single
+  `GET /api/greenhouses/{greenhouse_id}/planning-context?window=&interval=` returns everything the
+  optimizer's Data Access component needs for one cycle — current setpoints, `(min, mean, max)`
+  telemetry summaries per metric per bucket ([RFC-004](./request-for-comments.md#rfc-004-phase-3-llm-integration-interface)),
+  latest actuator states, and data-quality/freshness signals — in one bounded read. It matches the
+  spec's "bounded planning-context reads for one greenhouse" framing and the optimizer's single
+  `PlanContext` build, and keeps the payload bounded via summaries rather than raw readings.
+- **Data-quality fields carried on the read API.** `data_quality` (`controller_mode`, `time_scale`,
+  per-metric `freshness[]`, `faults[]`) plus per-actuator `health` give the optimizer's
+  [input gate](../specs/design/optimizer/06-spec-optimizer-input-gating.md) its freshness,
+  completeness, sensor/actuator-health, and clock-mode checks as plain response fields — resolving the
+  open question that spec flagged for "when the REST contract is authored."
+- **`schema_version` in-body — the one read exception.** Unlike the write contracts (`optimizer-write-rest`,
+  `frontend-rest`), the response carries a top-level `schema_version` integer, because the optimizer's
+  identity-consistency check reads it to detect read-API/contract drift. It tracks `info.version`'s major.
+- **Unauthenticated on the trusted network.** The read carries no authority or safety concern, so the
+  single operation is `security: []` (matching `frontend-rest` slice-2a telemetry reads);
+  [RFC-011](./request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009)
+  scopes service auth to the write boundaries. No `securitySchemes` are declared, so `redocly.yaml`
+  turns `security-defined` off (documented).
+- **Directory named by consumer (`optimizer-read-rest/`).** Named for the optimizer, matching how
+  `frontend-rest/` is named by its consumer (the SPA), and pairing with the setpoint write sibling
+  `optimizer-write-rest/`. A `platform-`prefixed name was rejected as ambiguous, since the platform
+  also serves the operator/fleet reads in `frontend-rest`.
+
+An unknown `window`/`interval` returns **422** with a `ValidationError` naming the violated `field` and
+`bound`; a missing greenhouse returns **404**. Validation mirrors the other contracts (a 3.1-aware
+Redocly lint plus an Ajv Draft 2020-12 run of each fixture against its component schema, with one
+negative fixture that must fail) and is wired into the same `scripts/validate-contracts.mjs` harness
+(`npm run validate:contracts`).
+
+**Why:** The read-path revision established that Phase 3 reads through a REST API, but left the surface
+undefined; the optimizer had a catalog entry and a design intent but no normative schema to build its
+Data Access component against. Authoring it as its own OpenAPI 3.1 document gives the optimizer one
+artifact, resolves RFC-008's deferred open questions (consolidated endpoint, which data-quality fields
+the API carries), and keeps one validation discipline across MQTT, controller-rest, frontend-rest,
+optimizer-write-rest, and this contract.
+
+**RFC:** [RFC-008](./request-for-comments.md#rfc-008-phase-3-telemetry-read-path),
+[RFC-004](./request-for-comments.md#rfc-004-phase-3-llm-integration-interface),
+[RFC-007](./request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format),
+[RFC-011](./request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009)
+
+---
+
+## 2026-07-07 — Setpoint API contract authored (OpenAPI 3.1); optimizer POST relocated out of frontend-rest
+
+**Decision:** Authored the platform's single-authority setpoint write path under
+`contracts/optimizer-write-rest/` as an **OpenAPI 3.1** document (`openapi.json`) plus a README and example
+fixtures — filling the §2.3 "Phase 2 Setpoint API" entry in the
+[contract catalog](../specs/design/spec-contracts.md) that was previously "to author," and giving the
+optimizer (Phase 3) and the Phase 4 planner one normative artifact to build their setpoint submissions
+against. The surface is a single greenhouse-scoped operation, `POST
+/api/greenhouses/{greenhouse_id}/setpoints`: a partial (merge) `SetpointsPatch` in, the resulting
+intended-state `Setpoints` bundle out at `202 Accepted`, recorded with `source = optimizer` provenance
+([RFC-005](./request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain)). This is a
+**contract-authoring** change: the backing Go endpoint (`submitSetpoints`) already exists and is
+unchanged; the artifact documents it. Shape choices settled while authoring:
+
+- **A distinct contract, not a `frontend-rest` operation.** The catalog has always listed this as a
+  separate contract (#3) from the operator/fleet REST API (#4): different audience (the optimizer, a
+  machine-to-machine caller, vs. the browser SPA), different provenance (`optimizer` vs.
+  `operator_edit`), and its own RFC-011 service-auth story. The `POST` had been pragmatically stashed
+  inside `frontend-rest/paths/setpoints.json` even though that contract's README already disclaimed it;
+  it is now **relocated** here so there is one canonical definition, and `frontend-rest` is left with
+  only the operator's ad-hoc `PATCH` (matching its own README and file-layout comment).
+- **Directory named by consumer (`optimizer-write-rest/`).** Named for its consumer — the optimizer
+  (and later the Phase 4 planner), the machine-to-machine caller — matching how `frontend-rest/` is
+  named by its consumer and pairing with the read sibling `optimizer-read-rest/`. A `platform-`prefixed
+  name was rejected as ambiguous, since `frontend-rest` is also a platform-served write surface
+  (operator edits, profiles, registration, assignments).
+- **Self-contained `Setpoints` copy.** The `Setpoints` / `SetpointsPatch` / `ZoneTargets` schemas are a
+  verbatim copy of `frontend-rest`'s (the same Go DTO backs both the operator `PATCH` and this `POST`),
+  kept local rather than cross-contract `$ref`'d — the same convention the other contracts use for
+  shared definitions, and what the per-directory validation harness expects.
+- **Config-gated auth, contract identical in both modes.** A `bearerAuth` (Keycloak client-credentials
+  / JWT) scheme carrying the narrow `setpoints:write` role is declared and applied as an **optional**
+  scheme (`security: [{}, { bearerAuth: [] }]`): with `SERVICE_AUTH_MODE=trusted_network` (default) the
+  untokened internal call is accepted; with `SERVICE_AUTH_MODE=oidc` a missing/invalid token is `401`
+  and a token lacking the role is `403`
+  ([RFC-011](./request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009)).
+
+A rejected submission returns **422** with a `ValidationError` naming the violated `field` and `bound`
+— the same shape the controller-rest and frontend-rest contracts return — and is not recorded as
+intended state. Validation mirrors the other contracts (a 3.1-aware Redocly lint of `openapi.json` plus
+an Ajv (Draft 2020-12) run of each fixture against its component schema, with one negative fixture that
+must fail) and is wired into the same `scripts/validate-contracts.mjs` harness (`npm run
+validate:contracts`).
+
+**Why:** `contracts/` is the single artifact all phases conform to, and this setpoint write path — the
+only cross-phase interface the unbuilt Phase 3 optimizer will hold with the platform — had a catalog
+entry and a live Go endpoint but no normative schema, with its definition awkwardly split into a
+sibling contract that disclaimed owning it. Authoring it as its own document gives the optimizer one
+artifact to build against, removes the `frontend-rest` inconsistency, and keeps one validation
+discipline (OpenAPI 3.1 / JSON Schema 2020-12) across MQTT, controller-rest, frontend-rest, and this
+contract.
+
+**RFC:** [RFC-005](./request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain),
+[RFC-011](./request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009),
+[RFC-007](./request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)
+
+---
+
 ## 2026-07-07 — Phase 3 telemetry read path revised: platform REST API backed by internal SQL views
 
 **Decision:** Replace the Phase 3 direct-DB telemetry read contract from

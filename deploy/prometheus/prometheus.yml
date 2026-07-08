@@ -25,6 +25,13 @@ scrape_configs:
       - files:
           - /etc/prometheus/targets/*.json
 
+  # cAdvisor — container-resource metrics (container_*) for every service in the stack: a single
+  # static target, unlike the dynamic controllers. See the "Container Resources" Grafana dashboard.
+  - job_name: cadvisor
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["cadvisor:8080"]
+
   # (Phase 3) The optimizer will expose its own /metrics (optimizer-health) and join here as a third
   # job once it lands — see docs/specs/design/optimizer/09-spec-optimizer-interfaces.md. It is not
   # built or containerized yet, so this stays commented (no live target).

@@ -1,0 +1,9 @@
+{
+  "metric": "vpd",
+  "zone_id": null,
+  "buckets": [
+    { "bucket_start": "2026-06-17T09:00:00.000Z", "min": 0.72, "mean": 0.85, "max": 0.98, "count": 60 },
+    { "bucket_start": "2026-06-17T10:00:00.000Z", "min": 0.80, "mean": 0.91, "max": 1.05, "count": 60 },
+    { "bucket_start": "2026-06-17T11:00:00.000Z", "min": 0.00, "mean": 0.00, "max": 0.00, "count": 0 }
+  ]
+}

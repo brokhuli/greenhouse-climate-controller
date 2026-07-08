@@ -115,8 +115,14 @@ services:
       KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
       KC_PROXY_HEADERS: xforwarded
       KC_HTTP_ENABLED: "true"
+      # Keep the JVM heap below half the container so metaspace, code cache, thread stacks, and
+      # other native memory have room under the 512M dev limit.
+      JAVA_OPTS_KC_HEAP: "-XX:MaxRAMPercentage=50 -XX:MinRAMPercentage=50 -XX:InitialRAMPercentage=30"
     volumes:
       - ./keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro
+      # Custom "Verdant" login theme (realm loginTheme=greenhouse); start-dev leaves
+      # theme caching off, so edits under here hot-reload on a browser refresh.
+      - ./keycloak/themes:/opt/keycloak/themes:ro
     healthcheck:
       # Keycloak's image ships bash but no curl/wget, so probe the realm's OIDC discovery endpoint
       # over bash's /dev/tcp: "healthy" means the realm is imported and discovery is actually being
@@ -215,6 +221,30 @@ services:
       resources:
         limits:
           cpus: "0.5"
+          memory: 256M
+
+  cadvisor: # (2b) container-resource metrics for every service in the stack — per-container CPU,
+    # memory, network, and uptime (container_*), scraped by Prometheus alongside the app metrics
+    # (operations §1). Fills the infra gap the platform_*/controller_* app metrics can't cover.
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: greenhouse-cadvisor
+    restart: unless-stopped
+    privileged: true # needs cgroup + docker stat access
+    devices:
+      - /dev/kmsg
+    ports:
+      - "8081:8080" # cAdvisor UI (host) — debug parity with prometheus:9090 / grafana:3000; scraping is internal
+    volumes:
+      # Read-only cgroup/docker stat sources. On Docker Desktop these resolve inside the WSL2 engine
+      # VM (Linux paths), not the Windows host — this is the standard cAdvisor mount set.
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    deploy:
+      resources:
+        limits:
+          cpus: "0.3"
           memory: 256M
 
 volumes:

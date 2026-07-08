@@ -1,0 +1,31 @@
+{
+  "GreenhouseId": {
+    "name": "greenhouse_id",
+    "in": "path",
+    "required": true,
+    "description": "Site-unique greenhouse identity; the same slug used in MQTT topics, controller REST paths, and DB rows (RFC-007).",
+    "schema": { "$ref": "./schemas/common.json#/Slug" }
+  },
+  "Window": {
+    "name": "window",
+    "in": "query",
+    "required": false,
+    "description": "Trailing history window for the planning read. Resolved server-side against the greenhouse's latest stored (simulated) timestamp — `[latest − window, latest]` — not the caller's wall clock, since telemetry is timestamped on the simulated clock. The default matches the optimizer's 12-hour planning horizon (extended to 24h at day boundaries); an unknown value is rejected 422.",
+    "schema": {
+      "type": "string",
+      "enum": ["6h", "12h", "24h", "48h"],
+      "default": "12h"
+    }
+  },
+  "Interval": {
+    "name": "interval",
+    "in": "query",
+    "required": false,
+    "description": "Time-bucket width for the (min, mean, max) telemetry summaries. Defaults to 1h — the hourly summary the LLM context strategy consumes (RFC-004). An unknown value is rejected 422.",
+    "schema": {
+      "type": "string",
+      "enum": ["1h", "6h", "1d"],
+      "default": "1h"
+    }
+  }
+}
