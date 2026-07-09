@@ -27,6 +27,16 @@ propose a **refined setpoint trajectory** for the horizon. The plan may reason a
 coupling while choosing targets, but it does not contain actuator commands or a controller-side
 actuator strategy.
 
+The trajectory is a **planning artifact** spanning the horizon; Phase 3 does **not** write the whole
+trajectory to Phase 2. Each cadence the optimizer applies only the **immediate next setpoint bundle** —
+a single `SetpointsPatch` through the
+[Phase 2 write path](./05-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application) —
+while the rest of the horizon informs the next cycle's
+[state-change gate](#invocation-strategy) (which compares the current simulated trajectory against the
+last accepted plan's). A scheduled or multi-step plan contract that hands Phase 2 a future trajectory is
+deliberately out of Phase 3 scope ([scope](./12-spec-optimizer-scope.md)); the single-authority write
+path stays a current-target merge.
+
 The planner emits a **structured plan** (not prose) conforming to the schema in
 [`contracts/`](../../../../contracts/), so the constraint engine and applier can consume it
 deterministically. The LLM **proposes**; it has no authority — every plan it emits is gated by the

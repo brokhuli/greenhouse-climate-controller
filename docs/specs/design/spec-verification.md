@@ -64,8 +64,9 @@ The development loops, fastest → slowest. A change should fail at the earliest
 2. **Pre-commit loop** *(local git hook —
    [`.githooks/pre-commit`](../../../.githooks/pre-commit))* — the **Rust gate** (`fmt --check`,
    `clippy -D warnings`, `check`, `test`, scoped to `climate-controller/`) and the **contracts gate**
-   (§5), each fired only when staged files touch its surface. Go/Python/frontend gates join here as
-   those phases land.
+   (§5), each fired only when staged files touch its surface. The Go and frontend gates run in the CI
+   loop (loop 6) rather than this hook — it stays scoped to the fast, dependency-light Rust and
+   contracts gates so an unrelated commit is never blocked on Docker/Node.
 3. **Contract loop** *(cross-component)* — the schema + fixtures are the **shared oracle**: when a
    producer or consumer drifts, the contract harness catches it; a deliberate contract change is
    versioned and recorded in an ADR ([`contracts/README.md`](../../../contracts/README.md), RFC-007).
@@ -78,8 +79,9 @@ The development loops, fastest → slowest. A change should fail at the earliest
    become the regression reference, re-captured **deliberately** on a model/prompt/config change.
 6. **CI loop** *(outer, clean environment)* — every gate above re-run on push/PR away from the
    developer's machine. **Built** ([`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml),
-   GitHub Actions): the Rust gate and the contract harness run today; coverage and the per-phase
-   Go/Python/frontend gates join as those phases land. Topology is §6 and
+   GitHub Actions): the Rust gate, the contract harness, the Go gate (unit + testcontainers
+   integration), and the frontend gate run today; Rust coverage and the Phase 3 Python gate (with
+   the load suite) join as that work lands. Topology is §6 and
    [RFC-010](../../decisions/request-for-comments.md#rfc-010-verification--continuous-integration-strategy);
    remaining work is in [`docs/backlog.md`](../../backlog.md).
 
@@ -95,7 +97,7 @@ here so the strategy is complete, but is wired when that phase is implemented �
 | **Rust controller** (P1) | `cargo fmt` · `cargo clippy --all-targets --all-features -D warnings` · `cargo check` · `cargo test` | **Present** — pre-commit Rust gate + CI |
 | Rust coverage (`P1-TEST-1` ≥ 90%) | `cargo llvm-cov` | To wire |
 | **Contracts** (all phases) | Ajv (Draft 2020-12) + `ajv-formats` for JSON Schema; `@redocly/cli` lint for OpenAPI; fixtures as pass/`*.bad-*`-fail cases — driven by [`scripts/validate-contracts.mjs`](../../../scripts/validate-contracts.mjs) (`npm run validate:contracts`) | **Present** — §5 |
-| **Go platform** (P2) | `gofmt` · `go vet` · `golangci-lint` · `go test`; testcontainers for the TimescaleDB up/down path (`P2-TEST-1`) | Lands with Phase 2 |
+| **Go platform** (P2) | `gofmt` · `go vet` · `golangci-lint` · `go test`; testcontainers for the TimescaleDB up/down path (`P2-TEST-1`) | **Present** — CI (`go test` unit gate + a separate testcontainers TimescaleDB integration job); CI-only, not in the pre-commit hook |
 | **React frontend** (P2a) | component/unit (Vitest + Testing Library); **Playwright** (E2E + live-update latency); **Lighthouse CI** (initial-load + a11y) — both against the production build (`P2-TEST-2`) | **Partially wired** — ESLint · `tsc` · Vitest + blocking **Lighthouse CI** (static production build, `.lighthouserc.json`) run in CI; **Playwright** E2E stays local (needs the live deploy stack), not yet in CI |
 | **Python optimizer** (P3) | `ruff` · `mypy` · `pytest`; the constraint-engine + golden-scenario suites of [§07](./optimizer/07-spec-optimizer-evaluation.md) (`P3-TEST-1`) | Lands with Phase 3 |
 | **Load / scale** (P2) | `docker-compose.override.yml` generator (N controllers) + MQTT publisher load; observe ingestion, fan-out lag, DB write rate per NFR Performance Testing | Lands with Phase 2 |
@@ -136,11 +138,13 @@ The CI platform is **GitHub Actions** ([`.github/workflows/ci.yml`](../../../.gi
 it closes the outer loop, re-running gates in a clean environment on push/PR. **Running today:** the
 Rust gate (`fmt`/`clippy`/`check`/`test`, scoped to `climate-controller/`) and the contract harness —
 the same gates the pre-commit hook fires locally, now also enforced away from the developer's machine
-(the hook stays staged-path-scoped so it never blocks an unrelated commit). The **frontend gate** —
-ESLint, `tsc`, Vitest, and a blocking **Lighthouse CI** run against the static production build — now
-runs too; its **Playwright** E2E stays local for now (it needs the live deploy stack). **Still to wire,**
-per the tooling matrix in §4: Rust coverage against `P1-TEST-1` (`cargo llvm-cov`), the frontend E2E
-harness, and — as each phase lands — the Go, Python gates and the load suite. The decision and its scope are
+(the hook stays staged-path-scoped so it never blocks an unrelated commit). The **Go gate** —
+`gofmt`/`go vet`/`golangci-lint`/`go build`/`go test`, plus a separate testcontainers TimescaleDB
+integration job (`P2-TEST-1`) — and the **frontend gate** — ESLint, `tsc`, Vitest, and a blocking
+**Lighthouse CI** run against the static production build — now run too; the frontend's **Playwright**
+E2E stays local for now (it needs the live deploy stack). **Still to wire,** per the tooling matrix in
+§4: Rust coverage against `P1-TEST-1` (`cargo llvm-cov`), the frontend E2E harness, the load suite, and
+— with Phase 3 — the Python gate. The decision and its scope are
 [RFC-010](../../decisions/request-for-comments.md#rfc-010-verification--continuous-integration-strategy);
 the remaining work is the CI item in [`docs/backlog.md`](../../backlog.md).
 

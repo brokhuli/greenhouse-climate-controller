@@ -31,7 +31,7 @@ By default the Phase 2 REST write is **trusted on the local Docker network** and
 Per [RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009),
 when the platform runs with `SERVICE_AUTH_MODE=oidc` (the cloud / multi-host posture) the optimizer
 authenticates as a **Keycloak confidential client** (`client_id: optimizer`) via the **client-credentials**
-grant and presents the resulting token as a `Bearer` credential on `POST /greenhouses/{id}/setpoints`.
+grant and presents the resulting token as a `Bearer` credential on `POST /api/greenhouses/{id}/setpoints`.
 The token carries a **narrow `setpoints:write` service role** — not the operator role — so a compromised
 credential can do nothing but propose in-bounds setpoints, which Phase 2 re-validates regardless. The
 client secret and the `SERVICE_AUTH_MODE` the optimizer targets are

@@ -30,8 +30,11 @@ Outcome recorded in the [2026-07-05 ADR entry](./decisions/architecture-design-r
 [2026-06-22](./decisions/local-environment-record.md)): it re-runs, on push/PR, the Rust gate
 (`fmt`/`clippy`/`check`/`test`) and the contract harness
 ([`scripts/validate-contracts.mjs`](../scripts/validate-contracts.mjs)) — the same gates the
-pre-commit hook fires locally. Still outstanding: Rust coverage against `P1-TEST-1`
-(`cargo llvm-cov`) and — as each phase lands — the Go, Python, and frontend gates and the load suite.
+pre-commit hook fires locally — plus the **Go gate** (`go test` unit + a testcontainers TimescaleDB
+integration job) and the **frontend gate** (ESLint/`tsc`/Vitest + blocking Lighthouse CI on the
+static production build), both since landed. Still outstanding: Rust coverage against `P1-TEST-1`
+(`cargo llvm-cov`), the frontend E2E (Playwright) harness, the load suite, and — with Phase 3 — the
+Python gate.
 
 **2b auth slice landed.** Human viewer/operator authentication is implemented (removing the
 first item above): Keycloak (`auth`) issues OIDC tokens, the Go API validates them and gates the

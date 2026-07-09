@@ -246,8 +246,10 @@ HAL time constants ([HAL §2](../design/controller/03-spec-controller-hal-simula
 
 **Security**
 
-- **P2-SEC-1** — 2b: **Keycloak OIDC with viewer/operator roles**; every write path requires the
-  operator role. *([security §3](../design/platform/07-spec-platform-security.md#3-roles-and-role-mapping), [§4](../design/platform/07-spec-platform-security.md#4-capability-matrix); 2b.)*
+- **P2-SEC-1** — 2b: **Keycloak OIDC with viewer/operator roles**; every **human** write path requires
+  the operator role. The one **service** write path (`POST /setpoints`) requires the narrow
+  `setpoints:write` role under `SERVICE_AUTH_MODE=oidc` — [RFC-011](../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009).
+  *([security §3](../design/platform/07-spec-platform-security.md#3-roles-and-role-mapping), [§4](../design/platform/07-spec-platform-security.md#4-capability-matrix), [§5](../design/platform/07-spec-platform-security.md#5-the-2a-unauthenticated-stance--and-the-deferred-service-auth-mode); 2b.)*
 
 **Portability**
 

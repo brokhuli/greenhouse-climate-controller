@@ -49,7 +49,7 @@ Phase 2 is the **single authority for controller setpoints**
 it enforces crop-safe bounds, records provenance (source `optimizer`, with an `optimizer_run_id` for
 tracing), and is the sole delivery path to the controller — applying on change, re-asserting on
 reconnect, and detecting drift. The optimizer submits refined targets via
-`POST /greenhouses/{id}/setpoints` and either receives `202` (accepted) or `422` (rejected with the
+`POST /api/greenhouses/{id}/setpoints` and either receives `202` (accepted) or `422` (rejected with the
 violated bound); it does **not** write to controllers directly and does **not** publish actuator
 commands. The call is trusted on the local network by default; under the platform's hardened
 `SERVICE_AUTH_MODE=oidc` posture it carries a Keycloak `setpoints:write` service token
