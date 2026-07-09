@@ -62,6 +62,15 @@ curl -X PATCH localhost:8080/api/greenhouses/gh-a/setpoints \
 `gen-controllers.sh N` is the lever for **performance testing** under different greenhouse counts
 (operations §2). Generated files (`docker-compose.override.yml`, `controllers/`) are git-ignored.
 
+**Shared simulated start.** `gen-controllers.sh` picks one `start_ts` — **today (UTC) at a random
+whole hour** — and stamps the same value into every controller's TOML, so the whole fleet's first
+telemetry timestamp and initial time-of-day match; each controller then drifts as it advances on its
+own `time_scale`. Pin a run (e.g. to reproduce a demo) by exporting `SIM_START_TS` before generating:
+`SIM_START_TS=2026-07-09T14:00:00Z bash deploy/scripts/gen-controllers.sh 2`. The chosen value is
+printed in the script's summary. Regenerating on a new day/hour shifts the timestamp window;
+because the telemetry store keeps prior runs (30-day retention, no restart reset), charts may show
+the old and new runs as separate clusters — harmless, and cleared by wiping the `db_data` volume.
+
 ## Service-auth hardening (RFC-011, dormant by default)
 
 Beyond the human viewer/operator auth above, two internal **service** write boundaries can be hardened

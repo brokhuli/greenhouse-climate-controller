@@ -166,6 +166,11 @@ soil_moisture_bounds = { min = 0.0, max = 1.0 }
 time_scale = 1.0                   # reset-on-restart default; runtime-adjustable, ephemeral
 seed = 6582955728036744813         # fixes the run for reproducible tests
 sensor_injection_timeout_secs = 300
+# start_ts: shared simulated start (RFC 3339 UTC). Omitted → the fixed 2026-01-01 epoch
+# (deterministic default). deploy/scripts/gen-controllers.sh uncomments this and sets one shared
+# value (today @ a random whole hour) across the fleet, so every controller's first timestamp and
+# initial time-of-day agree; controllers then drift as each advances at its own time_scale.
+# start_ts = "2026-01-01T00:00:00.000Z"
 
 [simulation.solar] # natural light day-cycle (so grow lights supplement)
 sunrise = "06:00"

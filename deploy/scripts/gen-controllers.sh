@@ -40,6 +40,17 @@ mkdir -p "$OUT_DIR" "$TARGETS_DIR"
 MINT_TOKENS="${CONTROLLER_AUTH_TOKENS:-0}"
 mint_token() { LC_ALL=C tr -dc 'a-f0-9' < /dev/urandom | head -c 32; }
 
+# One shared simulated start for the whole fleet: today (UTC) at a random whole hour. Every
+# controller begins at exactly this instant, so their first telemetry timestamp and initial
+# time-of-day agree; they then drift as each advances at its own time_scale. Computed once here
+# (outside the loop) — unlike seed, which is per-controller. Pin a run by exporting
+# SIM_START_TS=YYYY-MM-DDThh:00:00Z (e.g. to reproduce a demo).
+if [[ -n "${SIM_START_TS:-}" ]]; then
+  sim_start_ts="$SIM_START_TS"
+else
+  sim_start_ts="$(date -u +%Y-%m-%d)T$(printf '%02d' "$(( RANDOM % 24 ))"):00:00.000Z"
+fi
+
 letters=(a b c d e f g h i j k l m n o p q r s t u v w x y z)
 id_for() {
   local i="$1"
@@ -88,6 +99,7 @@ for (( i = 0; i < N; i++ )); do
       -e "s|^broker_url = .*|broker_url = \"mqtt://mqtt:1883\"|" \
       -e "s|^bind_addr = .*|bind_addr = \"0.0.0.0:8080\"|" \
       -e "s|^seed = .*|seed = $seed|" \
+      -e "s|^# start_ts = .*|start_ts = \"$sim_start_ts\"|" \
       "${auth_sed[@]}" \
       "$TEMPLATE" > "$toml"
 
@@ -132,6 +144,7 @@ echo "  override : $OVERRIDE"
 echo "  configs  : $OUT_DIR/<id>.toml"
 echo "  register : $REGISTER"
 echo "  scrape   : $TARGETS_FILE"
+echo "  sim start: $sim_start_ts (shared across the fleet; pin with SIM_START_TS=...)"
 echo
 echo "Next:"
 echo "  docker compose --env-file deploy/.env -f deploy/docker-compose.yml -f deploy/docker-compose.override.yml up -d --build"

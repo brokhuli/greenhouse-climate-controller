@@ -5,6 +5,7 @@
 //! simulation-only — a real-hardware backend ignores it. Optional in TOML; omitted fields take
 //! the committed defaults.
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::domain::TimeOfDay;
@@ -22,6 +23,12 @@ pub struct Simulation {
     /// Default auto-expiry for a sensor-reading injection (simulated seconds); a per-request TTL
     /// overrides it.
     pub sensor_injection_timeout_secs: u64,
+    /// Shared simulated wall-clock start (RFC 3339 UTC). `None` → the fixed 2026-01-01 epoch
+    /// (deterministic default for tests/standalone). The fleet gen script sets one shared value
+    /// (today @ a random whole hour) so every controller's first timestamp and initial time-of-day
+    /// agree, then drift as each advances at its own `time_scale`. The clock starts at the
+    /// *seconds-of-day* off that day's midnight, so telemetry and time-of-day stay aligned.
+    pub start_ts: Option<DateTime<Utc>>,
     /// Solar / PAR day-cycle disturbance.
     pub solar: Solar,
     /// Initial plant state at tick 0.
@@ -36,6 +43,7 @@ impl Default for Simulation {
             time_scale: 1.0,
             seed: 0x5EED_5EED_5EED_5EED,
             sensor_injection_timeout_secs: 300,
+            start_ts: None,
             solar: Solar::default(),
             initial: InitialState::default(),
             noise: Noise::default(),
@@ -225,6 +233,16 @@ mod tests {
         let mut v = Vec::new();
         Simulation::default().validate(&mut v);
         assert!(v.is_empty(), "{v:?}");
+    }
+
+    #[test]
+    fn start_ts_defaults_to_none_and_parses_rfc3339() {
+        assert_eq!(Simulation::default().start_ts, None);
+        let sim: Simulation = toml::from_str("start_ts = \"2026-07-09T14:00:00Z\"").unwrap();
+        assert_eq!(
+            sim.start_ts,
+            Some("2026-07-09T14:00:00Z".parse::<DateTime<Utc>>().unwrap())
+        );
     }
 
     #[test]

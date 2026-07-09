@@ -121,6 +121,17 @@ stops 0.5/1/2/4); the 8× ceiling keeps the wall interval above the per-tick com
 (`P1-PERF-3`). Each controller has its **own** `time_scale`; there is no shared/master clock across
 greenhouses.
 
+`start_ts` (optional, RFC 3339 UTC) sets the simulated wall-clock instant the run **begins** at.
+Omitted, the clock starts at the fixed **2026-01-01T00:00:00Z** epoch (the deterministic default for
+tests and standalone runs). When set, the clock's day-aligned **base** is that timestamp truncated to
+UTC midnight and its initial offset is the **seconds-of-day** — so telemetry `ts` (`= base +
+sim_seconds`) and the day/night model (`second_of_day = sim_seconds mod 86 400`) agree from the first
+tick, rather than telemetry reading, say, 14:00 while day/night logic thinks it is midnight. Like
+`time_scale`, it is **simulated-HAL-only** and per-controller — there is still no shared clock. To
+make a **fleet** start together, one shared `start_ts` is stamped into every controller's config at
+generation time (see [operations](../../../../deploy/README.md)); each controller then advances on its
+own `time_scale`, so their timestamps drift apart after the shared start.
+
 > **Duration semantics — simulated seconds, not wall-clock.** Every in-simulation duration in this
 > file and the reference below — `drain_period_secs`, `sensor_injection_timeout_secs`, the
 > manual-override timeout, the saturation and no-response windows, `interlock_min_hold` — is counted
@@ -189,6 +200,7 @@ the [deterministic simulation](./03-spec-controller-hal-simulation.md#7-determin
 | Simulation seed | fixed | — | Reproducibility (`P1-TEST-2`) |
 | `sensor_injection_timeout_secs` | 300 | s (sim) | Default auto-expiry for a [sensor-reading injection](./03-spec-controller-hal-simulation.md#9-sensor-reading-injection) (sim-only); per-request `ttl_secs` overrides it |
 | `time_scale` | 1.0 | × (0.25–8) | Wall-clock tick-cadence multiplier (sim-only); runtime-adjustable, ephemeral, per-controller ([HAL §7](./03-spec-controller-hal-simulation.md#time-scale-speed-without-breaking-determinism)) |
+| `start_ts` | 2026-01-01T00:00:00Z | RFC 3339 UTC | Simulated instant the run begins at (sim-only); day-aligned base + seconds-of-day so telemetry and time-of-day agree. Omitted → the fixed epoch; one shared value is stamped fleet-wide at generation |
 
 ### Real-time ([architecture](./02-spec-controller-architecture.md#3-real-time--scheduling-model))
 
