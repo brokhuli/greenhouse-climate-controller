@@ -149,7 +149,7 @@
 
 - **What:** The same HTTP client also submits refined setpoints to Phase 2.
 - **Why:** The write path is a single small `POST`, so a full client stack is unwarranted.
-- **How:** Writes refined setpoint bundles via `POST /greenhouses/{id}/setpoints`
+- **How:** Writes refined setpoint bundles via `POST /api/greenhouses/{id}/setpoints`
   ([interfaces](./09-spec-optimizer-interfaces.md)); Phase 2 remains the single authority and
   reconciles to the controller ([RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain)).
   In `trusted_network` mode the call is untokened; in `oidc` mode it presents the Keycloak

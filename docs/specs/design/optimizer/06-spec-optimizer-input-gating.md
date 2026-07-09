@@ -47,11 +47,14 @@ accelerated simulation, where setpoint refinement is intentionally out of scope.
 baseline stays in force regardless ([P3-RESIL-1](../../artifacts/non-functional-requirements.md)), a held
 cycle never destabilizes control — it only forgoes refinement until trusted inputs return.
 
-> **Read-API note (follow-up).** The optimizer can compute every signal above today from existing
-> contracts — `ts` on each reading for age, plus the controller's fault-event and `system-state`
-> streams for health. Exposing per-metric last-update age and fault status **directly on the RFC-008
-> telemetry read API** would let the gate consume them as plain response fields and is the clean
-> long-term home; which fields the API carries is an open question on
-> [RFC-008](../../../decisions/request-for-comments.md#rfc-008-phase-3-telemetry-read-path) to resolve
-> when the REST contract is authored. The platform can still compute those fields from internal SQL
-> views or aggregates.
+> **Read-API note.** The gate's signals are exposed **directly on the RFC-008 telemetry read API**,
+> now authored as the [`optimizer-read-rest`](../../../../contracts/optimizer-read-rest/) contract: the
+> `PlanningContext` response carries a `data_quality` block (`controller_mode`, `time_scale`,
+> per-metric `freshness[]`, and active `faults[]`) plus per-actuator `health` on each `ActuatorSnapshot`.
+> The gate's four checks map straight onto these fields — **freshness/completeness** → `freshness[]`,
+> **sensor health** → `faults[]`, **actuator health** → `ActuatorSnapshot.health`, **clock mode** →
+> `time_scale` (with `controller_mode` for the controller-degraded case) — so the optimizer consumes
+> them as plain response fields rather than recomputing them from the raw reading `ts` and the
+> controller's fault-event / `system-state` streams. This resolves the open
+> [RFC-008](../../../decisions/request-for-comments.md#rfc-008-phase-3-telemetry-read-path) question of
+> which fields the read API carries; the platform derives them from internal SQL views or aggregates.
