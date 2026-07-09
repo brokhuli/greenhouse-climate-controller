@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import ProfileManagement from "../../src/features/profiles/ProfileManagement";
+import { ProfileEditForm } from "../../src/features/profiles/ProfileEditForm";
 import { ProfileAssignmentPanel } from "../../src/features/greenhouse/ProfileAssignmentPanel";
 import { queryKeys } from "../../src/api/queries/keys";
 import type { Assignment, CropProfile, Setpoints } from "../../src/api/schemas";
@@ -45,6 +46,39 @@ describe("ProfileManagement", () => {
     renderWithProviders(<ProfileManagement />, { client });
 
     expect(screen.getByText("No crop profiles yet")).toBeInTheDocument();
+  });
+});
+
+describe("ProfileEditForm", () => {
+  const field = (container: HTMLElement, name: string) =>
+    container.querySelector<HTMLInputElement>(`[name="${name}"]`)!;
+
+  it("seeds a crop-safe envelope around each target for a new profile", () => {
+    const client = makeClient();
+    const { container } = renderWithProviders(<ProfileEditForm onClose={() => {}} />, { client });
+
+    // defaultTargets() day temp is 22 with a ±3 seed margin → [19, 25].
+    expect(field(container, "stage-0-temperatureDayC").value).toBe("22");
+    expect(field(container, "stage-0-temperatureDayC-min").value).toBe("19");
+    expect(field(container, "stage-0-temperatureDayC-max").value).toBe("25");
+  });
+
+  it("rejects a target that falls outside its crop-safe range before submitting", () => {
+    const client = makeClient();
+    const { container } = renderWithProviders(<ProfileEditForm onClose={() => {}} />, { client });
+
+    const set = (name: string, value: string) =>
+      fireEvent.change(field(container, name), { target: { value } });
+    set("profile-id", "lettuce");
+    set("profile-name", "Lettuce");
+    set("profile-crop", "lettuce");
+    // Move the envelope above the (22) target so the target no longer sits inside it.
+    set("stage-0-temperatureDayC-min", "30");
+    set("stage-0-temperatureDayC-max", "35");
+
+    fireEvent.click(screen.getByRole("button", { name: "Create profile" }));
+
+    expect(screen.getByRole("alert").textContent).toMatch(/outside its crop-safe range/);
   });
 });
 

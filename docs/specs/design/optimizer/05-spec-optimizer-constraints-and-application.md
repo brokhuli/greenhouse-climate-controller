@@ -16,8 +16,13 @@ Phase 2 platform that owns intended state.
 Every candidate plan passes through a deterministic **constraint engine** before it can be applied.
 The engine validates the plan against:
 
-- **Crop-safe bounds** — the min/max envelope the active crop profile defines for each target; the
-  optimizer may move targets *within* this envelope but never outside it.
+- **Crop-safe bounds** — the min/max envelope the active crop profile stage defines for each scalar
+  climate target (`StageBounds` on the profile — [platform crop-profiles §1](../platform/05-spec-platform-crop-profiles.md#1-profiles-and-assignment)),
+  read from the [planning-context](./06-spec-optimizer-input-gating.md) `setpoints.bounds` at the start
+  of the cycle; the optimizer may move targets *within* this envelope but never outside it. Because
+  Phase 2 enforces the same envelope on the write path, this engine is the optimizer's local pre-filter
+  on the authoritative bounds, not a second definition of them (a `202`/`422` disagreement is handled in
+  [§3](#3-write-path-concurrency--reconciliation)).
 - **Physical limits** — actuator ranges, rate limits, and physically achievable setpoint combinations.
 
 A plan that clears the engine is eligible for **auto-apply**

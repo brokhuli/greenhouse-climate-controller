@@ -1,13 +1,40 @@
 {
+  "Bound": {
+    "type": "object",
+    "description": "A crop-safe [min, max] envelope for one scalar climate target — the range the Phase 3 optimizer may refine that target within, never outside (RFC-005). min must be ≤ max, both must sit inside the target's generic physical range, and the envelope must contain the stage's own baseline target (enforced server-side; a violation is 422).",
+    "properties": {
+      "min": { "type": "number", "description": "Lower edge of the crop-safe range." },
+      "max": { "type": "number", "description": "Upper edge of the crop-safe range." }
+    },
+    "required": ["min", "max"],
+    "additionalProperties": false
+  },
+  "StageBounds": {
+    "type": "object",
+    "description": "A growth stage's crop-safe envelope: an optional Bound per scalar climate target. It is the canonical envelope the platform enforces on optimizer setpoint writes and exposes to the optimizer via the planning-context read. An absent target means no crop-specific envelope for it — only the generic physical bound applies. Time-of-day and per-zone irrigation targets are not optimizer-refined and carry no envelope.",
+    "properties": {
+      "temperature_day_c": { "$ref": "#/Bound" },
+      "temperature_night_c": { "$ref": "#/Bound" },
+      "humidity_low_pct": { "$ref": "#/Bound" },
+      "humidity_high_pct": { "$ref": "#/Bound" },
+      "humidity_deadband_pct": { "$ref": "#/Bound" },
+      "co2_target_ppm": { "$ref": "#/Bound" },
+      "co2_vent_interlock_threshold_pct": { "$ref": "#/Bound" },
+      "vpd_target_kpa": { "$ref": "#/Bound" },
+      "dli_target_mol": { "$ref": "#/Bound" }
+    },
+    "additionalProperties": false
+  },
   "ProfileStage": {
     "type": "object",
-    "description": "One growth stage of a crop profile and the target bundle it applies.",
+    "description": "One growth stage of a crop profile: the target bundle it applies, plus an optional crop-safe envelope the targets may be refined within.",
     "properties": {
       "stage": {
         "type": "string",
         "description": "Growth stage label (e.g. propagation, vegetative, fruiting)."
       },
-      "targets": { "$ref": "./setpoints.json#/Setpoints" }
+      "targets": { "$ref": "./setpoints.json#/Setpoints" },
+      "bounds": { "$ref": "#/StageBounds" }
     },
     "required": ["stage", "targets"],
     "additionalProperties": false

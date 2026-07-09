@@ -26,6 +26,13 @@
             "schedule": "06:00,14:00"
           }
         ]
+      },
+      "bounds": {
+        "temperature_day_c": { "min": 21.0, "max": 26.0 },
+        "humidity_high_pct": { "min": 75.0, "max": 85.0 },
+        "co2_target_ppm": { "min": 800, "max": 1000 },
+        "vpd_target_kpa": { "min": 0.7, "max": 1.1 },
+        "dli_target_mol": { "min": 15.0, "max": 22.0 }
       }
     },
     {

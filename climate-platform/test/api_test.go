@@ -112,10 +112,15 @@ func TestProfileAssignmentHTTP(t *testing.T) {
 	}, http.StatusCreated)
 	fleet.Observe("gh-a", time.Now().UTC())
 
-	// Create a crop profile.
+	// Create a crop profile whose stage carries a crop-safe envelope. The baseline temp_day (24)
+	// sits inside [20, 26]; optimizer writes are later gated to this envelope.
 	profile := domain.CropProfile{
 		ID: "lettuce", Name: "Lettuce", Crop: "lettuce",
-		Stages: []domain.ProfileStage{{Stage: "vegetative", Targets: sampleSetpoints()}},
+		Stages: []domain.ProfileStage{{
+			Stage:   "vegetative",
+			Targets: sampleSetpoints(),
+			Bounds:  &domain.StageBounds{TemperatureDayC: &domain.Bound{Min: 20, Max: 26}},
+		}},
 	}
 	client.do(http.MethodPost, "/api/profiles", profile, http.StatusCreated)
 
@@ -169,6 +174,22 @@ func TestProfileAssignmentHTTP(t *testing.T) {
 	}
 	if current.Revision != 3 || current.Source != domain.SourceOptimizer || current.Setpoints.TemperatureDayC != 23 {
 		t.Fatalf("current revision = %+v, want rev3 optimizer temp 23", current)
+	}
+
+	// An optimizer submission outside the active stage's crop-safe envelope ([20, 26]) is rejected
+	// 422 and leaves intended state untouched (still rev3) — the platform-side backstop (RFC-005).
+	client.do(http.MethodPost, "/api/greenhouses/gh-a/setpoints", map[string]any{"temperature_day_c": 30.0}, http.StatusUnprocessableEntity)
+	current, found, err = st.CurrentRevision(ctx, "gh-a")
+	if err != nil || !found || current.Revision != 3 {
+		t.Fatalf("rejected optimizer write must not advance intended state: rev=%d found=%v err=%v", current.Revision, found, err)
+	}
+
+	// The same out-of-envelope value from an operator edit is accepted (200): the crop-safe envelope
+	// gates the optimizer, not the operator — a sticky operator edit wins (crop-profiles §5).
+	client.do(http.MethodPatch, "/api/greenhouses/gh-a/setpoints", map[string]any{"temperature_day_c": 30.0}, http.StatusOK)
+	current, found, err = st.CurrentRevision(ctx, "gh-a")
+	if err != nil || !found || current.Revision != 4 || current.Source != domain.SourceOperatorEdit || current.Setpoints.TemperatureDayC != 30 {
+		t.Fatalf("current revision = %+v, want rev4 operator_edit temp 30", current)
 	}
 }
 

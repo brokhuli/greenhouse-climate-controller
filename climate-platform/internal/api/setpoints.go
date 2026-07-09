@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -32,6 +33,26 @@ func (s *Server) editSetpoints(c echo.Context) error {
 func (s *Server) submitSetpoints(c echo.Context) error {
 	actor := s.setpointActor(c, "optimizer")
 	return s.applySetpointWrite(c, domain.SourceOptimizer, actor, "optimizer setpoint submission", http.StatusAccepted)
+}
+
+// resolveStageBounds returns the crop-safe envelope of the greenhouse's active profile stage, used to
+// gate optimizer setpoint writes. It is nil when the greenhouse has no assignment, the assigned
+// profile or stage is gone, or the stage defines no envelope — in which case the optimizer write falls
+// back to the generic physical bounds alone. A store error is propagated (surfaced as 500).
+func (s *Server) resolveStageBounds(ctx context.Context, greenhouseID string) (*domain.StageBounds, error) {
+	assignment, found, err := s.store.GetAssignment(ctx, greenhouseID)
+	if err != nil || !found {
+		return nil, err
+	}
+	profile, found, err := s.store.GetProfile(ctx, assignment.ProfileID)
+	if err != nil || !found {
+		return nil, err
+	}
+	stage, ok := profile.Stage(assignment.Stage)
+	if !ok {
+		return nil, nil
+	}
+	return stage.Bounds, nil
 }
 
 // setpointActor is the audit actor for a setpoint write: the authenticated token's username (or
@@ -94,6 +115,20 @@ func (s *Server) applySetpointWrite(c echo.Context, source domain.SetpointSource
 	candidate := applyGlobalPatch(baseline, patch)
 	if verr := validateSetpoints(candidate); verr != nil {
 		return respondValidation(c, verr)
+	}
+	// Optimizer writes are additionally gated to the active crop profile stage's crop-safe envelope
+	// (RFC-005): a candidate outside it is rejected 422 naming the violated bound. Operator edits are
+	// deliberately not gated here — a sticky operator edit wins over the profile (crop-profiles §5).
+	if source == domain.SourceOptimizer {
+		bounds, err := s.resolveStageBounds(ctx, id)
+		if err != nil {
+			return s.fail(c, err)
+		}
+		if bounds != nil {
+			if verr := validateSetpointsWithinBounds(candidate, *bounds); verr != nil {
+				return respondValidation(c, verr)
+			}
+		}
 	}
 
 	outcome, err := s.reconcile.Apply(ctx, id, candidate, source, actor, description)

@@ -46,7 +46,7 @@ components/
     analytics.json           #   AnalyticsResponse, AnalyticsSeries, AnalyticsBucket
     events.json              #   EventEntry
     sim.json                 #   TimeScale, TimeScalePatch, FleetTimeScaleResult (sim-only)
-    profiles.json            #   CropProfile, CropProfilePatch, ProfileStage, Assignment, AssignmentInput (2b)
+    profiles.json            #   CropProfile, CropProfilePatch, ProfileStage, StageBounds, Bound, Assignment, AssignmentInput (2b)
   parameters.json            # shared path/query parameters
   responses.json             # shared error responses (401, 403, 404, 422)
 examples/                    # fixtures used as tests (see below)
@@ -166,7 +166,7 @@ not restated. This differs from the controller-rest contract, which is unauthent
 ## Examples
 
 [`examples/`](./examples/) holds request/response fixtures used as tests. Positive fixtures must
-validate against their component schema; the three `*.bad-*.json` counter-examples must **fail**:
+validate against their component schema; the four `*.bad-*.json` counter-examples must **fail**:
 
 | Fixture | Schema | Expect |
 |---|---|---|
@@ -179,7 +179,8 @@ validate against their component schema; the three `*.bad-*.json` counter-exampl
 | `analytics.json` | `AnalyticsResponse` | valid |
 | `event.json` | `EventEntry` | valid |
 | `event.bad-kind.json` | `EventEntry` | **fail** (`kind` outside the closed enum) |
-| `profile.json` | `CropProfile` | valid |
+| `profile.json` | `CropProfile` | valid (a stage with a crop-safe `bounds` envelope) |
+| `profile.bad-bounds.json` | `CropProfile` | **fail** (a `bounds` entry missing the required `max`) |
 | `assignment.json` | `Assignment` | valid |
 | `sim-time-scale.patch.json` | `TimeScalePatch` | valid |
 | `sim-time-scale.json` | `TimeScale` | valid |

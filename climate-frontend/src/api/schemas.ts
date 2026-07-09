@@ -689,7 +689,27 @@ export const toWireRegistration = (
 // Crop profiles & assignment (2b) — library entries and their greenhouse binding
 // ---------------------------------------------------------------------------
 
-export const wireProfileStage = z.object({ stage: z.string().min(1), targets: wireSetpoints });
+/** A crop-safe [min, max] envelope for one scalar climate target (frontend-rest Bound). */
+export const wireBound = z.object({ min: z.number(), max: z.number() });
+
+/** A stage's crop-safe envelope: an optional Bound per scalar climate target (frontend-rest StageBounds). */
+export const wireStageBounds = z.object({
+  temperature_day_c: wireBound.optional(),
+  temperature_night_c: wireBound.optional(),
+  humidity_low_pct: wireBound.optional(),
+  humidity_high_pct: wireBound.optional(),
+  humidity_deadband_pct: wireBound.optional(),
+  co2_target_ppm: wireBound.optional(),
+  co2_vent_interlock_threshold_pct: wireBound.optional(),
+  vpd_target_kpa: wireBound.optional(),
+  dli_target_mol: wireBound.optional(),
+});
+
+export const wireProfileStage = z.object({
+  stage: z.string().min(1),
+  targets: wireSetpoints,
+  bounds: wireStageBounds.optional(),
+});
 
 export const wireCropProfile = z.object({
   id: slug,
@@ -706,15 +726,66 @@ export const wireAssignment = z.object({
   stage: z.string().min(1),
 });
 
-export type ProfileStage = { stage: string; targets: Setpoints };
+/** A crop-safe [min, max] envelope for one scalar climate target. */
+export type Bound = { min: number; max: number };
+
+/** The scalar climate setpoint keys that can carry a crop-safe envelope (all but time-of-day/zones). */
+export type ScalarSetpointKey =
+  | "temperatureDayC"
+  | "temperatureNightC"
+  | "humidityLowPct"
+  | "humidityHighPct"
+  | "humidityDeadbandPct"
+  | "co2TargetPpm"
+  | "co2VentInterlockThresholdPct"
+  | "vpdTargetKpa"
+  | "dliTargetMol";
+
+/** A stage's crop-safe envelope: an optional Bound per scalar climate target. */
+export type StageBounds = Partial<Record<ScalarSetpointKey, Bound>>;
+
+export type ProfileStage = { stage: string; targets: Setpoints; bounds?: StageBounds };
 export type CropProfile = { id: string; name: string; crop: string; stages: ProfileStage[] };
 export type Assignment = { greenhouseId: string; profileId: string; stage: string };
 export type AssignmentInput = { profileId: string; stage: string };
 
-export const toProfileStage = (w: z.infer<typeof wireProfileStage>): ProfileStage => ({
-  stage: w.stage,
-  targets: toSetpoints(w.targets),
-});
+// Pairs each envelope target's camelCase view key with its snake_case wire key — the single table
+// the StageBounds adapters iterate so encode/decode stay in lockstep.
+const BOUND_KEYS: [ScalarSetpointKey, keyof z.infer<typeof wireStageBounds>][] = [
+  ["temperatureDayC", "temperature_day_c"],
+  ["temperatureNightC", "temperature_night_c"],
+  ["humidityLowPct", "humidity_low_pct"],
+  ["humidityHighPct", "humidity_high_pct"],
+  ["humidityDeadbandPct", "humidity_deadband_pct"],
+  ["co2TargetPpm", "co2_target_ppm"],
+  ["co2VentInterlockThresholdPct", "co2_vent_interlock_threshold_pct"],
+  ["vpdTargetKpa", "vpd_target_kpa"],
+  ["dliTargetMol", "dli_target_mol"],
+];
+
+export const toStageBounds = (w: z.infer<typeof wireStageBounds>): StageBounds => {
+  const bounds: StageBounds = {};
+  for (const [key, wireKey] of BOUND_KEYS) {
+    const b = w[wireKey];
+    if (b) bounds[key] = { min: b.min, max: b.max };
+  }
+  return bounds;
+};
+
+export const toWireStageBounds = (bounds: StageBounds): z.input<typeof wireStageBounds> => {
+  const wire: z.input<typeof wireStageBounds> = {};
+  for (const [key, wireKey] of BOUND_KEYS) {
+    const b = bounds[key];
+    if (b) wire[wireKey] = { min: b.min, max: b.max };
+  }
+  return wire;
+};
+
+export const toProfileStage = (w: z.infer<typeof wireProfileStage>): ProfileStage => {
+  const stage: ProfileStage = { stage: w.stage, targets: toSetpoints(w.targets) };
+  if (w.bounds) stage.bounds = toStageBounds(w.bounds);
+  return stage;
+};
 
 export const toCropProfile = (w: z.infer<typeof wireCropProfile>): CropProfile => ({
   id: w.id,
@@ -753,14 +824,17 @@ export const toWireSetpoints = (setpoints: Setpoints): z.input<typeof wireSetpoi
   zones: setpoints.zones.map(toWireZoneTargets),
 });
 
+const toWireProfileStage = (stage: ProfileStage): z.input<typeof wireProfileStage> => ({
+  stage: stage.stage,
+  targets: toWireSetpoints(stage.targets),
+  ...(stage.bounds ? { bounds: toWireStageBounds(stage.bounds) } : {}),
+});
+
 export const toWireCropProfile = (profile: CropProfile): z.input<typeof wireCropProfile> => ({
   id: profile.id,
   name: profile.name,
   crop: profile.crop,
-  stages: profile.stages.map((stage) => ({
-    stage: stage.stage,
-    targets: toWireSetpoints(stage.targets),
-  })),
+  stages: profile.stages.map(toWireProfileStage),
 });
 
 /** Encode a profile edit as a CropProfilePatch (id is immutable — path identity only). */
@@ -769,10 +843,7 @@ export const toWireCropProfilePatch = (
 ): { name: string; crop: string; stages: z.input<typeof wireProfileStage>[] } => ({
   name: profile.name,
   crop: profile.crop,
-  stages: profile.stages.map((stage) => ({
-    stage: stage.stage,
-    targets: toWireSetpoints(stage.targets),
-  })),
+  stages: profile.stages.map(toWireProfileStage),
 });
 
 export const toWireAssignmentInput = (

@@ -3,6 +3,7 @@
   "cases": [
     { "fixture": "planning-context.json", "schema": "planning-context.json#/PlanningContext", "expect": "pass" },
     { "fixture": "summary-series.json", "schema": "planning-context.json#/MetricSummarySeries", "expect": "pass" },
-    { "fixture": "planning-context.bad-range.json", "schema": "planning-context.json#/PlanningContext", "expect": "fail" }
+    { "fixture": "planning-context.bad-range.json", "schema": "planning-context.json#/PlanningContext", "expect": "fail" },
+    { "fixture": "stage-bounds.bad.json", "schema": "planning-context.json#/StageBounds", "expect": "fail" }
   ]
 }

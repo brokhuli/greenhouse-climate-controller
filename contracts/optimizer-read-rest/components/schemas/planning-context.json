@@ -124,9 +124,35 @@
     ],
     "additionalProperties": false
   },
+  "Bound": {
+    "type": "object",
+    "description": "A crop-safe [min, max] envelope for one scalar climate target — the range the optimizer may refine that target within, never outside (RFC-005). A copy of the frontend-rest Bound shape, kept local per the self-contained-contract convention.",
+    "properties": {
+      "min": { "type": "number", "description": "Lower edge of the crop-safe range." },
+      "max": { "type": "number", "description": "Upper edge of the crop-safe range." }
+    },
+    "required": ["min", "max"],
+    "additionalProperties": false
+  },
+  "StageBounds": {
+    "type": "object",
+    "description": "The active profile stage's crop-safe envelope: an optional Bound per scalar climate target. The platform enforces these on optimizer setpoint writes; the optimizer's constraint engine mirrors them so a plan that clears the engine is expected to be accepted (a 422 signals the envelope disagreed — a mid-cycle profile change or contract drift). An absent target means no crop-specific envelope for it. A copy of the frontend-rest StageBounds shape, kept local per the self-contained-contract convention.",
+    "properties": {
+      "temperature_day_c": { "$ref": "#/Bound" },
+      "temperature_night_c": { "$ref": "#/Bound" },
+      "humidity_low_pct": { "$ref": "#/Bound" },
+      "humidity_high_pct": { "$ref": "#/Bound" },
+      "humidity_deadband_pct": { "$ref": "#/Bound" },
+      "co2_target_ppm": { "$ref": "#/Bound" },
+      "co2_vent_interlock_threshold_pct": { "$ref": "#/Bound" },
+      "vpd_target_kpa": { "$ref": "#/Bound" },
+      "dli_target_mol": { "$ref": "#/Bound" }
+    },
+    "additionalProperties": false
+  },
   "CurrentSetpoints": {
     "type": "object",
-    "description": "The greenhouse's current intended state with its provenance — the crop-safe baseline the optimizer layers refinements over. `targets` is the same bundle the setpoints write path (optimizer-write-rest) accepts and returns.",
+    "description": "The greenhouse's current intended state with its provenance — the crop-safe baseline the optimizer layers refinements over. `targets` is the same bundle the setpoints write path (optimizer-write-rest) accepts and returns; `bounds` is the active stage's crop-safe envelope the optimizer refines within and the platform enforces on write.",
     "properties": {
       "source": {
         "type": "string",
@@ -138,7 +164,8 @@
         "format": "date-time",
         "description": "When the current intended state was last recorded (RFC 3339 UTC, ms)."
       },
-      "targets": { "$ref": "#/Setpoints" }
+      "targets": { "$ref": "#/Setpoints" },
+      "bounds": { "$ref": "#/StageBounds" }
     },
     "required": ["source", "updated_at", "targets"],
     "additionalProperties": false

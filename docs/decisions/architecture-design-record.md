@@ -8,6 +8,50 @@ alternatives and tradeoffs.
 
 ---
 
+## 2026-07-08 — Crop-safe envelopes on crop profiles (defense-in-depth for optimizer writes)
+
+**Decision:** Gave each crop-profile growth stage an optional **crop-safe envelope** — a per-target
+`min`/`max` (`StageBounds`, one `Bound` per scalar climate target) alongside its exact `targets` — as
+the canonical definition of how far the Phase 3 optimizer may refine that target. The platform stores
+it, exposes it to the optimizer on the planning-context read (`optimizer-read-rest` `CurrentSetpoints.bounds`),
+and **enforces it on the optimizer setpoint write path** (`optimizer-write-rest`): a submission that
+moves a target outside its active stage's envelope is rejected `422` naming the field. This is
+**Option C** of the design options — Phase 2 holds the canonical envelope and re-validates on write,
+while the optimizer (Phase 3, not yet built) pre-filters to the same envelope it reads back, so a `202`
+is expected and a `422` means the two views disagreed (a mid-cycle profile change or contract drift),
+escalated rather than retried. Details settled while implementing:
+
+- **Scope: all nine scalar climate targets; envelope optional per target.** Temperature day/night,
+  humidity low/high/deadband, CO₂ target, CO₂ vent interlock, VPD, and DLI can each carry a `Bound`.
+  Time-of-day (`day_start`/`day_end`) and per-zone irrigation targets are not optimizer-refined and
+  carry none. An absent per-target bound means no crop-specific envelope for it — only the generic
+  physical bound applies.
+- **Enforcement gates the optimizer, not the operator.** The envelope is validated only on the
+  `source = optimizer` POST path; an operator's ad-hoc `PATCH` is deliberately **not** gated — a sticky
+  operator edit wins over the profile ([platform crop-profiles §5](../specs/design/platform/05-spec-platform-crop-profiles.md)).
+  A greenhouse with no assignment, or a stage with no envelope, falls back to the generic physical
+  bounds (lenient) rather than blocking.
+- **Self-consistency invariant.** On profile create/update, each `Bound` must satisfy `min ≤ max`, sit
+  inside the target's generic physical range, and **contain the stage's own baseline target** — a
+  profile whose baseline falls outside its own envelope is rejected `422`.
+- **No DB migration.** Profile `stages` are already a JSONB column, so the optional `bounds` object
+  rides in the existing document; existing profiles (no `bounds`) remain valid.
+- **Envelope resolved server-side, not submitted.** The write body (`SetpointsPatch`) is unchanged; the
+  platform resolves the envelope from the greenhouse's assignment, so the write contract's shape is
+  additive-free and only its validation semantics tightened.
+
+**Why:** The optimizer spec makes "crop-safe bounds" the core of its constraint engine and several
+platform/contract docs claimed Phase 2 *enforces* them, but no such envelope existed — profiles stored
+only exact targets and Phase 2 validated only generic physical ranges, so the optimizer's "`422` = out
+of the crop-safe envelope" contract rested on a capability that wasn't there. Option C closes that gap
+with the profile (the operator-owned crop definition) as the single source of truth and the platform as
+the enforcing single authority (RFC-005), keeping the optimizer safe to evolve: even a buggy or
+compromised planner cannot push a target past the operator-defined crop-safe range. Options that put
+crop safety solely in the optimizer were rejected because they would have made Phase 2 unable to honor
+the single-authority claim.
+
+---
+
 ## 2026-07-07 — Phase 3 telemetry read contract authored (OpenAPI 3.1) as a consolidated planning-context read
 
 **Decision:** Authored the Phase 3 telemetry read path under `contracts/optimizer-read-rest/` as an

@@ -96,6 +96,18 @@ A rejected submission is **not** recorded as intended state. Two classes of rule
 - **Cross-field invariants** JSON Schema cannot express — `humidity_low_pct` below `humidity_high_pct`,
   `moisture_low_threshold` below `moisture_high_threshold`, `day_start` before `day_end` — are enforced
   server-side and surface as the same 422.
+- **Crop-safe envelope** — beyond the generic physical bounds above, a submission on this path is
+  additionally validated against the **active crop profile stage's crop-safe envelope** (the per-target
+  `min`/`max` an operator sets on the assigned profile, `frontend-rest StageBounds`). A target the plan
+  moves outside its envelope is rejected **422** naming that field, with a crop-safe bound. This is the
+  platform-side backstop that makes it the single authority for crop safety
+  ([RFC-005](../../docs/decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain)):
+  the optimizer's own constraint engine pre-filters to the same envelope (read from the
+  [planning-context](../optimizer-read-rest/) `bounds`), so a `202` is expected and a `422` means the
+  optimizer's view of the bounds disagreed with the platform's — a mid-cycle profile change or contract
+  drift, escalated rather than retried. A greenhouse with no assignment, or a stage that defines no
+  envelope, is not gated here — only the generic physical bounds apply. The envelope is **not** in the
+  request body; it is resolved server-side from the assignment.
 
 A missing greenhouse returns **404**.
 

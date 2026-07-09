@@ -13,13 +13,13 @@ import (
 // completed bundle a crop-profile stage carries and on the candidate an operator edit produces.
 func validateSetpoints(setpoints domain.Setpoints) *valError {
 	checks := []*valError{
-		rangeF("temperature_day_c", &setpoints.TemperatureDayC, -20, 60),
-		rangeF("temperature_night_c", &setpoints.TemperatureNightC, -20, 60),
-		rangeF("humidity_low_pct", &setpoints.HumidityLowPct, 0, 100),
-		rangeF("humidity_high_pct", &setpoints.HumidityHighPct, 0, 100),
-		rangeF("humidity_deadband_pct", &setpoints.HumidityDeadbandPct, 0, 50),
-		rangeI("co2_target_ppm", &setpoints.CO2TargetPPM, 0, 5000),
-		rangeF("co2_vent_interlock_threshold_pct", &setpoints.CO2VentInterlockThresholdPct, 0, 100),
+		rangeF("temperature_day_c", &setpoints.TemperatureDayC, physTempMinC, physTempMaxC),
+		rangeF("temperature_night_c", &setpoints.TemperatureNightC, physTempMinC, physTempMaxC),
+		rangeF("humidity_low_pct", &setpoints.HumidityLowPct, physPctMin, physPctMax),
+		rangeF("humidity_high_pct", &setpoints.HumidityHighPct, physPctMin, physPctMax),
+		rangeF("humidity_deadband_pct", &setpoints.HumidityDeadbandPct, physPctMin, physDeadbandMaxPct),
+		rangeI("co2_target_ppm", &setpoints.CO2TargetPPM, physCO2MinPpm, physCO2MaxPpm),
+		rangeF("co2_vent_interlock_threshold_pct", &setpoints.CO2VentInterlockThresholdPct, physPctMin, physPctMax),
 		minF("vpd_target_kpa", &setpoints.VPDTargetKPa, 0),
 		minF("dli_target_mol", &setpoints.DLITargetMol, 0),
 	}
@@ -104,6 +104,10 @@ func validateStages(stages []domain.ProfileStage) *valError {
 		seen[stage.Stage] = true
 		if verr := validateSetpoints(stage.Targets); verr != nil {
 			verr.Field = fmt.Sprintf("stages[%d].targets.%s", index, verr.Field)
+			return verr
+		}
+		if verr := validateStageBounds(stage.Targets, stage.Bounds); verr != nil {
+			verr.Field = fmt.Sprintf("stages[%d].%s", index, verr.Field)
 			return verr
 		}
 	}

@@ -71,6 +71,29 @@ describe("crop-profile adapters", () => {
     expect(patch.stages[0].targets).toMatchObject({ vpd_target_kpa: 1 });
   });
 
+  it("round-trips a stage's crop-safe envelope through the wire schema", () => {
+    const withBounds = profile();
+    withBounds.stages[0].bounds = {
+      temperatureDayC: { min: 21, max: 26 },
+      co2TargetPpm: { min: 800, max: 1000 },
+    };
+    const wire = toWireCropProfile(withBounds);
+    expect(wireCropProfile.safeParse(wire).success).toBe(true);
+    expect(wire.stages[0].bounds).toEqual({
+      temperature_day_c: { min: 21, max: 26 },
+      co2_target_ppm: { min: 800, max: 1000 },
+    });
+
+    const back = toCropProfile(wireCropProfile.parse(wire));
+    expect(back.stages[0].bounds).toEqual(withBounds.stages[0].bounds);
+  });
+
+  it("omits bounds entirely when a stage defines none", () => {
+    const wire = toWireCropProfile(profile());
+    expect(wire.stages[0]).not.toHaveProperty("bounds");
+    expect(toCropProfile(wireCropProfile.parse(wire)).stages[0].bounds).toBeUndefined();
+  });
+
   it("encodes full setpoints that round-trip through wireSetpoints", () => {
     expect(wireSetpoints.safeParse(toWireSetpoints(targets())).success).toBe(true);
   });
