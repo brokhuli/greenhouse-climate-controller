@@ -57,7 +57,7 @@
 - **Why:** FastAPI is fixed by
   [tech-stack-decisions.md](../tech-stack-decisions.md#phase-3--llm-climate-optimizer-python-only)
   and the [ADR](../../../decisions/architecture-design-record.md): Pydantic's declarative
-  request/response validation lines up with the `ActuatorPlan` Pydantic model the planner already
+  request/response validation lines up with the `OptimizerPlan` Pydantic model the planner already
   emits ([planning §1](./04-spec-optimizer-planning.md#1-llm-driven-planning)) and with the wire
   schemas in [`contracts/`](../../../../contracts/), and its async model fits the LLM- and
   HTTP-bound I/O.
@@ -77,7 +77,7 @@
 - **Why:** Fixed by
   [RFC-004](../../../decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface)
   (revised 2026-06-11, [ADR](../../../decisions/architecture-design-record.md)). LangChain's
-  `Runnable` chain, `ChatPromptTemplate`, `.with_structured_output(ActuatorPlan)`, and
+  `Runnable` chain, `ChatPromptTemplate`, `.with_structured_output(OptimizerPlan)`, and
   `.with_fallbacks()` replace bespoke prompt construction, output parsing, and try/catch failover —
   keeping the invocation strategy **backend-agnostic** (`P3-MOD-1`).
 - **How:** The planner is the chain `ChatPromptTemplate | LLM | StructuredOutputParser`
@@ -171,7 +171,7 @@
   per-greenhouse TOML ([configuration](./10-spec-optimizer-configuration.md)); `pydantic-settings`
   binds those env vars to typed, validated settings and **fails fast at load** on a bad value — the
   Python analog of the controller's `serde` + `toml` boundary validation.
-- **How:** Loads the DSN, the Phase 2 endpoint and its service-auth mode, LLM provider / model /
+- **How:** Loads the Phase 2 endpoint and its service-auth mode, LLM provider / model /
   sampling, objective weights, the local time-of-use cost schedule, and the data-quality, twin,
   application-gate, and service thresholds. Secrets (`PLANNER_API_KEY`,
   `PLANNER_OIDC_CLIENT_SECRET`) resolve from env only and are never written to a file or a log
@@ -190,7 +190,7 @@
   [`contracts/`](../../../../contracts/) schemas (JSON Schema 2020-12) the controller and platform
   validate against keeps the whole system contract-first. A `referencing.Registry` resolves the
   schemas' `$id`s **offline**, matching the rest of the stack's no-network validation.
-- **How:** The emitted `ActuatorPlan` and the read payloads are checked at the boundary; the Pydantic
+- **How:** The emitted `OptimizerPlan` and the read payloads are checked at the boundary; the Pydantic
   model mirrors the contract schema, so validation is a guard, not a second source of truth.
 
 ---

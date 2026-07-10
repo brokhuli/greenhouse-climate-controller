@@ -49,7 +49,7 @@ Phase 1 Controller
 | Component | Responsibility |
 |---|---|
 | Data Access | Read historical telemetry, actuator states, current setpoints, and data-quality/freshness signals for one greenhouse from Phase 2's REST API; never writes. Runs the input data-quality / freshness gate ([input gating](./06-spec-optimizer-input-gating.md)) before planning |
-| Digital Twin / Simulation | Roll heat / humidity / CO₂ / VPD / DLI forward over the planning horizon under candidate setpoints |
+| Digital Twin / Simulation | Roll heat / humidity / CO₂ / VPD / DLI forward over the planning horizon under the current baseline setpoints (see [cycle order](#cycle-order-simulate-then-plan)) |
 | LLM Planner | Propose refined setpoint trajectories from the simulated trajectory and objectives, accounting for actuator coupling without issuing actuator commands |
 | Constraint Engine | Validate every candidate plan against crop-safe bounds and physical limits before it can be applied |
 | Plan Applier | Write within-bounds plans down via the Phase 2 REST API; route the rest to operator escalation |
@@ -58,3 +58,17 @@ Phase 1 Controller
 The optimizer is a **client** of Phase 2, not a peer of Phase 1: it reads history through Phase 2's
 optimizer read API and writes through Phase 2's setpoint API exactly as an operator edit would,
 layered on the crop-profile baseline ([P2 crop profiles](../platform/05-spec-platform-crop-profiles.md)).
+
+### Cycle order: simulate then plan
+
+The twin and planner are **not** mutually recursive within a cycle; the order is fixed. The twin first
+simulates the **baseline** trajectory — the current Phase 2 setpoints ([write-path §3 baseline adoption](./05-spec-optimizer-constraints-and-application.md#3-write-path-concurrency--reconciliation))
+carried forward over the horizon under the twin's model. The [planner](./04-spec-optimizer-planning.md)
+consumes *that* trajectory (plus bounds and objectives) and proposes a candidate setpoint trajectory. The
+[constraint engine](./05-spec-optimizer-constraints-and-application.md#1-constraint-engine--safety) then
+validates the candidate's **targets** against crop-safe and physical bounds, and the
+[application gate](./05-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application)
+applies only the immediate next bundle. **Phase 3 v1 does not re-simulate the planner's candidate
+trajectory** — it validates the proposed targets against bounds, not by rolling the candidate forward
+through the twin. Closed-loop candidate re-simulation (scoring a candidate by simulating it) is a deferred
+optimization enhancement ([scope](./12-spec-optimizer-scope.md)).

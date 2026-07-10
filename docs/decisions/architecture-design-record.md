@@ -8,6 +8,29 @@ alternatives and tradeoffs.
 
 ---
 
+## 2026-07-10 — Phase 3 plan model renamed `ActuatorPlan` → `OptimizerPlan`
+
+**Decision:** The optimizer's structured LLM-output model — the Pydantic type parsed via
+`.with_structured_output(...)` and referenced by RFC-004's `generate_plan(context) -> …` signature — is
+renamed from `ActuatorPlan` to **`OptimizerPlan`**. The rename is propagated across the Phase 3 spec set
+([04 planning](../specs/design/optimizer/04-spec-optimizer-planning.md),
+[11 tech-stack](../specs/design/optimizer/11-spec-optimizer-tech-stack.md)),
+[tech-stack-decisions.md](../specs/design/tech-stack-decisions.md), RFC-004, and the
+[2026-06-11 entry](#2026-06-11--phase-3-llm-integration-langchain-replaces-custom-plannerbackend-internals)
+below. It is a **naming change only**: the model is internal (the LLM's structured output, later distilled
+into the immediate-next `SetpointsPatch` bundle), so **no wire contract changes** — the write path remains
+`POST /api/greenhouses/{id}/setpoints` with the `SetpointsPatch` body.
+
+**Why:** `ActuatorPlan` implied the optimizer commands actuators, which directly contradicts the core
+Phase 3 boundary — the optimizer writes **setpoints only**, never actuator commands (Phase 1 owns
+actuation), and all downward influence flows through Phase 2. `OptimizerPlan` reflects that the model
+carries refined setpoint targets, not an actuator strategy. Caught during a pre-implementation
+spec-hardening pass; no Phase 3 code exists yet, so this is a naming correction ahead of implementation.
+
+**RFC:** [RFC-004](./request-for-comments.md#rfc-004-phase-3-llm-integration-interface)
+
+---
+
 ## 2026-07-09 — Phase 3 LLM default flips to local Ollama; cloud providers become opt-in
 
 **Decision:** The **default** planning backend is the **local Ollama** model rather than a hosted API.
@@ -845,12 +868,12 @@ the home for the 2a/2b boundary; the Phase 2 spec carries the per-section tags.
 
 **Decision:** The `PlannerBackend` protocol from RFC-004 is replaced by a LangChain `Runnable`
 chain as the planner implementation. The chain is `ChatPromptTemplate | LLM | StructuredOutputParser`,
-constructed with `.with_structured_output(ActuatorPlan)` for plan parsing. `ChatAnthropic` /
+constructed with `.with_structured_output(OptimizerPlan)` for plan parsing. `ChatAnthropic` /
 `ChatOpenAI` (packages `langchain-anthropic`, `langchain-openai`) replace the bespoke hosted-backend
 implementation; `ChatOllama` (package `langchain-community`) replaces the bespoke Ollama backend.
 Fallback routing uses LangChain's native `.with_fallbacks([ChatOllama(...)])` instead of the manual
 try/catch retry in the Proposal. The call site changes from `backend.generate_plan(context)` to
-`chain.invoke(context_dict)`. `ActuatorPlan`, `PlanContext`, the five invocation-strategy levers
+`chain.invoke(context_dict)`. `OptimizerPlan`, `PlanContext`, the five invocation-strategy levers
 and their values, the constraint validation layer, and the configuration structure are all unchanged.
 This change is internal to the planner component; no other RFC is affected.
 
@@ -858,7 +881,7 @@ This change is internal to the planner component; no other RFC is affected.
 parsing as tested, maintained abstractions — eliminating custom code for each of those concerns.
 `.with_fallbacks()` expresses the hosted→Ollama fallback topology in one declaration rather than a
 try/catch wrapper, making the intent explicit and reducing the surface for subtle retry bugs.
-`.with_structured_output(ActuatorPlan)` ties the output parser directly to the existing Pydantic
+`.with_structured_output(OptimizerPlan)` ties the output parser directly to the existing Pydantic
 model, so LLM output validation and the constraint engine use the same schema. Consistent with the
 design doc principle that Phase 3 is "flexible by design — this layer evolves as LLM capabilities
 do."

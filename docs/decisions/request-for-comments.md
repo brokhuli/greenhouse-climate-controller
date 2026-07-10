@@ -229,7 +229,7 @@ remains available in dev for debugging; it just isn't the platform's ingress.)
 > `ChatOllama` (package `langchain-community`) replaces the bespoke Ollama backend; LangChain's
 > native `.with_fallbacks([ChatOllama(...)])` replaces the manual try/catch retry logic. The call
 > site changes from `backend.generate_plan(context)` to `chain.invoke(context_dict)`. Structured
-> output is parsed via `.with_structured_output(ActuatorPlan)`, with `ActuatorPlan` remaining a
+> output is parsed via `.with_structured_output(OptimizerPlan)`, with `OptimizerPlan` remaining a
 > Pydantic model. Everything outside the planner boundary is unchanged — the five
 > invocation-strategy levers and their values, `PlanContext`, the constraint validation layer,
 > configuration structure, and all other RFCs. The Proposal and its Alternatives are retained as the
@@ -257,7 +257,7 @@ cycle cadence — governs all LLM calls regardless of which backend is active.
 
 ### Problem
 
-The optimizer (Phase 3) uses an LLM to generate actuator plans from simulation state and constraints.
+The optimizer (Phase 3) uses an LLM to generate refined setpoint plans from simulation state and constraints.
 Two competing constraints apply: hosted frontier models produce higher-quality, more reliably
 constraint-valid plans, but introduce per-token cost and a network dependency; local models
 (Ollama) are free and offline but have smaller context windows and lower capability for complex
@@ -273,11 +273,11 @@ service:
 
 ```
 PlannerBackend
-  generate_plan(context: PlanContext) -> ActuatorPlan
+  generate_plan(context: PlanContext) -> OptimizerPlan
 ```
 
 `PlanContext` carries the digital-twin simulation state, current setpoints, crop-safe bounds, and
-cost/time-of-use signals. `ActuatorPlan` carries refined setpoints and a reasoning trace for audit.
+cost/time-of-use signals. `OptimizerPlan` carries refined setpoints and a reasoning trace for audit.
 
 **Primary backend: hosted API**
 - Enabled by setting `PLANNER_BACKEND=anthropic` (or `openai`) and supplying an API key.
@@ -293,7 +293,7 @@ cost/time-of-use signals. `ActuatorPlan` carries refined setpoints and a reasoni
   warning, and retries the hosted backend on the next cycle.
 
 The constraint-validation layer (safety bounds, crop limits) runs in Python *after* the LLM
-generates a plan, regardless of which backend produced it. No actuator plan reaches the controller
+generates a plan, regardless of which backend produced it. No optimizer plan reaches the controller
 without passing constraint validation.
 
 **Backend-agnostic invocation strategy**

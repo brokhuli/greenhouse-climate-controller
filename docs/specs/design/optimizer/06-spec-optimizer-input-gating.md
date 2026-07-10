@@ -37,8 +37,10 @@ ladder, never off a cliff"). It does **not** invoke the LLM; it **extends the la
 the same fallback the state-change gate already uses
 ([planning](./04-spec-optimizer-planning.md#1-llm-driven-planning)) — and raises an **escalation**
 surfaced for operator review, traced by `optimizer_run_id`
-([P3-OBS-1](../../artifacts/non-functional-requirements.md)). The escalation carries a **reason code**,
-because the checks fail for different reasons: a freshness, completeness, or clock-mode miss is
+([P3-OBS-1](../../artifacts/non-functional-requirements.md)). The escalation carries a canonical
+[**reason code**](./09-spec-optimizer-interfaces.md#escalation-reason-codes)
+(`input_stale`, `input_incomplete`, `sensor_fault`, `actuator_fault`, `clock_mode_unsupported`, or
+`contract_drift`), because the checks fail for different reasons: a freshness, completeness, or clock-mode miss is
 **transient** — it may clear on the next cycle once readings return or the controller is back at 1× —
 but an **identity-consistency** failure is a deployment or contract fault that **will not self-heal**,
 so it is tagged as contract drift for the operator to fix rather than a "wait for sensors" hold. The

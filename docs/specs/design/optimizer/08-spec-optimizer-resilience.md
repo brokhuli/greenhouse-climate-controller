@@ -25,14 +25,21 @@ and the platform's operational resilience
 ([08-spec-platform-operations.md](../platform/08-spec-platform-operations.md)).
 
 - **Stateless restart.** The optimizer holds no authoritative persistent state. Intended state lives
-  in Phase 2; the optimizer's only across-cycle memory — the last accepted plan and its trajectory,
-  used by the state-change gate ([planning](./04-spec-optimizer-planning.md#1-llm-driven-planning)) and
-  the degrade fallbacks ([input gating](./06-spec-optimizer-input-gating.md),
-  [twin robustness](./03-spec-optimizer-digital-twin.md#2-robustness--fidelity)) — is
-  **reconstructable** by reading current setpoints and recent telemetry from Phase 2 on startup. A
-  restart re-reads config, reconnects to the Phase 2 REST API
-  ([RFC-008](../../../decisions/request-for-comments.md#rfc-008-phase-3-telemetry-read-path)), and
-  resumes on the next cadence tick; there is nothing to replay. While the optimizer
+  in Phase 2. The optimizer's only across-cycle memory is the last accepted plan — its applied
+  **setpoint bundle** (the baseline) *and* the full **horizon trajectory** that the state-change gate
+  ([planning](./04-spec-optimizer-planning.md#invocation-strategy)) and the degrade fallbacks
+  ([input gating](./06-spec-optimizer-input-gating.md),
+  [twin robustness](./03-spec-optimizer-digital-twin.md#2-robustness--fidelity)) compare against — and the
+  two recover **asymmetrically** on restart. The applied bundle *is* reconstructable: it is the current
+  setpoints Phase 2 already holds. The horizon **trajectory**, though, is **in-memory only** — it is a
+  per-cycle planning artifact ([planning](./04-spec-optimizer-planning.md#1-llm-driven-planning)) Phase 3
+  v1 persists nowhere, so it **cannot** be rebuilt from Phase 2. A restart therefore re-reads config,
+  reconnects to the Phase 2 REST API
+  ([RFC-008](../../../decisions/request-for-comments.md#rfc-008-phase-3-telemetry-read-path)), reads the
+  current setpoints as its baseline, and resumes on the next cadence tick with **no prior trajectory**:
+  the [state-change gate](./04-spec-optimizer-planning.md#invocation-strategy) is **disabled for that
+  first cycle** — it has nothing to diff against, so it plans fresh — and rebuilds from the baseline
+  trajectory that first cycle produces. There is nothing to replay. While the optimizer
   is down, the Phase 2 baseline continues unchanged
   ([P3-RESIL-1](../../artifacts/non-functional-requirements.md)) and the controller holds its last
   accepted setpoints ([P3-REL-1](../../artifacts/non-functional-requirements.md)) — a restart costs a
@@ -51,7 +58,8 @@ and the platform's operational resilience
   that changes it without the corresponding ADR entry and baseline recapture is a reviewable event, not
   silent drift.
 - **Escalation backpressure.** Escalations are the optimizer's only operator-facing output for held
-  cycles ([application gate](./05-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application),
+  cycles, each tagged with a canonical [reason code](./09-spec-optimizer-interfaces.md#escalation-reason-codes)
+  ([application gate](./05-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application),
   [input gating](./06-spec-optimizer-input-gating.md),
   [twin robustness](./03-spec-optimizer-digital-twin.md#2-robustness--fidelity),
   [write-path concurrency](./05-spec-optimizer-constraints-and-application.md#3-write-path-concurrency--reconciliation)).
@@ -64,9 +72,10 @@ and the platform's operational resilience
   ([crop-profiles §3](../platform/05-spec-platform-crop-profiles.md#3-reconciliation--the-platform-is-the-source-of-truth)):
   it bounds operator load — the escalation-backlog failure mode — without dropping signal.
 - **Health & cadence watchdog.** The FastAPI surface ([interfaces](./09-spec-optimizer-interfaces.md))
-  exposes a health endpoint reporting DB and Phase 2 reachability, the last-successful-cycle time, and
-  the current escalation backlog, so a supervisor can restart an unresponsive container and an operator
-  can see a stalled loop. The same surface exposes a Prometheus **`/metrics`** endpoint
+  exposes a health endpoint reporting Phase 2 reachability, LLM backend reachability, the
+  last-successful-cycle time, and the current escalation backlog, so a supervisor can restart an
+  unresponsive container and an operator can see a stalled loop. (The optimizer holds **no** DB
+  connection — it reads Phase 2 over REST per [RFC-008](../../../decisions/request-for-comments.md#rfc-008-phase-3-telemetry-read-path) — so there is no DB reachability to report.) The same surface exposes a Prometheus **`/metrics`** endpoint
   ([tech stack §Observability](./11-spec-optimizer-tech-stack.md#observability)) — last-successful-cycle
   age, cycle duration, twin divergence, and planner-failover counts make the same stall/overrun
   conditions graphable and alertable in the platform's shared Grafana, not just pollable point-in-time. A cycle that overruns its cadence — LLM latency past the
