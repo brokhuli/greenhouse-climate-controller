@@ -13,13 +13,20 @@ import {
   type GreenhouseRegistrationInput,
   type SetpointsPatch,
 } from "../schemas";
+import { FLEET_POLL_BASE_MS } from "./fleet";
 import { queryKeys } from "./keys";
 
-/** Fleet list — the landing view's source, patched live by `status`/`drift` frames. */
+/**
+ * Fleet list — the landing view's source. `status`/`drift`/telemetry frames patch it live between
+ * refreshes, but `climate.dli` has no live carrier (it's a backend accumulator served only on this
+ * REST snapshot, not a WS telemetry metric), so the periodic refetch is what keeps DLI current
+ * without a page reload. Cadence tracks the sparkline poll's base interval.
+ */
 export function useFleet() {
   return useQuery({
     queryKey: queryKeys.fleet(),
     queryFn: async () => (await apiClient.get("/greenhouses", wireFleet)).map(toGreenhouseSummary),
+    refetchInterval: FLEET_POLL_BASE_MS,
   });
 }
 
