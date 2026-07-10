@@ -88,6 +88,26 @@ describe("crop-profile adapters", () => {
     expect(back.stages[0].bounds).toEqual(withBounds.stages[0].bounds);
   });
 
+  it("round-trips a stage's per-zone crop-safe envelope through the wire schema", () => {
+    const withZoneBounds = profile();
+    withZoneBounds.stages[0].bounds = {
+      temperatureDayC: { min: 21, max: 26 },
+      zones: {
+        moistureLowThreshold: { min: 0.2, max: 0.4 },
+        drainPeriodSecs: { min: 400, max: 800 },
+      },
+    };
+    const wire = toWireCropProfile(withZoneBounds);
+    expect(wireCropProfile.safeParse(wire).success).toBe(true);
+    expect(wire.stages[0].bounds?.zones).toEqual({
+      moisture_low_threshold: { min: 0.2, max: 0.4 },
+      drain_period_secs: { min: 400, max: 800 },
+    });
+
+    const back = toCropProfile(wireCropProfile.parse(wire));
+    expect(back.stages[0].bounds).toEqual(withZoneBounds.stages[0].bounds);
+  });
+
   it("omits bounds entirely when a stage defines none", () => {
     const wire = toWireCropProfile(profile());
     expect(wire.stages[0]).not.toHaveProperty("bounds");

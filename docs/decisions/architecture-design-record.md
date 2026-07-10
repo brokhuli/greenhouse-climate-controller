@@ -8,6 +8,73 @@ alternatives and tradeoffs.
 
 ---
 
+## 2026-07-09 — Phase 3 LLM default flips to local Ollama; cloud providers become opt-in
+
+**Decision:** The **default** planning backend is the **local Ollama** model rather than a hosted API.
+`llm.provider` defaults to `"ollama"` (model `llama3`, endpoint `http://ollama:11434`), with
+`"anthropic"` / `"openai"` selectable as opt-in cloud backends by setting the provider and supplying
+`PLANNER_API_KEY`. The hosted-primary → Ollama-fallback topology of the
+[2026-06-07 entry](#2026-06-07--phase-3-llm-integration-hosted-primary-ollama-fallback-backend-agnostic-strategy)
+becomes **optional and configurable**: a single `fallback_provider` (empty by default) wires a secondary
+backend via LangChain's `.with_fallbacks()`, typically set only when a cloud provider is the primary.
+The pinned-model / per-backend-baseline discipline, the backend-agnostic invocation strategy,
+`PlanContext`, and the constraint layer are all unchanged — only which backend is the default moves.
+
+**Why:** A local default makes `P3-PORT-1` (runs under Compose with no cloud account) true out of the
+box: planning is free, fully offline, and leaks no telemetry off-host, with zero setup beyond the
+`ollama` container the stack already runs. With a local primary the always-available container is its own
+backstop, so the fixed fallback path of the original decision is no longer needed by default; it is
+retained as an opt-in for the cloud-primary posture, where a network outage still warrants continuity.
+Cloud frontier models remain one config change away for operators who want their higher plan quality —
+the backend-agnostic seam from RFC-004 is exactly what makes the default a configuration choice rather
+than a rewrite.
+
+**RFC:** [RFC-004](./request-for-comments.md#rfc-004-phase-3-llm-integration-interface) (revision 2026-07-09)
+
+---
+
+## 2026-07-09 — Per-zone irrigation targets are optimizer-refinable (per-zone crop-safe envelope)
+
+**Decision:** Made per-zone irrigation targets first-class on the setpoint write path, mirroring how the
+global climate targets already behave, and extended the crop-safe envelope to cover them. Concretely:
+
+- **Zone writes are honored, not ignored.** `applySetpointWrite` (operator `PATCH` and optimizer `POST`)
+  now merges a patch's `zones` onto the baseline bundle **by `zone_id`** and delivers them to the
+  controller through the existing per-zone reconciliation leg (`PATCH /zones/{zone_id}`). Previously the
+  handler decoded and shape-validated `zones` but silently dropped them (`applyGlobalPatch` copied only
+  the global fields), so a caller got a `200`/`202` while the zone change vanished (Codex Phase 3 review,
+  finding #3). Each named zone must specify its full target set; an unknown `zone_id` is rejected `422`
+  (zone **topology** is fixed — adding/removing zones is a controller config + restart change); unlisted
+  zones are unchanged.
+- **New per-zone crop-safe envelope.** `StageBounds` gains an optional `zones` (`ZoneBounds`): a `min`/`max`
+  per numeric zone target (`moisture_low_threshold`, `moisture_high_threshold`, `drain_period_secs`),
+  applied **uniformly to every zone** in the stage — a crop's safe soil-moisture/drain window is a
+  property of the crop and growth stage, not of which bench a zone is. A zone's `schedule` carries none,
+  mirroring the global `day_start`/`day_end`.
+- **Authority mirrors climate.** The optimizer's zone writes are gated against the stage's `ZoneBounds`
+  (a value outside it is `422` naming `zones[i].<field>`); an operator's ad-hoc zone edit is deliberately
+  **not** gated (a sticky operator edit wins). The optimizer reads the zone window from the
+  planning-context (`optimizer-read-rest` `CurrentSetpoints.bounds.zones`), exactly as for the climate
+  envelope.
+- **No DB migration.** `ZoneBounds` rides in the existing JSONB `stages` document; profiles without it
+  stay valid, and the write body (`SetpointsPatch`) already carried `zones`.
+
+This **revises the 2026-07-08 decision below**, which scoped the crop-safe envelope to the nine scalar
+climate targets and declared per-zone irrigation "not optimizer-refined." That exclusion was a deliberate
+deferral, not a permanent boundary; this entry lifts it now that a zone envelope exists to fence the
+refinement safely.
+
+**Why:** The write contract already advertised zone updates and the operator SPA already offered editable
+per-zone inputs, but the code silently discarded them — the "valid-looking write that does nothing" Codex
+flagged. Two coherent fixes existed: reject zone writes (make the contract honest about the deferral) or
+honor them (make the code honest about the contract). We chose to **honor** them, so zone irrigation
+behaves exactly like the climate targets — writable by operator and optimizer, the optimizer fenced by a
+crop-safe envelope the operator owns — rather than carve out a second-class path. Rejecting with `422` was
+declined because it would have left the operator's editable zone inputs permanently non-functional and
+deferred a capability the contract already promised.
+
+---
+
 ## 2026-07-08 — Crop-safe envelopes on crop profiles (defense-in-depth for optimizer writes)
 
 **Decision:** Gave each crop-profile growth stage an optional **crop-safe envelope** — a per-target
@@ -24,8 +91,9 @@ escalated rather than retried. Details settled while implementing:
 - **Scope: all nine scalar climate targets; envelope optional per target.** Temperature day/night,
   humidity low/high/deadband, CO₂ target, CO₂ vent interlock, VPD, and DLI can each carry a `Bound`.
   Time-of-day (`day_start`/`day_end`) and per-zone irrigation targets are not optimizer-refined and
-  carry none. An absent per-target bound means no crop-specific envelope for it — only the generic
-  physical bound applies.
+  carry none. *(Per-zone irrigation was later made refinable with its own `ZoneBounds` envelope — see the
+  2026-07-09 entry above; time-of-day still carries none.)* An absent per-target bound means no
+  crop-specific envelope for it — only the generic physical bound applies.
 - **Enforcement gates the optimizer, not the operator.** The envelope is validated only on the
   `source = optimizer` POST path; an operator's ad-hoc `PATCH` is deliberately **not** gated — a sticky
   operator edit wins over the profile ([platform crop-profiles §5](../specs/design/platform/05-spec-platform-crop-profiles.md)).

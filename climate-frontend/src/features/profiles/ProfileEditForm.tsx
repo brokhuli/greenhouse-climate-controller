@@ -9,6 +9,8 @@ import type {
   ScalarSetpointKey,
   Setpoints,
   StageBounds,
+  ZoneBoundKey,
+  ZoneBounds,
   ZoneTargets,
 } from "../../api/schemas";
 import { Button } from "../../components/ui/Button";
@@ -74,6 +76,66 @@ function defaultBound(field: ScalarField, target: number): Bound {
   };
 }
 
+// The numeric per-zone irrigation targets that can carry a crop-safe envelope. The envelope is uniform
+// per stage (applied to every zone), so its inputs live at stage level, not per zone. schedule carries
+// no envelope (time-of-day, like the day window).
+type ZoneBoundField = {
+  key: ZoneBoundKey;
+  label: string;
+  step: string;
+  min: number;
+  max: number;
+  margin: number;
+};
+
+const ZONE_BOUND_FIELDS: ZoneBoundField[] = [
+  {
+    key: "moistureLowThreshold",
+    label: "Moisture low (VWC)",
+    step: "0.01",
+    min: 0,
+    max: 1,
+    margin: 0.1,
+  },
+  {
+    key: "moistureHighThreshold",
+    label: "Moisture high (VWC)",
+    step: "0.01",
+    min: 0,
+    max: 1,
+    margin: 0.1,
+  },
+  {
+    key: "drainPeriodSecs",
+    label: "Drain period (s)",
+    step: "1",
+    min: 0,
+    max: Infinity,
+    margin: 120,
+  },
+];
+
+// defaultZoneBound seeds a zone-target envelope wide enough to contain every zone's value for that
+// field, clamped to the field's physical range.
+function defaultZoneBound(field: ZoneBoundField, zones: ZoneTargets[]): Bound {
+  const values = zones.map((zone) => zone[field.key]);
+  return {
+    min: round2(Math.max(field.min, Math.min(...values) - field.margin)),
+    max: round2(Math.min(field.max, Math.max(...values) + field.margin)),
+  };
+}
+
+// seedZoneBounds returns the stage's per-zone envelope: existing bounds where set, else one seeded to
+// contain all zones. undefined when the stage has no zones (nothing to envelope).
+function seedZoneBounds(zones: ZoneTargets[], existing?: ZoneBounds): ZoneBounds | undefined {
+  if (zones.length === 0) return undefined;
+  const bounds: ZoneBounds = {};
+  for (const field of ZONE_BOUND_FIELDS) {
+    bounds[field.key] = existing?.[field.key] ?? defaultZoneBound(field, zones);
+  }
+  return bounds;
+}
+
 // fullBounds returns a complete envelope for a stage: an existing per-target bound where set, else one
 // seeded around the target. Keeps the editor's envelope inputs populated even for pre-envelope profiles.
 function fullBounds(targets: Setpoints, existing?: StageBounds): StageBounds {
@@ -81,6 +143,8 @@ function fullBounds(targets: Setpoints, existing?: StageBounds): StageBounds {
   for (const field of SCALARS) {
     bounds[field.key] = existing?.[field.key] ?? defaultBound(field, targets[field.key]);
   }
+  const zones = seedZoneBounds(targets.zones, existing?.zones);
+  if (zones) bounds.zones = zones;
   return bounds;
 }
 
@@ -159,11 +223,31 @@ export function ProfileEditForm({
       }),
     );
 
+  const setZoneBound = (index: number, key: ZoneBoundKey, edge: "min" | "max", value: number) =>
+    setStages((prev) =>
+      prev.map((stage, i) => {
+        if (i !== index) return stage;
+        const zones = stage.bounds?.zones ?? {};
+        const current = zones[key] ?? { min: value, max: value };
+        return {
+          ...stage,
+          bounds: { ...stage.bounds, zones: { ...zones, [key]: { ...current, [edge]: value } } },
+        };
+      }),
+    );
+
+  // Changing the zones re-seeds the per-zone envelope (keeping any bounds already set), and drops it
+  // when the last zone is removed — mirroring how the climate envelope always stays populated.
   const setZones = (index: number, zones: ZoneTargets[]) =>
     setStages((prev) =>
-      prev.map((stage, i) =>
-        i === index ? { ...stage, targets: { ...stage.targets, zones } } : stage,
-      ),
+      prev.map((stage, i) => {
+        if (i !== index) return stage;
+        const bounds: StageBounds = { ...stage.bounds };
+        const seeded = seedZoneBounds(zones, stage.bounds?.zones);
+        if (seeded) bounds.zones = seeded;
+        else delete bounds.zones;
+        return { ...stage, targets: { ...stage.targets, zones }, bounds };
+      }),
     );
 
   const submit = () => {
@@ -196,6 +280,27 @@ export function ProfileEditForm({
             `${stage.stage} · ${field.label}: target ${target} is outside its crop-safe range [${bound.min}, ${bound.max}].`,
           );
           return;
+        }
+      }
+      // The per-zone envelope is uniform, so it must contain every zone's target for each bounded field.
+      const zoneBounds = stage.bounds?.zones;
+      if (zoneBounds) {
+        for (const field of ZONE_BOUND_FIELDS) {
+          const bound = zoneBounds[field.key];
+          if (!bound) continue;
+          if (bound.min > bound.max) {
+            setFormError(`${stage.stage} · zone ${field.label}: crop-safe min must be ≤ max.`);
+            return;
+          }
+          for (const zone of stage.targets.zones) {
+            const target = zone[field.key];
+            if (target < bound.min || target > bound.max) {
+              setFormError(
+                `${stage.stage} · zone ${field.label}: ${zone.zoneId || "a zone"}'s target ${target} is outside its crop-safe range [${bound.min}, ${bound.max}].`,
+              );
+              return;
+            }
+          }
         }
       }
     }
@@ -332,6 +437,47 @@ export function ProfileEditForm({
             </div>
 
             <ZoneEditor zones={stage.targets.zones} onChange={(zones) => setZones(index, zones)} />
+
+            {stage.targets.zones.length > 0 ? (
+              <div className="flex flex-col gap-2">
+                <p className="section-label">Zone irrigation crop-safe range</p>
+                <p className="text-fg-muted text-xs">
+                  The optimizer may refine every zone's irrigation targets within these bounds; each
+                  zone's target must sit inside the range.
+                </p>
+                {ZONE_BOUND_FIELDS.map((field) => {
+                  const bound = stage.bounds?.zones?.[field.key];
+                  return (
+                    <div
+                      key={field.key}
+                      className="grid grid-cols-1 gap-2 sm:grid-cols-[1.4fr_1fr_1fr]"
+                    >
+                      <div className="text-fg-muted flex items-end pb-2 text-sm">{field.label}</div>
+                      <TextField
+                        label="Crop-safe min"
+                        type="number"
+                        step={field.step}
+                        name={`stage-${index}-zone-${field.key}-min`}
+                        value={bound?.min ?? ""}
+                        onChange={(e) =>
+                          setZoneBound(index, field.key, "min", Number(e.target.value))
+                        }
+                      />
+                      <TextField
+                        label="Crop-safe max"
+                        type="number"
+                        step={field.step}
+                        name={`stage-${index}-zone-${field.key}-max`}
+                        value={bound?.max ?? ""}
+                        onChange={(e) =>
+                          setZoneBound(index, field.key, "max", Number(e.target.value))
+                        }
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
           </div>
         ))}
 

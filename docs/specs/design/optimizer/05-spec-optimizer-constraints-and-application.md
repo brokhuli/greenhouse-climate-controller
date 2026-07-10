@@ -17,7 +17,8 @@ Every candidate plan passes through a deterministic **constraint engine** before
 The engine validates the plan against:
 
 - **Crop-safe bounds** — the min/max envelope the active crop profile stage defines for each scalar
-  climate target (`StageBounds` on the profile — [platform crop-profiles §1](../platform/05-spec-platform-crop-profiles.md#1-profiles-and-assignment)),
+  climate target and, uniformly across zones, the numeric per-zone irrigation targets (`StageBounds`,
+  including its `zones` envelope, on the profile — [platform crop-profiles §1](../platform/05-spec-platform-crop-profiles.md#1-profiles-and-assignment)),
   read from the [planning-context](./06-spec-optimizer-input-gating.md) `setpoints.bounds` at the start
   of the cycle; the optimizer may move targets *within* this envelope but never outside it. Because
   Phase 2 enforces the same envelope on the write path, this engine is the optimizer's local pre-filter
@@ -41,8 +42,8 @@ constraints still bound everything that actually happens in the greenhouse.
 
 ## 2. Setpoint refinement & application
 
-What Phase 3 adjusts are **targets**: the VPD / DLI / CO₂ / temperature setpoints that Phase 2 already
-resolves from the crop profile. It refines them dynamically — shifting within the crop-safe envelope
+What Phase 3 adjusts are **targets**: the VPD / DLI / CO₂ / temperature setpoints and the per-zone
+irrigation targets that Phase 2 already resolves from the crop profile. It refines them dynamically — shifting within the crop-safe envelope
 to anticipate the diurnal cycle, coordinate actuators, and reduce cost — and writes the result down.
 It **writes targets only**; it never commands actuators and never edits the crop profile itself.
 

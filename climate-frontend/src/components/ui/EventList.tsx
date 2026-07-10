@@ -14,10 +14,13 @@ const SEVERITY_COLOR: Record<EventSeverity, string> = {
 
 const SEVERITY_ORDER: EventSeverity[] = ["critical", "warning", "info"];
 
+// Rendered in UTC — the greenhouse's simulated wall-clock frame (see lib/timeFormat.ts) — so an
+// event's time reads the same hour the simulated clock shows, not the operator's browser-local shift.
 const formatEventDate = (date: Date): string =>
   date.toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
+    timeZone: "UTC",
   });
 
 const formatEventTime = (date: Date): string =>
@@ -25,6 +28,7 @@ const formatEventTime = (date: Date): string =>
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
+    timeZone: "UTC",
   });
 
 function EventRow({ event, showGreenhouse }: { event: EventEntry; showGreenhouse: boolean }) {

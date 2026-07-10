@@ -15,11 +15,13 @@ it emits is gated downstream by the
 ## 1. LLM-driven planning
 
 The planner is implemented as a LangChain `Runnable` chain —
-`ChatPromptTemplate | LLM | StructuredOutputParser` — with `ChatAnthropic` / `ChatOpenAI` as the
-primary LLM wrappers and `ChatOllama` as the fallback, wired via `.with_fallbacks()`. Structured
+`ChatPromptTemplate | LLM | StructuredOutputParser`. The active chat-model wrapper is chosen by
+configuration: `ChatOllama` is the **default** local backend (offline, key-free), with
+`ChatAnthropic` / `ChatOpenAI` available as opt-in cloud backends. An optional secondary backend is
+wired via `.with_fallbacks()`. Structured
 plan output is parsed via `.with_structured_output(ActuatorPlan)`. See
 [RFC-004](../../../decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface)
-(revised ADR entry 2026-06-11).
+(revised ADR entries 2026-06-11 and 2026-07-09).
 
 The planner is prompted with the observed state, the simulated forward trajectory, the active
 crop-safe bounds, and the [optimization objectives](#2-optimization-objectives), and asked to
@@ -89,10 +91,12 @@ and the
 are. Sampling is pinned to make plans *reproducible enough to regression-test*
 ([evaluation](./07-spec-optimizer-evaluation.md)), not to guarantee identical output.
 
-The model is **pinned** (`claude-sonnet-4-6`, [configuration](./10-spec-optimizer-configuration.md)). A
-model change is a deliberate, reviewed event recorded as an ADR entry — never a silent upgrade —
+The active model is **pinned** in configuration (default `llama3` on the local Ollama backend; a cloud
+model such as `claude-sonnet-4-6` when a cloud provider is configured,
+[configuration](./10-spec-optimizer-configuration.md)). A model change — including switching provider —
+is a deliberate, reviewed event recorded as an ADR entry — never a silent upgrade —
 because it shifts the plan distribution and invalidates the evaluation baselines
-([evaluation](./07-spec-optimizer-evaluation.md)). The Ollama fallback (`llama3`) is a **different
+([evaluation](./07-spec-optimizer-evaluation.md)). Any configured fallback backend is a **different
 model** and will produce different plans for the same input; failover is therefore logged and traced
 (`optimizer_run_id`, [P3-OBS-1](../../artifacts/non-functional-requirements.md)) and held to its own
 baseline, not the primary backend's.

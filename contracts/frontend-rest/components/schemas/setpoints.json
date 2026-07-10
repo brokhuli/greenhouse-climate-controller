@@ -126,7 +126,7 @@
   },
   "SetpointsPatch": {
     "type": "object",
-    "description": "Partial (merge) update of a Setpoints bundle — any subset of the same fields, same bounds. Absent fields are unchanged; a present `zones` array replaces the zone target set. Cross-field invariants the schema cannot express (humidity_low_pct < humidity_high_pct, moisture_low_threshold < moisture_high_threshold) are enforced server-side and surface as 422.",
+    "description": "Partial (merge) update of a Setpoints bundle — any subset of the same fields, same bounds. Absent fields are unchanged; a present `zones` array updates the named zones' targets, matched by `zone_id` (each named zone must specify its full target set; unlisted zones are unchanged; an unknown `zone_id` is rejected 422 — zone topology is fixed). Cross-field invariants the schema cannot express (humidity_low_pct < humidity_high_pct, moisture_low_threshold < moisture_high_threshold) are enforced server-side and surface as 422.",
     "properties": {
       "temperature_day_c": { "$ref": "#/Setpoints/properties/temperature_day_c" },
       "temperature_night_c": { "$ref": "#/Setpoints/properties/temperature_night_c" },

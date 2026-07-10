@@ -13,6 +13,7 @@
     { "fixture": "event.bad-kind.json", "schema": "events.json#/EventEntry", "expect": "fail" },
     { "fixture": "profile.json", "schema": "profiles.json#/CropProfile", "expect": "pass" },
     { "fixture": "profile.bad-bounds.json", "schema": "profiles.json#/CropProfile", "expect": "fail" },
+    { "fixture": "profile.bad-zone-bounds.json", "schema": "profiles.json#/CropProfile", "expect": "fail" },
     { "fixture": "assignment.json", "schema": "profiles.json#/Assignment", "expect": "pass" },
     { "fixture": "sim-time-scale.patch.json", "schema": "sim.json#/TimeScalePatch", "expect": "pass" },
     { "fixture": "sim-time-scale.json", "schema": "sim.json#/TimeScale", "expect": "pass" },

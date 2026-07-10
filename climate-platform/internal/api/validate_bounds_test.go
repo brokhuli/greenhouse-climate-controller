@@ -111,3 +111,68 @@ func TestValidateStageBoundsPrefixedByStageIndex(t *testing.T) {
 		t.Fatalf("stage-prefixed bounds error not surfaced: %+v", verr)
 	}
 }
+
+func TestValidateStageBoundsAcceptsValidZoneEnvelope(t *testing.T) {
+	// Baseline zone bench-a: moisture 0.3/0.6, drain 600 — all inside these bounds.
+	bounds := &domain.StageBounds{Zones: &domain.ZoneBounds{
+		MoistureLowThreshold:  bound(0.2, 0.4),
+		MoistureHighThreshold: bound(0.5, 0.7),
+		DrainPeriodSecs:       bound(300, 900),
+	}}
+	if verr := validateStageBounds(fullSetpoints(), bounds); verr != nil {
+		t.Fatalf("valid zone envelope rejected: %+v", verr)
+	}
+}
+
+func TestValidateStageBoundsRejectsZoneEnvelope(t *testing.T) {
+	cases := map[string]struct {
+		zones *domain.ZoneBounds
+		field string
+	}{
+		"zone min greater than max": {
+			&domain.ZoneBounds{MoistureLowThreshold: bound(0.4, 0.2)}, "bounds.zones.moisture_low_threshold",
+		},
+		"zone max above physical range": {
+			&domain.ZoneBounds{MoistureHighThreshold: bound(0.5, 1.5)}, "bounds.zones.moisture_high_threshold",
+		},
+		"zone envelope excludes baseline target": {
+			// baseline moisture_low is 0.3; [0.4,0.5] cannot contain it.
+			&domain.ZoneBounds{MoistureLowThreshold: bound(0.4, 0.5)}, "bounds.zones.moisture_low_threshold",
+		},
+		"drain envelope excludes baseline": {
+			// baseline drain is 600; [700,900] cannot contain it.
+			&domain.ZoneBounds{DrainPeriodSecs: bound(700, 900)}, "bounds.zones.drain_period_secs",
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			verr := validateStageBounds(fullSetpoints(), &domain.StageBounds{Zones: tc.zones})
+			if verr == nil {
+				t.Fatalf("%s: expected a validation error", name)
+			}
+			if verr.Field != tc.field {
+				t.Fatalf("%s: field = %q, want %q", name, verr.Field, tc.field)
+			}
+		})
+	}
+}
+
+func TestValidateSetpointsWithinBoundsZoneEnvelope(t *testing.T) {
+	sp := fullSetpoints() // zone bench-a moisture_low 0.3
+	bounds := domain.StageBounds{Zones: &domain.ZoneBounds{MoistureLowThreshold: bound(0.2, 0.4)}}
+
+	if verr := validateSetpointsWithinBounds(sp, bounds); verr != nil {
+		t.Fatalf("within-envelope zone rejected: %+v", verr)
+	}
+
+	// Above the zone envelope is rejected, naming the indexed zone field and a crop-safe bound.
+	over := fullSetpoints()
+	over.Zones[0].MoistureLowThreshold = 0.45
+	verr := validateSetpointsWithinBounds(over, bounds)
+	if verr == nil {
+		t.Fatal("out-of-envelope zone should be rejected")
+	}
+	if verr.Field != "zones[0].moisture_low_threshold" || !strings.Contains(verr.Bound, "crop-safe") {
+		t.Fatalf("unexpected error: field=%q bound=%q", verr.Field, verr.Bound)
+	}
+}

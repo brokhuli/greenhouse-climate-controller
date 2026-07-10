@@ -44,7 +44,8 @@ and the platform's operational resilience
   letting it run on silent defaults — the same startup-gate discipline the platform applies to schema
   migrations ([08-spec-platform-operations.md](../platform/08-spec-platform-operations.md)). Validation covers
   presence and ranges (thresholds in `[0, 1]`, positive intervals and horizons, a reachable Phase 2
-  endpoint, a known LLM provider with credentials, and a **pinned model id matching the
+  endpoint, a known LLM provider — the default local Ollama backend needs no credentials, a cloud
+  provider requires an API key — and a **pinned model id matching the
   [evaluation](./07-spec-optimizer-evaluation.md) baseline**). Because the active model id pins
   the regression baselines ([planning](./04-spec-optimizer-planning.md#1-llm-driven-planning)), a config
   that changes it without the corresponding ADR entry and baseline recapture is a reviewable event, not

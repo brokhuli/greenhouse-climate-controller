@@ -8,7 +8,7 @@
 
 This set is the **top-level design spec for Phase 3**: the **intelligence layer**
 that sits above each greenhouse's deterministic Phase 1 controller and refines the
-climate targets Phase 2 resolves from crop profiles. It describes the **software
+climate and per-zone irrigation targets Phase 2 resolves from crop profiles. It describes the **software
 service**. It sits alongside the
 [controller](../controller/01-spec-controller-overview.md),
 [platform](../platform/01-spec-platform-overview.md), and [Phase 4](../spec-phase4.md)

@@ -235,6 +235,18 @@ remains available in dev for debugging; it just isn't the platform's ingress.)
 > configuration structure, and all other RFCs. The Proposal and its Alternatives are retained as the
 > deliberation record. See ADR entry 2026-06-11.
 
+> **Revision (2026-07-09 — supersedes the primary/fallback default below):** The **default** planning
+> backend is now the **local Ollama** model, not a hosted API. The interface stays backend-agnostic and
+> provider-selectable: `provider` defaults to `"ollama"` (offline, no API key, no data egress), with
+> `"anthropic"` / `"openai"` available as **opt-in cloud backends** for higher-capability planning. The
+> hosted→Ollama fallback topology of the original Proposal becomes **optional and configurable**
+> (`fallback_provider`, empty by default) rather than a fixed hosted-primary arrangement — with a local
+> primary, the always-available `ollama` container is itself the backstop, so no fallback is required by
+> default; one is typically configured only when a *cloud* provider is the primary. Rationale: `P3-PORT-1`
+> (no cloud account) holds out of the box, planning is free and fully offline by default, and the cloud
+> path is one config change away. The invocation strategy, `PlanContext`, constraint validation, and all
+> other RFCs are unchanged. See ADR entry 2026-07-09.
+
 ### Summary
 
 Define a **backend-agnostic LLM interface** in the Python optimizer. Use a **hosted LLM**

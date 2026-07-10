@@ -19,6 +19,10 @@ const (
 	physDeadbandMaxPct = 50
 	physCO2MinPpm      = 0
 	physCO2MaxPpm      = 5000
+	physMoistureMin    = 0
+	physMoistureMax    = 1
+	physDrainMinSecs   = 0
+	physDrainMaxSecs   = 1 << 31
 )
 
 // climateBoundField pairs a scalar climate setpoint's wire name and generic physical range with
@@ -72,6 +76,35 @@ func (f climateBoundField) rangeLabel() string {
 	return fmt.Sprintf("%g..%g", f.lo, f.hi)
 }
 
+// zoneBoundField is the per-zone analogue of climateBoundField: it pairs a numeric irrigation
+// target's wire name and generic physical range with accessors for its value on a ZoneTargets and
+// its crop-safe Bound in a ZoneBounds envelope. schedule (time-of-day triggers) is not envelope-able
+// and is absent, mirroring the global day window.
+type zoneBoundField struct {
+	name  string
+	lo    float64
+	hi    float64
+	value func(domain.ZoneTargets) float64
+	bound func(domain.ZoneBounds) *domain.Bound
+}
+
+var zoneBoundFields = []zoneBoundField{
+	{"moisture_low_threshold", physMoistureMin, physMoistureMax,
+		func(z domain.ZoneTargets) float64 { return z.MoistureLowThreshold },
+		func(b domain.ZoneBounds) *domain.Bound { return b.MoistureLowThreshold }},
+	{"moisture_high_threshold", physMoistureMin, physMoistureMax,
+		func(z domain.ZoneTargets) float64 { return z.MoistureHighThreshold },
+		func(b domain.ZoneBounds) *domain.Bound { return b.MoistureHighThreshold }},
+	{"drain_period_secs", physDrainMinSecs, physDrainMaxSecs,
+		func(z domain.ZoneTargets) float64 { return float64(z.DrainPeriodSecs) },
+		func(b domain.ZoneBounds) *domain.Bound { return b.DrainPeriodSecs }},
+}
+
+// rangeLabel renders a zone field's physical range for a 422 Bound message.
+func (f zoneBoundField) rangeLabel() string {
+	return fmt.Sprintf("%g..%g", f.lo, f.hi)
+}
+
 // validateStageBounds checks a growth stage's optional crop-safe envelope. For each present target
 // bound: min <= max, both endpoints inside the target's generic physical range, and the stage's own
 // baseline target for that field must fall within [min, max] — a profile whose baseline lies outside
@@ -101,6 +134,41 @@ func validateStageBounds(targets domain.Setpoints, bounds *domain.StageBounds) *
 			return &valError{Field: field, Bound: fmt.Sprintf("must contain target %g", target), Value: target}
 		}
 	}
+	if verr := validateZoneStageBounds(targets.Zones, bounds.Zones); verr != nil {
+		return verr
+	}
+	return nil
+}
+
+// validateZoneStageBounds is the per-zone analogue of the climate loop in validateStageBounds: for
+// each present zone bound, min <= max and both endpoints inside the target's physical range, and
+// every zone's own baseline target for that field must fall within [min, max] (the uniform envelope
+// applies to all zones, so all must satisfy it). A nil envelope is valid.
+func validateZoneStageBounds(zones []domain.ZoneTargets, bounds *domain.ZoneBounds) *valError {
+	if bounds == nil {
+		return nil
+	}
+	for _, f := range zoneBoundFields {
+		b := f.bound(*bounds)
+		if b == nil {
+			continue
+		}
+		field := "bounds.zones." + f.name
+		if b.Min > b.Max {
+			return &valError{Field: field, Bound: "min <= max", Value: b.Min}
+		}
+		if b.Min < f.lo {
+			return &valError{Field: field, Bound: f.rangeLabel(), Value: b.Min}
+		}
+		if b.Max > f.hi {
+			return &valError{Field: field, Bound: f.rangeLabel(), Value: b.Max}
+		}
+		for _, zone := range zones {
+			if target := f.value(zone); target < b.Min || target > b.Max {
+				return &valError{Field: field, Bound: fmt.Sprintf("must contain target %g", target), Value: target}
+			}
+		}
+	}
 	return nil
 }
 
@@ -117,6 +185,23 @@ func validateSetpointsWithinBounds(setpoints domain.Setpoints, bounds domain.Sta
 		}
 		if v := f.value(setpoints); v < b.Min || v > b.Max {
 			return &valError{Field: f.name, Bound: fmt.Sprintf("crop-safe %g..%g", b.Min, b.Max), Value: v}
+		}
+	}
+	if zb := bounds.Zones; zb != nil {
+		for index, zone := range setpoints.Zones {
+			for _, f := range zoneBoundFields {
+				b := f.bound(*zb)
+				if b == nil {
+					continue
+				}
+				if v := f.value(zone); v < b.Min || v > b.Max {
+					return &valError{
+						Field: fmt.Sprintf("zones[%d].%s", index, f.name),
+						Bound: fmt.Sprintf("crop-safe %g..%g", b.Min, b.Max),
+						Value: v,
+					}
+				}
+			}
 		}
 	}
 	return nil

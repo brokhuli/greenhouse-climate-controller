@@ -81,14 +81,16 @@
   `.with_fallbacks()` replace bespoke prompt construction, output parsing, and try/catch failover —
   keeping the invocation strategy **backend-agnostic** (`P3-MOD-1`).
 - **How:** The planner is the chain `ChatPromptTemplate | LLM | StructuredOutputParser`
-  ([planning §1](./04-spec-optimizer-planning.md#1-llm-driven-planning)) with `ChatAnthropic` /
-  `ChatOpenAI` primary and `ChatOllama` wired via `.with_fallbacks([ChatOllama(...)])`. Sampling is
-  **pinned** — primary model `claude-sonnet-4-6`, temperature `0`, `top_p 1.0`, `max_tokens` from
+  ([planning §1](./04-spec-optimizer-planning.md#1-llm-driven-planning)). The active wrapper is chosen
+  by configuration: `ChatOllama` is the **default** local backend, with `ChatAnthropic` / `ChatOpenAI`
+  available as opt-in cloud backends; an optional secondary is wired via `.with_fallbacks([...])`.
+  Sampling is **pinned** — default model `llama3` (a cloud model such as `claude-sonnet-4-6` when a
+  cloud provider is configured), temperature `0`, `top_p 1.0`, `max_tokens` from
   [configuration](./10-spec-optimizer-configuration.md) — so plans are reproducible enough to
   regression-test ([planning — determinism](./04-spec-optimizer-planning.md#determinism--reproducibility)).
-  A model change is a reviewed **ADR event**, never a silent upgrade; the Ollama `llama3` fallback is
-  a different model held to its own evaluation baseline, and failover is logged and traced by
-  `optimizer_run_id` (`P3-OBS-1`). The API key is supplied via `PLANNER_API_KEY` and **never logged**
+  A model or provider change is a reviewed **ADR event**, never a silent upgrade; any configured fallback
+  is a different model held to its own evaluation baseline, and failover is logged and traced by
+  `optimizer_run_id` (`P3-OBS-1`). Cloud API keys are supplied via `PLANNER_API_KEY` and **never logged**
   (`P3-SEC-1`).
 
 ---
@@ -238,7 +240,7 @@
 - **pytest** — the test gate; see [Testing](#testing).
 - **uv** — drives all of the above (`uv run ruff …`, `uv run mypy`, `uv run pytest`), matching the
   Phase 3 row of [`spec-verification.md`](../spec-verification.md).
-- **Docker / Docker Compose** — the service and its Ollama fallback run as Compose services
+- **Docker / Docker Compose** — the service and its default local Ollama backend run as Compose services
   (`P3-PORT-1`); see [Deployment](#deployment).
 
 ---
@@ -247,11 +249,12 @@
 
 - **What:** An `optimizer` service and an `ollama` service in Docker Compose.
 - **Why:** `P3-PORT-1` — the optimizer runs as a Python service under Compose with **no cloud
-  account**. The hosted LLM is reached through Docker Desktop's default outbound internet access; the
-  local `ollama` container provides the offline fallback backend.
+  account**, which the default local Ollama backend satisfies out of the box. A cloud LLM, when
+  configured, is reached through Docker Desktop's default outbound internet access; the local `ollama`
+  container is the **default** backend and needs no API key or network egress.
 - **How:** The `optimizer` service is configured entirely by environment / secret
-  ([configuration](./10-spec-optimizer-configuration.md)); the `ollama` service backs
-  `fallback_endpoint` (`http://ollama:11434`). The optimizer is a **client** of Phase 2
+  ([configuration](./10-spec-optimizer-configuration.md)); the `ollama` service backs the default
+  `endpoint` (`http://ollama:11434`). The optimizer is a **client** of Phase 2
   ([architecture](./02-spec-optimizer-architecture.md)) — it reads and writes through
   Phase 2's API; it opens **no** channel to a Phase 1 controller.
 

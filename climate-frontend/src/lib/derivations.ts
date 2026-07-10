@@ -287,23 +287,32 @@ export function moistureFillSpans(
 }
 
 /**
- * "Last watered" label for a zone's last cycle end: "Today, 8:00 AM" on the local calendar day,
+ * "Last watered" label for a zone's last cycle end: "Today, 8:00 AM" on the same calendar day,
  * "Jun 24, 8:00 AM" otherwise, "Never" when the zone has not cycled. `now` is injectable so the
- * today/other-day branch is deterministic in tests.
+ * today/other-day branch is deterministic in tests. Rendered in UTC — the greenhouse's simulated
+ * wall-clock frame (see lib/timeFormat.ts) — so the time reads the hour the simulated clock shows.
  */
 export function formatLastWatered(ts: Date | null, now: Date = new Date()): string {
   if (!ts) return "Never";
-  const time = ts.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-  if (isSameLocalDay(ts, now)) return `Today, ${time}`;
-  const date = ts.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const time = ts.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "UTC",
+  });
+  if (isSameUTCDay(ts, now)) return `Today, ${time}`;
+  const date = ts.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
   return `${date}, ${time}`;
 }
 
-function isSameLocalDay(a: Date, b: Date): boolean {
+function isSameUTCDay(a: Date, b: Date): boolean {
   return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
+    a.getUTCFullYear() === b.getUTCFullYear() &&
+    a.getUTCMonth() === b.getUTCMonth() &&
+    a.getUTCDate() === b.getUTCDate()
   );
 }
 

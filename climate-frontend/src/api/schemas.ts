@@ -692,6 +692,13 @@ export const toWireRegistration = (
 /** A crop-safe [min, max] envelope for one scalar climate target (frontend-rest Bound). */
 export const wireBound = z.object({ min: z.number(), max: z.number() });
 
+/** A stage's crop-safe envelope for the numeric per-zone irrigation targets (frontend-rest ZoneBounds). */
+export const wireZoneBounds = z.object({
+  moisture_low_threshold: wireBound.optional(),
+  moisture_high_threshold: wireBound.optional(),
+  drain_period_secs: wireBound.optional(),
+});
+
 /** A stage's crop-safe envelope: an optional Bound per scalar climate target (frontend-rest StageBounds). */
 export const wireStageBounds = z.object({
   temperature_day_c: wireBound.optional(),
@@ -703,6 +710,7 @@ export const wireStageBounds = z.object({
   co2_vent_interlock_threshold_pct: wireBound.optional(),
   vpd_target_kpa: wireBound.optional(),
   dli_target_mol: wireBound.optional(),
+  zones: wireZoneBounds.optional(),
 });
 
 export const wireProfileStage = z.object({
@@ -741,8 +749,14 @@ export type ScalarSetpointKey =
   | "vpdTargetKpa"
   | "dliTargetMol";
 
-/** A stage's crop-safe envelope: an optional Bound per scalar climate target. */
-export type StageBounds = Partial<Record<ScalarSetpointKey, Bound>>;
+/** The numeric per-zone irrigation keys that can carry a crop-safe envelope (schedule carries none). */
+export type ZoneBoundKey = "moistureLowThreshold" | "moistureHighThreshold" | "drainPeriodSecs";
+
+/** A stage's crop-safe envelope for the numeric per-zone irrigation targets, applied to every zone. */
+export type ZoneBounds = Partial<Record<ZoneBoundKey, Bound>>;
+
+/** A stage's crop-safe envelope: an optional Bound per scalar climate target, plus a per-zone envelope. */
+export type StageBounds = Partial<Record<ScalarSetpointKey, Bound>> & { zones?: ZoneBounds };
 
 export type ProfileStage = { stage: string; targets: Setpoints; bounds?: StageBounds };
 export type CropProfile = { id: string; name: string; crop: string; stages: ProfileStage[] };
@@ -751,7 +765,7 @@ export type AssignmentInput = { profileId: string; stage: string };
 
 // Pairs each envelope target's camelCase view key with its snake_case wire key — the single table
 // the StageBounds adapters iterate so encode/decode stay in lockstep.
-const BOUND_KEYS: [ScalarSetpointKey, keyof z.infer<typeof wireStageBounds>][] = [
+const BOUND_KEYS: [ScalarSetpointKey, Exclude<keyof z.infer<typeof wireStageBounds>, "zones">][] = [
   ["temperatureDayC", "temperature_day_c"],
   ["temperatureNightC", "temperature_night_c"],
   ["humidityLowPct", "humidity_low_pct"],
@@ -763,12 +777,38 @@ const BOUND_KEYS: [ScalarSetpointKey, keyof z.infer<typeof wireStageBounds>][] =
   ["dliTargetMol", "dli_target_mol"],
 ];
 
+// The per-zone envelope counterpart to BOUND_KEYS.
+const ZONE_BOUND_KEYS: [ZoneBoundKey, keyof z.infer<typeof wireZoneBounds>][] = [
+  ["moistureLowThreshold", "moisture_low_threshold"],
+  ["moistureHighThreshold", "moisture_high_threshold"],
+  ["drainPeriodSecs", "drain_period_secs"],
+];
+
+export const toZoneBounds = (w: z.infer<typeof wireZoneBounds>): ZoneBounds => {
+  const bounds: ZoneBounds = {};
+  for (const [key, wireKey] of ZONE_BOUND_KEYS) {
+    const b = w[wireKey];
+    if (b) bounds[key] = { min: b.min, max: b.max };
+  }
+  return bounds;
+};
+
+export const toWireZoneBounds = (bounds: ZoneBounds): z.input<typeof wireZoneBounds> => {
+  const wire: z.input<typeof wireZoneBounds> = {};
+  for (const [key, wireKey] of ZONE_BOUND_KEYS) {
+    const b = bounds[key];
+    if (b) wire[wireKey] = { min: b.min, max: b.max };
+  }
+  return wire;
+};
+
 export const toStageBounds = (w: z.infer<typeof wireStageBounds>): StageBounds => {
   const bounds: StageBounds = {};
   for (const [key, wireKey] of BOUND_KEYS) {
     const b = w[wireKey];
     if (b) bounds[key] = { min: b.min, max: b.max };
   }
+  if (w.zones) bounds.zones = toZoneBounds(w.zones);
   return bounds;
 };
 
@@ -778,6 +818,7 @@ export const toWireStageBounds = (bounds: StageBounds): z.input<typeof wireStage
     const b = bounds[key];
     if (b) wire[wireKey] = { min: b.min, max: b.max };
   }
+  if (bounds.zones) wire.zones = toWireZoneBounds(bounds.zones);
   return wire;
 };
 

@@ -134,9 +134,19 @@
     "required": ["min", "max"],
     "additionalProperties": false
   },
+  "ZoneBounds": {
+    "type": "object",
+    "description": "The active stage's crop-safe envelope for the numeric per-zone irrigation targets, applied uniformly to every zone. An absent target means no crop-specific envelope for it; a zone's schedule carries none. A copy of the frontend-rest ZoneBounds shape, kept local per the self-contained-contract convention.",
+    "properties": {
+      "moisture_low_threshold": { "$ref": "#/Bound" },
+      "moisture_high_threshold": { "$ref": "#/Bound" },
+      "drain_period_secs": { "$ref": "#/Bound" }
+    },
+    "additionalProperties": false
+  },
   "StageBounds": {
     "type": "object",
-    "description": "The active profile stage's crop-safe envelope: an optional Bound per scalar climate target. The platform enforces these on optimizer setpoint writes; the optimizer's constraint engine mirrors them so a plan that clears the engine is expected to be accepted (a 422 signals the envelope disagreed — a mid-cycle profile change or contract drift). An absent target means no crop-specific envelope for it. A copy of the frontend-rest StageBounds shape, kept local per the self-contained-contract convention.",
+    "description": "The active profile stage's crop-safe envelope: an optional Bound per scalar climate target, plus an optional per-zone irrigation envelope (`zones`). The platform enforces these on optimizer setpoint writes; the optimizer's constraint engine mirrors them so a plan that clears the engine is expected to be accepted (a 422 signals the envelope disagreed — a mid-cycle profile change or contract drift). An absent target means no crop-specific envelope for it. A copy of the frontend-rest StageBounds shape, kept local per the self-contained-contract convention.",
     "properties": {
       "temperature_day_c": { "$ref": "#/Bound" },
       "temperature_night_c": { "$ref": "#/Bound" },
@@ -146,7 +156,8 @@
       "co2_target_ppm": { "$ref": "#/Bound" },
       "co2_vent_interlock_threshold_pct": { "$ref": "#/Bound" },
       "vpd_target_kpa": { "$ref": "#/Bound" },
-      "dli_target_mol": { "$ref": "#/Bound" }
+      "dli_target_mol": { "$ref": "#/Bound" },
+      "zones": { "$ref": "#/ZoneBounds" }
     },
     "additionalProperties": false
   },

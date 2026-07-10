@@ -35,14 +35,20 @@ oidc_client_id = "optimizer"          # confidential client; narrow setpoints:wr
 oidc_client_secret = ""               # set via PLANNER_OIDC_CLIENT_SECRET env var; never in file
 
 [llm]
-# Primary backend: "anthropic" | "openai"
-# Falls back to "ollama" automatically if the primary is unreachable.
-provider = "anthropic"
-model = "claude-sonnet-4-6"
-api_key = ""                          # set via PLANNER_API_KEY env var; never in file
-fallback_provider = "ollama"
-fallback_model = "llama3"
-fallback_endpoint = "http://ollama:11434"
+# Planning backend. Defaults to a local Ollama model — offline, no API key, no data
+# leaves the host. Set provider to "anthropic" or "openai" (and supply an API key via
+# PLANNER_API_KEY) to plan with a higher-capability cloud model instead.
+provider = "ollama"                   # "ollama" (default) | "anthropic" | "openai"
+model = "llama3"
+endpoint = "http://ollama:11434"      # Ollama base URL; ignored for cloud providers
+api_key = ""                          # set via PLANNER_API_KEY env var; required for cloud providers, never in file
+# Optional secondary backend, wired via LangChain .with_fallbacks() and used only if the
+# primary is unreachable mid-cycle. Empty = no fallback: the local Ollama primary is itself
+# the always-available backstop. Typically set only when a *cloud* provider is the primary
+# (e.g. fallback_provider = "ollama") to keep planning continuous through a network outage.
+fallback_provider = ""                # "" (none, default) | "ollama" | "anthropic" | "openai"
+fallback_model = ""
+fallback_endpoint = ""
 temperature = 0                       # greedy decoding for reproducible plans; see planner determinism
 top_p = 1.0
 max_tokens = 1024                     # response budget; distinct from the 4000-token context budget
