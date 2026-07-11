@@ -32,6 +32,9 @@ co2_target_ppm = 1000
 co2_vent_interlock_threshold_pct = 15.0
 vpd_target_kpa = 1.0       # primary humidity control input (drives the RH target each tick)
 dli_target_mol = 20.0
+expected_peak_par = 800.0  # operator's clear-sky peak natural PAR estimate (µmol·m⁻²·s⁻¹); predicts
+                           # remaining daylight so grow lights cover only the shortfall the sun won't
+                           # provide. Independent of the hidden [simulation.solar]; 0 disables it.
 
 # --- Irrigation zones (spec §4) ------------------------------------------------------------
 [[zones]]
@@ -72,8 +75,12 @@ soil_residual_vwc = 0.15         # air-dry floor: drying settles here, never dra
 # Gains are sized to give each actuator real control authority (tuned via the seeded sim).
 [[hal.actuators]]
 actuator = "heater"
-effects = [{ variable = "temperature", gain = 18.0 }] # +18 °C above ambient at full
-constraints = { min_on_secs = 60, min_off_secs = 60 }
+effects = [{ variable = "temperature", gain = 22.0 }] # +22 °C above ambient at full
+# Anti short-cycle dwell. Kept short relative to the 120 s thermal τ: a longer min-off (e.g. 60 s)
+# holds the heater off past the point the air has fallen below setpoint, coasting into a deep
+# undershoot and a coarse night limit cycle. 30 s halves that swing while still protecting the
+# hardware from rapid cycling.
+constraints = { min_on_secs = 30, min_off_secs = 30 }
 
 [[hal.actuators]]
 actuator = "fans"

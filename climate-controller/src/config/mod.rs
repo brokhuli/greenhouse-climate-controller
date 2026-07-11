@@ -184,6 +184,21 @@ constraints = { min_on_secs = 60, min_off_secs = 60 }
     }
 
     #[test]
+    fn omitted_expected_peak_par_defaults_to_zero() {
+        // A config predating the predictive-lighting knob must still parse; the forecast defaults
+        // to disabled (0), i.e. reactive supplemental lighting.
+        assert!(
+            !MINIMAL.contains("expected_peak_par"),
+            "MINIMAL should not set the knob"
+        );
+        let config: Config = toml::from_str(MINIMAL).unwrap();
+        config
+            .validate()
+            .expect("config without the knob validates");
+        assert_eq!(config.setpoints.expected_peak_par, 0.0);
+    }
+
+    #[test]
     fn unknown_field_is_a_parse_error() {
         let text = format!("{MINIMAL}\nbogus_field = true\n");
         assert!(toml::from_str::<Config>(&text).is_err());

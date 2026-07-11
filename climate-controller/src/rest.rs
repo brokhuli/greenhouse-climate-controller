@@ -223,6 +223,7 @@ pub struct SetpointsPatch {
     co2_vent_interlock_threshold_pct: Option<f64>,
     vpd_target_kpa: Option<f64>,
     dli_target_mol: Option<f64>,
+    expected_peak_par: Option<f64>,
 }
 
 impl SetpointsPatch {
@@ -238,6 +239,7 @@ impl SetpointsPatch {
             && self.co2_vent_interlock_threshold_pct.is_none()
             && self.vpd_target_kpa.is_none()
             && self.dli_target_mol.is_none()
+            && self.expected_peak_par.is_none()
     }
 }
 
@@ -589,6 +591,9 @@ fn apply_setpoints_patch(
     }
     if let Some(v) = patch.dli_target_mol {
         sp.dli_target_mol = v;
+    }
+    if let Some(v) = patch.expected_peak_par {
+        sp.expected_peak_par = v;
     }
     first_violation(|vs| sp.validate(vs)).map_or(Ok(sp), Err)
 }

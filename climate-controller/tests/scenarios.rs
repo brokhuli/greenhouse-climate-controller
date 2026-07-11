@@ -43,17 +43,25 @@ fn injector(s: &Snapshot) -> f64 {
 #[test]
 fn diurnal_night_tracks_setpoint_and_vpd() {
     let mut p = pipeline_at(config(), Clock::starting_at("02:00".parse().unwrap()));
+    // Average the last 10 min: the bang-bang heater (min on/off dwell) rides a small limit cycle,
+    // so a single-tick sample is phase-sensitive — the settled *mean* is what tracks the setpoint.
+    let window = 600;
+    let mut sum = 0.0;
     let mut last = None;
-    for _ in 0..3600 {
-        last = Some(p.tick());
+    for i in 0..3600 {
+        let s = p.tick();
+        if i >= 3600 - window {
+            sum += s.trusted.temperature.expect("temperature available");
+        }
+        last = Some(s);
     }
-    let s = last.unwrap();
-    let temp = s.trusted.temperature.expect("temperature available");
+    let mean_temp = sum / window as f64;
     // Night setpoint is 18 °C; without control the air would fall toward outdoor 10 °C.
     assert!(
-        (temp - 18.0).abs() < 3.0,
-        "night temperature held near 18 °C, was {temp}"
+        (mean_temp - 18.0).abs() < 2.5,
+        "night temperature held near 18 °C, mean was {mean_temp}"
     );
+    let s = last.unwrap();
     let vpd = s.trusted.vpd.expect("vpd available");
     assert!(
         (vpd - 1.0).abs() < 0.6,
