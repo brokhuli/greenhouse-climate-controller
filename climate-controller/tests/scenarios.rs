@@ -308,10 +308,11 @@ fn manual_override_auto_expires() {
     );
 }
 
-/// Irrigation over a simulated day: with the tuned drying rate + hourly daytime schedule, Bench A's
-/// gated scheduler holds the moisture band — the soil sawtooths within/near 0.35–0.55, refills to
-/// near the high threshold, and never sags toward the air-dry residual (the old model crashed it to
-/// ~0). Deterministic under the seeded HAL.
+/// Irrigation over a simulated day: with the tuned drying rate + every-2-hour daytime schedule,
+/// Bench A's gated scheduler cycles the soil in a deep sawtooth — it refills to near the high
+/// threshold (0.55) and, with the wider gaps between cycles, dries noticeably lower before the next
+/// refill, yet never sags all the way to the air-dry residual (0.15). Deterministic under the
+/// seeded HAL.
 #[test]
 fn irrigation_schedule_holds_the_moisture_band_over_a_day() {
     use climate_controller::domain::Slug;
@@ -333,8 +334,9 @@ fn irrigation_schedule_holds_the_moisture_band_over_a_day() {
     }
 
     assert!(
-        min_soil > 0.28,
-        "soil should stay near the band, not sag toward residual — min was {min_soil:.3}"
+        min_soil > 0.18,
+        "soil dries deeper between the 2-hourly cycles but must stay above the air-dry residual \
+         (0.15) — min was {min_soil:.3}"
     );
     assert!(
         max_soil > 0.54,

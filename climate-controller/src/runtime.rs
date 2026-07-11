@@ -443,6 +443,10 @@ mod tests {
         assert_eq!(tick_interval(2.0), Duration::from_millis(500));
         assert_eq!(tick_interval(0.5), Duration::from_millis(2000));
         assert_eq!(tick_interval(4.0), Duration::from_millis(250));
+        assert_eq!(tick_interval(8.0), Duration::from_millis(125));
+        // The upper UI stops: 1000/16 = 62.5 rounds to 63 ms, 1000/32 = 31.25 rounds to 31 ms.
+        assert_eq!(tick_interval(16.0), Duration::from_millis(63));
+        assert_eq!(tick_interval(32.0), Duration::from_millis(31));
         // Never zero, even at absurd speeds.
         assert!(tick_interval(100_000.0) >= Duration::from_millis(1));
     }

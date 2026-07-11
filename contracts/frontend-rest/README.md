@@ -90,7 +90,7 @@ The optimizer's single-authority `POST /greenhouses/{id}/setpoints` (RFC-005 wri
 ad-hoc edit above is the operator's path.
 
 The `sim/time-scale` paths are a **simulation-only** surface (marked `x-simulation-only`): they read
-and set the controller's simulated-clock speed (0.25–8×) for one greenhouse or — at `/api/sim/time-scale`
+and set the controller's simulated-clock speed (0.25–32×) for one greenhouse or — at `/api/sim/time-scale`
 — the whole fleet, relaying to the controller's own sim-only [`/sim/time-scale`](../controller-rest/)
 (controller HAL §7). The fleet form fans out as **N independent per-controller writes** — there is no
 shared/master clock — and returns a per-greenhouse outcome. This is a diagnostic, **not a setpoint**: it
@@ -185,7 +185,7 @@ validate against their component schema; the four `*.bad-*.json` counter-example
 | `assignment.json` | `Assignment` | valid |
 | `sim-time-scale.patch.json` | `TimeScalePatch` | valid |
 | `sim-time-scale.json` | `TimeScale` | valid |
-| `sim-time-scale.bad-range.json` | `TimeScalePatch` | **fail** (`scale` 100, outside 0.25–8) |
+| `sim-time-scale.bad-range.json` | `TimeScalePatch` | **fail** (`scale` 100, outside 0.25–32) |
 | `sim-time-scale-all.json` | `FleetTimeScaleResult` | valid |
 
 ## Validation

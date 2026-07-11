@@ -175,7 +175,7 @@ wall-clock tick cadence, not the per-tick step, so determinism is preserved.
   means the request was accepted and the returned `scale` is the scheduler's target for subsequent
   ticks, not proof that a telemetry frame has already been emitted at that cadence. The
   authoritative observed value is still the next system-state snapshot / WebSocket status frame.
-  `scale` is a clamped range (0.25-8×, canonical stops 0.5/1/2/4); out-of-range is **422**. The
+  `scale` is a clamped range (0.25-32×, canonical stops 0.5/1/2/4/8/16/32); out-of-range is **422**. The
   value is **ephemeral** - reset to the configured default (1×) on restart - and
   **per-controller** (no shared/master clock).
 - **Simulated-backend only**, like injection: a real-hardware backend has no wall-clock-speed

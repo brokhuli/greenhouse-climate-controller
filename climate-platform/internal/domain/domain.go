@@ -24,7 +24,7 @@ func ValidSlug(s string) bool { return slugPattern.MatchString(s) }
 // within it. Liveness sizes its sweep cadence to MaxTimeScale (the fastest clock).
 const (
 	MinTimeScale = 0.25
-	MaxTimeScale = 8.0
+	MaxTimeScale = 32.0
 )
 
 // Connectivity is a greenhouse's controller connectivity as the platform derives it

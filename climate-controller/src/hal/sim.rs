@@ -11,7 +11,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use crate::clock::{Clock, DT_SECS};
+use crate::clock::{Clock, DT_SECS, MAX_TIME_SCALE, MIN_TIME_SCALE};
 use crate::config::{Config, Disturbances, Noise, Solar, TimeConstants};
 use crate::domain::{Actuator, ClimateVariable, Slug};
 use crate::rng::Rng;
@@ -386,7 +386,7 @@ impl SimControl for SimulatedHal {
     }
 
     fn set_time_scale(&mut self, scale: f64) {
-        self.time_scale = scale.clamp(0.25, 8.0);
+        self.time_scale = scale.clamp(MIN_TIME_SCALE, MAX_TIME_SCALE);
     }
 
     fn time_scale(&self) -> f64 {

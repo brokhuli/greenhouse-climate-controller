@@ -116,10 +116,11 @@ It is a **simulated-HAL-only** knob — a real-hardware backend has no such conc
 [REST surface](./08-spec-controller-interfaces.md#simulation-control-simulated-hal-only). The value
 is **ephemeral**: this TOML `time_scale` is the **reset-on-restart default**, not persisted live
 state, so a restart returns to it (typically 1×) regardless of any runtime change — the same
-ephemerality as a manual override or a sensor injection. Accepted range **0.25–8×** (canonical
-stops 0.5/1/2/4); the 8× ceiling keeps the wall interval above the per-tick compute budget
-(`P1-PERF-3`). Each controller has its **own** `time_scale`; there is no shared/master clock across
-greenhouses.
+ephemerality as a manual override or a sensor injection. Accepted range **0.25–32×** (canonical
+stops 0.5/1/2/4/8/16/32); the 32× ceiling is set by wall-clock timer granularity, not per-tick
+compute (measured ≈9 µs, far under the `P1-PERF-3` ≤100 ms budget) — at 32× the wall interval is
+~31 ms, which the scheduler holds with modest jitter. Each controller has its **own** `time_scale`;
+there is no shared/master clock across greenhouses.
 
 `start_ts` (optional, RFC 3339 UTC) sets the simulated wall-clock instant the run **begins** at.
 Omitted, the clock starts at the fixed **2026-01-01T00:00:00Z** epoch (the deterministic default for
@@ -199,7 +200,7 @@ the [deterministic simulation](./03-spec-controller-hal-simulation.md#7-determin
 | Disturbance profiles | per-disturbance | — | Outdoor temp, solar/PAR cycle, CO₂ uptake, soil drying, humidity drift |
 | Simulation seed | fixed | — | Reproducibility (`P1-TEST-2`) |
 | `sensor_injection_timeout_secs` | 300 | s (sim) | Default auto-expiry for a [sensor-reading injection](./03-spec-controller-hal-simulation.md#9-sensor-reading-injection) (sim-only); per-request `ttl_secs` overrides it |
-| `time_scale` | 1.0 | × (0.25–8) | Wall-clock tick-cadence multiplier (sim-only); runtime-adjustable, ephemeral, per-controller ([HAL §7](./03-spec-controller-hal-simulation.md#time-scale-speed-without-breaking-determinism)) |
+| `time_scale` | 1.0 | × (0.25–32) | Wall-clock tick-cadence multiplier (sim-only); runtime-adjustable, ephemeral, per-controller ([HAL §7](./03-spec-controller-hal-simulation.md#time-scale-speed-without-breaking-determinism)) |
 | `start_ts` | 2026-01-01T00:00:00Z | RFC 3339 UTC | Simulated instant the run begins at (sim-only); day-aligned base + seconds-of-day so telemetry and time-of-day agree. Omitted → the fixed epoch; one shared value is stamped fleet-wide at generation |
 
 ### Real-time ([architecture](./02-spec-controller-architecture.md#3-real-time--scheduling-model))
@@ -212,8 +213,10 @@ the [deterministic simulation](./03-spec-controller-hal-simulation.md#7-determin
 
 Tick period and jitter are the **1× baseline**. On the simulated HAL the
 [`time_scale`](#simulation-control-simulated-hal-only) knob scales the wall-clock period to
-`1000 / time_scale` ms; the per-tick compute budget (`P1-PERF-3`) is unchanged, which is what bounds
-the maximum usable speed.
+`1000 / time_scale` ms; the per-tick compute budget (`P1-PERF-3`) is unchanged. Measured per-tick
+compute is ≈9 µs — far under that budget — so the ceiling on usable speed is wall-clock timer
+granularity, not compute: 32× (~31 ms) holds with modest jitter, whereas 64× (~16 ms) is where OS
+timer granularity dominates.
 
 ### Sensing & fusion ([sensing](./04-spec-controller-sensing.md))
 

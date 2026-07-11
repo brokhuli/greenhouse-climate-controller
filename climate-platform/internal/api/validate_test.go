@@ -63,10 +63,13 @@ func TestValidateScale(t *testing.T) {
 	if verr := validateScale(fptr(0.1)); verr == nil {
 		t.Fatal("0.1 below range should be rejected")
 	}
-	if verr := validateScale(fptr(9)); verr == nil {
-		t.Fatal("9 above range should be rejected")
+	if verr := validateScale(fptr(33)); verr == nil {
+		t.Fatal("33 above range should be rejected")
 	}
 	if verr := validateScale(fptr(2)); verr != nil {
 		t.Fatalf("2.0 should be valid, got %+v", verr)
+	}
+	if verr := validateScale(fptr(32)); verr != nil {
+		t.Fatalf("32.0 should be valid, got %+v", verr)
 	}
 }

@@ -445,9 +445,11 @@ the simulation itself:
   input-gate reason) when a greenhouse reports `time_scale ≠ 1.0` and resumes at 1×. Coordinating
   optimizer cadence with arbitrary speeds is out of scope.
 
-**Limitations (accepted):** speed-up is **CPU-bound** — at scale `S` the wall interval is `1000/S` ms
-and must stay above the per-tick compute budget (`P1-PERF-3`, ≤100 ms), so the range is clamped to
-0.25–8×; the wall-clock real-time targets (`P1-PERF-1/2`) describe the 1× baseline and relax off 1×
+**Limitations (accepted):** speed-up is bounded by **wall-clock timer granularity**, not compute — at
+scale `S` the wall interval is `1000/S` ms; measured per-tick compute is ≈9 µs (far under the
+`P1-PERF-3` ≤100 ms budget), so the range is clamped to 0.25–32× because 32× (~31 ms) holds with
+modest jitter while 64× (~16 ms) is where OS timer granularity dominates; the wall-clock real-time
+targets (`P1-PERF-1/2`) describe the 1× baseline and relax off 1×
 (on the simulated backend only); telemetry arrival becomes bursty at `S` Hz; per-controller clocks
 mean cross-greenhouse wall-clock comparison is not meaningful.
 

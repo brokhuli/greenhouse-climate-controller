@@ -298,7 +298,7 @@ const minSweepInterval = 250 * time.Millisecond
 
 // sweepInterval sizes the liveness sweep to the fastest accepted clock: an N×
 // greenhouse's effective offline horizon is offlineAfter/N (state.effectiveOffline), so
-// sweeping at offlineAfter/(2·MaxTimeScale) marks even an 8× greenhouse offline within
+// sweeping at offlineAfter/(2·MaxTimeScale) marks even a 32× greenhouse offline within
 // ~one cadence of its horizon instead of lagging the 1× cadence (ingestion §4).
 func sweepInterval(offlineAfter time.Duration) time.Duration {
 	interval := time.Duration(float64(offlineAfter) / (2 * domain.MaxTimeScale))

@@ -6,8 +6,8 @@
       "scale": {
         "type": "number",
         "minimum": 0.25,
-        "maximum": 8.0,
-        "description": "Wall-clock cadence multiplier. 1.0 = real-time; <1 slows down (0.5 = half speed); >1 speeds up (2.0, 4.0 = fast-forward). Canonical UI stops are 0.5/1/2/4; any value in range is accepted. Out-of-range is rejected with 422."
+        "maximum": 32.0,
+        "description": "Wall-clock cadence multiplier. 1.0 = real-time; <1 slows down (0.5 = half speed); >1 speeds up (2.0, 4.0 = fast-forward). Canonical UI stops are 0.5/1/2/4/8/16/32; any value in range is accepted. Out-of-range is rejected with 422."
       }
     },
     "required": ["scale"],
@@ -20,7 +20,7 @@
       "scale": {
         "type": "number",
         "minimum": 0.25,
-        "maximum": 8.0,
+        "maximum": 32.0,
         "description": "Active wall-clock cadence multiplier (1.0 = real-time)."
       },
       "tick_index": {
@@ -44,7 +44,7 @@
       "requested_scale": {
         "type": "number",
         "minimum": 0.25,
-        "maximum": 8.0,
+        "maximum": 32.0,
         "description": "The scale requested for the whole fleet."
       },
       "results": {
@@ -61,7 +61,7 @@
             "scale": {
               "type": ["number", "null"],
               "minimum": 0.25,
-              "maximum": 8.0,
+              "maximum": 32.0,
               "description": "The controller's resulting scale, or null when not applied (offline, or real hardware → 404)."
             },
             "detail": {

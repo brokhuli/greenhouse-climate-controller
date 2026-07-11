@@ -71,8 +71,8 @@
       "scale": {
         "type": "number",
         "minimum": 0.25,
-        "maximum": 8.0,
-        "description": "Wall-clock cadence multiplier. 1.0 = real-time; <1 slows down (0.5 = half speed); >1 speeds up (2.0, 4.0 = fast-forward). Canonical UI stops are 0.5/1/2/4, but any value in the range is accepted. The 8.0 ceiling leaves headroom above the per-tick compute budget (`P1-PERF-3`, ≤100 ms): at scale S the wall interval is 1000/S ms, so 8× → 125 ms. Out-of-range values are rejected with 422."
+        "maximum": 32.0,
+        "description": "Wall-clock cadence multiplier. 1.0 = real-time; <1 slows down (0.5 = half speed); >1 speeds up (2.0, 4.0 = fast-forward). Canonical UI stops are 0.5/1/2/4/8/16/32, but any value in the range is accepted. The 32.0 ceiling is set by wall-clock timer granularity, not per-tick compute (measured ≈9 µs, far under the `P1-PERF-3` ≤100 ms budget): at scale S the wall interval is 1000/S ms, so 32× → ~31 ms, which the scheduler holds with modest jitter, whereas 64× (~16 ms) is where OS timer granularity dominates. Out-of-range values are rejected with 422."
       }
     },
     "required": ["scale"],
@@ -85,7 +85,7 @@
       "scale": {
         "type": "number",
         "minimum": 0.25,
-        "maximum": 8.0,
+        "maximum": 32.0,
         "description": "Active wall-clock cadence multiplier (1.0 = real-time)."
       },
       "tick_index": {

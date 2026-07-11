@@ -21,6 +21,7 @@ use axum::routing::{get, put};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+use crate::clock::{MAX_TIME_SCALE, MIN_TIME_SCALE};
 use crate::config::{Bounds, Setpoints, Zone};
 use crate::domain::{Actuator, Slug, TimeOfDay};
 use crate::faults::{FaultType, Mode, Severity};
@@ -938,10 +939,10 @@ async fn put_time_scale(
     if !s.is_me(&gh) {
         return not_found("unknown greenhouse");
     }
-    if !(0.25..=8.0).contains(&body.scale) {
+    if !(MIN_TIME_SCALE..=MAX_TIME_SCALE).contains(&body.scale) {
         return unprocessable(FieldViolation::new(
             "scale",
-            "0.25..=8",
+            "0.25..=32",
             serde_json::json!(body.scale),
         ));
     }

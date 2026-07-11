@@ -13,7 +13,7 @@ import { queryKeys } from "./keys";
  * the one explicit exception to setpoint-only downward control (frontend constraints §"Control & safety").
  */
 
-/** Set one greenhouse's simulated-clock speed (0.25–8×). */
+/** Set one greenhouse's simulated-clock speed (0.25–32×). */
 export function useSetTimeScale(id: string) {
   const queryClient = useQueryClient();
   return useMutation({

@@ -8,6 +8,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+use crate::clock::{MAX_TIME_SCALE, MIN_TIME_SCALE};
 use crate::domain::TimeOfDay;
 use crate::validation::{FieldViolation, check_min, check_range};
 
@@ -16,7 +17,7 @@ use crate::validation::{FieldViolation, check_min, check_range};
 #[serde(default, deny_unknown_fields)]
 pub struct Simulation {
     /// Wall-clock tick-cadence multiplier (sim-only). The TOML value is the reset-on-restart
-    /// default; it is runtime-adjustable and ephemeral ([HAL §7]). Range 0.25–8×.
+    /// default; it is runtime-adjustable and ephemeral ([HAL §7]). Range 0.25–32×.
     pub time_scale: f64,
     /// PRNG seed — fixes the entire run for reproducible tests (`P1-TEST-2`).
     pub seed: u64,
@@ -58,8 +59,8 @@ impl Simulation {
             violations,
             "simulation.time_scale",
             self.time_scale,
-            0.25,
-            8.0,
+            MIN_TIME_SCALE,
+            MAX_TIME_SCALE,
         );
         check_min(
             violations,
@@ -248,7 +249,7 @@ mod tests {
     #[test]
     fn out_of_range_time_scale_is_flagged() {
         let mut s = Simulation::default();
-        s.time_scale = 16.0;
+        s.time_scale = 64.0;
         let mut v = Vec::new();
         s.validate(&mut v);
         assert!(v.iter().any(|x| x.field == "simulation.time_scale"));

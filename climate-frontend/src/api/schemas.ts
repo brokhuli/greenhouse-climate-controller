@@ -142,7 +142,7 @@ export const wireGreenhouseSummary = z.object({
   crop: z.string().nullable(),
   status: connectivitySchema,
   drift: z.boolean().default(false),
-  time_scale: z.number().min(0.25).max(8).nullable().optional(),
+  time_scale: z.number().min(0.25).max(32).nullable().optional(),
   climate: wireClimate.optional(),
 });
 
@@ -152,7 +152,7 @@ export const wireGreenhouseDetail = z.object({
   crop: z.string().nullable(),
   status: connectivitySchema,
   drift: z.boolean().default(false),
-  time_scale: z.number().min(0.25).max(8).nullable().optional(),
+  time_scale: z.number().min(0.25).max(32).nullable().optional(),
   setpoints: wireSetpoints,
   zone_status: z.array(wireZoneStatus),
 });
@@ -234,21 +234,21 @@ export const wireEventEntry = z.object({
   source: z.string().optional(),
 });
 
-export const wireTimeScalePatch = z.object({ scale: z.number().min(0.25).max(8) });
+export const wireTimeScalePatch = z.object({ scale: z.number().min(0.25).max(32) });
 
 export const wireTimeScale = z.object({
-  scale: z.number().min(0.25).max(8),
+  scale: z.number().min(0.25).max(32),
   tick_index: z.number().int().min(0),
   updated_at: isoTimestamp,
 });
 
 export const wireFleetTimeScaleResult = z.object({
-  requested_scale: z.number().min(0.25).max(8),
+  requested_scale: z.number().min(0.25).max(32),
   results: z.array(
     z.object({
       greenhouse_id: slug,
       applied: z.boolean(),
-      scale: z.number().min(0.25).max(8).nullable(),
+      scale: z.number().min(0.25).max(32).nullable(),
       detail: z.string().nullable(),
     }),
   ),
@@ -315,7 +315,7 @@ export const statusFrame = z
     zone_id: z.null(),
     type: z.literal("status"),
     status: connectivitySchema,
-    time_scale: z.number().min(0.25).max(8).optional(),
+    time_scale: z.number().min(0.25).max(32).optional(),
   })
   .strict();
 
