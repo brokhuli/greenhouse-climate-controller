@@ -25,7 +25,7 @@ MQTT / JSON-schema, not shared database access.
 One endpoint returns everything the optimizer's **Data Access** component needs for one planning
 cycle, in a single bounded read: **current setpoints**, **bucketed telemetry summaries**, **latest
 actuator states**, and the **data-quality / freshness signals** its
-[input gate](../../docs/specs/design/optimizer/06-spec-optimizer-input-gating.md) runs before
+[input gate](../../docs/specs/design/optimizer/07-spec-optimizer-input-gating.md) runs before
 planning. History is returned as `(min, mean, max)` **summaries** per metric per bucket
 ([RFC-004](../../docs/decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface)),
 not raw readings, so the payload stays bounded.
@@ -126,7 +126,7 @@ wrapped in the RFC-007 `schema_version` envelope — their identity is the path 
 their version is `info.version`. This **read** contract is the one exception: it carries a top-level
 `schema_version` integer, because the optimizer's identity-consistency check explicitly reads it to
 detect read-API/contract **drift** (*"an unknown `schema_version` means the read API or a contract has
-drifted"*, [input-gating spec](../../docs/specs/design/optimizer/06-spec-optimizer-input-gating.md)).
+drifted"*, [input-gating spec](../../docs/specs/design/optimizer/07-spec-optimizer-input-gating.md)).
 `schema_version` tracks `info.version`'s major and bumps with it on a breaking change.
 
 ## Field naming

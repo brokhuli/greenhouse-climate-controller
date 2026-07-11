@@ -53,6 +53,7 @@ function registerSchema(absPath) {
 const CONTRACTS = [
   { dir: 'contracts/mqtt', kind: 'jsonschema' },
   { dir: 'contracts/frontend-ws', kind: 'jsonschema' },
+  { dir: 'contracts/optimizer-plan', kind: 'jsonschema' },
   { dir: 'contracts/controller-rest', kind: 'openapi' },
   { dir: 'contracts/frontend-rest', kind: 'openapi' },
   { dir: 'contracts/optimizer-write-rest', kind: 'openapi' },

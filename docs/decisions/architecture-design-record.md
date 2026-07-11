@@ -8,13 +8,44 @@ alternatives and tradeoffs.
 
 ---
 
+## 2026-07-11 — Phase 3 plan contract authored (`OptimizerPlan` + `PlanRecord`)
+
+**Decision:** Authored the Phase 3 optimizer plan contract that RFC-004 named but left unspecified — the
+actual shape of the plan the LLM planner emits — as a **two-layer** structure:
+
+- **`OptimizerPlan`** — the LLM's structured output (`.with_structured_output`): the horizon
+  `trajectory` (hourly points), the `immediate_setpoints` `SetpointsPatch` applied this cadence, a
+  load-bearing `confidence`, an `explanation`, and optional advisory `objective_scores` /
+  `escalation_hint`. Proposed, not authoritative.
+- **`PlanRecord`** — the service envelope stamping the provenance and outcome the model must not invent:
+  `optimizer_run_id`, `greenhouse_id`, `created_at`, the chosen `horizon` window, the `backend`
+  (provider / model / role), and the gate `outcome` (`applied` / `escalated` + canonical `reason_code`
+  / `extended`).
+
+The prose definition is the new [`05-spec-optimizer-plan-contract.md`](../specs/design/optimizer/05-spec-optimizer-plan-contract.md)
+(inserted between the planner and the constraint engine that consumes it, renumbering the former
+`05–12` optimizer docs to `06–13`); the machine-readable JSON Schema (Draft 2020-12) lives in
+[`contracts/optimizer-plan/`](../../contracts/optimizer-plan/) and is wired into the contract harness
+(`npm run validate:contracts`).
+
+**Why:** Without a defined shape the planner, constraint engine, applier, service API, and tests would
+each invent their own, and RFC-004 only committed to "refined setpoints + a reasoning trace." The
+two-layer split keeps `.with_structured_output()` honest — the schema the model fills contains only
+fields it can meaningfully author (never a run id, model name, or apply/escalate decision). The
+contract is **internal** to the optimizer (planner → constraint engine → applier); the only downward
+wire stays the unchanged `optimizer-write-rest/` setpoint path, so this adds no cross-service boundary.
+
+**RFC:** [RFC-004](./request-for-comments.md#rfc-004-phase-3-llm-integration-interface)
+
+---
+
 ## 2026-07-10 — Phase 3 plan model renamed `ActuatorPlan` → `OptimizerPlan`
 
 **Decision:** The optimizer's structured LLM-output model — the Pydantic type parsed via
 `.with_structured_output(...)` and referenced by RFC-004's `generate_plan(context) -> …` signature — is
 renamed from `ActuatorPlan` to **`OptimizerPlan`**. The rename is propagated across the Phase 3 spec set
 ([04 planning](../specs/design/optimizer/04-spec-optimizer-planning.md),
-[11 tech-stack](../specs/design/optimizer/11-spec-optimizer-tech-stack.md)),
+[12 tech-stack](../specs/design/optimizer/12-spec-optimizer-tech-stack.md)),
 [tech-stack-decisions.md](../specs/design/tech-stack-decisions.md), RFC-004, and the
 [2026-06-11 entry](#2026-06-11--phase-3-llm-integration-langchain-replaces-custom-plannerbackend-internals)
 below. It is a **naming change only**: the model is internal (the LLM's structured output, later distilled
@@ -164,7 +195,7 @@ authoring (resolving RFC-008's open questions):
   `PlanContext` build, and keeps the payload bounded via summaries rather than raw readings.
 - **Data-quality fields carried on the read API.** `data_quality` (`controller_mode`, `time_scale`,
   per-metric `freshness[]`, `faults[]`) plus per-actuator `health` give the optimizer's
-  [input gate](../specs/design/optimizer/06-spec-optimizer-input-gating.md) its freshness,
+  [input gate](../specs/design/optimizer/07-spec-optimizer-input-gating.md) its freshness,
   completeness, sensor/actuator-health, and clock-mode checks as plain response fields — resolving the
   open question that spec flagged for "when the REST contract is authored."
 - **`schema_version` in-body — the one read exception.** Unlike the write contracts (`optimizer-write-rest`,
@@ -1226,7 +1257,7 @@ core comfortably covers a single greenhouse's rollout.
 **Decision:** Expose the optimizer's service surface — trigger planning cycles, inspect proposed
 plans, review escalations, report health — with **FastAPI**
 ([P3 §2](../specs/design/optimizer/02-spec-optimizer-architecture.md),
-[§8](../specs/design/optimizer/09-spec-optimizer-interfaces.md)).
+[§8](../specs/design/optimizer/10-spec-optimizer-interfaces.md)).
 
 **Why:** FastAPI's Pydantic models give declarative request/response validation that lines up
 directly with the JSON-Schema-first contract discipline of

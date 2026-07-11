@@ -1,0 +1,8 @@
+{
+  "confidence": 1.4,
+  "explanation": "Confidence out of range - must be within [0, 1]; this fixture must be rejected.",
+  "immediate_setpoints": { "temperature_day_c": 22.5 },
+  "trajectory": [
+    { "at": "2026-07-11T13:30:00.000Z", "setpoints": { "temperature_day_c": 22.5 } }
+  ]
+}

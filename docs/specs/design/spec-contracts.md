@@ -108,13 +108,13 @@ is versioned and accompanied by an ADR, per [`contracts/README.md`](../../../con
 
 | | |
 |---|---|
-| **Purpose** | The structured plan the LLM planner emits (refined setpoints + reasoning/audit trace), consumed deterministically by the constraint engine and plan applier. Phase 4 extends it to be combustion-aware (device-selection preferences). |
+| **Purpose** | The structured plan the LLM planner emits, in two layers: `OptimizerPlan` (the LLM's refined setpoint trajectory, immediate setpoints, confidence, and reasoning/audit trace) wrapped by `PlanRecord` (the service's provenance + gate-outcome envelope), consumed deterministically by the constraint engine and plan applier. Phase 4 extends it to be combustion-aware (device-selection preferences). Defined in [`05-spec-optimizer-plan-contract.md`](./optimizer/05-spec-optimizer-plan-contract.md). |
 | **Parties / direction** | Planner → constraint engine / applier (internal to the optimizer) |
-| **Format** | Structured schema (JSON Schema) |
+| **Format** | Structured schema (JSON Schema, Draft 2020-12) |
 | **Phase introduced** | Phase 3 (extended in Phase 4) |
 | **Governing decision** | [RFC-004](../../decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface) |
-| **Location** | [`contracts/`](../../../contracts/), to be created |
-| **Status** | To author |
+| **Location** | [`contracts/optimizer-plan/`](../../../contracts/optimizer-plan/) |
+| **Status** | Authored — schemas + README + example fixtures exist under [`contracts/optimizer-plan/`](../../../contracts/optimizer-plan/), validated by the contract harness |
 
 ### 2.7 Phase 3 telemetry read API
 

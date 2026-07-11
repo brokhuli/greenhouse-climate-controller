@@ -139,5 +139,5 @@ Host tooling:
 
 See [RFC-004](../../decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface),
 [`tech-stack-decisions.md`](./tech-stack-decisions.md#phase-3--llm-climate-optimizer-python-only),
-[optimizer tech stack](./optimizer/11-spec-optimizer-tech-stack.md), and
-[optimizer configuration](./optimizer/10-spec-optimizer-configuration.md).
+[optimizer tech stack](./optimizer/12-spec-optimizer-tech-stack.md), and
+[optimizer configuration](./optimizer/11-spec-optimizer-configuration.md).

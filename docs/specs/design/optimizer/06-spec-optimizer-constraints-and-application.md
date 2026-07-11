@@ -19,7 +19,7 @@ The engine validates the plan against:
 - **Crop-safe bounds** — the min/max envelope the active crop profile stage defines for each scalar
   climate target and, uniformly across zones, the numeric per-zone irrigation targets (`StageBounds`,
   including its `zones` envelope, on the profile — [platform crop-profiles §1](../platform/05-spec-platform-crop-profiles.md#1-profiles-and-assignment)),
-  read from the [planning-context](./06-spec-optimizer-input-gating.md) `setpoints.bounds` at the start
+  read from the [planning-context](./07-spec-optimizer-input-gating.md) `setpoints.bounds` at the start
   of the cycle; the optimizer may move targets *within* this envelope but never outside it. Because
   Phase 2 enforces the same envelope on the write path, this engine is the optimizer's local pre-filter
   on the authoritative bounds, not a second definition of them (a `202`/`422` disagreement is handled in
@@ -59,7 +59,7 @@ reconnect, and detecting drift. The optimizer submits refined targets via
 violated bound); it does **not** write to controllers directly and does **not** publish actuator
 commands. The call is trusted on the local network by default; under the platform's hardened
 `SERVICE_AUTH_MODE=oidc` posture it carries a Keycloak `setpoints:write` service token
-([interfaces — authenticating the Phase 2 write path](./09-spec-optimizer-interfaces.md#authenticating-the-phase-2-write-path),
+([interfaces — authenticating the Phase 2 write path](./10-spec-optimizer-interfaces.md#authenticating-the-phase-2-write-path),
 [RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009)),
 with no change to the bundle or the `202`/`422` contract.
 
@@ -73,7 +73,7 @@ with no change to the bundle or the `202`/`422` contract.
 
 Escalations are **surfaced, not executed**: the optimizer exposes the proposed plan and the reason it
 was held for an operator to review, rather than applying a plan it cannot vouch for. The
-within-bounds / confidence thresholds are configuration ([configuration](./10-spec-optimizer-configuration.md)).
+within-bounds / confidence thresholds are configuration ([configuration](./11-spec-optimizer-configuration.md)).
 
 ---
 
@@ -91,7 +91,7 @@ This section states how the optimizer **cooperates** with them rather than re-im
 |---|---|
 | **Single-flight per greenhouse** | At most one cycle is in flight per greenhouse. The fixed cadence ([planning](./04-spec-optimizer-planning.md#1-llm-driven-planning)) plus a per-greenhouse in-flight guard means a slow cycle (LLM latency near the [P3-PERF-2](../../artifacts/non-functional-requirements.md) 60 s bound) finishes or times out **before** the next begins — there is never an optimizer-vs-optimizer race on the write path. N greenhouses still plan independently ([P3-SCAL-1](../../artifacts/non-functional-requirements.md)); single-flight is **per greenhouse, not global**. |
 | **The operator wins; the optimizer observes** | At each cycle's start, Data Access reads current setpoints **and their provenance** ([architecture](./02-spec-optimizer-architecture.md)). If the live setpoints carry a non-`optimizer` source (an `operator_edit`) newer than the optimizer's last applied plan, the optimizer adopts that as its **baseline** and plans from it — it never re-asserts its own prior plan over an operator edit. A refinement is a suggestion layered on the baseline, never a claim of ownership — the optimizer-layer analog of the platform's "drift is surfaced, not fought indefinitely" ([crop-profiles §3](../platform/05-spec-platform-crop-profiles.md#3-reconciliation--the-platform-is-the-source-of-truth)). |
-| **A `422` is a contract signal, not a retry** | Because the constraint engine ([constraint engine](#1-constraint-engine--safety)) validates against the same crop-safe bounds Phase 2 enforces, a `202` is expected; a `422` means the optimizer's view of the bounds **disagrees** with Phase 2's — the crop profile changed mid-cycle, or the bounds contract drifted. A `422` is therefore **never retried in a loop**: it is escalated as a `bounds_mismatch` fault ([reason codes](./09-spec-optimizer-interfaces.md#escalation-reason-codes); `optimizer_run_id`, [P3-OBS-1](../../artifacts/non-functional-requirements.md)) and the cycle abandoned, leaving the Phase 2 baseline in force ([P3-RESIL-1](../../artifacts/non-functional-requirements.md)). |
+| **A `422` is a contract signal, not a retry** | Because the constraint engine ([constraint engine](#1-constraint-engine--safety)) validates against the same crop-safe bounds Phase 2 enforces, a `202` is expected; a `422` means the optimizer's view of the bounds **disagrees** with Phase 2's — the crop profile changed mid-cycle, or the bounds contract drifted. A `422` is therefore **never retried in a loop**: it is escalated as a `bounds_mismatch` fault ([reason codes](./10-spec-optimizer-interfaces.md#escalation-reason-codes); `optimizer_run_id`, [P3-OBS-1](../../artifacts/non-functional-requirements.md)) and the cycle abandoned, leaving the Phase 2 baseline in force ([P3-RESIL-1](../../artifacts/non-functional-requirements.md)). |
 
 Each applied bundle carries its `optimizer_run_id` as provenance
 ([RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain),

@@ -8,7 +8,7 @@
 Part of the [controller set](./01-spec-controller-overview.md); this is the controller's instance of
 the system-wide strategy in [`spec-verification.md`](../spec-verification.md) (the verification
 ladder, the tooling matrix, the contract harness) and the optimizer-side analog of
-[`07-spec-optimizer-evaluation.md`](../optimizer/07-spec-optimizer-evaluation.md). It builds on the
+[`08-spec-optimizer-evaluation.md`](../optimizer/08-spec-optimizer-evaluation.md). It builds on the
 tick pipeline and [module composition](./02-spec-controller-architecture.md#5-module-composition-rules),
 the [seeded HAL](./03-spec-controller-hal-simulation.md#7-determinism--seeding), [sensing](./04-spec-controller-sensing.md),
 and the [safety interlocks](./06-spec-controller-safety-and-constraints.md#2-safety-interlocks).

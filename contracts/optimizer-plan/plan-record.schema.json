@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://greenhouse.local/contracts/optimizer-plan/plan-record.schema.json",
+  "title": "PlanRecord",
+  "description": "The optimizer service's envelope around one OptimizerPlan for one cycle - it stamps on the provenance and outcome the model must not be trusted to invent (run id, chosen horizon window, backend identity, gate decision). Layer 2 of the plan contract; returned by GET .../plans/latest and referenced by escalations. See docs/specs/design/optimizer/05-spec-optimizer-plan-contract.md §3.",
+  "type": "object",
+  "$defs": {
+    "ReasonCode": {
+      "type": "string",
+      "description": "Canonical escalation reason code - the single source of truth is the optimizer interfaces spec (Escalation reason codes). Present on outcome only when status is escalated.",
+      "enum": [
+        "input_stale",
+        "input_incomplete",
+        "sensor_fault",
+        "actuator_fault",
+        "clock_mode_unsupported",
+        "contract_drift",
+        "twin_diverged",
+        "twin_fidelity_fault",
+        "constraint_violation",
+        "low_confidence",
+        "bounds_mismatch",
+        "cycle_timeout",
+        "llm_unavailable"
+      ]
+    },
+    "Backend": {
+      "type": "object",
+      "description": "Which model produced the plan. A fallback is a different model held to its own evaluation baseline, so failover is recorded here, not hidden.",
+      "properties": {
+        "provider": { "type": "string", "enum": ["ollama", "anthropic", "openai"], "description": "The active planning backend provider." },
+        "model": { "type": "string", "minLength": 1, "description": "The pinned model id (e.g. llama3, claude-sonnet-4-6)." },
+        "role": { "type": "string", "enum": ["primary", "fallback"], "description": "Whether the primary backend or the configured fallback produced this plan." }
+      },
+      "required": ["provider", "model", "role"],
+      "additionalProperties": false
+    },
+    "Horizon": {
+      "type": "object",
+      "description": "The adaptive window the service chose for the cycle: 12h by default, 24h near a day boundary. trajectory spans [start, end].",
+      "properties": {
+        "start": { "type": "string", "format": "date-time", "description": "Horizon start (RFC 3339, UTC) - the cycle start." },
+        "end": { "type": "string", "format": "date-time", "description": "Horizon end (RFC 3339, UTC)." }
+      },
+      "required": ["start", "end"],
+      "additionalProperties": false
+    },
+    "Outcome": {
+      "type": "object",
+      "description": "What the gates decided. reason_code + message are present when status is escalated.",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["applied", "escalated", "extended"],
+          "description": "applied = submitted to Phase 2; escalated = surfaced, not applied; extended = the state-change gate skipped the LLM and carried the prior plan forward."
+        },
+        "reason_code": { "$ref": "#/$defs/ReasonCode" },
+        "message": { "type": "string", "description": "Operator-facing detail for an escalation." }
+      },
+      "required": ["status"],
+      "additionalProperties": false
+    }
+  },
+  "properties": {
+    "schema_version": { "type": "integer", "minimum": 1, "description": "Major version of this plan contract (internal; a bump is an ADR event)." },
+    "optimizer_run_id": { "type": "string", "format": "uuid", "description": "The cycle's trace / provenance id. Phase 2 records it on the applied bundle; every plan and escalation is traced by it (P3-OBS-1)." },
+    "greenhouse_id": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$", "description": "The greenhouse this plan is for." },
+    "created_at": { "type": "string", "format": "date-time", "description": "When the cycle produced the plan (RFC 3339, UTC)." },
+    "horizon": { "$ref": "#/$defs/Horizon" },
+    "backend": { "$ref": "#/$defs/Backend" },
+    "plan": { "$ref": "https://greenhouse.local/contracts/optimizer-plan/optimizer-plan.schema.json" },
+    "outcome": { "$ref": "#/$defs/Outcome" }
+  },
+  "required": [
+    "schema_version",
+    "optimizer_run_id",
+    "greenhouse_id",
+    "created_at",
+    "horizon",
+    "backend",
+    "plan",
+    "outcome"
+  ],
+  "additionalProperties": false
+}

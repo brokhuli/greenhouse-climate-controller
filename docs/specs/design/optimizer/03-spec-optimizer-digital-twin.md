@@ -48,29 +48,29 @@ passing cloud) is **weather-reactive** control and belongs to Phase 4.
 ## 2. Robustness & fidelity
 
 [The forward model](#1-the-forward-model) above describes what the twin computes, and
-[input gating](./06-spec-optimizer-input-gating.md) gates its **inputs** — but nothing yet guards the
+[input gating](./07-spec-optimizer-input-gating.md) gates its **inputs** — but nothing yet guards the
 twin's own **numerical behavior** or whether its **parameters still match the real greenhouse**. A
 forward model can diverge (stiff dynamics, a bad step) or silently de-calibrate (thermal mass,
 leakage, or a failing vent seal change over weeks) — and either failure yields a confident trajectory
 the planner then optimizes against. The output gates
-([constraint engine](./05-spec-optimizer-constraints-and-application.md#1-constraint-engine--safety),
-[application gate](./05-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application))
+([constraint engine](./06-spec-optimizer-constraints-and-application.md#1-constraint-engine--safety),
+[application gate](./06-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application))
 cannot catch it, because the resulting *plan* looks perfectly valid; the error is upstream, in the
 future the plan was built on.
 
 ### Numerical stability
 
 The integrator runs with a bounded step (`twin.solver_max_step_minutes`,
-[configuration](./10-spec-optimizer-configuration.md)) and checks every step for **non-finite** state
+[configuration](./11-spec-optimizer-configuration.md)) and checks every step for **non-finite** state
 (NaN / Inf), states outside **physically plausible** envelopes (temperature past sensor range,
 negative humidity or CO₂), and **non-convergence** within a step budget. A diverged simulation is
-treated exactly like a failed input precondition ([input gating](./06-spec-optimizer-input-gating.md)):
+treated exactly like a failed input precondition ([input gating](./07-spec-optimizer-input-gating.md)):
 the optimizer does **not** hand a garbage trajectory to the planner — it extends the last accepted
 plan and raises a `twin_diverged` escalation
-([reason codes](./09-spec-optimizer-interfaces.md#escalation-reason-codes)), traced by `optimizer_run_id`
+([reason codes](./10-spec-optimizer-interfaces.md#escalation-reason-codes)), traced by `optimizer_run_id`
 ([P3-OBS-1](../../artifacts/non-functional-requirements.md)). The solver is fixed-step / seeded so a
 scenario reproduces, making the twin the deterministic forward model
-[evaluation](./07-spec-optimizer-evaluation.md) already relies on — the optimizer-side analog of the
+[evaluation](./08-spec-optimizer-evaluation.md) already relies on — the optimizer-side analog of the
 controller's seeded HAL ([P1-TEST-2](../../artifacts/non-functional-requirements.md)).
 
 ### Parameter fidelity & drift
@@ -79,18 +79,18 @@ The twin is parameterized per greenhouse (thermal mass, leakage, actuator gains 
 constants that drift seasonally and as equipment ages. Each cycle the optimizer computes a
 **one-step-ahead residual**: the previous cycle's predicted trajectory against the now-observed
 telemetry. A residual that stays beyond `twin.divergence_threshold`
-([configuration](./10-spec-optimizer-configuration.md)) is a **fidelity fault** — the model no longer
+([configuration](./11-spec-optimizer-configuration.md)) is a **fidelity fault** — the model no longer
 matches the greenhouse. The response is **graded, not binary**: the twin keeps running (a degraded
 prediction still beats none), but plan **confidence is attenuated** so a low-fidelity model's plans
 fall below the
-[application-gate](./05-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application)
+[application-gate](./06-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application)
 threshold and **escalate rather than auto-apply** (`twin_fidelity_fault`,
-[reason codes](./09-spec-optimizer-interfaces.md#escalation-reason-codes)), and persistent divergence is
+[reason codes](./10-spec-optimizer-interfaces.md#escalation-reason-codes)), and persistent divergence is
 surfaced for recalibration. Refitting the parameters from history is **deferred**
-([scope](./12-spec-optimizer-scope.md)) — Phase 3 *detects and flags* drift; it does not auto-tune.
+([scope](./13-spec-optimizer-scope.md)) — Phase 3 *detects and flags* drift; it does not auto-tune.
 
 The crop-safe constraint engine
-([constraint engine](./05-spec-optimizer-constraints-and-application.md#1-constraint-engine--safety))
+([constraint engine](./06-spec-optimizer-constraints-and-application.md#1-constraint-engine--safety))
 and the controller's interlocks remain the hard backstop regardless of twin quality, so a drifted or
 diverged twin **degrades optimization, never safety** — the same principle as everywhere else in this
 spec: the deterministic gates, not the model, are what keep the greenhouse safe.

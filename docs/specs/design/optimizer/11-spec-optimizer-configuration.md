@@ -8,9 +8,9 @@
 Part of the [optimizer set](./01-spec-optimizer-overview.md); the thresholds here are
 referenced throughout the set (e.g.
 [planning](./04-spec-optimizer-planning.md#1-llm-driven-planning),
-[input gating](./06-spec-optimizer-input-gating.md),
+[input gating](./07-spec-optimizer-input-gating.md),
 [twin robustness](./03-spec-optimizer-digital-twin.md#2-robustness--fidelity),
-[resilience](./08-spec-optimizer-resilience.md)).
+[resilience](./09-spec-optimizer-resilience.md)).
 
 ---
 

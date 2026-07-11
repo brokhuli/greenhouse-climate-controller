@@ -17,7 +17,7 @@ schemas.
 | **Phase 2 REST API (read)** | Platform → optimizer | Read-only planning context for one greenhouse: historical telemetry, actuator states, current setpoints, and data-quality/freshness signals. Per the revised [RFC-008](../../../decisions/request-for-comments.md#rfc-008-phase-3-telemetry-read-path), this is a REST contract; the platform may back it with internal SQL views or continuous aggregates, but the optimizer never connects to TimescaleDB directly. |
 | **Phase 2 REST API (write)** | Optimizer → platform | Write refined setpoint bundles (layered on the crop baseline); platform reconciles to the controller |
 | **Service API (FastAPI)** | Operator/tools → optimizer | Trigger planning cycles, inspect proposed plans, review and act on escalations |
-| **`/metrics` (Prometheus)** | Prometheus → optimizer | Operational *optimizer-health* scrape served on the FastAPI service — an unauthenticated read, **outside** the versioned contracts, the metrics sibling of `/health`. Joins the platform's shared Prometheus/Grafana ([platform operations §1](../platform/08-spec-platform-operations.md#1-observability), [tech stack §Observability](./11-spec-optimizer-tech-stack.md#observability)) |
+| **`/metrics` (Prometheus)** | Prometheus → optimizer | Operational *optimizer-health* scrape served on the FastAPI service — an unauthenticated read, **outside** the versioned contracts, the metrics sibling of `/health`. Joins the platform's shared Prometheus/Grafana ([platform operations §1](../platform/08-spec-platform-operations.md#1-observability), [tech stack §Observability](./12-spec-optimizer-tech-stack.md#observability)) |
 
 The optimizer **consumes** the contracts owned by [`contracts/`](../../../../contracts/) and the Phase 2
 interfaces ([P2 crop profiles](../platform/05-spec-platform-crop-profiles.md),
@@ -35,7 +35,7 @@ versioned wire contract.
 
 | Method + path | Purpose |
 |---|---|
-| `GET /health` | Liveness/readiness — Phase 2 reachability, LLM backend reachability, last-successful-cycle time, escalation backlog ([resilience — watchdog](./08-spec-optimizer-resilience.md)) |
+| `GET /health` | Liveness/readiness — Phase 2 reachability, LLM backend reachability, last-successful-cycle time, escalation backlog ([resilience — watchdog](./09-spec-optimizer-resilience.md)) |
 | `GET /metrics` | Prometheus optimizer-health scrape (the `/metrics` row above) |
 | `POST /api/optimizer/greenhouses/{id}/cycles` | Trigger a planning cycle for one greenhouse, out of band from the fixed cadence |
 | `GET /api/optimizer/greenhouses/{id}/plans/latest` | Inspect the latest proposed / applied plan for one greenhouse |
@@ -49,11 +49,11 @@ Every plan and escalation these endpoints expose is traced by `optimizer_run_id`
 ### Escalation reason codes
 
 Every escalation — from the
-[application gate](./05-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application),
-[input gating](./06-spec-optimizer-input-gating.md),
+[application gate](./06-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application),
+[input gating](./07-spec-optimizer-input-gating.md),
 [twin robustness](./03-spec-optimizer-digital-twin.md#2-robustness--fidelity),
-the [write path](./05-spec-optimizer-constraints-and-application.md#3-write-path-concurrency--reconciliation),
-or [resilience](./08-spec-optimizer-resilience.md) — carries a canonical **reason code**, so operators
+the [write path](./06-spec-optimizer-constraints-and-application.md#3-write-path-concurrency--reconciliation),
+or [resilience](./09-spec-optimizer-resilience.md) — carries a canonical **reason code**, so operators
 and dashboards classify held cycles without parsing prose. This table is the single source of truth; the
 raising gates reference it rather than re-listing codes.
 
@@ -74,7 +74,7 @@ raising gates reference it rather than re-listing codes.
 | `llm_unavailable` | planner — backend unreachable and no fallback configured | transient |
 
 **Class** is the operator-triage hint the input gate already draws
-([input gating](./06-spec-optimizer-input-gating.md)): a **transient** code may clear on the next cycle
+([input gating](./07-spec-optimizer-input-gating.md)): a **transient** code may clear on the next cycle
 once inputs, the twin, the clock, or the backend recover; a **persistent** code is a deployment,
 contract, model, or bounds fault that will **not** self-heal and needs an operator fix or recalibration.
 All are **surfaced, not applied** — the Phase 2 baseline stays in force regardless
@@ -90,6 +90,6 @@ grant and presents the resulting token as a `Bearer` credential on `POST /api/gr
 The token carries a **narrow `setpoints:write` service role** — not the operator role — so a compromised
 credential can do nothing but propose in-bounds setpoints, which Phase 2 re-validates regardless. The
 client secret and the `SERVICE_AUTH_MODE` the optimizer targets are
-[configuration](./10-spec-optimizer-configuration.md), never committed; the setpoint contract itself is
+[configuration](./11-spec-optimizer-configuration.md), never committed; the setpoint contract itself is
 **identical** with or without the token. This is the optimizer half of the deferred service-auth seam —
 dormant in the single-host local deployment, enabled by configuration alone.

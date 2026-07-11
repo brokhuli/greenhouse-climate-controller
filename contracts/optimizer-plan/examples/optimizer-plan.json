@@ -1,0 +1,22 @@
+{
+  "confidence": 0.88,
+  "explanation": "Shift lighting toward the cheaper overnight window while holding the DLI target.",
+  "objective_scores": { "anticipation": 0.6, "coupling": 0.5, "efficiency": 0.9 },
+  "immediate_setpoints": {
+    "dli_target_mol": 14.0,
+    "zones": [
+      {
+        "zone_id": "bench-a",
+        "moisture_low_threshold": 0.32,
+        "moisture_high_threshold": 0.42,
+        "drain_period_secs": 900,
+        "schedule": "06:00,14:00"
+      }
+    ]
+  },
+  "trajectory": [
+    { "at": "2026-07-11T22:00:00.000Z", "setpoints": { "dli_target_mol": 14.0 } },
+    { "at": "2026-07-11T23:00:00.000Z", "setpoints": { "dli_target_mol": 14.0 } }
+  ],
+  "escalation_hint": { "note": "dli target held at the crop-safe floor" }
+}

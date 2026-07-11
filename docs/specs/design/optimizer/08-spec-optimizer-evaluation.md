@@ -7,7 +7,7 @@
 
 Part of the [optimizer set](./01-spec-optimizer-overview.md); this builds on the
 deterministic gates in
-[constraints & application](./05-spec-optimizer-constraints-and-application.md) and the
+[constraints & application](./06-spec-optimizer-constraints-and-application.md) and the
 deterministic forward model in
 [digital twin](./03-spec-optimizer-digital-twin.md).
 
@@ -23,8 +23,8 @@ scope note in [the overview](./01-spec-optimizer-overview.md).)
 1. **Constraint-engine regression suite.** The deterministic gate is unit-tested against a corpus of
    known-good and known-bad plans — out-of-bounds targets, infeasible coupled-actuator combinations,
    and sub-threshold confidence — asserting each is accepted, rejected, or escalated as specified
-   ([constraint engine](./05-spec-optimizer-constraints-and-application.md#1-constraint-engine--safety),
-   [application gate](./05-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application)).
+   ([constraint engine](./06-spec-optimizer-constraints-and-application.md#1-constraint-engine--safety),
+   [application gate](./06-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application)).
    This is where the ≥ 90% bound-check coverage of P3-TEST-1 is met.
 
 2. **Golden-scenario library, run through the digital twin.** The twin
@@ -33,7 +33,7 @@ scope note in [the overview](./01-spec-optimizer-overview.md).)
    ([P1-TEST-2](../../artifacts/non-functional-requirements.md): deterministic under a fixed seed).
    Scenarios deliberately reach past the happy path: diurnal ramp, steady state, a transient
    disturbance, **sensor dropout / stale input** (which must trip the
-   [input gate](./06-spec-optimizer-input-gating.md), not produce a plan), a **twin divergence /
+   [input gate](./07-spec-optimizer-input-gating.md), not produce a plan), a **twin divergence /
    parameter-drift** case (which must trip the
    [twin-robustness path](./03-spec-optimizer-digital-twin.md#2-robustness--fidelity) — extend and
    escalate, or attenuate confidence — not yield a confident plan over a bad trajectory), contradictory
@@ -53,5 +53,5 @@ scope note in [the overview](./01-spec-optimizer-overview.md).)
 
 An end-to-end integration test exercises the full path — read → twin → planner → constraint engine →
 applier — against the deterministic twin, asserting the application gate
-([application gate](./05-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application))
+([application gate](./06-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application))
 routes auto-apply versus escalation correctly.

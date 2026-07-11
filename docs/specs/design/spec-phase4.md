@@ -230,8 +230,8 @@ Concretely, the extended twin:
 This is a **superset** of Phase 3's anticipation: clock-known disturbances are still anticipated; the
 forecast simply adds the variable ones. Everything downstream — the constraint engine, the
 confidence-gated application path, and the setpoint-only write through Phase 2 — is unchanged
-([P3 §5](./optimizer/05-spec-optimizer-constraints-and-application.md#1-constraint-engine--safety),
-[P3 §6](./optimizer/05-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application)).
+([P3 §5](./optimizer/06-spec-optimizer-constraints-and-application.md#1-constraint-engine--safety),
+[P3 §6](./optimizer/06-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application)).
 
 ---
 
@@ -264,7 +264,7 @@ still applied only through Phase 2.
 ## 8. Constraints & Safety
 
 Phase 4 preserves the **layered safety model**, and the controller remains final
-([P3 §5](./optimizer/05-spec-optimizer-constraints-and-application.md#1-constraint-engine--safety)).
+([P3 §5](./optimizer/06-spec-optimizer-constraints-and-application.md#1-constraint-engine--safety)).
 
 - **Controller interlocks remain unconditional and controller-owned.** The existing critical-temp,
   CO₂-ceiling, and irrigation-fault interlocks ([P1 §7](./controller/06-spec-controller-safety-and-constraints.md#2-safety-interlocks))
@@ -297,13 +297,13 @@ Phase 4 adds exactly one new ingress — the weather feed — and reuses every e
 | Interface | Direction | Role |
 |---|---|---|
 | **External Weather API** | Provider → optimizer | New ingress: live outdoor conditions + site-wide forecast for the planning horizon |
-| **Phase 2 REST API (read)** | Platform → optimizer | Unchanged — read planning context/history per greenhouse ([P3 §8](./optimizer/09-spec-optimizer-interfaces.md)); platform may back it with internal SQL views |
+| **Phase 2 REST API (read)** | Platform → optimizer | Unchanged — read planning context/history per greenhouse ([P3 §8](./optimizer/10-spec-optimizer-interfaces.md)); platform may back it with internal SQL views |
 | **Phase 2 REST API (write)** | Optimizer → platform | Unchanged — write refined setpoint bundles; platform reconciles to the controller |
 | **MQTT / REST (controller)** | Platform ↔ controller | Unchanged — the burner appears as additional actuator state/commands per [`contracts/`](../../../contracts/) |
 
 The downward path is **identical to Phase 3**: the optimizer writes setpoints **through Phase 2**,
 which remains the single authority on intended state; it never opens its own channel to the controller
-and never publishes actuator commands ([P3 §6](./optimizer/05-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application)).
+and never publishes actuator commands ([P3 §6](./optimizer/06-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application)).
 New burner telemetry and commands are **referenced** from [`contracts/`](../../../contracts/), the
 shared source of truth — this spec does not redefine wire formats. The weather provider is an external
 dependency; its payload is normalized at ingestion ([§5](#5-weather-feed--forecast-ingestion-optimizer-layer))
@@ -315,7 +315,7 @@ so the rest of the optimizer is provider-agnostic.
 
 Phase 4 extends the existing configuration surfaces rather than introducing a new one. Optimizer-layer
 settings follow the Phase 3 convention (environment variables / the Compose file
-[P3 §9](./optimizer/10-spec-optimizer-configuration.md)); the burner and its HAL gains follow the Phase 1
+[P3 §9](./optimizer/11-spec-optimizer-configuration.md)); the burner and its HAL gains follow the Phase 1
 convention (per-greenhouse TOML loaded at startup
 [P1 §4](./controller/07-spec-controller-config-and-parameters.md)).
 
@@ -363,7 +363,7 @@ weather feed**, and nothing else from the deferred list.
 
 | Deferred / excluded | Why / where it belongs |
 |---|---|
-| Site-wide orchestration | Coordinated behavior across greenhouses (staggering loads, sharing constrained resources) still needs a shared-infrastructure model that is out of scope; like Phase 3, Phase 4 plans **one greenhouse at a time** ([P3 §15](./optimizer/12-spec-optimizer-scope.md), [physical-system-multi.md](./physical-system-multi.md#out-of-scope-for-this-site-model)) |
+| Site-wide orchestration | Coordinated behavior across greenhouses (staggering loads, sharing constrained resources) still needs a shared-infrastructure model that is out of scope; like Phase 3, Phase 4 plans **one greenhouse at a time** ([P3 §15](./optimizer/13-spec-optimizer-scope.md), [physical-system-multi.md](./physical-system-multi.md#out-of-scope-for-this-site-model)) |
 | Shared fuel / supply contention | The burner draws from an **assumed-infinite** fuel supply; shared-tank depletion and contention remain unmodeled site-level physics ([physical-system-multi.md — Common Inputs](./physical-system-multi.md#common-inputs--out-of-scope)) |
 | Central heating plant (boiler) | The coupled device modeled is a **per-greenhouse burner**, not a site boiler piping heat to many houses ([physical-system-multi.md](./physical-system-multi.md#common-inputs--out-of-scope)) |
 | Direct actuator commanding by the optimizer | Driving actuators — including the burner and the device choice — is **controller-owned** ([§4](#4-actuator-selection-coordination-controller-layer)); the optimizer's downward influence stays **setpoint-only**, through Phase 2 |

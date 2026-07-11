@@ -40,6 +40,13 @@ Shared message and data contracts — the single source of truth that all three 
   may back it with internal SQL views / continuous aggregates, but those are implementation details,
   not the contract; unauthenticated on the trusted Docker network. See
   [`optimizer-read-rest/README.md`](./optimizer-read-rest/README.md).
+- `optimizer-plan/` — the Phase 3 optimizer's **internal plan contract** (JSON Schema, Draft 2020-12):
+  the structured plan the LLM planner emits and the record the service wraps around it — `OptimizerPlan`
+  (proposed by the model) plus a `PlanRecord` envelope (provenance + the constraint/confidence gate
+  outcome). Consumed by the constraint engine and applier *inside* the optimizer, so it is **not** a
+  cross-service wire boundary — the only downward wire stays the `optimizer-write-rest/` setpoint path.
+  Governed by [RFC-004](../docs/decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface).
+  See [`optimizer-plan/README.md`](./optimizer-plan/README.md).
 
 Phase 1 (controller) publishes telemetry to these schemas; Phase 2 (platform) ingests them; Phase 3
 (optimizer) reads that history. **MQTT carries telemetry only** (sensor readings, actuator state,

@@ -10,7 +10,7 @@
 > through the constraint engine; `P3-REL-1`/`P3-RESIL-1`/`P3-AVAIL-1` optimizer failure never
 > disrupts control; `P3-SCAL-1` one greenhouse at a time; `P3-OBS-1` `optimizer_run_id` tracing;
 > `P3-SEC-1` API key via secret, never logged; `P3-PORT-1` Python under Compose, no cloud) and by
-> the [scope boundary](./12-spec-optimizer-scope.md). Host tooling (Python install, Ollama, editor
+> the [scope boundary](./13-spec-optimizer-scope.md). Host tooling (Python install, Ollama, editor
 > LSP) is in
 > [`required-dependencies.md`](../required-dependencies.md#phase-3--local-llm-climate-optimizer).
 
@@ -62,7 +62,7 @@
   schemas in [`contracts/`](../../../../contracts/), and its async model fits the LLM- and
   HTTP-bound I/O.
 - **How:** Serves the operator surface from
-  [interfaces](./09-spec-optimizer-interfaces.md) — trigger planning cycles, inspect proposed plans,
+  [interfaces](./10-spec-optimizer-interfaces.md) — trigger planning cycles, inspect proposed plans,
   and review/act on escalations (`P3-USE-1`). Pydantic models mirror the contract schemas so a
   malformed request or plan fails at the boundary, not mid-cycle.
 
@@ -86,7 +86,7 @@
   available as opt-in cloud backends; an optional secondary is wired via `.with_fallbacks([...])`.
   Sampling is **pinned** — default model `llama3` (a cloud model such as `claude-sonnet-4-6` when a
   cloud provider is configured), temperature `0`, `top_p 1.0`, `max_tokens` from
-  [configuration](./10-spec-optimizer-configuration.md) — so plans are reproducible enough to
+  [configuration](./11-spec-optimizer-configuration.md) — so plans are reproducible enough to
   regression-test ([planning — determinism](./04-spec-optimizer-planning.md#determinism--reproducibility)).
   A model or provider change is a reviewed **ADR event**, never a silent upgrade; any configured fallback
   is a different model held to its own evaluation baseline, and failover is logged and traced by
@@ -106,13 +106,13 @@
   ([digital twin §1](./03-spec-optimizer-digital-twin.md#1-the-forward-model)) — exactly the ODE /
   array workload NumPy + SciPy exist for.
 - **How ⚑:** The integrator is SciPy's `solve_ivp` run with a **bounded step**
-  (`twin.solver_max_step_minutes`, [configuration](./10-spec-optimizer-configuration.md)) and a
+  (`twin.solver_max_step_minutes`, [configuration](./11-spec-optimizer-configuration.md)) and a
   **seed**, with the per-step non-finite / physical-plausibility / non-convergence checks from
   [digital twin §2](./03-spec-optimizer-digital-twin.md#2-robustness--fidelity). A seeded, fixed-step
   solver is what makes the twin a **reproducible** forward model — the optimizer-side analog of the
   controller's seeded HAL (`P1-TEST-2`,
   [controller HAL — determinism](../controller/03-spec-controller-hal-simulation.md#7-determinism--seeding))
-  — which the evaluation suite ([evaluation](./07-spec-optimizer-evaluation.md), `P3-TEST-1`) relies
+  — which the evaluation suite ([evaluation](./08-spec-optimizer-evaluation.md), `P3-TEST-1`) relies
   on. **⚑ Alternatives & trip-wire:** a **hand-rolled RK step** (more code to vet for the same
   behavior) or a **stiff/implicit specialized solver** (JiTCODE, assimulo). Reach past
   `solve_ivp` only if the greenhouse dynamics prove stiff enough that a bounded explicit step can't
@@ -133,8 +133,8 @@
   model.
 - **How:** Reads planning context, historical telemetry, actuator states, current setpoints, and
   data-quality/freshness signals for one greenhouse from Phase 2
-  ([interfaces](./09-spec-optimizer-interfaces.md)); `platform_api_url` comes from
-  [configuration](./10-spec-optimizer-configuration.md). The hourly `(min, mean, max)` summaries the
+  ([interfaces](./10-spec-optimizer-interfaces.md)); `platform_api_url` comes from
+  [configuration](./11-spec-optimizer-configuration.md). The hourly `(min, mean, max)` summaries the
   planner context needs may still be computed by TimescaleDB internal views or continuous aggregates,
   but that is a platform implementation detail.
 - **⚑ Alternatives & trip-wire:** **Direct SQL via SQLAlchemy/psycopg** (faster and closer to
@@ -152,11 +152,11 @@
 - **What:** The same HTTP client also submits refined setpoints to Phase 2.
 - **Why:** The write path is a single small `POST`, so a full client stack is unwarranted.
 - **How:** Writes refined setpoint bundles via `POST /api/greenhouses/{id}/setpoints`
-  ([interfaces](./09-spec-optimizer-interfaces.md)); Phase 2 remains the single authority and
+  ([interfaces](./10-spec-optimizer-interfaces.md)); Phase 2 remains the single authority and
   reconciles to the controller ([RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain)).
   In `trusted_network` mode the call is untokened; in `oidc` mode it presents the Keycloak
   client-credentials `Bearer` token carrying the narrow `setpoints:write` service role
-  ([interfaces — authenticating the write path](./09-spec-optimizer-interfaces.md#authenticating-the-phase-2-write-path),
+  ([interfaces — authenticating the write path](./10-spec-optimizer-interfaces.md#authenticating-the-phase-2-write-path),
   [RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009)).
   The client secret is `PLANNER_OIDC_CLIENT_SECRET`, from env only (`P3-SEC-1`).
 
@@ -168,7 +168,7 @@
 
 - **What:** Environment-variable → typed-settings binding.
 - **Why:** The optimizer is configured via **environment variables / the Compose file**, not a
-  per-greenhouse TOML ([configuration](./10-spec-optimizer-configuration.md)); `pydantic-settings`
+  per-greenhouse TOML ([configuration](./11-spec-optimizer-configuration.md)); `pydantic-settings`
   binds those env vars to typed, validated settings and **fails fast at load** on a bad value — the
   Python analog of the controller's `serde` + `toml` boundary validation.
 - **How:** Loads the Phase 2 endpoint and its service-auth mode, LLM provider / model /
@@ -208,7 +208,7 @@
   ([platform tech stack](../platform/10-spec-platform-tech-stack.md)).
 - **How:** Each cycle logs a JSON record carrying `optimizer_run_id`, the input-gate / twin outcome,
   and whether the plan was applied or escalated. `prometheus-client` exposes a **`/metrics`** surface
-  on the optimizer's FastAPI service ([interfaces §9](./09-spec-optimizer-interfaces.md)) — *optimizer-health*
+  on the optimizer's FastAPI service ([interfaces §9](./10-spec-optimizer-interfaces.md)) — *optimizer-health*
   (cycle rate/duration, twin divergence, planner failover, applied-vs-escalated), the metrics sibling
   of its `/health` endpoint. It joins the platform's shared Prometheus/Grafana
   ([platform operations §1](../platform/08-spec-platform-operations.md#1-observability)) as a third
@@ -220,13 +220,13 @@
 ## Testing
 
 - **What:** `pytest` unit tests plus the evaluation / regression suites of
-  [§07](./07-spec-optimizer-evaluation.md).
+  [§08](./08-spec-optimizer-evaluation.md).
 - **Why:** `P3-TEST-1` requires **100% of plans through the deterministic constraint engine**; the
   regression suite diffs plans against the **seeded twin** and the **pinned planner**, which is why
   determinism is designed into both ([digital twin §2](./03-spec-optimizer-digital-twin.md#2-robustness--fidelity),
   [planning — determinism](./04-spec-optimizer-planning.md#determinism--reproducibility)).
 - **How:** Unit tests cover the constraint engine, the input-quality gate
-  ([input gating](./06-spec-optimizer-input-gating.md)), and the context serializer's token-budget
+  ([input gating](./07-spec-optimizer-input-gating.md)), and the context serializer's token-budget
   behavior (`P3-PERF-3`); a LangChain fake / recorded chat model keeps planner tests off a live LLM;
   golden-scenario runs drive the seeded twin and assert plan stability. Coverage runs in CI.
 
@@ -253,7 +253,7 @@
   configured, is reached through Docker Desktop's default outbound internet access; the local `ollama`
   container is the **default** backend and needs no API key or network egress.
 - **How:** The `optimizer` service is configured entirely by environment / secret
-  ([configuration](./10-spec-optimizer-configuration.md)); the `ollama` service backs the default
+  ([configuration](./11-spec-optimizer-configuration.md)); the `ollama` service backs the default
   `endpoint` (`http://ollama:11434`). The optimizer is a **client** of Phase 2
   ([architecture](./02-spec-optimizer-architecture.md)) — it reads and writes through
   Phase 2's API; it opens **no** channel to a Phase 1 controller.
