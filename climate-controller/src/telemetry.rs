@@ -36,6 +36,27 @@ pub fn epoch() -> DateTime<Utc> {
         .expect("valid epoch")
 }
 
+/// The `(day-aligned base, seconds-of-day offset)` the simulated clock starts from.
+///
+/// `Some(start_ts)` → `(start_ts` truncated to UTC midnight, seconds since that midnight`)`;
+/// `None` → `(epoch(), 0)`. Telemetry `ts = base + sim_seconds` and the clock's `sim_seconds` starts
+/// at the returned offset, so a mid-day start keeps timestamps and `second_of_day` aligned (rather
+/// than telemetry reading 14:00 while day/night logic thinks it is midnight).
+pub fn sim_clock_start(start_ts: Option<DateTime<Utc>>) -> (DateTime<Utc>, u64) {
+    match start_ts {
+        Some(start) => {
+            let midnight = start
+                .date_naive()
+                .and_hms_opt(0, 0, 0)
+                .expect("valid midnight")
+                .and_utc();
+            let offset = (start - midnight).num_seconds().max(0) as u64;
+            (midnight, offset)
+        }
+        None => (epoch(), 0),
+    }
+}
+
 /// RFC 3339 UTC, millisecond precision, from a simulated-seconds offset off the epoch.
 fn ts(base: DateTime<Utc>, sim_seconds: u64) -> String {
     (base + Duration::seconds(sim_seconds as i64))
@@ -523,6 +544,25 @@ mod tests {
             last = p.tick();
         }
         last
+    }
+
+    #[test]
+    fn sim_clock_start_splits_into_midnight_base_and_seconds_of_day() {
+        let start: DateTime<Utc> = "2026-07-09T14:00:00Z".parse().unwrap();
+        let (base, offset) = sim_clock_start(Some(start));
+        assert_eq!(
+            base,
+            "2026-07-09T00:00:00Z".parse::<DateTime<Utc>>().unwrap()
+        );
+        assert_eq!(offset, 14 * 3600);
+        // The reconstructed instant (base + offset) is the start again, so telemetry and the
+        // clock's second-of-day agree.
+        assert_eq!(instant_ts(base, offset), "2026-07-09T14:00:00.000Z");
+    }
+
+    #[test]
+    fn sim_clock_start_defaults_to_the_fixed_epoch_at_midnight() {
+        assert_eq!(sim_clock_start(None), (epoch(), 0));
     }
 
     #[test]

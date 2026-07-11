@@ -169,9 +169,10 @@ func TestStateSnapshotRecordsHouseSensors(t *testing.T) {
 }
 
 func TestSweepInterval(t *testing.T) {
-	// Sized to the fastest accepted clock: 10s / (2 * MaxTimeScale) with MaxTimeScale=8.
-	if got := sweepInterval(10 * time.Second); got != 625*time.Millisecond {
-		t.Fatalf("sweepInterval(10s) = %v, want 625ms", got)
+	// Sized to the fastest accepted clock: 30s / (2 * MaxTimeScale) with MaxTimeScale=32
+	// = 468.75ms (above the floor, so the non-floored branch is exercised).
+	if got := sweepInterval(30 * time.Second); got != 468750*time.Microsecond {
+		t.Fatalf("sweepInterval(30s) = %v, want 468.75ms", got)
 	}
 	// A tiny horizon floors to minSweepInterval rather than spinning.
 	if got := sweepInterval(2 * time.Second); got != minSweepInterval {
@@ -181,6 +182,6 @@ func TestSweepInterval(t *testing.T) {
 	offlineAfter := 16 * time.Second
 	fastestHorizon := time.Duration(float64(offlineAfter) / domain.MaxTimeScale)
 	if got := sweepInterval(offlineAfter); got > fastestHorizon {
-		t.Fatalf("sweep %v must not lag the 8x horizon %v", got, fastestHorizon)
+		t.Fatalf("sweep %v must not lag the 32x horizon %v", got, fastestHorizon)
 	}
 }

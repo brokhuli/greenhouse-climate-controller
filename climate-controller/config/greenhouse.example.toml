@@ -32,6 +32,9 @@ co2_target_ppm = 1000
 co2_vent_interlock_threshold_pct = 15.0
 vpd_target_kpa = 1.0       # primary humidity control input (drives the RH target each tick)
 dli_target_mol = 20.0
+expected_peak_par = 800.0  # operator's clear-sky peak natural PAR estimate (µmol·m⁻²·s⁻¹); predicts
+                           # remaining daylight so grow lights cover only the shortfall the sun won't
+                           # provide. Independent of the hidden [simulation.solar]; 0 disables it.
 
 # --- Irrigation zones (spec §4) ------------------------------------------------------------
 [[zones]]
@@ -39,14 +42,17 @@ id = "bench-a"
 moisture_low_threshold = 0.35  # VWC — irrigation triggers below this
 moisture_high_threshold = 0.55 # VWC — irrigation stops above this
 drain_period_secs = 300        # minimum gap between cycles
-schedule = "06:00,14:00"       # time-of-day triggers
+# Every-2-hour daytime windows: the gated scheduler refills a couple hours after soil crosses the
+# low threshold, so the soil dries further between cycles (a deeper sawtooth) yet still refills well
+# above the air-dry residual.
+schedule = "06:00,08:00,10:00,12:00,14:00,16:00,18:00"
 
 [[zones]]
 id = "seedling-tray"
 moisture_low_threshold = 0.50
 moisture_high_threshold = 0.70
 drain_period_secs = 600
-schedule = "07:00,13:00,18:00"
+schedule = "07:00,09:00,11:00,13:00,15:00,17:00,19:00"
 
 # --- HAL simulation model (spec §3) --------------------------------------------------------
 [hal.time_constants] # first-order-lag τ per state variable (seconds)
@@ -61,7 +67,8 @@ outdoor_temp_c = 10.0
 ambient_humidity_pct = 50.0
 heat_loss_coeff = 0.002 # extra envelope conduction toward outdoor (small vs the τ pull)
 plant_co2_uptake_ppm_per_s = 0.5
-soil_drying_rate_per_s = 0.00005
+soil_drying_rate_per_s = 0.00002 # VWC/s ET draw when the valve is closed (≈2.8 h to fall 0.20 VWC)
+soil_residual_vwc = 0.15         # air-dry floor: drying settles here, never draws toward 0
 
 # Coupling matrix (spec §3): each actuator declares a SET of effects on climate variables,
 # never a one-to-one mapping (RFC-006). `gain` is the full-on contribution to that variable's
@@ -69,8 +76,12 @@ soil_drying_rate_per_s = 0.00005
 # Gains are sized to give each actuator real control authority (tuned via the seeded sim).
 [[hal.actuators]]
 actuator = "heater"
-effects = [{ variable = "temperature", gain = 18.0 }] # +18 °C above ambient at full
-constraints = { min_on_secs = 60, min_off_secs = 60 }
+effects = [{ variable = "temperature", gain = 22.0 }] # +22 °C above ambient at full
+# Anti short-cycle dwell. Kept short relative to the 120 s thermal τ: a longer min-off (e.g. 60 s)
+# holds the heater off past the point the air has fallen below setpoint, coasting into a deep
+# undershoot and a coarse night limit cycle. 30 s halves that swing while still protecting the
+# hardware from rapid cycling.
+constraints = { min_on_secs = 30, min_off_secs = 30 }
 
 [[hal.actuators]]
 actuator = "fans"
@@ -166,6 +177,11 @@ soil_moisture_bounds = { min = 0.0, max = 1.0 }
 time_scale = 1.0                   # reset-on-restart default; runtime-adjustable, ephemeral
 seed = 6582955728036744813         # fixes the run for reproducible tests
 sensor_injection_timeout_secs = 300
+# start_ts: shared simulated start (RFC 3339 UTC). Omitted → the fixed 2026-01-01 epoch
+# (deterministic default). deploy/scripts/gen-controllers.sh uncomments this and sets one shared
+# value (today @ a random whole hour) across the fleet, so every controller's first timestamp and
+# initial time-of-day agree; controllers then drift as each advances at its own time_scale.
+# start_ts = "2026-01-01T00:00:00.000Z"
 
 [simulation.solar] # natural light day-cycle (so grow lights supplement)
 sunrise = "06:00"

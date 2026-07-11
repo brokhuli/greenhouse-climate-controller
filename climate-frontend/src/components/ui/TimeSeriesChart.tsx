@@ -4,7 +4,7 @@ import "uplot/dist/uPlot.min.css";
 import type { SeriesPoint } from "../../lib/derivations";
 import { sparklineBounds } from "../../lib/chartScale";
 import { areaFill, resolveColor } from "../../lib/chartStyle";
-import { formatClockSeconds, formatTimestamp } from "../../lib/timeFormat";
+import { formatClockSeconds, formatTimestamp, utcTzDate } from "../../lib/timeFormat";
 import { useTheme } from "../../hooks/theme";
 
 /**
@@ -185,6 +185,8 @@ export function TimeSeriesChart({
     const opts: uPlot.Options = {
       width,
       height: plotHeight,
+      // Render the time axis in UTC (the simulated wall-clock frame), matching the hover readout.
+      tzDate: utcTzDate,
       legend: { show: false },
       cursor: { show: !isSparkline },
       plugins: isSparkline

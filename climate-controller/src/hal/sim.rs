@@ -11,7 +11,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use crate::clock::{Clock, DT_SECS};
+use crate::clock::{Clock, DT_SECS, MAX_TIME_SCALE, MIN_TIME_SCALE};
 use crate::config::{Config, Disturbances, Noise, Solar, TimeConstants};
 use crate::domain::{Actuator, ClimateVariable, Slug};
 use crate::rng::Rng;
@@ -264,8 +264,12 @@ impl SimulatedHal {
         let target_p = self.solar.peak_par * solar + self.house_actuator_sum(ClimateVariable::Par);
         self.par += (dt / self.tau.par_s) * (target_p - self.par);
 
-        // Soil moisture per zone: lag toward the valve's wetting target, minus constant drying.
+        // Soil moisture per zone: an open valve fills toward saturation; otherwise the soil dries
+        // by a slow, roughly-constant evapotranspiration draw, down to a residual (air-dry) floor
+        // — never toward bone-dry. Bang-bang irrigation makes `wetting_target` 0 or `valve_gain`,
+        // so `wetting_target > *s` cleanly selects the fill vs. dry branch.
         let drying = self.disturbances.soil_drying_rate_per_s * dt;
+        let residual = self.disturbances.soil_residual_vwc;
         let tau_soil = self.tau.soil_moisture_s;
         let valve_gain = self.valve_soil_gain;
         let zones = self.zone_ids.clone();
@@ -276,9 +280,15 @@ impl SimulatedHal {
             } else {
                 self.observed.get(&id)
             };
-            let target_s = valve_gain * level / 100.0;
+            let wetting_target = valve_gain * level / 100.0;
             if let Some(s) = self.soil.get_mut(&z) {
-                *s += (dt / tau_soil) * (target_s - *s) - drying;
+                if wetting_target > *s {
+                    // Valve delivering: first-order fill toward the wetting target.
+                    *s += (dt / tau_soil) * (wetting_target - *s);
+                } else if *s > residual {
+                    // Idle: constant ET drawdown, floored at the residual (air-dry) baseline.
+                    *s = (*s - drying).max(residual);
+                }
                 *s = s.clamp(0.0, 1.0);
             }
         }
@@ -376,7 +386,7 @@ impl SimControl for SimulatedHal {
     }
 
     fn set_time_scale(&mut self, scale: f64) {
-        self.time_scale = scale.clamp(0.25, 8.0);
+        self.time_scale = scale.clamp(MIN_TIME_SCALE, MAX_TIME_SCALE);
     }
 
     fn time_scale(&self) -> f64 {
@@ -522,5 +532,54 @@ mod tests {
             (hal.read().temperature_probes[0] - off_temp).abs() < 0.5,
             "no-effect heater must track the heater-off trajectory"
         );
+    }
+
+    /// A closed valve dries the soil by the constant ET draw and settles at the residual floor —
+    /// it never draws toward bone-dry (the old lag-to-0 artifact).
+    #[test]
+    fn closed_valve_dries_to_residual_floor_not_zero() {
+        let mut cfg = config();
+        cfg.simulation.noise.soil_moisture = 0.0; // read the true soil value exactly
+        cfg.simulation.initial.soil_moisture = 0.5;
+        cfg.hal.disturbances.soil_drying_rate_per_s = 0.01; // large draw so the floor is reached fast
+        cfg.hal.disturbances.soil_residual_vwc = 0.2;
+        let zone = cfg.zones[0].id.clone();
+
+        let mut hal = SimulatedHal::new(&cfg);
+        let off = Commands::all_off(std::slice::from_ref(&zone));
+        let mut clock = Clock::new();
+        for _ in 0..200 {
+            hal.command(&off);
+            hal.step(&clock);
+            clock.advance();
+        }
+
+        let soil = hal.read().soil_moisture[&zone];
+        assert!(
+            (soil - 0.2).abs() < 1e-9,
+            "soil should settle at the residual floor (0.2), got {soil}"
+        );
+    }
+
+    /// An open valve fills the soil toward saturation (the wetting path is unchanged).
+    #[test]
+    fn open_valve_wets_soil() {
+        let mut cfg = config();
+        cfg.simulation.noise.soil_moisture = 0.0;
+        cfg.simulation.initial.soil_moisture = 0.3;
+        let zone = cfg.zones[0].id.clone();
+
+        let mut hal = SimulatedHal::new(&cfg);
+        let mut open = Commands::all_off(std::slice::from_ref(&zone));
+        open.set(&ActuatorId::Valve(zone.clone()), 100.0);
+        let mut clock = Clock::new();
+        for _ in 0..300 {
+            hal.command(&open);
+            hal.step(&clock);
+            clock.advance();
+        }
+
+        let soil = hal.read().soil_moisture[&zone];
+        assert!(soil > 0.4, "an open valve should wet the soil, got {soil}");
     }
 }

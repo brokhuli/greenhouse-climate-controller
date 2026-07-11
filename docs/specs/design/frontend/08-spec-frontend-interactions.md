@@ -158,8 +158,8 @@ The simulation-speed knob is the one **live** (non-confirmed) write, because it 
 a setpoint:
 
 - **Immediate, no confirmation dialog.** Picking a speed on the `TimeScaleControl`
-  ([components](./06-spec-frontend-components.md)) — a segmented 0.5×/1×/2×/4× control (or a slider
-  across the 0.25–8× range) — fires the `PATCH .../sim/time-scale` straight away; speeding a
+  ([components](./06-spec-frontend-components.md)) — a segmented 0.5×/1×/2×/4×/8×/16×/32× control (or
+  a slider across the 0.25–32× range) — fires the `PATCH .../sim/time-scale` straight away; speeding a
   simulation up or down is cheap and reversible, so the deliberate edit→confirm gate above does not
   apply.
 - **Optimistic with rollback.** The control shows the new speed in a **pending** style until the API

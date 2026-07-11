@@ -30,6 +30,7 @@ impl Hal {
     /// actuator, at least one effect per actuator).
     pub fn validate(&self, violations: &mut Vec<FieldViolation>) {
         self.time_constants.validate(violations);
+        self.disturbances.validate(violations);
 
         let mut seen = HashSet::new();
         for (i, model) in self.actuators.iter().enumerate() {
@@ -127,8 +128,33 @@ pub struct Disturbances {
     pub heat_loss_coeff: f64,
     /// Plant CO₂ uptake during light hours (ppm per second).
     pub plant_co2_uptake_ppm_per_s: f64,
-    /// Per-zone soil drying rate (VWC per second).
+    /// Per-zone soil drying rate (VWC per second) — the constant evapotranspiration draw when a
+    /// zone's valve is closed.
     pub soil_drying_rate_per_s: f64,
+    /// Air-dry residual VWC the soil settles at when unwatered; drying never draws below this
+    /// (undisturbed soil approaches an air-dry baseline, not 0). Defaulted so existing configs
+    /// that predate the field keep parsing.
+    #[serde(default = "default_soil_residual_vwc")]
+    pub soil_residual_vwc: f64,
+}
+
+/// Default air-dry residual VWC (a plausible substrate floor, below typical low thresholds).
+fn default_soil_residual_vwc() -> f64 {
+    0.15
+}
+
+impl Disturbances {
+    fn validate(&self, violations: &mut Vec<FieldViolation>) {
+        // The residual floor is a VWC fraction: it must be finite and within [0, 1], else it can
+        // sit above saturation or invert the drying floor in the HAL soil model.
+        if !self.soil_residual_vwc.is_finite() || !(0.0..=1.0).contains(&self.soil_residual_vwc) {
+            violations.push(FieldViolation::new(
+                "hal.disturbances.soil_residual_vwc",
+                "within [0.0, 1.0]",
+                serde_json::json!(self.soil_residual_vwc),
+            ));
+        }
+    }
 }
 
 /// One actuator's entry in the coupling matrix: its effect set and hardware constraints.
@@ -197,6 +223,7 @@ mod tests {
             heat_loss_coeff: 0.02,
             plant_co2_uptake_ppm_per_s: 0.5,
             soil_drying_rate_per_s: 0.00001,
+            soil_residual_vwc: 0.15,
         }
     }
 
@@ -259,6 +286,26 @@ mod tests {
             v.iter()
                 .any(|x| x.bound == "must declare at least one effect")
         );
+    }
+
+    #[test]
+    fn out_of_range_soil_residual_is_flagged() {
+        for bad in [-0.1, 1.5, f64::NAN] {
+            let mut d = disturbances();
+            d.soil_residual_vwc = bad;
+            let hal = Hal {
+                time_constants: time_constants(),
+                disturbances: d,
+                actuators: vec![heater()],
+            };
+            let mut v = Vec::new();
+            hal.validate(&mut v);
+            assert!(
+                v.iter()
+                    .any(|x| x.field == "hal.disturbances.soil_residual_vwc"),
+                "residual {bad} should be flagged: {v:?}"
+            );
+        }
     }
 
     #[test]

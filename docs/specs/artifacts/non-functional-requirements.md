@@ -98,7 +98,8 @@ HAL time constants ([HAL §2](../design/controller/03-spec-controller-hal-simula
 > knob scales only the wall-clock tick *cadence* (`sleep = 1000 / time_scale` ms), so off 1× the
 > effective period and the absolute jitter move with it — the fixed-1 Hz / ≤50 ms targets are stated
 > at 1×, and the knob is bounded to the simulated backend. It does **not** relax the per-tick compute
-> budget **P1-PERF-3** (which is what caps the maximum usable speed), and it does **not** affect
+> budget **P1-PERF-3**; measured per-tick compute is ≈9 µs, far under that budget, so the cap on
+> usable speed (the 32× ceiling) is wall-clock timer granularity, not compute. It does **not** affect
 > **P1-TEST-2**: `Δt` and the seeded draw order are unchanged, so replay stays tick-indexed and
 > bit-identical at any speed. See [HAL §7](../design/controller/03-spec-controller-hal-simulation.md#time-scale-speed-without-breaking-determinism)
 > and [controller constraints §1](../design/controller/10-spec-controller-constraints.md#1-determinism--real-time).

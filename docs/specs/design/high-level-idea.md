@@ -316,7 +316,7 @@ independent control loops); site-wide orchestration across greenhouses is **out 
 - **Python** — core logic
 - **FastAPI** — service interface
 - **NumPy/SciPy** — simulation
-- **LangChain** (`langchain-anthropic`/`langchain-openai` primary, `langchain-community` Ollama fallback) — planning chain; see [RFC-004](../../decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface)
+- **LangChain** (`langchain-community` Ollama default local backend, `langchain-anthropic`/`langchain-openai` opt-in cloud backends) — planning chain; see [RFC-004](../../decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface)
 - **Phase 2 REST API** — refined-setpoint delivery (Phase 2 is the single setpoint authority; see [RFC-005](../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain))
 - **Postgres** — historical data
 

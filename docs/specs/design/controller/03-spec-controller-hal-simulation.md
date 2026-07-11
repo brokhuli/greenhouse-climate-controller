@@ -126,7 +126,9 @@ fight:
 - **Solar / PAR day cycle** — natural light by time of day; drives natural PAR (so
   grow lights *supplement*) and solar heat gain.
 - **Plant CO₂ uptake** — consumes CO₂ during light hours.
-- **Per-zone soil drying** — soil moisture decays over time.
+- **Per-zone soil drying** — a slow, roughly-constant evapotranspiration draw when a zone's valve
+  is closed, down to an air-dry **residual** floor (soil never decays to bare 0); an open valve
+  fills that zone toward saturation.
 - **Ambient humidity drift.**
 
 > **Boundary.** The controller sees only sensor readings; simulation internals and
@@ -171,9 +173,9 @@ how fast it runs *in wall-clock* is purely a question of how often the
 [scheduler](./02-spec-controller-architecture.md#3-real-time--scheduling-model) fires a tick — a
 property entirely outside the simulation. A simulation-only **`time_scale`** knob exploits this:
 it multiplies the wall-clock tick cadence (`sleep = tick_period / time_scale`) so an operator or
-test can run the plant at 0.5× / 1× / 2× / 4× (any value in a clamped range, canonical stops
-0.5/1/2/4) — slow-motion to inspect a transient, fast-forward to reach a DLI or drain milestone
-sooner.
+test can run the plant at 0.5× / 1× / 2× / 4× / 8× / 16× / 32× (any value in a clamped range,
+canonical stops 0.5/1/2/4/8/16/32) — slow-motion to inspect a transient, fast-forward to reach a DLI
+or drain milestone sooner.
 
 - **`Δt` and the seed are untouched.** The knob changes *when* ticks fire, never the per-tick step
   or the seeded PRNG draw order. The tick-for-tick sequence of readings is therefore **identical**
@@ -187,9 +189,11 @@ sooner.
   saturation and no-response windows — so they all speed up together, the intended effect.
   Infrastructure timers that are genuinely wall-clock (MQTT reconnect backoff, REST/HTTP timeouts)
   stay on wall-clock and do **not** scale.
-- **Speed-up is CPU-bound; slow-down is free.** At `time_scale = S` the wall interval is
-  `1000/S` ms, which must stay above the per-tick compute budget (`P1-PERF-3`, ≤100 ms) — so there
-  is a practical ceiling (the contract clamps to 8×); below 1× there is none.
+- **Speed-up is bounded by timer granularity; slow-down is free.** At `time_scale = S` the wall
+  interval is `1000/S` ms. Per-tick compute is ≈9 µs — far under the `P1-PERF-3` ≤100 ms budget — so
+  the ceiling is not compute but wall-clock timer granularity/jitter: 32× (~31 ms) holds with modest
+  jitter, whereas 64× (~16 ms) is where OS timer granularity dominates, so the contract clamps to
+  32×; below 1× there is none.
 - **Simulation-only, independent, ephemeral.** A real-hardware backend has no notion of wall-clock
   speed, so the knob lives on the simulated backend only (reached through a sim-only HAL extension,
   like [sensor injection §9](#9-sensor-reading-injection)) and its

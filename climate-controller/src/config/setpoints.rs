@@ -43,6 +43,14 @@ pub struct Setpoints {
     pub vpd_target_kpa: f64,
     /// Daily Light Integral target driving supplemental lighting (mol·m⁻²·day⁻¹).
     pub dli_target_mol: f64,
+    /// Expected clear-sky peak natural PAR at solar noon (µmol·m⁻²·s⁻¹), used to *predict* how much
+    /// natural DLI is still coming before `day_end` so supplemental grow lights cover only the
+    /// shortfall the sun won't provide (and turn off early on bright days). A controller-side
+    /// operator estimate — independent of, and never read from, the simulator's hidden
+    /// `[simulation.solar]`. `0` disables the prediction: lights fall back to purely reactive
+    /// (on whenever behind the target during the day window). Optional; defaults to `0`.
+    #[serde(default)]
+    pub expected_peak_par: f64,
 }
 
 impl Setpoints {
@@ -94,6 +102,7 @@ impl Setpoints {
         );
         check_min(violations, "vpd_target_kpa", self.vpd_target_kpa, 0.0);
         check_min(violations, "dli_target_mol", self.dli_target_mol, 0.0);
+        check_min(violations, "expected_peak_par", self.expected_peak_par, 0.0);
 
         // Cross-field invariants the JSON Schema can't express (controller-enforced 422).
         if self.humidity_low_pct >= self.humidity_high_pct {
@@ -130,6 +139,7 @@ mod tests {
             co2_vent_interlock_threshold_pct: 15.0,
             vpd_target_kpa: 1.0,
             dli_target_mol: 20.0,
+            expected_peak_par: 800.0,
         }
     }
 
@@ -174,5 +184,14 @@ mod tests {
             v.iter()
                 .any(|x| x.field == "humidity_deadband_pct" && x.bound == "0..=50")
         );
+    }
+
+    #[test]
+    fn negative_expected_peak_par_is_flagged() {
+        let mut s = valid();
+        s.expected_peak_par = -1.0; // a clear-sky peak can't be negative
+        let mut v = Vec::new();
+        s.validate(&mut v);
+        assert!(v.iter().any(|x| x.field == "expected_peak_par"));
     }
 }

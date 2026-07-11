@@ -142,7 +142,7 @@ export const wireGreenhouseSummary = z.object({
   crop: z.string().nullable(),
   status: connectivitySchema,
   drift: z.boolean().default(false),
-  time_scale: z.number().min(0.25).max(8).nullable().optional(),
+  time_scale: z.number().min(0.25).max(32).nullable().optional(),
   climate: wireClimate.optional(),
 });
 
@@ -152,7 +152,7 @@ export const wireGreenhouseDetail = z.object({
   crop: z.string().nullable(),
   status: connectivitySchema,
   drift: z.boolean().default(false),
-  time_scale: z.number().min(0.25).max(8).nullable().optional(),
+  time_scale: z.number().min(0.25).max(32).nullable().optional(),
   setpoints: wireSetpoints,
   zone_status: z.array(wireZoneStatus),
 });
@@ -234,21 +234,21 @@ export const wireEventEntry = z.object({
   source: z.string().optional(),
 });
 
-export const wireTimeScalePatch = z.object({ scale: z.number().min(0.25).max(8) });
+export const wireTimeScalePatch = z.object({ scale: z.number().min(0.25).max(32) });
 
 export const wireTimeScale = z.object({
-  scale: z.number().min(0.25).max(8),
+  scale: z.number().min(0.25).max(32),
   tick_index: z.number().int().min(0),
   updated_at: isoTimestamp,
 });
 
 export const wireFleetTimeScaleResult = z.object({
-  requested_scale: z.number().min(0.25).max(8),
+  requested_scale: z.number().min(0.25).max(32),
   results: z.array(
     z.object({
       greenhouse_id: slug,
       applied: z.boolean(),
-      scale: z.number().min(0.25).max(8).nullable(),
+      scale: z.number().min(0.25).max(32).nullable(),
       detail: z.string().nullable(),
     }),
   ),
@@ -315,7 +315,7 @@ export const statusFrame = z
     zone_id: z.null(),
     type: z.literal("status"),
     status: connectivitySchema,
-    time_scale: z.number().min(0.25).max(8).optional(),
+    time_scale: z.number().min(0.25).max(32).optional(),
   })
   .strict();
 
@@ -689,7 +689,35 @@ export const toWireRegistration = (
 // Crop profiles & assignment (2b) — library entries and their greenhouse binding
 // ---------------------------------------------------------------------------
 
-export const wireProfileStage = z.object({ stage: z.string().min(1), targets: wireSetpoints });
+/** A crop-safe [min, max] envelope for one scalar climate target (frontend-rest Bound). */
+export const wireBound = z.object({ min: z.number(), max: z.number() });
+
+/** A stage's crop-safe envelope for the numeric per-zone irrigation targets (frontend-rest ZoneBounds). */
+export const wireZoneBounds = z.object({
+  moisture_low_threshold: wireBound.optional(),
+  moisture_high_threshold: wireBound.optional(),
+  drain_period_secs: wireBound.optional(),
+});
+
+/** A stage's crop-safe envelope: an optional Bound per scalar climate target (frontend-rest StageBounds). */
+export const wireStageBounds = z.object({
+  temperature_day_c: wireBound.optional(),
+  temperature_night_c: wireBound.optional(),
+  humidity_low_pct: wireBound.optional(),
+  humidity_high_pct: wireBound.optional(),
+  humidity_deadband_pct: wireBound.optional(),
+  co2_target_ppm: wireBound.optional(),
+  co2_vent_interlock_threshold_pct: wireBound.optional(),
+  vpd_target_kpa: wireBound.optional(),
+  dli_target_mol: wireBound.optional(),
+  zones: wireZoneBounds.optional(),
+});
+
+export const wireProfileStage = z.object({
+  stage: z.string().min(1),
+  targets: wireSetpoints,
+  bounds: wireStageBounds.optional(),
+});
 
 export const wireCropProfile = z.object({
   id: slug,
@@ -706,15 +734,99 @@ export const wireAssignment = z.object({
   stage: z.string().min(1),
 });
 
-export type ProfileStage = { stage: string; targets: Setpoints };
+/** A crop-safe [min, max] envelope for one scalar climate target. */
+export type Bound = { min: number; max: number };
+
+/** The scalar climate setpoint keys that can carry a crop-safe envelope (all but time-of-day/zones). */
+export type ScalarSetpointKey =
+  | "temperatureDayC"
+  | "temperatureNightC"
+  | "humidityLowPct"
+  | "humidityHighPct"
+  | "humidityDeadbandPct"
+  | "co2TargetPpm"
+  | "co2VentInterlockThresholdPct"
+  | "vpdTargetKpa"
+  | "dliTargetMol";
+
+/** The numeric per-zone irrigation keys that can carry a crop-safe envelope (schedule carries none). */
+export type ZoneBoundKey = "moistureLowThreshold" | "moistureHighThreshold" | "drainPeriodSecs";
+
+/** A stage's crop-safe envelope for the numeric per-zone irrigation targets, applied to every zone. */
+export type ZoneBounds = Partial<Record<ZoneBoundKey, Bound>>;
+
+/** A stage's crop-safe envelope: an optional Bound per scalar climate target, plus a per-zone envelope. */
+export type StageBounds = Partial<Record<ScalarSetpointKey, Bound>> & { zones?: ZoneBounds };
+
+export type ProfileStage = { stage: string; targets: Setpoints; bounds?: StageBounds };
 export type CropProfile = { id: string; name: string; crop: string; stages: ProfileStage[] };
 export type Assignment = { greenhouseId: string; profileId: string; stage: string };
 export type AssignmentInput = { profileId: string; stage: string };
 
-export const toProfileStage = (w: z.infer<typeof wireProfileStage>): ProfileStage => ({
-  stage: w.stage,
-  targets: toSetpoints(w.targets),
-});
+// Pairs each envelope target's camelCase view key with its snake_case wire key — the single table
+// the StageBounds adapters iterate so encode/decode stay in lockstep.
+const BOUND_KEYS: [ScalarSetpointKey, Exclude<keyof z.infer<typeof wireStageBounds>, "zones">][] = [
+  ["temperatureDayC", "temperature_day_c"],
+  ["temperatureNightC", "temperature_night_c"],
+  ["humidityLowPct", "humidity_low_pct"],
+  ["humidityHighPct", "humidity_high_pct"],
+  ["humidityDeadbandPct", "humidity_deadband_pct"],
+  ["co2TargetPpm", "co2_target_ppm"],
+  ["co2VentInterlockThresholdPct", "co2_vent_interlock_threshold_pct"],
+  ["vpdTargetKpa", "vpd_target_kpa"],
+  ["dliTargetMol", "dli_target_mol"],
+];
+
+// The per-zone envelope counterpart to BOUND_KEYS.
+const ZONE_BOUND_KEYS: [ZoneBoundKey, keyof z.infer<typeof wireZoneBounds>][] = [
+  ["moistureLowThreshold", "moisture_low_threshold"],
+  ["moistureHighThreshold", "moisture_high_threshold"],
+  ["drainPeriodSecs", "drain_period_secs"],
+];
+
+export const toZoneBounds = (w: z.infer<typeof wireZoneBounds>): ZoneBounds => {
+  const bounds: ZoneBounds = {};
+  for (const [key, wireKey] of ZONE_BOUND_KEYS) {
+    const b = w[wireKey];
+    if (b) bounds[key] = { min: b.min, max: b.max };
+  }
+  return bounds;
+};
+
+export const toWireZoneBounds = (bounds: ZoneBounds): z.input<typeof wireZoneBounds> => {
+  const wire: z.input<typeof wireZoneBounds> = {};
+  for (const [key, wireKey] of ZONE_BOUND_KEYS) {
+    const b = bounds[key];
+    if (b) wire[wireKey] = { min: b.min, max: b.max };
+  }
+  return wire;
+};
+
+export const toStageBounds = (w: z.infer<typeof wireStageBounds>): StageBounds => {
+  const bounds: StageBounds = {};
+  for (const [key, wireKey] of BOUND_KEYS) {
+    const b = w[wireKey];
+    if (b) bounds[key] = { min: b.min, max: b.max };
+  }
+  if (w.zones) bounds.zones = toZoneBounds(w.zones);
+  return bounds;
+};
+
+export const toWireStageBounds = (bounds: StageBounds): z.input<typeof wireStageBounds> => {
+  const wire: z.input<typeof wireStageBounds> = {};
+  for (const [key, wireKey] of BOUND_KEYS) {
+    const b = bounds[key];
+    if (b) wire[wireKey] = { min: b.min, max: b.max };
+  }
+  if (bounds.zones) wire.zones = toWireZoneBounds(bounds.zones);
+  return wire;
+};
+
+export const toProfileStage = (w: z.infer<typeof wireProfileStage>): ProfileStage => {
+  const stage: ProfileStage = { stage: w.stage, targets: toSetpoints(w.targets) };
+  if (w.bounds) stage.bounds = toStageBounds(w.bounds);
+  return stage;
+};
 
 export const toCropProfile = (w: z.infer<typeof wireCropProfile>): CropProfile => ({
   id: w.id,
@@ -753,14 +865,17 @@ export const toWireSetpoints = (setpoints: Setpoints): z.input<typeof wireSetpoi
   zones: setpoints.zones.map(toWireZoneTargets),
 });
 
+const toWireProfileStage = (stage: ProfileStage): z.input<typeof wireProfileStage> => ({
+  stage: stage.stage,
+  targets: toWireSetpoints(stage.targets),
+  ...(stage.bounds ? { bounds: toWireStageBounds(stage.bounds) } : {}),
+});
+
 export const toWireCropProfile = (profile: CropProfile): z.input<typeof wireCropProfile> => ({
   id: profile.id,
   name: profile.name,
   crop: profile.crop,
-  stages: profile.stages.map((stage) => ({
-    stage: stage.stage,
-    targets: toWireSetpoints(stage.targets),
-  })),
+  stages: profile.stages.map(toWireProfileStage),
 });
 
 /** Encode a profile edit as a CropProfilePatch (id is immutable — path identity only). */
@@ -769,10 +884,7 @@ export const toWireCropProfilePatch = (
 ): { name: string; crop: string; stages: z.input<typeof wireProfileStage>[] } => ({
   name: profile.name,
   crop: profile.crop,
-  stages: profile.stages.map((stage) => ({
-    stage: stage.stage,
-    targets: toWireSetpoints(stage.targets),
-  })),
+  stages: profile.stages.map(toWireProfileStage),
 });
 
 export const toWireAssignmentInput = (

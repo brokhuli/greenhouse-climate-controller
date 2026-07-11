@@ -95,13 +95,13 @@ func validateRegistration(reg registrationDTO) *valError {
 // express, on the fields present in a partial setpoint edit (frontend-rest SetpointsPatch).
 func validateSetpointsPatch(patch setpointsPatchDTO) *valError {
 	checks := []*valError{
-		rangeF("temperature_day_c", patch.TemperatureDayC, -20, 60),
-		rangeF("temperature_night_c", patch.TemperatureNightC, -20, 60),
-		rangeF("humidity_low_pct", patch.HumidityLowPct, 0, 100),
-		rangeF("humidity_high_pct", patch.HumidityHighPct, 0, 100),
-		rangeF("humidity_deadband_pct", patch.HumidityDeadbandPct, 0, 50),
-		rangeI("co2_target_ppm", patch.CO2TargetPpm, 0, 5000),
-		rangeF("co2_vent_interlock_threshold_pct", patch.CO2VentInterlockThresholdPct, 0, 100),
+		rangeF("temperature_day_c", patch.TemperatureDayC, physTempMinC, physTempMaxC),
+		rangeF("temperature_night_c", patch.TemperatureNightC, physTempMinC, physTempMaxC),
+		rangeF("humidity_low_pct", patch.HumidityLowPct, physPctMin, physPctMax),
+		rangeF("humidity_high_pct", patch.HumidityHighPct, physPctMin, physPctMax),
+		rangeF("humidity_deadband_pct", patch.HumidityDeadbandPct, physPctMin, physDeadbandMaxPct),
+		rangeI("co2_target_ppm", patch.CO2TargetPpm, physCO2MinPpm, physCO2MaxPpm),
+		rangeF("co2_vent_interlock_threshold_pct", patch.CO2VentInterlockThresholdPct, physPctMin, physPctMax),
 		minF("vpd_target_kpa", patch.VPDTargetKpa, 0),
 		minF("dli_target_mol", patch.DLITargetMol, 0),
 	}

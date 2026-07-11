@@ -2,8 +2,10 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -32,6 +34,26 @@ func (s *Server) editSetpoints(c echo.Context) error {
 func (s *Server) submitSetpoints(c echo.Context) error {
 	actor := s.setpointActor(c, "optimizer")
 	return s.applySetpointWrite(c, domain.SourceOptimizer, actor, "optimizer setpoint submission", http.StatusAccepted)
+}
+
+// resolveStageBounds returns the crop-safe envelope of the greenhouse's active profile stage, used to
+// gate optimizer setpoint writes. It is nil when the greenhouse has no assignment, the assigned
+// profile or stage is gone, or the stage defines no envelope — in which case the optimizer write falls
+// back to the generic physical bounds alone. A store error is propagated (surfaced as 500).
+func (s *Server) resolveStageBounds(ctx context.Context, greenhouseID string) (*domain.StageBounds, error) {
+	assignment, found, err := s.store.GetAssignment(ctx, greenhouseID)
+	if err != nil || !found {
+		return nil, err
+	}
+	profile, found, err := s.store.GetProfile(ctx, assignment.ProfileID)
+	if err != nil || !found {
+		return nil, err
+	}
+	stage, ok := profile.Stage(assignment.Stage)
+	if !ok {
+		return nil, nil
+	}
+	return stage.Bounds, nil
 }
 
 // setpointActor is the audit actor for a setpoint write: the authenticated token's username (or
@@ -91,9 +113,26 @@ func (s *Server) applySetpointWrite(c echo.Context, source domain.SetpointSource
 		// No intended state yet and the controller could not be reached to seed one.
 		return respondError(c, http.StatusServiceUnavailable, "controller unreachable")
 	}
-	candidate := applyGlobalPatch(baseline, patch)
+	candidate, patchErr := applyPatch(baseline, patch)
+	if patchErr != nil {
+		return respondValidation(c, patchErr)
+	}
 	if verr := validateSetpoints(candidate); verr != nil {
 		return respondValidation(c, verr)
+	}
+	// Optimizer writes are additionally gated to the active crop profile stage's crop-safe envelope
+	// (RFC-005): a candidate outside it is rejected 422 naming the violated bound. Operator edits are
+	// deliberately not gated here — a sticky operator edit wins over the profile (crop-profiles §5).
+	if source == domain.SourceOptimizer {
+		bounds, err := s.resolveStageBounds(ctx, id)
+		if err != nil {
+			return s.fail(c, err)
+		}
+		if bounds != nil {
+			if verr := validateSetpointsWithinBounds(candidate, *bounds); verr != nil {
+				return respondValidation(c, verr)
+			}
+		}
 	}
 
 	outcome, err := s.reconcile.Apply(ctx, id, candidate, source, actor, description)
@@ -109,11 +148,11 @@ func (s *Server) applySetpointWrite(c echo.Context, source domain.SetpointSource
 	return c.JSON(successStatus, outcome.Setpoints)
 }
 
-// applyGlobalPatch merges a partial edit's global setpoint fields onto a baseline bundle. Zone
-// targets are carried from the baseline unchanged: ad-hoc zone-target edits are out of the 2b
-// backbone (zone targets are governed by the assigned crop profile), mirroring 2a's decision not
-// to relay zones through this path.
-func applyGlobalPatch(base domain.Setpoints, patch setpointsPatchDTO) domain.Setpoints {
+// applyPatch merges a partial edit onto a baseline bundle: the global climate fields overwrite their
+// targets, and a present zones array updates the matching baseline zones by zone_id (mergeZonePatch).
+// Zone topology is fixed — a zone_id the baseline does not have is rejected — so the merged bundle
+// always covers exactly the greenhouse's configured zones. A zone-level rejection surfaces as 422.
+func applyPatch(base domain.Setpoints, patch setpointsPatchDTO) (domain.Setpoints, *valError) {
 	if patch.TemperatureDayC != nil {
 		base.TemperatureDayC = *patch.TemperatureDayC
 	}
@@ -147,7 +186,75 @@ func applyGlobalPatch(base domain.Setpoints, patch setpointsPatchDTO) domain.Set
 	if patch.DLITargetMol != nil {
 		base.DLITargetMol = *patch.DLITargetMol
 	}
-	return base
+	if patch.Zones != nil {
+		zones, verr := mergeZonePatch(base.Zones, patch.Zones)
+		if verr != nil {
+			return domain.Setpoints{}, verr
+		}
+		base.Zones = zones
+	}
+	return base, nil
+}
+
+// mergeZonePatch overlays a patch's per-zone targets onto the baseline zone set, matched by zone_id.
+// Each patch entry must fully specify its targets (all fields present — a zone write replaces that
+// zone's whole bundle) and name a zone the baseline already has; an unknown zone_id (a topology
+// change, which is a controller config + restart concern) or a duplicate id is rejected 422. Zones
+// the patch does not name are carried through unchanged. The returned slice is fresh — the baseline's
+// backing array is never mutated.
+func mergeZonePatch(base []domain.ZoneTargets, patch []zoneTargetsDTO) ([]domain.ZoneTargets, *valError) {
+	merged := make([]domain.ZoneTargets, len(base))
+	copy(merged, base)
+	position := make(map[string]int, len(base))
+	for i, zone := range base {
+		position[zone.ZoneID] = i
+	}
+	seen := make(map[string]bool, len(patch))
+	for i, dto := range patch {
+		field := fmt.Sprintf("zones[%d]", i)
+		zone, verr := zoneFromDTO(field, dto)
+		if verr != nil {
+			return nil, verr
+		}
+		pos, ok := position[zone.ZoneID]
+		if !ok {
+			return nil, &valError{Field: field + ".zone_id", Bound: "unknown zone", Value: zone.ZoneID}
+		}
+		if seen[zone.ZoneID] {
+			return nil, &valError{Field: field + ".zone_id", Bound: "duplicate", Value: zone.ZoneID}
+		}
+		seen[zone.ZoneID] = true
+		merged[pos] = zone
+	}
+	return merged, nil
+}
+
+// zoneFromDTO converts a fully-specified zone patch entry into a domain ZoneTargets. Every target
+// field is required on a zone write (contracts ZoneTargets required set); a missing field is a 422.
+// Value ranges and the moisture ordering are already checked by validateZone before this runs.
+func zoneFromDTO(field string, dto zoneTargetsDTO) (domain.ZoneTargets, *valError) {
+	required := []struct {
+		name    string
+		present bool
+	}{
+		{"zone_id", dto.ZoneID != nil},
+		{"moisture_low_threshold", dto.MoistureLowThreshold != nil},
+		{"moisture_high_threshold", dto.MoistureHighThreshold != nil},
+		{"drain_period_secs", dto.DrainPeriodSecs != nil},
+		{"schedule", dto.Schedule != nil},
+	}
+	for _, r := range required {
+		if !r.present {
+			return domain.ZoneTargets{}, &valError{Field: field + "." + r.name, Bound: "required"}
+		}
+	}
+	return domain.ZoneTargets{
+		ZoneID:                *dto.ZoneID,
+		MoistureLowThreshold:  *dto.MoistureLowThreshold,
+		MoistureHighThreshold: *dto.MoistureHighThreshold,
+		DrainPeriodSecs:       *dto.DrainPeriodSecs,
+		Schedule:              *dto.Schedule,
+	}, nil
 }
 
 // decodeSetpointsPatch parses the patch body, rejecting unknown fields to honor the

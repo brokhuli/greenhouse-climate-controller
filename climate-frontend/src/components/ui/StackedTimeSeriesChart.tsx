@@ -10,7 +10,7 @@ import {
   type BandScale,
 } from "../../lib/stackedChart";
 import { resolveColor } from "../../lib/chartStyle";
-import { formatTimestamp } from "../../lib/timeFormat";
+import { formatTimestamp, utcTzDate } from "../../lib/timeFormat";
 import { useTheme } from "../../hooks/theme";
 import type { ReferenceLine } from "./TimeSeriesChart";
 
@@ -293,6 +293,8 @@ export function StackedTimeSeriesChart({
     const opts: uPlot.Options = {
       width,
       height: plotHeight,
+      // Render the time axis in UTC (the simulated wall-clock frame), matching the hover readout.
+      tzDate: utcTzDate,
       legend: { show: false },
       cursor: { x: true, y: false },
       plugins: [

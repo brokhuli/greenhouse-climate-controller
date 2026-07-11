@@ -12,6 +12,15 @@ use crate::domain::TimeOfDay;
 /// The fixed simulated time step per tick, in seconds (one tick = one simulated second).
 pub const DT_SECS: u64 = 1;
 
+/// Inclusive bounds on the wall-clock `time_scale` (cadence multiplier), shared by config
+/// validation, the REST guard, and the HAL clamp so the accepted range can never drift between
+/// them. The upper bound is set by wall-clock timer granularity, not per-tick compute (measured
+/// ≈9 µs, far under the 100 ms budget): at 32× the tick interval is ~31 ms, which `tokio`'s timer
+/// holds with only modest jitter, whereas 64× (~16 ms) is where OS timer granularity dominates.
+pub const MIN_TIME_SCALE: f64 = 0.25;
+/// See [`MIN_TIME_SCALE`].
+pub const MAX_TIME_SCALE: f64 = 32.0;
+
 /// A monotonic simulated clock: a tick counter plus simulated seconds since an arbitrary
 /// day-aligned epoch. Time-of-day is the seconds modulo a day.
 #[derive(Debug, Clone, PartialEq, Eq)]

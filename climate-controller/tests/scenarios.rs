@@ -43,17 +43,25 @@ fn injector(s: &Snapshot) -> f64 {
 #[test]
 fn diurnal_night_tracks_setpoint_and_vpd() {
     let mut p = pipeline_at(config(), Clock::starting_at("02:00".parse().unwrap()));
+    // Average the last 10 min: the bang-bang heater (min on/off dwell) rides a small limit cycle,
+    // so a single-tick sample is phase-sensitive — the settled *mean* is what tracks the setpoint.
+    let window = 600;
+    let mut sum = 0.0;
     let mut last = None;
-    for _ in 0..3600 {
-        last = Some(p.tick());
+    for i in 0..3600 {
+        let s = p.tick();
+        if i >= 3600 - window {
+            sum += s.trusted.temperature.expect("temperature available");
+        }
+        last = Some(s);
     }
-    let s = last.unwrap();
-    let temp = s.trusted.temperature.expect("temperature available");
+    let mean_temp = sum / window as f64;
     // Night setpoint is 18 °C; without control the air would fall toward outdoor 10 °C.
     assert!(
-        (temp - 18.0).abs() < 3.0,
-        "night temperature held near 18 °C, was {temp}"
+        (mean_temp - 18.0).abs() < 2.5,
+        "night temperature held near 18 °C, mean was {mean_temp}"
     );
+    let s = last.unwrap();
     let vpd = s.trusted.vpd.expect("vpd available");
     assert!(
         (vpd - 1.0).abs() < 0.6,
@@ -297,5 +305,41 @@ fn manual_override_auto_expires() {
     assert!(
         !s.overrides.contains_key(&heater_id),
         "override should have auto-expired"
+    );
+}
+
+/// Irrigation over a simulated day: with the tuned drying rate + every-2-hour daytime schedule,
+/// Bench A's gated scheduler cycles the soil in a deep sawtooth — it refills to near the high
+/// threshold (0.55) and, with the wider gaps between cycles, dries noticeably lower before the next
+/// refill, yet never sags all the way to the air-dry residual (0.15). Deterministic under the
+/// seeded HAL.
+#[test]
+fn irrigation_schedule_holds_the_moisture_band_over_a_day() {
+    use climate_controller::domain::Slug;
+    let zone: Slug = "bench-a".parse().unwrap();
+    let mut p = pipeline_at(config(), Clock::starting_at("06:00".parse().unwrap()));
+
+    let (mut min_soil, mut max_soil) = (f64::INFINITY, f64::NEG_INFINITY);
+    for _ in 0..(10 * 3600u64) {
+        let soil = p
+            .tick()
+            .trusted
+            .soil_moisture
+            .get(&zone)
+            .copied()
+            .flatten()
+            .expect("bench-a soil sensor is healthy");
+        min_soil = min_soil.min(soil);
+        max_soil = max_soil.max(soil);
+    }
+
+    assert!(
+        min_soil > 0.18,
+        "soil dries deeper between the 2-hourly cycles but must stay above the air-dry residual \
+         (0.15) — min was {min_soil:.3}"
+    );
+    assert!(
+        max_soil > 0.54,
+        "scheduler should refill toward the high threshold — max was {max_soil:.3}"
     );
 }

@@ -40,6 +40,13 @@ mkdir -p "$OUT_DIR" "$TARGETS_DIR"
 MINT_TOKENS="${CONTROLLER_AUTH_TOKENS:-0}"
 mint_token() { LC_ALL=C tr -dc 'a-f0-9' < /dev/urandom | head -c 32; }
 
+# One shared simulated start for the whole fleet. Every controller begins at exactly this instant,
+# so their first telemetry timestamp and initial time-of-day agree; they then drift as each advances
+# at its own time_scale. Computed once here (outside the loop) — unlike seed, which is per-controller.
+# Unset SIM_START_TS → today (UTC) at a random whole hour. Pin a run by exporting SIM_START_TS as a
+# friendly time (now, 6pm, 11am, 18:00) or a full RFC 3339 timestamp; see resolve-sim-start.sh.
+sim_start_ts="$(bash "$SCRIPT_DIR/resolve-sim-start.sh" "${SIM_START_TS:-}")"
+
 letters=(a b c d e f g h i j k l m n o p q r s t u v w x y z)
 id_for() {
   local i="$1"
@@ -88,6 +95,7 @@ for (( i = 0; i < N; i++ )); do
       -e "s|^broker_url = .*|broker_url = \"mqtt://mqtt:1883\"|" \
       -e "s|^bind_addr = .*|bind_addr = \"0.0.0.0:8080\"|" \
       -e "s|^seed = .*|seed = $seed|" \
+      -e "s|^# start_ts = .*|start_ts = \"$sim_start_ts\"|" \
       "${auth_sed[@]}" \
       "$TEMPLATE" > "$toml"
 
@@ -111,8 +119,10 @@ for (( i = 0; i < N; i++ )); do
           memory: 64M
 EOF
 
-  printf 'curl -fsS -X POST "$API/api/greenhouses" "${AUTH[@]}" -H '\''Content-Type: application/json'\'' -d '\''{"id":"%s","display_name":"Greenhouse %s","crop":null,"controller":{"rest_base_url":"http://%s:8080","mqtt_topic_root":"gh/%s"%s}}'\'' && echo " registered %s"\n' \
-    "$id" "${id#gh-}" "$id" "$id" "$bearer_json" "$id" >> "$REGISTER"
+  # Tolerate an already-registered greenhouse (e.g. a fresh-run.sh re-run keeps registrations): treat a
+  # failed POST as "already present" so `set -e` doesn't abort before any newly-added greenhouse.
+  printf 'curl -fsS -X POST "$API/api/greenhouses" "${AUTH[@]}" -H '\''Content-Type: application/json'\'' -d '\''{"id":"%s","display_name":"Greenhouse %s","crop":null,"controller":{"rest_base_url":"http://%s:8080","mqtt_topic_root":"gh/%s"%s}}'\'' && echo " registered %s" || echo " %s already present"\n' \
+    "$id" "${id#gh-}" "$id" "$id" "$bearer_json" "$id" "$id" >> "$REGISTER"
 done
 
 # Prometheus file-SD: one target group for the whole controller fleet (operations §1).
@@ -132,6 +142,7 @@ echo "  override : $OVERRIDE"
 echo "  configs  : $OUT_DIR/<id>.toml"
 echo "  register : $REGISTER"
 echo "  scrape   : $TARGETS_FILE"
+echo "  sim start: $sim_start_ts (shared across the fleet; pin with SIM_START_TS=...)"
 echo
 echo "Next:"
 echo "  docker compose --env-file deploy/.env -f deploy/docker-compose.yml -f deploy/docker-compose.override.yml up -d --build"

@@ -8,6 +8,141 @@ alternatives and tradeoffs.
 
 ---
 
+## 2026-07-10 — Phase 3 plan model renamed `ActuatorPlan` → `OptimizerPlan`
+
+**Decision:** The optimizer's structured LLM-output model — the Pydantic type parsed via
+`.with_structured_output(...)` and referenced by RFC-004's `generate_plan(context) -> …` signature — is
+renamed from `ActuatorPlan` to **`OptimizerPlan`**. The rename is propagated across the Phase 3 spec set
+([04 planning](../specs/design/optimizer/04-spec-optimizer-planning.md),
+[11 tech-stack](../specs/design/optimizer/11-spec-optimizer-tech-stack.md)),
+[tech-stack-decisions.md](../specs/design/tech-stack-decisions.md), RFC-004, and the
+[2026-06-11 entry](#2026-06-11--phase-3-llm-integration-langchain-replaces-custom-plannerbackend-internals)
+below. It is a **naming change only**: the model is internal (the LLM's structured output, later distilled
+into the immediate-next `SetpointsPatch` bundle), so **no wire contract changes** — the write path remains
+`POST /api/greenhouses/{id}/setpoints` with the `SetpointsPatch` body.
+
+**Why:** `ActuatorPlan` implied the optimizer commands actuators, which directly contradicts the core
+Phase 3 boundary — the optimizer writes **setpoints only**, never actuator commands (Phase 1 owns
+actuation), and all downward influence flows through Phase 2. `OptimizerPlan` reflects that the model
+carries refined setpoint targets, not an actuator strategy. Caught during a pre-implementation
+spec-hardening pass; no Phase 3 code exists yet, so this is a naming correction ahead of implementation.
+
+**RFC:** [RFC-004](./request-for-comments.md#rfc-004-phase-3-llm-integration-interface)
+
+---
+
+## 2026-07-09 — Phase 3 LLM default flips to local Ollama; cloud providers become opt-in
+
+**Decision:** The **default** planning backend is the **local Ollama** model rather than a hosted API.
+`llm.provider` defaults to `"ollama"` (model `llama3`, endpoint `http://ollama:11434`), with
+`"anthropic"` / `"openai"` selectable as opt-in cloud backends by setting the provider and supplying
+`PLANNER_API_KEY`. The hosted-primary → Ollama-fallback topology of the
+[2026-06-07 entry](#2026-06-07--phase-3-llm-integration-hosted-primary-ollama-fallback-backend-agnostic-strategy)
+becomes **optional and configurable**: a single `fallback_provider` (empty by default) wires a secondary
+backend via LangChain's `.with_fallbacks()`, typically set only when a cloud provider is the primary.
+The pinned-model / per-backend-baseline discipline, the backend-agnostic invocation strategy,
+`PlanContext`, and the constraint layer are all unchanged — only which backend is the default moves.
+
+**Why:** A local default makes `P3-PORT-1` (runs under Compose with no cloud account) true out of the
+box: planning is free, fully offline, and leaks no telemetry off-host, with zero setup beyond the
+`ollama` container the stack already runs. With a local primary the always-available container is its own
+backstop, so the fixed fallback path of the original decision is no longer needed by default; it is
+retained as an opt-in for the cloud-primary posture, where a network outage still warrants continuity.
+Cloud frontier models remain one config change away for operators who want their higher plan quality —
+the backend-agnostic seam from RFC-004 is exactly what makes the default a configuration choice rather
+than a rewrite.
+
+**RFC:** [RFC-004](./request-for-comments.md#rfc-004-phase-3-llm-integration-interface) (revision 2026-07-09)
+
+---
+
+## 2026-07-09 — Per-zone irrigation targets are optimizer-refinable (per-zone crop-safe envelope)
+
+**Decision:** Made per-zone irrigation targets first-class on the setpoint write path, mirroring how the
+global climate targets already behave, and extended the crop-safe envelope to cover them. Concretely:
+
+- **Zone writes are honored, not ignored.** `applySetpointWrite` (operator `PATCH` and optimizer `POST`)
+  now merges a patch's `zones` onto the baseline bundle **by `zone_id`** and delivers them to the
+  controller through the existing per-zone reconciliation leg (`PATCH /zones/{zone_id}`). Previously the
+  handler decoded and shape-validated `zones` but silently dropped them (`applyGlobalPatch` copied only
+  the global fields), so a caller got a `200`/`202` while the zone change vanished (Codex Phase 3 review,
+  finding #3). Each named zone must specify its full target set; an unknown `zone_id` is rejected `422`
+  (zone **topology** is fixed — adding/removing zones is a controller config + restart change); unlisted
+  zones are unchanged.
+- **New per-zone crop-safe envelope.** `StageBounds` gains an optional `zones` (`ZoneBounds`): a `min`/`max`
+  per numeric zone target (`moisture_low_threshold`, `moisture_high_threshold`, `drain_period_secs`),
+  applied **uniformly to every zone** in the stage — a crop's safe soil-moisture/drain window is a
+  property of the crop and growth stage, not of which bench a zone is. A zone's `schedule` carries none,
+  mirroring the global `day_start`/`day_end`.
+- **Authority mirrors climate.** The optimizer's zone writes are gated against the stage's `ZoneBounds`
+  (a value outside it is `422` naming `zones[i].<field>`); an operator's ad-hoc zone edit is deliberately
+  **not** gated (a sticky operator edit wins). The optimizer reads the zone window from the
+  planning-context (`optimizer-read-rest` `CurrentSetpoints.bounds.zones`), exactly as for the climate
+  envelope.
+- **No DB migration.** `ZoneBounds` rides in the existing JSONB `stages` document; profiles without it
+  stay valid, and the write body (`SetpointsPatch`) already carried `zones`.
+
+This **revises the 2026-07-08 decision below**, which scoped the crop-safe envelope to the nine scalar
+climate targets and declared per-zone irrigation "not optimizer-refined." That exclusion was a deliberate
+deferral, not a permanent boundary; this entry lifts it now that a zone envelope exists to fence the
+refinement safely.
+
+**Why:** The write contract already advertised zone updates and the operator SPA already offered editable
+per-zone inputs, but the code silently discarded them — the "valid-looking write that does nothing" Codex
+flagged. Two coherent fixes existed: reject zone writes (make the contract honest about the deferral) or
+honor them (make the code honest about the contract). We chose to **honor** them, so zone irrigation
+behaves exactly like the climate targets — writable by operator and optimizer, the optimizer fenced by a
+crop-safe envelope the operator owns — rather than carve out a second-class path. Rejecting with `422` was
+declined because it would have left the operator's editable zone inputs permanently non-functional and
+deferred a capability the contract already promised.
+
+---
+
+## 2026-07-08 — Crop-safe envelopes on crop profiles (defense-in-depth for optimizer writes)
+
+**Decision:** Gave each crop-profile growth stage an optional **crop-safe envelope** — a per-target
+`min`/`max` (`StageBounds`, one `Bound` per scalar climate target) alongside its exact `targets` — as
+the canonical definition of how far the Phase 3 optimizer may refine that target. The platform stores
+it, exposes it to the optimizer on the planning-context read (`optimizer-read-rest` `CurrentSetpoints.bounds`),
+and **enforces it on the optimizer setpoint write path** (`optimizer-write-rest`): a submission that
+moves a target outside its active stage's envelope is rejected `422` naming the field. This is
+**Option C** of the design options — Phase 2 holds the canonical envelope and re-validates on write,
+while the optimizer (Phase 3, not yet built) pre-filters to the same envelope it reads back, so a `202`
+is expected and a `422` means the two views disagreed (a mid-cycle profile change or contract drift),
+escalated rather than retried. Details settled while implementing:
+
+- **Scope: all nine scalar climate targets; envelope optional per target.** Temperature day/night,
+  humidity low/high/deadband, CO₂ target, CO₂ vent interlock, VPD, and DLI can each carry a `Bound`.
+  Time-of-day (`day_start`/`day_end`) and per-zone irrigation targets are not optimizer-refined and
+  carry none. *(Per-zone irrigation was later made refinable with its own `ZoneBounds` envelope — see the
+  2026-07-09 entry above; time-of-day still carries none.)* An absent per-target bound means no
+  crop-specific envelope for it — only the generic physical bound applies.
+- **Enforcement gates the optimizer, not the operator.** The envelope is validated only on the
+  `source = optimizer` POST path; an operator's ad-hoc `PATCH` is deliberately **not** gated — a sticky
+  operator edit wins over the profile ([platform crop-profiles §5](../specs/design/platform/05-spec-platform-crop-profiles.md)).
+  A greenhouse with no assignment, or a stage with no envelope, falls back to the generic physical
+  bounds (lenient) rather than blocking.
+- **Self-consistency invariant.** On profile create/update, each `Bound` must satisfy `min ≤ max`, sit
+  inside the target's generic physical range, and **contain the stage's own baseline target** — a
+  profile whose baseline falls outside its own envelope is rejected `422`.
+- **No DB migration.** Profile `stages` are already a JSONB column, so the optional `bounds` object
+  rides in the existing document; existing profiles (no `bounds`) remain valid.
+- **Envelope resolved server-side, not submitted.** The write body (`SetpointsPatch`) is unchanged; the
+  platform resolves the envelope from the greenhouse's assignment, so the write contract's shape is
+  additive-free and only its validation semantics tightened.
+
+**Why:** The optimizer spec makes "crop-safe bounds" the core of its constraint engine and several
+platform/contract docs claimed Phase 2 *enforces* them, but no such envelope existed — profiles stored
+only exact targets and Phase 2 validated only generic physical ranges, so the optimizer's "`422` = out
+of the crop-safe envelope" contract rested on a capability that wasn't there. Option C closes that gap
+with the profile (the operator-owned crop definition) as the single source of truth and the platform as
+the enforcing single authority (RFC-005), keeping the optimizer safe to evolve: even a buggy or
+compromised planner cannot push a target past the operator-defined crop-safe range. Options that put
+crop safety solely in the optimizer were rejected because they would have made Phase 2 unable to honor
+the single-authority claim.
+
+---
+
 ## 2026-07-07 — Phase 3 telemetry read contract authored (OpenAPI 3.1) as a consolidated planning-context read
 
 **Decision:** Authored the Phase 3 telemetry read path under `contracts/optimizer-read-rest/` as an
@@ -310,9 +445,11 @@ the simulation itself:
   input-gate reason) when a greenhouse reports `time_scale ≠ 1.0` and resumes at 1×. Coordinating
   optimizer cadence with arbitrary speeds is out of scope.
 
-**Limitations (accepted):** speed-up is **CPU-bound** — at scale `S` the wall interval is `1000/S` ms
-and must stay above the per-tick compute budget (`P1-PERF-3`, ≤100 ms), so the range is clamped to
-0.25–8×; the wall-clock real-time targets (`P1-PERF-1/2`) describe the 1× baseline and relax off 1×
+**Limitations (accepted):** speed-up is bounded by **wall-clock timer granularity**, not compute — at
+scale `S` the wall interval is `1000/S` ms; measured per-tick compute is ≈9 µs (far under the
+`P1-PERF-3` ≤100 ms budget), so the range is clamped to 0.25–32× because 32× (~31 ms) holds with
+modest jitter while 64× (~16 ms) is where OS timer granularity dominates; the wall-clock real-time
+targets (`P1-PERF-1/2`) describe the 1× baseline and relax off 1×
 (on the simulated backend only); telemetry arrival becomes bursty at `S` Hz; per-controller clocks
 mean cross-greenhouse wall-clock comparison is not meaningful.
 
@@ -733,12 +870,12 @@ the home for the 2a/2b boundary; the Phase 2 spec carries the per-section tags.
 
 **Decision:** The `PlannerBackend` protocol from RFC-004 is replaced by a LangChain `Runnable`
 chain as the planner implementation. The chain is `ChatPromptTemplate | LLM | StructuredOutputParser`,
-constructed with `.with_structured_output(ActuatorPlan)` for plan parsing. `ChatAnthropic` /
+constructed with `.with_structured_output(OptimizerPlan)` for plan parsing. `ChatAnthropic` /
 `ChatOpenAI` (packages `langchain-anthropic`, `langchain-openai`) replace the bespoke hosted-backend
 implementation; `ChatOllama` (package `langchain-community`) replaces the bespoke Ollama backend.
 Fallback routing uses LangChain's native `.with_fallbacks([ChatOllama(...)])` instead of the manual
 try/catch retry in the Proposal. The call site changes from `backend.generate_plan(context)` to
-`chain.invoke(context_dict)`. `ActuatorPlan`, `PlanContext`, the five invocation-strategy levers
+`chain.invoke(context_dict)`. `OptimizerPlan`, `PlanContext`, the five invocation-strategy levers
 and their values, the constraint validation layer, and the configuration structure are all unchanged.
 This change is internal to the planner component; no other RFC is affected.
 
@@ -746,7 +883,7 @@ This change is internal to the planner component; no other RFC is affected.
 parsing as tested, maintained abstractions — eliminating custom code for each of those concerns.
 `.with_fallbacks()` expresses the hosted→Ollama fallback topology in one declaration rather than a
 try/catch wrapper, making the intent explicit and reducing the surface for subtle retry bugs.
-`.with_structured_output(ActuatorPlan)` ties the output parser directly to the existing Pydantic
+`.with_structured_output(OptimizerPlan)` ties the output parser directly to the existing Pydantic
 model, so LLM output validation and the constraint engine use the same schema. Consistent with the
 design doc principle that Phase 3 is "flexible by design — this layer evolves as LLM capabilities
 do."

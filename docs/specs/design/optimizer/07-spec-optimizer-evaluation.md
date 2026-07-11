@@ -48,8 +48,8 @@ scope note in [the overview](./01-spec-optimizer-overview.md).)
    the recorded baseline plan. Baselines are re-captured **deliberately** when the model, prompt, or
    sampling config changes — the same trigger as a model-pin change in
    [planning](./04-spec-optimizer-planning.md#1-llm-driven-planning) — and are kept **per backend**,
-   since the primary and Ollama fallback produce different distributions and must each be held to their
-   own baseline.
+   since each configured backend (the default local Ollama model, an opt-in cloud model, or any
+   fallback) produces a different distribution and must each be held to its own baseline.
 
 An end-to-end integration test exercises the full path — read → twin → planner → constraint engine →
 applier — against the deterministic twin, asserting the application gate

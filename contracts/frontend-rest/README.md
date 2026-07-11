@@ -46,7 +46,7 @@ components/
     analytics.json           #   AnalyticsResponse, AnalyticsSeries, AnalyticsBucket
     events.json              #   EventEntry
     sim.json                 #   TimeScale, TimeScalePatch, FleetTimeScaleResult (sim-only)
-    profiles.json            #   CropProfile, CropProfilePatch, ProfileStage, Assignment, AssignmentInput (2b)
+    profiles.json            #   CropProfile, CropProfilePatch, ProfileStage, StageBounds, ZoneBounds, Bound, Assignment, AssignmentInput (2b)
   parameters.json            # shared path/query parameters
   responses.json             # shared error responses (401, 403, 404, 422)
 examples/                    # fixtures used as tests (see below)
@@ -90,7 +90,7 @@ The optimizer's single-authority `POST /greenhouses/{id}/setpoints` (RFC-005 wri
 ad-hoc edit above is the operator's path.
 
 The `sim/time-scale` paths are a **simulation-only** surface (marked `x-simulation-only`): they read
-and set the controller's simulated-clock speed (0.25–8×) for one greenhouse or — at `/api/sim/time-scale`
+and set the controller's simulated-clock speed (0.25–32×) for one greenhouse or — at `/api/sim/time-scale`
 — the whole fleet, relaying to the controller's own sim-only [`/sim/time-scale`](../controller-rest/)
 (controller HAL §7). The fleet form fans out as **N independent per-controller writes** — there is no
 shared/master clock — and returns a per-greenhouse outcome. This is a diagnostic, **not a setpoint**: it
@@ -166,7 +166,7 @@ not restated. This differs from the controller-rest contract, which is unauthent
 ## Examples
 
 [`examples/`](./examples/) holds request/response fixtures used as tests. Positive fixtures must
-validate against their component schema; the three `*.bad-*.json` counter-examples must **fail**:
+validate against their component schema; the four `*.bad-*.json` counter-examples must **fail**:
 
 | Fixture | Schema | Expect |
 |---|---|---|
@@ -179,11 +179,13 @@ validate against their component schema; the three `*.bad-*.json` counter-exampl
 | `analytics.json` | `AnalyticsResponse` | valid |
 | `event.json` | `EventEntry` | valid |
 | `event.bad-kind.json` | `EventEntry` | **fail** (`kind` outside the closed enum) |
-| `profile.json` | `CropProfile` | valid |
+| `profile.json` | `CropProfile` | valid (a stage with a crop-safe `bounds` envelope, incl. a per-zone `bounds.zones`) |
+| `profile.bad-bounds.json` | `CropProfile` | **fail** (a `bounds` entry missing the required `max`) |
+| `profile.bad-zone-bounds.json` | `CropProfile` | **fail** (a `bounds.zones` envelope on `schedule`, which carries none) |
 | `assignment.json` | `Assignment` | valid |
 | `sim-time-scale.patch.json` | `TimeScalePatch` | valid |
 | `sim-time-scale.json` | `TimeScale` | valid |
-| `sim-time-scale.bad-range.json` | `TimeScalePatch` | **fail** (`scale` 100, outside 0.25–8) |
+| `sim-time-scale.bad-range.json` | `TimeScalePatch` | **fail** (`scale` 100, outside 0.25–32) |
 | `sim-time-scale-all.json` | `FleetTimeScaleResult` | valid |
 
 ## Validation

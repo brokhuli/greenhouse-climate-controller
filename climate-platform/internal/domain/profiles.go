@@ -2,11 +2,50 @@ package domain
 
 import "time"
 
-// ProfileStage is one growth stage of a crop profile and the target bundle it applies
+// ProfileStage is one growth stage of a crop profile and the target bundle it applies, plus
+// an optional crop-safe envelope the stage's targets may be refined within
 // (contracts/frontend-rest ProfileStage).
 type ProfileStage struct {
-	Stage   string    `json:"stage"`
-	Targets Setpoints `json:"targets"`
+	Stage   string       `json:"stage"`
+	Targets Setpoints    `json:"targets"`
+	Bounds  *StageBounds `json:"bounds,omitempty"`
+}
+
+// Bound is a crop-safe [min, max] envelope for one scalar climate target — the range the Phase 3
+// optimizer may refine that target within, never outside (RFC-005, optimizer constraint engine).
+type Bound struct {
+	Min float64 `json:"min"`
+	Max float64 `json:"max"`
+}
+
+// StageBounds is a growth stage's crop-safe envelope: one optional Bound per scalar climate target
+// plus an optional per-zone irrigation envelope. It is the canonical envelope the platform enforces
+// on optimizer setpoint writes and exposes to the optimizer via the planning-context read. An absent
+// field means no crop-specific envelope for that target — only the generic physical bound applies.
+// Time-of-day (day_start/day_end) and a zone's schedule are not optimizer-refined and carry no
+// envelope.
+type StageBounds struct {
+	TemperatureDayC              *Bound      `json:"temperature_day_c,omitempty"`
+	TemperatureNightC            *Bound      `json:"temperature_night_c,omitempty"`
+	HumidityLowPct               *Bound      `json:"humidity_low_pct,omitempty"`
+	HumidityHighPct              *Bound      `json:"humidity_high_pct,omitempty"`
+	HumidityDeadbandPct          *Bound      `json:"humidity_deadband_pct,omitempty"`
+	CO2TargetPpm                 *Bound      `json:"co2_target_ppm,omitempty"`
+	CO2VentInterlockThresholdPct *Bound      `json:"co2_vent_interlock_threshold_pct,omitempty"`
+	VPDTargetKpa                 *Bound      `json:"vpd_target_kpa,omitempty"`
+	DLITargetMol                 *Bound      `json:"dli_target_mol,omitempty"`
+	Zones                        *ZoneBounds `json:"zones,omitempty"`
+}
+
+// ZoneBounds is a stage's crop-safe envelope for the numeric per-zone irrigation targets, applied
+// uniformly to every zone in the stage: a crop's safe soil-moisture and drain-cadence window is a
+// property of the crop and growth stage, not of which bench a zone is. A zone's schedule (time-of-day
+// triggers) carries no envelope, mirroring the global day window. An absent field means no
+// crop-specific envelope for that target — only the generic physical bound applies.
+type ZoneBounds struct {
+	MoistureLowThreshold  *Bound `json:"moisture_low_threshold,omitempty"`
+	MoistureHighThreshold *Bound `json:"moisture_high_threshold,omitempty"`
+	DrainPeriodSecs       *Bound `json:"drain_period_secs,omitempty"`
 }
 
 // CropProfile is a named, stage-aware bundle of climate + irrigation targets for a crop —

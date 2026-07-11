@@ -14,6 +14,7 @@ use chrono::{DateTime, Utc};
 use tokio::net::TcpListener;
 use tokio::sync::{mpsc, watch};
 
+use crate::clock::Clock;
 use crate::config::Config;
 use crate::domain::Slug;
 use crate::hal::{ActuatorId, SensorChannel, SimControl, SimulatedHal};
@@ -23,7 +24,7 @@ use crate::rest::{
     RuntimeView, SensorInjectionDto, ZoneStatusDto, router,
 };
 use crate::state::Snapshot;
-use crate::telemetry::{OutputState, actuator_name, epoch, instant_ts};
+use crate::telemetry::{OutputState, actuator_name, instant_ts, sim_clock_start};
 
 /// The 1× wall-clock tick period (`P1-PERF-1`).
 const TICK_PERIOD_MS: f64 = 1000.0;
@@ -63,7 +64,10 @@ pub async fn run(config: Config) -> Result<(), Box<dyn Error>> {
         par: config.sensing.par_bounds,
         soil_moisture: config.sensing.soil_moisture_bounds,
     };
-    let base = epoch();
+    // The simulated clock starts at `base` (a day-aligned midnight) plus a seconds-of-day offset, so
+    // telemetry `ts` and the day/night model agree from the first tick. `simulation.start_ts` unset
+    // → the fixed 2026-01-01 epoch at midnight (offset 0), preserving deterministic behavior.
+    let (base, start_offset_secs) = sim_clock_start(config.simulation.start_ts);
 
     // Controller-health metrics, shared between the tick loop, the MQTT event loop, and the REST
     // /metrics handler.
@@ -74,11 +78,14 @@ pub async fn run(config: Config) -> Result<(), Box<dyn Error>> {
     spawn_resource_sampler(metrics.clone());
 
     let mut time_scale = config.simulation.time_scale;
-    let mut time_scale_updated_at_seconds = 0u64;
+    // As-of marker for the initial time-scale, in the same sim-seconds frame as the clock, so its
+    // reported instant is the sim start (not midnight) when the clock starts mid-day.
+    let mut time_scale_updated_at_seconds = start_offset_secs;
     let mut injections: HashMap<InjectionKey, InjectionRecord> = HashMap::new();
 
     let hal = SimulatedHal::new(&config);
-    let mut pipeline = Pipeline::new(config, hal);
+    let mut pipeline =
+        Pipeline::with_clock(config, hal, Clock::starting_at_seconds(start_offset_secs));
 
     let (cmd_tx, mut cmd_rx) = mpsc::channel::<Command>(COMMAND_CAP);
 
@@ -98,7 +105,7 @@ pub async fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let (view_tx, view_rx) = watch::channel(view0);
 
     let mut publisher =
-        crate::mqtt::Publisher::connect(&broker_url, &greenhouse_id, metrics.clone());
+        crate::mqtt::Publisher::connect(&broker_url, &greenhouse_id, base, metrics.clone());
     metrics.record_publish(publisher.publish_snapshot(&snapshot, time_scale));
 
     // Serve REST on its own task.
@@ -436,6 +443,10 @@ mod tests {
         assert_eq!(tick_interval(2.0), Duration::from_millis(500));
         assert_eq!(tick_interval(0.5), Duration::from_millis(2000));
         assert_eq!(tick_interval(4.0), Duration::from_millis(250));
+        assert_eq!(tick_interval(8.0), Duration::from_millis(125));
+        // The upper UI stops: 1000/16 = 62.5 rounds to 63 ms, 1000/32 = 31.25 rounds to 31 ms.
+        assert_eq!(tick_interval(16.0), Duration::from_millis(63));
+        assert_eq!(tick_interval(32.0), Duration::from_millis(31));
         // Never zero, even at absurd speeds.
         assert!(tick_interval(100_000.0) >= Duration::from_millis(1));
     }

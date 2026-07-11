@@ -21,6 +21,7 @@ use axum::routing::{get, put};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+use crate::clock::{MAX_TIME_SCALE, MIN_TIME_SCALE};
 use crate::config::{Bounds, Setpoints, Zone};
 use crate::domain::{Actuator, Slug, TimeOfDay};
 use crate::faults::{FaultType, Mode, Severity};
@@ -223,6 +224,7 @@ pub struct SetpointsPatch {
     co2_vent_interlock_threshold_pct: Option<f64>,
     vpd_target_kpa: Option<f64>,
     dli_target_mol: Option<f64>,
+    expected_peak_par: Option<f64>,
 }
 
 impl SetpointsPatch {
@@ -238,6 +240,7 @@ impl SetpointsPatch {
             && self.co2_vent_interlock_threshold_pct.is_none()
             && self.vpd_target_kpa.is_none()
             && self.dli_target_mol.is_none()
+            && self.expected_peak_par.is_none()
     }
 }
 
@@ -590,6 +593,9 @@ fn apply_setpoints_patch(
     if let Some(v) = patch.dli_target_mol {
         sp.dli_target_mol = v;
     }
+    if let Some(v) = patch.expected_peak_par {
+        sp.expected_peak_par = v;
+    }
     first_violation(|vs| sp.validate(vs)).map_or(Ok(sp), Err)
 }
 
@@ -933,10 +939,10 @@ async fn put_time_scale(
     if !s.is_me(&gh) {
         return not_found("unknown greenhouse");
     }
-    if !(0.25..=8.0).contains(&body.scale) {
+    if !(MIN_TIME_SCALE..=MAX_TIME_SCALE).contains(&body.scale) {
         return unprocessable(FieldViolation::new(
             "scale",
-            "0.25..=8",
+            "0.25..=32",
             serde_json::json!(body.scale),
         ));
     }

@@ -131,8 +131,9 @@ Host tooling:
 - **Pylance/Ruff** editor tooling for type/lint feedback.
 - **LangChain provider packages** such as `langchain-anthropic`, `langchain-openai`, and
   `langchain-community`.
-- **Hosted LLM API key** for the configured primary provider, supplied through environment/secret.
-- **Ollama runtime** for the local fallback backend.
+- **Ollama runtime** for the default local backend — the offline, key-free planning path.
+- **Cloud LLM API key** (optional) for a configured Anthropic/OpenAI backend, supplied through
+  environment/secret; not needed for the default Ollama path.
 - **Phase 2 REST API access** through the optimizer telemetry read API once authored; the platform may
   back it with internal SQL views, but no host DB access is required for the optimizer.
 

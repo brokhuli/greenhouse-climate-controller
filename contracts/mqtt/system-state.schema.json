@@ -140,7 +140,7 @@
         "time_scale": {
           "type": "number",
           "minimum": 0.25,
-          "maximum": 8.0,
+          "maximum": 32.0,
           "description": "Wall-clock cadence multiplier (1.0 = real-time; <1 slow-motion; >1 fast-forward). Scales only the tick cadence, not the per-tick simulation step Δt, so determinism is preserved."
         },
         "tick_index": {

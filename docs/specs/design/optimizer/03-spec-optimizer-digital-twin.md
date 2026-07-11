@@ -15,7 +15,7 @@ against.
 ## 1. The forward model
 
 The simulation engine is a **forward model** of a single greenhouse's climate, built on NumPy/SciPy.
-Given an observed state and a candidate setpoint trajectory, it predicts how temperature, humidity,
+Given an observed state and a given setpoint trajectory, it predicts how temperature, humidity,
 CO₂, **VPD**, and accumulated **DLI** evolve over a planning horizon — the physics the Phase 1
 controller deliberately approximates with first-order lag and the platform does not model at all
 ([P1 constraints §9](../controller/10-spec-controller-constraints.md#9-scope--deferred-controller-capabilities)).
@@ -29,6 +29,19 @@ Crucially, the twin anticipates only **deterministic, clock-known** disturbances
 solar/temperature curve and the day/night setpoint schedule. It pre-positions for *when the sun
 predictably rises*, not for a variable forecast. Reacting to a real weather feed (a cold front, a
 passing cloud) is **weather-reactive** control and belongs to Phase 4.
+
+> **Implementation-readiness — Digital Twin v1 (TBD).** This section fixes *what* the twin predicts and
+> the disturbances it anticipates; the **quantitative model is still owed to implementation** and is the
+> single largest open item in this set. Before the twin can be built, v1 must pin down:
+>
+> - **Governing equations** — the coupled ODEs for temperature, humidity, and CO₂ (with VPD and DLI derived), including the actuator-lag terms.
+> - **Per-greenhouse parameters** — thermal mass, leakage / infiltration, actuator gains and lag constants — and their **source**: seeded from the [physical-system model](../physical-system-single.md) / config to start, since auto-fitting is out of scope ([§2](#parameter-fidelity--drift)).
+> - **Controller approximation** — how the twin represents the Phase 1 controller's closed-loop response while rolling the baseline forward (the controller is *in the loop* being simulated).
+> - **One-step residual formula** — the exact predicted-vs-observed error the drift check in [§2](#parameter-fidelity--drift) thresholds against `twin.divergence_threshold`.
+> - **Deterministic-disturbance model** — the diurnal solar / temperature curve and the day/night schedule the twin pre-positions for ([§1](#1-the-forward-model)).
+>
+> These are recorded here as a checklist, not solved; the equations and parameter set land with the twin
+> implementation (or a dedicated twin-definition spec).
 
 ---
 
@@ -53,7 +66,8 @@ The integrator runs with a bounded step (`twin.solver_max_step_minutes`,
 negative humidity or CO₂), and **non-convergence** within a step budget. A diverged simulation is
 treated exactly like a failed input precondition ([input gating](./06-spec-optimizer-input-gating.md)):
 the optimizer does **not** hand a garbage trajectory to the planner — it extends the last accepted
-plan and raises an escalation, traced by `optimizer_run_id`
+plan and raises a `twin_diverged` escalation
+([reason codes](./09-spec-optimizer-interfaces.md#escalation-reason-codes)), traced by `optimizer_run_id`
 ([P3-OBS-1](../../artifacts/non-functional-requirements.md)). The solver is fixed-step / seeded so a
 scenario reproduces, making the twin the deterministic forward model
 [evaluation](./07-spec-optimizer-evaluation.md) already relies on — the optimizer-side analog of the
@@ -70,8 +84,9 @@ matches the greenhouse. The response is **graded, not binary**: the twin keeps r
 prediction still beats none), but plan **confidence is attenuated** so a low-fidelity model's plans
 fall below the
 [application-gate](./05-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application)
-threshold and **escalate rather than auto-apply**, and persistent divergence is surfaced for
-recalibration. Refitting the parameters from history is **deferred**
+threshold and **escalate rather than auto-apply** (`twin_fidelity_fault`,
+[reason codes](./09-spec-optimizer-interfaces.md#escalation-reason-codes)), and persistent divergence is
+surfaced for recalibration. Refitting the parameters from history is **deferred**
 ([scope](./12-spec-optimizer-scope.md)) — Phase 3 *detects and flags* drift; it does not auto-tune.
 
 The crop-safe constraint engine

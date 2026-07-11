@@ -15,17 +15,21 @@ it emits is gated downstream by the
 ## 1. LLM-driven planning
 
 The planner is implemented as a LangChain `Runnable` chain —
-`ChatPromptTemplate | LLM | StructuredOutputParser` — with `ChatAnthropic` / `ChatOpenAI` as the
-primary LLM wrappers and `ChatOllama` as the fallback, wired via `.with_fallbacks()`. Structured
-plan output is parsed via `.with_structured_output(ActuatorPlan)`. See
+`ChatPromptTemplate | LLM | StructuredOutputParser`. The active chat-model wrapper is chosen by
+configuration: `ChatOllama` is the **default** local backend (offline, key-free), with
+`ChatAnthropic` / `ChatOpenAI` available as opt-in cloud backends. An optional secondary backend is
+wired via `.with_fallbacks()`. Structured
+plan output is parsed via `.with_structured_output(OptimizerPlan)`. See
 [RFC-004](../../../decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface)
-(revised ADR entry 2026-06-11).
+(revised ADR entries 2026-06-11 and 2026-07-09).
 
-The planner is prompted with the observed state, the simulated forward trajectory, the active
-crop-safe bounds, and the [optimization objectives](#2-optimization-objectives), and asked to
+The planner is prompted with the observed state, the twin's simulated forward trajectory of the
+**current baseline** ([architecture — cycle order](./02-spec-optimizer-architecture.md#cycle-order-simulate-then-plan)),
+the active crop-safe bounds, and the [optimization objectives](#2-optimization-objectives), and asked to
 propose a **refined setpoint trajectory** for the horizon. The plan may reason about actuator
 coupling while choosing targets, but it does not contain actuator commands or a controller-side
-actuator strategy.
+actuator strategy. In Phase 3 v1 the planner's own candidate is **not** re-simulated through the twin;
+its proposed targets are validated against bounds downstream ([scope](./12-spec-optimizer-scope.md)).
 
 The trajectory is a **planning artifact** spanning the horizon; Phase 3 does **not** write the whole
 trajectory to Phase 2. Each cadence the optimizer applies only the **immediate next setpoint bundle** —
@@ -56,7 +60,7 @@ local:
 | **Fixed token budget** | `PlanContext` is serialized to a fixed token budget (default 4 000 tokens). If the budget is exceeded the serializer raises an explicit error — no silent truncation. |
 | **Hourly telemetry summaries** | History is serialized as `(min, mean, max)` per sensor per hour, not raw readings. |
 | **Adaptive horizon** | Default 12-hour horizon; extended to 24 h only when the cycle window crosses a day boundary (within 4 h of sunrise/sunset). |
-| **State-change gate** | The LLM is not invoked if the current simulated trajectory deviates from the last accepted plan's trajectory by less than a configurable threshold. The current plan is extended instead. |
+| **State-change gate** | The LLM is not invoked if the current simulated trajectory deviates from the last accepted plan's trajectory by less than a configurable threshold. The current plan is extended instead. The compared trajectory is **in-memory only**, so on the first cycle after a restart there is nothing to diff against — the gate is skipped and the LLM runs to rebuild the baseline ([resilience — stateless restart](./08-spec-optimizer-resilience.md)). |
 | **Fixed cycle cadence** | Planning cycles run on a fixed interval (default 30 minutes). The state-change gate controls actual LLM call frequency within that cadence. |
 
 All five levers are configurable ([configuration](./10-spec-optimizer-configuration.md)).
@@ -89,10 +93,12 @@ and the
 are. Sampling is pinned to make plans *reproducible enough to regression-test*
 ([evaluation](./07-spec-optimizer-evaluation.md)), not to guarantee identical output.
 
-The model is **pinned** (`claude-sonnet-4-6`, [configuration](./10-spec-optimizer-configuration.md)). A
-model change is a deliberate, reviewed event recorded as an ADR entry — never a silent upgrade —
+The active model is **pinned** in configuration (default `llama3` on the local Ollama backend; a cloud
+model such as `claude-sonnet-4-6` when a cloud provider is configured,
+[configuration](./10-spec-optimizer-configuration.md)). A model change — including switching provider —
+is a deliberate, reviewed event recorded as an ADR entry — never a silent upgrade —
 because it shifts the plan distribution and invalidates the evaluation baselines
-([evaluation](./07-spec-optimizer-evaluation.md)). The Ollama fallback (`llama3`) is a **different
+([evaluation](./07-spec-optimizer-evaluation.md)). Any configured fallback backend is a **different
 model** and will produce different plans for the same input; failover is therefore logged and traced
 (`optimizer_run_id`, [P3-OBS-1](../../artifacts/non-functional-requirements.md)) and held to its own
 baseline, not the primary backend's.

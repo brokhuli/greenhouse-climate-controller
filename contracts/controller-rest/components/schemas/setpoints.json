@@ -64,6 +64,11 @@
         "type": "number",
         "minimum": 0,
         "description": "Daily Light Integral target driving supplemental lighting (mol·m⁻²·day⁻¹)."
+      },
+      "expected_peak_par": {
+        "type": "number",
+        "minimum": 0,
+        "description": "Operator estimate of clear-sky peak natural PAR at solar noon (µmol·m⁻²·s⁻¹). Predicts how much natural DLI is still coming before day_end so supplemental grow lights cover only the shortfall the sun won't provide. Optional; 0 (the default) disables the prediction, reverting to reactive lighting."
       }
     },
     "required": [
@@ -95,7 +100,8 @@
       "co2_target_ppm": { "$ref": "#/Setpoints/properties/co2_target_ppm" },
       "co2_vent_interlock_threshold_pct": { "$ref": "#/Setpoints/properties/co2_vent_interlock_threshold_pct" },
       "vpd_target_kpa": { "$ref": "#/Setpoints/properties/vpd_target_kpa" },
-      "dli_target_mol": { "$ref": "#/Setpoints/properties/dli_target_mol" }
+      "dli_target_mol": { "$ref": "#/Setpoints/properties/dli_target_mol" },
+      "expected_peak_par": { "$ref": "#/Setpoints/properties/expected_peak_par" }
     },
     "minProperties": 1,
     "additionalProperties": false

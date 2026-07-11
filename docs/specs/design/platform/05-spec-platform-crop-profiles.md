@@ -29,6 +29,15 @@ faithful to them.
   **plus** the per-zone soil-moisture thresholds and watering schedule that crop
   wants. Profiles form a small library, editable in the dashboard
   ([data model](./03-spec-platform-data-model.md)).
+- Each stage also carries an optional **crop-safe envelope** — a `min`/`max` range per
+  scalar climate target expressing how far that target may safely move for the crop at
+  that stage. The exact target is the baseline; the envelope is the safe room around it,
+  and the baseline must sit inside its own envelope. It is the agronomic guardrail the
+  Phase 3 optimizer refines within, and the platform enforces it on the optimizer write
+  path ([§4](#4-boundary-with-phase-3--single-setpoint-authority)). It constrains **only**
+  optimizer refinements: 2b profile resolution and operator edits apply targets directly and
+  are not envelope-gated. Authored and stored with the profile so the boundary is in force
+  the moment the optimizer lands.
 - A greenhouse has exactly **one active assignment** at a time: a profile + the
   current growth stage. Advancing the stage (propagation → vegetative → fruiting)
   re-selects the stage's target bundle.
@@ -89,18 +98,23 @@ reconciliation analogue of the controller's bounded-buffer discipline
 
 The platform owns the **static** mapping — "this crop, this stage → these targets."
 Phase 3 later **refines** those targets dynamically (anticipatory, cost-aware) within
-crop-safe bounds; that optimization is out of scope here
-([constraints](./11-spec-platform-constraints.md)).
+the **crop-safe envelope** the assigned profile stage defines ([§1](#1-profiles-and-assignment));
+that optimization is out of scope here ([constraints](./11-spec-platform-constraints.md)).
 
 Crucially, the optimizer is **not** a second setpoint authority. The platform is the
 **single authority for controller setpoints**
 ([RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain)):
 when Phase 3 lands, the optimizer submits refined targets through this same setpoint
 write path (a setpoint-submission endpoint, [API surface](./09-spec-platform-interfaces.md#3-api-surface-inventory)),
-and the platform enforces the crop-safe bounds, records the write with its source
-(`optimizer`), and remains the sole delivery path to the controller — exactly as it
-does for a crop-profile assignment or an operator setpoint edit. The optimizer never writes
-to a controller directly.
+and the platform **enforces the active stage's crop-safe envelope** — a submission that
+moves a target outside its `min`/`max` is rejected `422` naming the violated bound, so the
+platform (not the optimizer) is the authority for crop safety. It records the accepted write
+with its source (`optimizer`) and remains the sole delivery path to the controller — exactly
+as it does for a crop-profile assignment or an operator setpoint edit. This gate is on the
+**optimizer** path only: an operator's ad-hoc edit is deliberately **not** envelope-bounded
+(a sticky operator edit wins over the profile, [§5](#5-fleet-management--operator-control)),
+and a greenhouse with no assignment or a stage with no envelope falls back to the generic
+physical bounds. The optimizer never writes to a controller directly.
 
 ---
 

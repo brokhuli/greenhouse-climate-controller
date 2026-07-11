@@ -62,6 +62,40 @@ curl -X PATCH localhost:8080/api/greenhouses/gh-a/setpoints \
 `gen-controllers.sh N` is the lever for **performance testing** under different greenhouse counts
 (operations §2). Generated files (`docker-compose.override.yml`, `controllers/`) are git-ignored.
 
+**Shared simulated start.** `gen-controllers.sh` picks one `start_ts` — by default **today (UTC) at a
+random whole hour** — and stamps the same value into every controller's TOML, so the whole fleet's
+first telemetry timestamp and initial time-of-day match; each controller then drifts as it advances
+on its own `time_scale`. Pin a run (e.g. to reproduce a demo) by exporting `SIM_START_TS` before
+generating — it accepts a friendly time or a full RFC 3339 timestamp:
+
+```sh
+SIM_START_TS=now  bash deploy/scripts/gen-controllers.sh 2   # start at the current (local) time
+SIM_START_TS=6pm  bash deploy/scripts/gen-controllers.sh 2   # greenhouse clock reads 6pm (also 11am, 18:00)
+SIM_START_TS=2026-07-09T14:00:00Z bash deploy/scripts/gen-controllers.sh 2   # exact instant
+# (omitted → today at a random whole hour, as before)
+```
+
+Hour inputs are literal — `6pm` makes the greenhouse clock read 6pm regardless of your timezone —
+while `now` uses your local wall time. The chosen value is printed in the script's summary.
+
+**Fresh run vs. continue.** The telemetry store survives restarts (`docker compose down` keeps the
+`db_data` volume — 30-day retention, no reset), keyed by *simulated* timestamp. So if you start a new run
+whose clock is **behind** data already stored — e.g. restarting at 1pm after a run had reached 5pm — the
+new live readings land in the chart's past: the detail page anchors its window to the newest *stored*
+timestamp and clips the live edge, freezing the climate chart and stat cards (the fleet, zones, and
+actuators keep updating, since they don't window on time). Use the one-command wrapper for a clean run —
+it regenerates, rebuilds, brings the stack up, clears prior-run telemetry **only if the new start is
+behind it**, and registers the fleet:
+
+```sh
+SIM_START_TS=1pm bash deploy/scripts/fresh-run.sh 4   # clean run at 1pm (guarded reset if needed)
+```
+
+To **continue** the current run, just bring the stack up as usual (no reset). To clear run data by hand at
+any time — the fast alternative to wiping the volume, since it keeps registrations and profiles — run
+`bash deploy/scripts/reset-sim-data.sh` (add `--if-behind <start>` for the guarded form). Wiping the whole
+`db_data` volume (`docker compose … down -v`) remains the full-reset fallback.
+
 ## Service-auth hardening (RFC-011, dormant by default)
 
 Beyond the human viewer/operator auth above, two internal **service** write boundaries can be hardened

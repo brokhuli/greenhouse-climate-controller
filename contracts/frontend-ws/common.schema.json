@@ -89,7 +89,7 @@
     "time_scale": {
       "type": "number",
       "minimum": 0.25,
-      "maximum": 8.0,
+      "maximum": 32.0,
       "description": "Simulation-only: the greenhouse controller's current simulated-clock speed multiplier (1.0 = real-time; <1 slow-motion; >1 fast-forward). Each controller's clock is independent. Drives the dashboard's per-greenhouse speed indicator; absent on real-hardware controllers. Mirrors the controller's `system-state.simulation.time_scale` and the controller-rest `TimeScale.scale` (controller HAL §7)."
     }
   }

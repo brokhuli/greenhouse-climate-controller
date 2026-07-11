@@ -89,7 +89,12 @@ the response `from`/`to` report the resolved span. `interval` is the summary buc
   are computed against `to`.
 - **`setpoints`** — `CurrentSetpoints`: the current intended state (`targets`, the same bundle
   `optimizer-write-rest` accepts/returns) with its `source` (`optimizer` / `operator_edit` / `profile`) and
-  `updated_at` provenance — the crop-safe baseline the optimizer refines against.
+  `updated_at` provenance — the crop-safe baseline the optimizer refines against. It also carries the
+  active stage's crop-safe **`bounds`** (`StageBounds`, an optional `min`/`max` per scalar climate
+  target, plus an optional per-zone irrigation envelope under `bounds.zones`, `ZoneBounds`): the
+  envelope the optimizer's constraint engine refines within and the platform enforces on the write
+  path, so a plan that clears the engine is expected to be accepted (a `422` signals the envelope
+  disagreed). `bounds` is absent when the stage defines none.
 - **`telemetry`** — one `MetricSummarySeries` per metric/scope pair, each a list of `SummaryBucket`
   `(bucket_start, min, mean, max, count)`. Per-zone soil moisture stays distinct (its own `zone_id`).
 - **`actuators`** — the latest `ActuatorSnapshot` per actuator/scope: `commanded`, `observed`

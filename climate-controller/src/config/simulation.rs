@@ -5,8 +5,10 @@
 //! simulation-only — a real-hardware backend ignores it. Optional in TOML; omitted fields take
 //! the committed defaults.
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+use crate::clock::{MAX_TIME_SCALE, MIN_TIME_SCALE};
 use crate::domain::TimeOfDay;
 use crate::validation::{FieldViolation, check_min, check_range};
 
@@ -15,13 +17,19 @@ use crate::validation::{FieldViolation, check_min, check_range};
 #[serde(default, deny_unknown_fields)]
 pub struct Simulation {
     /// Wall-clock tick-cadence multiplier (sim-only). The TOML value is the reset-on-restart
-    /// default; it is runtime-adjustable and ephemeral ([HAL §7]). Range 0.25–8×.
+    /// default; it is runtime-adjustable and ephemeral ([HAL §7]). Range 0.25–32×.
     pub time_scale: f64,
     /// PRNG seed — fixes the entire run for reproducible tests (`P1-TEST-2`).
     pub seed: u64,
     /// Default auto-expiry for a sensor-reading injection (simulated seconds); a per-request TTL
     /// overrides it.
     pub sensor_injection_timeout_secs: u64,
+    /// Shared simulated wall-clock start (RFC 3339 UTC). `None` → the fixed 2026-01-01 epoch
+    /// (deterministic default for tests/standalone). The fleet gen script sets one shared value
+    /// (today @ a random whole hour) so every controller's first timestamp and initial time-of-day
+    /// agree, then drift as each advances at its own `time_scale`. The clock starts at the
+    /// *seconds-of-day* off that day's midnight, so telemetry and time-of-day stay aligned.
+    pub start_ts: Option<DateTime<Utc>>,
     /// Solar / PAR day-cycle disturbance.
     pub solar: Solar,
     /// Initial plant state at tick 0.
@@ -36,6 +44,7 @@ impl Default for Simulation {
             time_scale: 1.0,
             seed: 0x5EED_5EED_5EED_5EED,
             sensor_injection_timeout_secs: 300,
+            start_ts: None,
             solar: Solar::default(),
             initial: InitialState::default(),
             noise: Noise::default(),
@@ -50,8 +59,8 @@ impl Simulation {
             violations,
             "simulation.time_scale",
             self.time_scale,
-            0.25,
-            8.0,
+            MIN_TIME_SCALE,
+            MAX_TIME_SCALE,
         );
         check_min(
             violations,
@@ -228,9 +237,19 @@ mod tests {
     }
 
     #[test]
+    fn start_ts_defaults_to_none_and_parses_rfc3339() {
+        assert_eq!(Simulation::default().start_ts, None);
+        let sim: Simulation = toml::from_str("start_ts = \"2026-07-09T14:00:00Z\"").unwrap();
+        assert_eq!(
+            sim.start_ts,
+            Some("2026-07-09T14:00:00Z".parse::<DateTime<Utc>>().unwrap())
+        );
+    }
+
+    #[test]
     fn out_of_range_time_scale_is_flagged() {
         let mut s = Simulation::default();
-        s.time_scale = 16.0;
+        s.time_scale = 64.0;
         let mut v = Vec::new();
         s.validate(&mut v);
         assert!(v.iter().any(|x| x.field == "simulation.time_scale"));

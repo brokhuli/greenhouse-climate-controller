@@ -16,8 +16,14 @@ Phase 2 platform that owns intended state.
 Every candidate plan passes through a deterministic **constraint engine** before it can be applied.
 The engine validates the plan against:
 
-- **Crop-safe bounds** — the min/max envelope the active crop profile defines for each target; the
-  optimizer may move targets *within* this envelope but never outside it.
+- **Crop-safe bounds** — the min/max envelope the active crop profile stage defines for each scalar
+  climate target and, uniformly across zones, the numeric per-zone irrigation targets (`StageBounds`,
+  including its `zones` envelope, on the profile — [platform crop-profiles §1](../platform/05-spec-platform-crop-profiles.md#1-profiles-and-assignment)),
+  read from the [planning-context](./06-spec-optimizer-input-gating.md) `setpoints.bounds` at the start
+  of the cycle; the optimizer may move targets *within* this envelope but never outside it. Because
+  Phase 2 enforces the same envelope on the write path, this engine is the optimizer's local pre-filter
+  on the authoritative bounds, not a second definition of them (a `202`/`422` disagreement is handled in
+  [§3](#3-write-path-concurrency--reconciliation)).
 - **Physical limits** — actuator ranges, rate limits, and physically achievable setpoint combinations.
 
 A plan that clears the engine is eligible for **auto-apply**
@@ -36,8 +42,8 @@ constraints still bound everything that actually happens in the greenhouse.
 
 ## 2. Setpoint refinement & application
 
-What Phase 3 adjusts are **targets**: the VPD / DLI / CO₂ / temperature setpoints that Phase 2 already
-resolves from the crop profile. It refines them dynamically — shifting within the crop-safe envelope
+What Phase 3 adjusts are **targets**: the VPD / DLI / CO₂ / temperature setpoints and the per-zone
+irrigation targets that Phase 2 already resolves from the crop profile. It refines them dynamically — shifting within the crop-safe envelope
 to anticipate the diurnal cycle, coordinate actuators, and reduce cost — and writes the result down.
 It **writes targets only**; it never commands actuators and never edits the crop profile itself.
 
@@ -85,12 +91,13 @@ This section states how the optimizer **cooperates** with them rather than re-im
 |---|---|
 | **Single-flight per greenhouse** | At most one cycle is in flight per greenhouse. The fixed cadence ([planning](./04-spec-optimizer-planning.md#1-llm-driven-planning)) plus a per-greenhouse in-flight guard means a slow cycle (LLM latency near the [P3-PERF-2](../../artifacts/non-functional-requirements.md) 60 s bound) finishes or times out **before** the next begins — there is never an optimizer-vs-optimizer race on the write path. N greenhouses still plan independently ([P3-SCAL-1](../../artifacts/non-functional-requirements.md)); single-flight is **per greenhouse, not global**. |
 | **The operator wins; the optimizer observes** | At each cycle's start, Data Access reads current setpoints **and their provenance** ([architecture](./02-spec-optimizer-architecture.md)). If the live setpoints carry a non-`optimizer` source (an `operator_edit`) newer than the optimizer's last applied plan, the optimizer adopts that as its **baseline** and plans from it — it never re-asserts its own prior plan over an operator edit. A refinement is a suggestion layered on the baseline, never a claim of ownership — the optimizer-layer analog of the platform's "drift is surfaced, not fought indefinitely" ([crop-profiles §3](../platform/05-spec-platform-crop-profiles.md#3-reconciliation--the-platform-is-the-source-of-truth)). |
-| **A `422` is a contract signal, not a retry** | Because the constraint engine ([constraint engine](#1-constraint-engine--safety)) validates against the same crop-safe bounds Phase 2 enforces, a `202` is expected; a `422` means the optimizer's view of the bounds **disagrees** with Phase 2's — the crop profile changed mid-cycle, or the bounds contract drifted. A `422` is therefore **never retried in a loop**: it is escalated as a bounds-mismatch fault (`optimizer_run_id`, [P3-OBS-1](../../artifacts/non-functional-requirements.md)) and the cycle abandoned, leaving the Phase 2 baseline in force ([P3-RESIL-1](../../artifacts/non-functional-requirements.md)). |
+| **A `422` is a contract signal, not a retry** | Because the constraint engine ([constraint engine](#1-constraint-engine--safety)) validates against the same crop-safe bounds Phase 2 enforces, a `202` is expected; a `422` means the optimizer's view of the bounds **disagrees** with Phase 2's — the crop profile changed mid-cycle, or the bounds contract drifted. A `422` is therefore **never retried in a loop**: it is escalated as a `bounds_mismatch` fault ([reason codes](./09-spec-optimizer-interfaces.md#escalation-reason-codes); `optimizer_run_id`, [P3-OBS-1](../../artifacts/non-functional-requirements.md)) and the cycle abandoned, leaving the Phase 2 baseline in force ([P3-RESIL-1](../../artifacts/non-functional-requirements.md)). |
 
 Each applied bundle carries its `optimizer_run_id` as provenance
 ([RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain),
 [RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)),
-and Phase 2's setpoint `PATCH` is an idempotent merge
-([crop-profiles §3](../platform/05-spec-platform-crop-profiles.md#3-reconciliation--the-platform-is-the-source-of-truth)),
+and Phase 2's setpoint write is an idempotent merge
+([crop-profiles §3](../platform/05-spec-platform-crop-profiles.md#3-reconciliation--the-platform-is-the-source-of-truth)) —
+the optimizer's `POST /setpoints` and the operator's ad-hoc `PATCH` share the same merge semantics —
 so a re-assert or a duplicate delivery **re-converges to the same intended state** rather than
 stacking — correctness depends only on the last write landing, never on a write landing exactly once.

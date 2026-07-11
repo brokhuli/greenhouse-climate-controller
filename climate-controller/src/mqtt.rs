@@ -16,7 +16,7 @@ use rumqttc::{AsyncClient, MqttOptions, QoS};
 
 use crate::metrics::{Metrics, PublishStats};
 use crate::state::Snapshot;
-use crate::telemetry::{FaultKey, active_fault_keys, epoch, telemetry_frames};
+use crate::telemetry::{FaultKey, active_fault_keys, telemetry_frames};
 
 /// Bounded outbound request buffer. When full (broker unreachable), `try_publish` errors and the
 /// frame is dropped — never queued unboundedly.
@@ -39,7 +39,14 @@ pub struct Publisher {
 impl Publisher {
     /// Connect to the broker and spawn the event-loop task (which auto-reconnects). Must be called
     /// inside a Tokio runtime. `metrics` receives the connection-state gauge from the event loop.
-    pub fn connect(broker_url: &str, greenhouse_id: &str, metrics: Arc<Metrics>) -> Self {
+    /// `base` is the simulated-clock base (`ts = base + sim_seconds`); it must match the runtime's so
+    /// MQTT and REST timestamps share one epoch (see [`crate::telemetry::sim_clock_start`]).
+    pub fn connect(
+        broker_url: &str,
+        greenhouse_id: &str,
+        base: DateTime<Utc>,
+        metrics: Arc<Metrics>,
+    ) -> Self {
         let (host, port) = parse_broker_url(broker_url);
         let mut options = MqttOptions::new(format!("controller-{greenhouse_id}"), host, port);
         options.set_keep_alive(std::time::Duration::from_secs(KEEP_ALIVE_SECS));
@@ -64,7 +71,7 @@ impl Publisher {
         Publisher {
             client,
             greenhouse_id: greenhouse_id.to_string(),
-            base: epoch(),
+            base,
             prev_faults: BTreeSet::new(),
         }
     }

@@ -106,7 +106,7 @@
 |---|---|
 | Language | Python |
 | Framework | FastAPI |
-| LLM Integration | LangChain (`langchain-anthropic`, `langchain-openai`, `langchain-community`) — `ChatAnthropic`/`ChatOpenAI` primary, `ChatOllama` fallback via `.with_fallbacks()`; see [RFC-004](../../decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface) |
+| LLM Integration | LangChain (`langchain-anthropic`, `langchain-openai`, `langchain-community`) — `ChatOllama` default local backend, `ChatAnthropic`/`ChatOpenAI` opt-in cloud backends, optional secondary via `.with_fallbacks()`; see [RFC-004](../../decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface) |
 | Simulation Engine | NumPy + SciPy |
 | Digital Twin | Custom greenhouse physics model |
 | Data Access | Phase 2 REST API via HTTP client |
@@ -118,12 +118,12 @@
 
 - **Python** — best language for LLMs, simulation, and optimization
 - **FastAPI** — clean service interface for the optimizer
-- **Hosted LLM primary** — frontier models produce more reliably constraint-valid multi-variable plans; Docker Desktop containers have outbound internet access by default, so no special networking is needed
-- **LangChain** — provides `Runnable` chain composition, `ChatPromptTemplate`, `.with_structured_output(ActuatorPlan)`, and `.with_fallbacks()` routing; replaces bespoke prompt construction, output parsing, and fallback logic
-- **Ollama fallback** — preserves planning continuity when the hosted backend is temporarily unreachable; wired via LangChain's `.with_fallbacks()`, transparent to the planning loop
-- **Backend-agnostic invocation strategy** — fixed token budget, hourly summaries, adaptive horizon, state-change gate, and fixed cadence applied before any backend call; strategy is identical for both backends
+- **Local Ollama default** — offline, key-free, and free per plan, so `P3-PORT-1` (no cloud account) holds out of the box; the always-available `ollama` container is the default planning backend and its own backstop
+- **LangChain** — provides `Runnable` chain composition, `ChatPromptTemplate`, `.with_structured_output(OptimizerPlan)`, and `.with_fallbacks()` routing; replaces bespoke prompt construction, output parsing, and fallback logic
+- **Cloud LLM opt-in** — a hosted frontier model (Anthropic/OpenAI) can be configured as the primary for more reliably constraint-valid multi-variable plans; Docker Desktop containers have outbound internet access by default, so no special networking is needed. An optional secondary backend (e.g. Ollama when a cloud provider is primary) wires via `.with_fallbacks()`, transparent to the planning loop
+- **Backend-agnostic invocation strategy** — fixed token budget, hourly summaries, adaptive horizon, state-change gate, and fixed cadence applied before any backend call; strategy is identical across backends
 - **NumPy/SciPy** — simulation of heat, humidity, and CO₂ dynamics
-- **Constraint engine** — validates LLM-generated actuator plans before execution
+- **Constraint engine** — validates LLM-generated setpoint plans before they are applied
 - **Phase 2 REST API** — historical data from Phase 2 feeds the optimizer through a platform-owned
   REST contract, backed internally by SQL views/aggregates where useful
 - **Flexible by design** — this layer evolves as LLM capabilities do

@@ -67,7 +67,7 @@ The same surface the controller publishes
   greenhouse **offline**; ingested fault events mark it **degraded**. For simulated
   controllers, "expected" is adjusted by the reported `time_scale`: one frame per tick means
   approximately `time_scale × 1 Hz` in wall-clock, so a `0.25×` greenhouse is not stale just because
-  it reports every ~4 seconds, while an `8×` greenhouse is expected to report much more frequently
+  it reports every ~4 seconds, while a `32×` greenhouse is expected to report much more frequently
   until backpressure shedding creates an observable data gap. If no current `time_scale` is known
   yet, liveness falls back to the 1× baseline until the retained system-state snapshot or status
   frame supplies it. Per-greenhouse status is derived *here* and surfaced to the fleet view and

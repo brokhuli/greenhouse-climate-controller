@@ -68,7 +68,7 @@ All paths are greenhouse-scoped under `/greenhouses/{greenhouse_id}`.
 | `PUT /sim/sensor-injections/{metric}` | Inject a sensor reading *(sim-only)* | 200 `SensorInjection` | 422, 404 |
 | `DELETE /sim/sensor-injections/{metric}` | Clear a sensor injection *(sim-only)* | 204 | 404 |
 | `GET /sim/time-scale` | Current simulated-clock speed + tick *(sim-only)* | 200 `TimeScale` | 404 |
-| `PUT /sim/time-scale` | Set the simulated-clock speed (0.25–8×) *(sim-only)* | 200 `TimeScale` | 422, 404 |
+| `PUT /sim/time-scale` | Set the simulated-clock speed (0.25–32×) *(sim-only)* | 200 `TimeScale` | 422, 404 |
 
 Only the runtime-mutable surfaces accept writes. Adding or removing a zone, and changing HAL
 parameters, is a config-file edit plus restart (controller spec

@@ -42,7 +42,7 @@
       "time_scale": {
         "type": ["number", "null"],
         "minimum": 0.25,
-        "maximum": 8.0,
+        "maximum": 32.0,
         "description": "Simulation-only: the controller's current simulated-clock speed multiplier (1.0 = real-time), backing the fleet card's per-greenhouse speed indicator. Null on a real-hardware controller or when unknown. Patched live by the WebSocket status frame (frontend-ws). Each controller's clock is independent (controller HAL §7)."
       },
       "climate": {

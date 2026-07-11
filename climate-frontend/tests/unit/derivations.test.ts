@@ -246,6 +246,7 @@ describe("formatLastWatered", () => {
       `Today, ${ts.toLocaleTimeString(undefined, {
         hour: "numeric",
         minute: "2-digit",
+        timeZone: "UTC",
       })}`,
     );
   });
@@ -253,7 +254,9 @@ describe("formatLastWatered", () => {
   it("labels an earlier day with its date", () => {
     const ts = new Date("2026-06-24T08:00:00.000Z");
     const result = formatLastWatered(ts, now);
-    expect(result).toContain(ts.toLocaleDateString(undefined, { month: "short", day: "numeric" }));
+    expect(result).toContain(
+      ts.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" }),
+    );
     expect(result).not.toContain("Today");
   });
 

@@ -64,7 +64,7 @@ type greenhouseDetailDTO struct {
 	ZoneStatus  []zoneStatusDTO `json:"zone_status"`
 }
 
-// --- setpoints (patch parsed for validation; the raw body is relayed unchanged) ---
+// --- setpoints (partial edit: decoded, validated, and merged onto the baseline bundle) ---
 
 type zoneTargetsDTO struct {
 	ZoneID                *string  `json:"zone_id"`

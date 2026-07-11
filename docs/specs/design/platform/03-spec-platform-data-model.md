@@ -25,6 +25,7 @@ extension, not a separate database):
 | Controller endpoint | How to reach a greenhouse's controller (MQTT topic root, REST base URL), liveness |
 | Crop profile | A named, **stage-aware** bundle of climate + irrigation targets for a crop |
 | Profile target bundle | The actual values — mirrors the controller's **runtime-adjustable** config: the climate `[setpoints]` (temperature day/night, VPD target + humidity safety bounds, DLI, CO₂) **plus** per-zone soil-moisture thresholds + watering schedule |
+| Profile crop-safe envelope | Optional per-stage `min`/`max` per scalar climate target — the range the Phase 3 optimizer may refine that target within ([crop profiles §4](./05-spec-platform-crop-profiles.md#4-boundary-with-phase-3--single-setpoint-authority)). Rides in the same stage document as the target bundle (no separate entity/column); absent for stages that define none |
 | Profile assignment | Which profile (and growth stage) is currently assigned to a greenhouse |
 | Intended setpoint state | The effective setpoints the platform believes each greenhouse should be running: resolved profile baseline plus sticky operator edits and accepted optimizer refinements |
 | Setpoint revision / provenance | Monotonic revision, source (`profile`, `operator_edit`, `optimizer`), actor/run id, reason, and timestamps for each intended-state change |

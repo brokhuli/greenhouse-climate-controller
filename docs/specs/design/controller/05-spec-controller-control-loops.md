@@ -140,11 +140,24 @@ cycle in one never blocks another.
 
 ### Lighting — DLI accumulation
 
-Tracks cumulative PAR over the day (Daily Light Integral, mol/m²/day). If the
-`dli_target_mol` is not on track by midday, supplemental **grow lights** engage for
-the afternoon; the **shade screen** sheds excess solar heat/light. Lights also
-extend the photoperiod for day-length-sensitive crops. Because DLI integrates over
-the day, the loop is adaptive: a bright morning reduces the afternoon supplement.
+Tracks cumulative PAR over the day (Daily Light Integral, mol/m²/day). Each tick the
+loop **projects the natural DLI still to come** before `day_end` from a controller-side
+clear-sky model — a raised half-sine of `expected_peak_par` over the day window — and
+engages supplemental **grow lights** only when `accumulated + expected_remaining <
+dli_target_mol`, i.e. only to cover the shortfall the sun won't provide. So on a bright
+day the lights switch off early (or never run), rather than driving the target early and
+then having the **shade screen** block the still-abundant sun. The shade screen sheds
+excess solar heat/light once the day's target is genuinely met. Lights also extend the
+photoperiod for day-length-sensitive crops.
+
+`expected_peak_par` is an **operator estimate**, independent of the simulator's hidden
+solar model (the HAL abstraction: the controller cannot see the true disturbance). The
+projection is a clear-sky forecast, but it is recomputed each tick against the *measured*
+accumulator, so it self-corrects to reality: a dim/cloudy day banks DLI slower than the
+model assumes, so the projected total slips below target and the lights re-engage to cover
+the genuine shortfall. Setting `expected_peak_par = 0` disables the forecast, reverting to
+reactive lighting (on whenever behind during the day window). A faulted PAR sensor falls
+back to a time-based photoperiod.
 
 The accumulated DLI (`mol·m⁻²·d⁻¹`) is surfaced as a derived value in the consolidated
 [system-state telemetry](./08-spec-controller-interfaces.md#2-mqtt--telemetry-out) — distinct
