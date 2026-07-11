@@ -126,7 +126,9 @@ fight:
 - **Solar / PAR day cycle** — natural light by time of day; drives natural PAR (so
   grow lights *supplement*) and solar heat gain.
 - **Plant CO₂ uptake** — consumes CO₂ during light hours.
-- **Per-zone soil drying** — soil moisture decays over time.
+- **Per-zone soil drying** — a slow, roughly-constant evapotranspiration draw when a zone's valve
+  is closed, down to an air-dry **residual** floor (soil never decays to bare 0); an open valve
+  fills that zone toward saturation.
 - **Ambient humidity drift.**
 
 > **Boundary.** The controller sees only sensor readings; simulation internals and

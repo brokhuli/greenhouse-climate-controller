@@ -47,14 +47,38 @@ export function useFleet() {
   return result;
 }
 
-/** One greenhouse's detail snapshot, including its current setpoints. */
+/**
+ * One greenhouse's detail snapshot, including its current setpoints and per-zone irrigation status.
+ *
+ * `status`/`drift`/telemetry frames patch this snapshot live between refreshes, but the per-zone
+ * `zone_status` fields (`irrigating`, `last_cycle_ts`, `faulted`) have no live WS carrier — only the
+ * zone's soil-moisture *value* streams, not its watering *state*. So a periodic refetch is what keeps
+ * the "Watering"/last-watered indicators current without a page reload.
+ *
+ * As with {@link useFleet}, that refetch runs on our own interval rather than useQuery's
+ * `refetchInterval`: the live stream patches this same query via `setQueryData` on every status/drift
+ * frame (see livePatch.ts), and each cache write clears and recreates the observer's refetch-interval
+ * timer — at a sub-interval frame cadence the timer is perpetually reset and never fires. A self-owned
+ * interval isn't tied to the observer, so those cache writes can't starve it.
+ */
 export function useGreenhouse(id: string) {
-  return useQuery({
+  const queryClient = useQueryClient();
+  const result = useQuery({
     queryKey: queryKeys.greenhouse(id),
     queryFn: async () =>
       toGreenhouseDetail(await apiClient.get(`/greenhouses/${id}`, wireGreenhouseDetail)),
     enabled: id.length > 0,
   });
+
+  useEffect(() => {
+    if (id.length === 0) return;
+    const timer = setInterval(() => {
+      void queryClient.refetchQueries({ queryKey: queryKeys.greenhouse(id) });
+    }, FLEET_POLL_BASE_MS);
+    return () => clearInterval(timer);
+  }, [queryClient, id]);
+
+  return result;
 }
 
 /** Register a greenhouse into the fleet. Invalidates the fleet list on success. */

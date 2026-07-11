@@ -42,8 +42,9 @@ pub struct HealthState {
     valve_last_soil: BTreeMap<Slug, f64>,
     /// Per push actuator: consecutive ticks the driven variable has failed to respond.
     house_no_resp_ticks: BTreeMap<Actuator, u64>,
-    /// Per push actuator: the variable value to beat for "responded" — the best level seen since the
-    /// current push challenge began.
+    /// Per push actuator: the variable value to beat for "responded". For non-floored actuators
+    /// it's the best level seen since the current push challenge began (ratchets up); for PAR
+    /// (floored) it's frozen at the challenge-start level, since PAR plateaus rather than climbing.
     house_no_resp_baseline: BTreeMap<Actuator, f64>,
     disabled: BTreeSet<ActuatorId>,
 }
@@ -197,7 +198,12 @@ impl HealthState {
                                 v >= baseline - margin // temp/RH/CO₂ must at least hold
                             };
                             if responded {
-                                if v > baseline {
+                                // Non-floored actuators ratchet the baseline to the best level seen,
+                                // so a later decline past it reads as no-response. PAR (floored) must
+                                // instead hold its comparison against *where the challenge started*:
+                                // it plateaus once the lights are on and stops rising, so ratcheting
+                                // up here would make a healthy, holding PAR look like no-response.
+                                if !desc.floored && v > baseline {
                                     self.house_no_resp_baseline.insert(desc.actuator, v);
                                 }
                                 self.house_no_resp_ticks.insert(desc.actuator, 0);
@@ -524,6 +530,34 @@ mod tests {
         assert!(health.disabled().contains(&lights));
         assert!(
             faults
+                .iter()
+                .any(|f| f.fault_type == FaultType::ActuatorNoResponse)
+        );
+    }
+
+    #[test]
+    fn grow_lights_not_flagged_when_par_rises_then_plateaus() {
+        // Lights commanded on; PAR ramps up to a plateau and holds there (the digital twin's
+        // first-order response — photons stop climbing once the lamp is fully on). PAR clearly
+        // responded, so no fault: the no-response challenge must compare against where it started,
+        // not ratchet up to the best level seen (which would make a holding PAR look dead).
+        let cfg = config();
+        let mut health = HealthState::new();
+        let lights = ActuatorId::House(Actuator::GrowLights);
+        let mut cmd = Commands::all_off(&[]);
+        cmd.set(&lights, 100.0);
+
+        let mut faults = Vec::new();
+        // Ramp 50 → 800, then hold at 800 for well past the window.
+        for &par in &[50.0, 200.0, 500.0, 800.0, 800.0, 800.0, 800.0, 800.0] {
+            faults.clear();
+            let mut trusted = trusted_with_soil(Map::new());
+            trusted.par = Some(par);
+            health.monitor(Some(&cmd), &cmd, &trusted, &resolved(), &cfg, &mut faults);
+        }
+        assert!(health.disabled().is_empty());
+        assert!(
+            !faults
                 .iter()
                 .any(|f| f.fault_type == FaultType::ActuatorNoResponse)
         );

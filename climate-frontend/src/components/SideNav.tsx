@@ -1,12 +1,20 @@
-import { Activity, LayoutGrid, Sprout } from "lucide-react";
+import { Activity, LayoutGrid, Sparkle, Sprout, type LucideIcon } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useTheme } from "../hooks/theme";
 
-const NAV_ITEMS = [
+type NavItem = {
+  to: string;
+  label: string;
+  end: boolean;
+  icon: LucideIcon;
+};
+
+const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Fleet", icon: LayoutGrid, end: true },
   { to: "/profiles", label: "Profiles", icon: Sprout, end: false },
   { to: "/activity", label: "Activity", icon: Activity, end: false },
-] as const;
+  { to: "/verdant-force", label: "Optimizer", icon: Sparkle, end: false },
+];
 
 /** Primary navigation rail (architecture §8). */
 export function SideNav() {
@@ -24,11 +32,11 @@ export function SideNav() {
         <span className="font-semibold">Verdant</span>
       </div>
 
-      {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
+      {NAV_ITEMS.map((item) => (
         <NavLink
-          key={to}
-          to={to}
-          end={end}
+          key={item.to}
+          to={item.to}
+          end={item.end}
           className={({ isActive }) =>
             `flex items-center gap-3 rounded-md px-3 py-2 text-base ${
               isActive
@@ -37,8 +45,8 @@ export function SideNav() {
             }`
           }
         >
-          <Icon size={18} aria-hidden />
-          <span>{label}</span>
+          <item.icon size={18} aria-hidden />
+          <span>{item.label}</span>
         </NavLink>
       ))}
     </nav>

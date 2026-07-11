@@ -39,14 +39,16 @@ id = "bench-a"
 moisture_low_threshold = 0.35  # VWC — irrigation triggers below this
 moisture_high_threshold = 0.55 # VWC — irrigation stops above this
 drain_period_secs = 300        # minimum gap between cycles
-schedule = "06:00,14:00"       # time-of-day triggers
+# Hourly daytime windows: frequent enough that the gated scheduler refills soon after soil crosses
+# the low threshold, so the sawtooth stays essentially within band instead of sagging to residual.
+schedule = "06:00,07:00,08:00,09:00,10:00,11:00,12:00,13:00,14:00,15:00,16:00,17:00,18:00,19:00"
 
 [[zones]]
 id = "seedling-tray"
 moisture_low_threshold = 0.50
 moisture_high_threshold = 0.70
 drain_period_secs = 600
-schedule = "07:00,13:00,18:00"
+schedule = "07:00,08:00,09:00,10:00,11:00,12:00,13:00,14:00,15:00,16:00,17:00,18:00,19:00"
 
 # --- HAL simulation model (spec §3) --------------------------------------------------------
 [hal.time_constants] # first-order-lag τ per state variable (seconds)
@@ -61,7 +63,8 @@ outdoor_temp_c = 10.0
 ambient_humidity_pct = 50.0
 heat_loss_coeff = 0.002 # extra envelope conduction toward outdoor (small vs the τ pull)
 plant_co2_uptake_ppm_per_s = 0.5
-soil_drying_rate_per_s = 0.00005
+soil_drying_rate_per_s = 0.00001 # VWC/s ET draw when the valve is closed (≈5.5 h to fall 0.20 VWC)
+soil_residual_vwc = 0.15         # air-dry floor: drying settles here, never draws toward 0
 
 # Coupling matrix (spec §3): each actuator declares a SET of effects on climate variables,
 # never a one-to-one mapping (RFC-006). `gain` is the full-on contribution to that variable's

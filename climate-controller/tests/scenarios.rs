@@ -299,3 +299,37 @@ fn manual_override_auto_expires() {
         "override should have auto-expired"
     );
 }
+
+/// Irrigation over a simulated day: with the tuned drying rate + hourly daytime schedule, Bench A's
+/// gated scheduler holds the moisture band — the soil sawtooths within/near 0.35–0.55, refills to
+/// near the high threshold, and never sags toward the air-dry residual (the old model crashed it to
+/// ~0). Deterministic under the seeded HAL.
+#[test]
+fn irrigation_schedule_holds_the_moisture_band_over_a_day() {
+    use climate_controller::domain::Slug;
+    let zone: Slug = "bench-a".parse().unwrap();
+    let mut p = pipeline_at(config(), Clock::starting_at("06:00".parse().unwrap()));
+
+    let (mut min_soil, mut max_soil) = (f64::INFINITY, f64::NEG_INFINITY);
+    for _ in 0..(10 * 3600u64) {
+        let soil = p
+            .tick()
+            .trusted
+            .soil_moisture
+            .get(&zone)
+            .copied()
+            .flatten()
+            .expect("bench-a soil sensor is healthy");
+        min_soil = min_soil.min(soil);
+        max_soil = max_soil.max(soil);
+    }
+
+    assert!(
+        min_soil > 0.28,
+        "soil should stay near the band, not sag toward residual — min was {min_soil:.3}"
+    );
+    assert!(
+        max_soil > 0.54,
+        "scheduler should refill toward the high threshold — max was {max_soil:.3}"
+    );
+}

@@ -152,6 +152,7 @@ ambient_humidity_pct = 50.0
 heat_loss_coeff = 0.02
 plant_co2_uptake_ppm_per_s = 0.5
 soil_drying_rate_per_s = 0.00001
+soil_residual_vwc = 0.15
 
 [[hal.actuators]]
 actuator = "heater"
@@ -165,6 +166,21 @@ constraints = { min_on_secs = 60, min_off_secs = 60 }
         config.validate().expect("minimal config should validate");
         assert_eq!(config.controller_id.as_str(), "gh-a");
         assert!(config.zones.is_empty());
+    }
+
+    #[test]
+    fn omitted_soil_residual_defaults() {
+        // A config predating the knob (no soil_residual_vwc) must still parse, defaulting to 0.15.
+        let text = MINIMAL.replace("soil_residual_vwc = 0.15\n", "");
+        assert!(
+            !text.contains("soil_residual_vwc"),
+            "line should be removed"
+        );
+        let config: Config = toml::from_str(&text).unwrap();
+        config
+            .validate()
+            .expect("config without the knob should validate");
+        assert_eq!(config.hal.disturbances.soil_residual_vwc, 0.15);
     }
 
     #[test]
