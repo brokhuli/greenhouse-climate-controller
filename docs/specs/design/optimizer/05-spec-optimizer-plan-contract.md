@@ -51,7 +51,7 @@ the Python `OptimizerPlan` Pydantic model.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `trajectory` | `TrajectoryPoint[]` (non-empty) | ✓ | The refined setpoint trajectory across the horizon, one point per hour ([hourly granularity](./04-spec-optimizer-planning.md#invocation-strategy)). A **planning artifact**: it is held in memory so a skipped cycle can **extend the plan** ([state-change gate](./04-spec-optimizer-planning.md#invocation-strategy)) by carrying the next hour's setpoints forward, and is **not** written whole to Phase 2 — only `immediate_setpoints` is applied. It is **not** the gate's comparison input: the gate diffs the twin's predicted-**climate** forecast, a separate in-memory reference ([digital twin §1.6](./03-spec-optimizer-digital-twin.md#16-twin-output-predicted-trajectory)). |
+| `trajectory` | `TrajectoryPoint[]` (non-empty) | ✓ | The refined setpoint trajectory across the horizon, one point per hour ([hourly granularity](./04-spec-optimizer-planning.md#invocation-strategy)). A **planning artifact**: it is held in memory so a skipped cycle can **extend the plan** ([state-change gate](./04-spec-optimizer-planning.md#invocation-strategy)) — the retained trajectory is **surfaced for review, never re-applied**. On a skipped or held cycle **nothing new is written**: the last applied `immediate_setpoints` bundle **stays in force** (Phase 2 already holds it), so the trajectory is **not** written to Phase 2 — only a fresh, gated plan's `immediate_setpoints` ever reaches the greenhouse. It is **not** the gate's comparison input: the gate diffs the twin's predicted-**climate** forecast, a separate in-memory reference ([digital twin §1.6](./03-spec-optimizer-digital-twin.md#16-twin-output-predicted-trajectory)). |
 | `immediate_setpoints` | `SetpointsPatch` | ✓ | The **single next bundle** the applier submits to Phase 2 this cadence — the refined targets of `trajectory[0]` expressed as a partial [setpoints patch](../../../../contracts/optimizer-write-rest/components/schemas/setpoints.json). This is a **normative, engine-enforced invariant** — `immediate_setpoints` ≡ `trajectory[0].setpoints` field-for-field, not just a description — and a mismatch is rejected ([constraint engine](./06-spec-optimizer-constraints-and-application.md#1-constraint-engine--safety)). The one part of the plan that reaches the greenhouse. |
 | `confidence` | `number` ∈ [0, 1] | ✓ | The planner's self-assessed confidence in the immediate bundle. **Load-bearing**: below the configured `confidence_threshold` ([configuration](./11-spec-optimizer-configuration.md), default `0.8`) the plan is **escalated, not applied** ([application gate](./06-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application)). |
 | `explanation` | `string` | ✓ | A short natural-language reason summary — the "reasoning/audit trace" surfaced to an operator when the plan is escalated or inspected. |
@@ -86,11 +86,23 @@ rather than a cross-contract `$ref`.
 | `schema_version` | `integer` | ✓ | Major version of this plan contract. Internal, not a cross-service wire version; a bump is an ADR event (§5). |
 | `optimizer_run_id` | `string` (UUID) | ✓ | The cycle's trace / provenance id. Phase 2 records it on the applied bundle (`source = optimizer`, [RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain)); every plan and escalation the service exposes is traced by it (`P3-OBS-1`). |
 | `greenhouse_id` | `string` | ✓ | The greenhouse this plan is for — one plan is one greenhouse's cycle. |
-| `created_at` | `string` (RFC 3339, UTC) | ✓ | When the cycle produced the plan. |
+| `created_at` | `string` (RFC 3339, UTC) | ✓ | When the cycle ran — the instant this record was produced, whether it applied, escalated, or extended. |
 | `horizon` | `{ start, end }` (RFC 3339, UTC) | ✓ | The **adaptive window** the service chose for the cycle: 12 h by default, 24 h near a day boundary ([invocation strategy](./04-spec-optimizer-planning.md#invocation-strategy)). `trajectory` spans `[start, end]`. |
 | `backend` | `{ provider, model, prompt_version, role }` | ✓ | Which **model and prompt** produced the plan. `provider ∈ { ollama, anthropic, openai }`; `model` is the pinned id (e.g. `llama3`, `claude-sonnet-4-6`); `prompt_version` is the pinned [prompt-template version](./04-spec-optimizer-planning.md#prompt-template--versioning) (e.g. `v1`); `role ∈ { primary, fallback }`. `(model, prompt_version, sampling)` is the provenance tuple a plan is reproduced from — a fallback is a **different model** held to its own [evaluation baseline](./08-spec-optimizer-evaluation.md), so failover is recorded here, not hidden ([determinism](./04-spec-optimizer-planning.md#determinism--reproducibility)). |
-| `plan` | `OptimizerPlan` | ✓ | The layer-1 plan (§2). |
-| `outcome` | `{ status, reason_code?, message? }` | ✓ | What the gates decided. `status ∈ { applied, escalated, extended }`; on `escalated`, `reason_code` (one of the [canonical reason codes](./10-spec-optimizer-interfaces.md#escalation-reason-codes)) is **required** — the schema enforces it with a conditional rule ([plan-record.schema.json](../../../../contracts/optimizer-plan/plan-record.schema.json)) — and `message` is the operator-facing detail. `extended` means no new plan was applied: the [state-change gate](./04-spec-optimizer-planning.md#invocation-strategy) skipped the LLM (or there was nothing to refine), and the prior plan or Phase 2 baseline is carried forward. |
+| `plan` | `OptimizerPlan` \| `null` | ✓ (nullable) | The layer-1 plan (§2), or **`null`** when the cycle produced no new plan — any **pre-planner** held cycle (the input gate, clock-mode, contract-drift, twin-divergence, cycle-timeout, or LLM-unavailable path holds the cycle *before* the planner runs) and a cold-start `extended`. An `applied` record **always** carries a non-null plan (the schema enforces this with a conditional rule); a **post-planner** escalation (`low_confidence`, `constraint_violation`, `twin_fidelity_fault`, `bounds_mismatch`, `write_unauthorized`) still carries the plan it rejected. |
+| `source_plan_id` | `string` (UUID) | – | Present when `plan` is `null`: the `optimizer_run_id` of the prior accepted plan whose already-applied bundle **stays in force** while this cycle is held or extended — the greenhouse holds the last applied setpoints, nothing new is written ([resilience](./09-spec-optimizer-resilience.md)). Absent on a cold-start hold of the Phase 2 baseline, where no prior plan exists. |
+| `outcome` | `{ status, reason_code?, message? }` | ✓ | What the gates decided. `status ∈ { applied, escalated, extended }`; on `escalated`, `reason_code` (one of the [canonical reason codes](./10-spec-optimizer-interfaces.md#escalation-reason-codes)) is **required** — the schema enforces it with a conditional rule ([plan-record.schema.json](../../../../contracts/optimizer-plan/plan-record.schema.json)) — and `message` is the operator-facing detail. `extended` means **no new plan was applied and nothing new was written**: the [state-change gate](./04-spec-optimizer-planning.md#invocation-strategy) skipped the LLM (or there was nothing to refine), so the **last applied bundle stays in force** — `plan` is `null` and `source_plan_id` names the retained prior plan (absent on a cold-start hold of the Phase 2 baseline). |
+
+**A held cycle still produces a record.** Not every cycle produces a plan: the
+[input gate](./07-spec-optimizer-input-gating.md), a
+[twin divergence](./03-spec-optimizer-digital-twin.md#2-robustness--fidelity), a cycle timeout, or an
+LLM outage can hold a cycle *before* the planner ever runs
+([resilience](./09-spec-optimizer-resilience.md)). Such a cycle still emits a `PlanRecord` — the
+operator surface must show *that the cycle ran and why nothing changed* — with `plan = null`, the
+pre-planner [reason code](./10-spec-optimizer-interfaces.md#escalation-reason-codes) on `outcome`, and
+`source_plan_id` naming the plan whose already-applied bundle stays in force (absent on a cold start,
+where the Phase 2 baseline is held). The **only** record guaranteed a non-null `plan` is an `applied`
+one.
 
 ---
 
@@ -113,8 +125,9 @@ rather than a cross-contract `$ref`.
 6. The **state-change gate** of the *next* cycle diffs the current twin **climate** forecast against
    the **reference forecast** retained from this cycle's planner run
    ([planning — state-change gate](./04-spec-optimizer-planning.md#invocation-strategy)); a small
-   deviation yields `outcome.status = extended` — this plan's `trajectory` is carried forward with no
-   new LLM call.
+   deviation yields `outcome.status = extended` — **no new LLM call and no new write**: the last
+   applied bundle stays in force while this plan's `trajectory` is retained in memory (surfaced, not
+   re-applied), referenced by the next record's `source_plan_id`.
 
 ---
 

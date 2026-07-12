@@ -69,7 +69,7 @@ raising gates reference it rather than re-listing codes.
 | `actuator_fault` | input gating — actuator health (`stuck` / `no_response`) | transient |
 | `clock_mode_unsupported` | input gating — `time_scale ≠ 1.0` | transient |
 | `contract_drift` | input gating — identity / `schema_version` mismatch; write path — Phase 2 `404` (greenhouse not in the platform registry) | persistent |
-| `twin_diverged` | twin — numerical divergence (non-finite / non-converging step) | transient |
+| `twin_diverged` | twin — numerical divergence (non-finite / out-of-envelope step) | transient |
 | `twin_fidelity_fault` | twin — sustained parameter drift | persistent |
 | `constraint_violation` | constraint engine — target out of crop-safe range, or an inconsistent setpoint bundle | persistent (for this plan) |
 | `low_confidence` | application gate — plan below the confidence threshold | transient |

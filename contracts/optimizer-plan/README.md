@@ -38,6 +38,10 @@ each schema's `description`s carry the per-field detail. In brief:
 - `outcome.reason_code` (on escalation) is one of the canonical
   [escalation reason codes](../../docs/specs/design/optimizer/10-spec-optimizer-interfaces.md#escalation-reason-codes);
   the raising gate assigns it, not the model.
+- `plan` is `null` when a cycle produced no new plan — a **pre-planner** held cycle (input gate,
+  clock mode, contract drift, twin divergence, cycle timeout, LLM unavailable) or a cold-start
+  `extended`; `source_plan_id` then names the held prior plan whose applied bundle stays in force. An
+  `applied` record always carries its (non-null) plan.
 - `backend.prompt_version` pins the prompt template that produced the plan (resolving
   `climate-optimizer/prompts/planner.v{version}.md`); with `backend.model` it makes a stored plan
   traceable to its exact (model, prompt) provenance. A prompt change is a deliberate ADR event.
@@ -55,7 +59,8 @@ Each schema embeds a stable `$id` under `https://greenhouse.local/contracts/opti
 each `<frame>.*.json` validates against `<frame>.schema.json`, and every `*.bad-*.json` must be
 rejected.
 
-- `plan-record.applied.json`, `plan-record.escalated-low-confidence.json` → `plan-record.schema.json`
+- `plan-record.applied.json`, `plan-record.escalated-low-confidence.json`, `plan-record.escalated-input-stale.json`, `plan-record.extended.json` → `plan-record.schema.json`
+- `plan-record.bad-escalated-no-reason.json` (escalated with no `reason_code`), `plan-record.bad-applied-null-plan.json` (`applied` with `plan: null`) → `plan-record.schema.json` (**must reject**)
 - `optimizer-plan.json` → `optimizer-plan.schema.json`
 - `optimizer-plan.bad-confidence.json` → `optimizer-plan.schema.json` (confidence out of `[0, 1]`; **must reject**)
 

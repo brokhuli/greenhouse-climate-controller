@@ -58,7 +58,7 @@ max_tokens = 1024                     # response budget; distinct from the 4000-
 cycle_interval_minutes = 30
 horizon_hours = 12                    # extended to 24 only near day boundaries
 context_token_budget = 4000           # serializer raises if exceeded; no silent truncation
-state_change_threshold = 0.05         # fraction deviation to suppress a cycle's LLM call
+state_change_threshold = 0.05         # normalized mean predicted-climate residual (twin fidelity-residual method) below which the LLM call is suppressed → planning state-change gate
 objective_weights = { anticipation = 1.0, coupling = 1.0, efficiency = 0.5 }
 
 [cost]
@@ -80,15 +80,15 @@ max_telemetry_age_minutes = 35        # latest reading per required metric must 
 required_metrics = ["temperature", "humidity", "co2", "par"]   # VPD / DLI are derived from these
 # per-zone soil_moisture is additionally required when the greenhouse declares irrigation zones
 # (gated on zone presence, not this flat greenhouse-scoped list) → input gating
-min_history_coverage = 0.8            # fraction of expected samples in the window; large gaps fail the gate
+min_history_coverage = 0.8            # min fraction of non-empty summary buckets over the window (expected buckets = window ÷ interval); an empty bucket is a gap → input gating
 
 [twin]
-solver_max_step_minutes = 5           # integrator sub-step ceiling; exponential update stays stable above the fastest τ; non-finite / non-converging step = sim divergence → twin robustness
+solver_max_step_minutes = 5           # integrator sub-step ceiling; exponential update stays stable above the fastest τ; non-finite / out-of-envelope step = sim divergence → twin robustness
 output_interval_minutes = 60          # spacing of the twin's predicted-trajectory points handed to the planner (planner's hourly granularity); internal sub-steps are finer
 divergence_threshold = 0.15           # one-step predicted-vs-observed residual fraction (mean over required metrics, normalized by plausibility-range) → twin robustness
 fidelity_breach_cycles = 3            # consecutive divergence_threshold breaches before a fidelity fault caps confidence and escalates → twin robustness
 
 [service]
-cycle_timeout_seconds = 60            # a cycle exceeding this is abandoned and the last plan extended; aligns with P3-PERF-2
+cycle_timeout_seconds = 60            # a cycle exceeding this is abandoned and the last applied bundle held; aligns with P3-PERF-2
 escalation_dedup_window_minutes = 60  # recurring escalations for one greenhouse collapse into one standing entry → resilience
 ```

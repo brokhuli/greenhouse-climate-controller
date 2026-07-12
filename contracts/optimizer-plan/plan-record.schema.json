@@ -55,7 +55,7 @@
         "status": {
           "type": "string",
           "enum": ["applied", "escalated", "extended"],
-          "description": "applied = submitted to Phase 2; escalated = surfaced, not applied; extended = no new plan applied - the state-change gate skipped the LLM (or there was nothing to refine) and the prior plan or Phase 2 baseline is carried forward."
+          "description": "applied = submitted to Phase 2; escalated = surfaced, not applied; extended = no new plan applied and nothing new written - the state-change gate skipped the LLM (or there was nothing to refine), so the last applied bundle stays in force (plan is null; source_plan_id names the held prior plan, absent on a cold-start hold of the Phase 2 baseline)."
         },
         "reason_code": { "$ref": "#/$defs/ReasonCode" },
         "message": { "type": "string", "description": "Operator-facing detail for an escalation." }
@@ -70,10 +70,17 @@
     "schema_version": { "type": "integer", "minimum": 1, "description": "Major version of this plan contract (internal; a bump is an ADR event)." },
     "optimizer_run_id": { "type": "string", "format": "uuid", "description": "The cycle's trace / provenance id. Phase 2 records it on the applied bundle; every plan and escalation is traced by it (P3-OBS-1)." },
     "greenhouse_id": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$", "description": "The greenhouse this plan is for." },
-    "created_at": { "type": "string", "format": "date-time", "description": "When the cycle produced the plan (RFC 3339, UTC)." },
+    "created_at": { "type": "string", "format": "date-time", "description": "When the cycle ran (RFC 3339, UTC) - the instant this record was produced, whether it applied, escalated, or extended." },
     "horizon": { "$ref": "#/$defs/Horizon" },
     "backend": { "$ref": "#/$defs/Backend" },
-    "plan": { "$ref": "https://greenhouse.local/contracts/optimizer-plan/optimizer-plan.schema.json" },
+    "plan": {
+      "description": "The layer-1 OptimizerPlan (§2), or null when the cycle produced no new plan: every pre-planner held cycle (an input-gate, clock-mode, contract-drift, twin-divergence, cycle-timeout, or llm-unavailable outcome, where the LLM never ran) and a cold-start `extended` that holds the Phase 2 baseline. An `applied` outcome always carries a non-null plan (enforced by the conditional below). A post-planner escalation (low_confidence, constraint_violation, twin_fidelity_fault, bounds_mismatch, write_unauthorized) still carries the plan it rejected.",
+      "oneOf": [
+        { "$ref": "https://greenhouse.local/contracts/optimizer-plan/optimizer-plan.schema.json" },
+        { "type": "null" }
+      ]
+    },
+    "source_plan_id": { "type": "string", "format": "uuid", "description": "When `plan` is null, the optimizer_run_id of the prior accepted plan whose already-applied bundle stays in force while this cycle is held or extended (the greenhouse holds the last applied setpoints; nothing new is written). Absent on a cold-start hold of the Phase 2 baseline, where no prior plan exists." },
     "outcome": { "$ref": "#/$defs/Outcome" }
   },
   "required": [
@@ -86,5 +93,13 @@
     "plan",
     "outcome"
   ],
-  "additionalProperties": false
+  "additionalProperties": false,
+  "if": {
+    "properties": { "outcome": { "properties": { "status": { "const": "applied" } }, "required": ["status"] } },
+    "required": ["outcome"]
+  },
+  "then": {
+    "properties": { "plan": { "$ref": "https://greenhouse.local/contracts/optimizer-plan/optimizer-plan.schema.json" } },
+    "required": ["plan"]
+  }
 }

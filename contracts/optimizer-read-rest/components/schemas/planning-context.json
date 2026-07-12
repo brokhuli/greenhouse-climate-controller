@@ -205,7 +205,7 @@
       "count": {
         "type": "integer",
         "minimum": 0,
-        "description": "Number of raw samples aggregated into the bucket (0 signals a gap the completeness check reads)."
+        "description": "Number of raw samples aggregated into the bucket; 0 marks the bucket a gap. Bucket coverage - the fraction of non-empty buckets over the window's expected buckets (window duration / interval) - is the optimizer's completeness signal, checked against min_history_coverage (input gating)."
       }
     },
     "required": ["bucket_start", "min", "mean", "max", "count"],
@@ -274,7 +274,7 @@
   },
   "MetricFreshness": {
     "type": "object",
-    "description": "Per-metric freshness and completeness the input gate reads: the latest sample's age (against max_telemetry_age_minutes) and how many samples the window holds (against min_history_coverage).",
+    "description": "Per-metric freshness the input gate reads: the latest sample's age (against max_telemetry_age_minutes). Completeness is measured separately, from telemetry summary-bucket coverage (SummaryBucket.count vs min_history_coverage), not from this object.",
     "properties": {
       "metric": { "$ref": "./common.json#/Metric" },
       "zone_id": {
@@ -295,7 +295,7 @@
       "sample_count": {
         "type": "integer",
         "minimum": 0,
-        "description": "Raw samples for this metric/scope in the window — the completeness signal."
+        "description": "Raw samples for this metric/scope in the window — an informational total. Completeness is measured from per-bucket coverage (SummaryBucket.count), not this flat count."
       }
     },
     "required": ["metric", "zone_id", "latest_ts", "age_seconds", "sample_count"],
@@ -327,7 +327,7 @@
   },
   "DataQuality": {
     "type": "object",
-    "description": "The data-quality / freshness signals the optimizer's input gate runs before invoking the digital twin and planner. Each field maps to one gate check: freshness+completeness (freshness[]), sensor health (faults[]), actuator health (on each ActuatorSnapshot), controller mode (controller_mode), and clock mode (time_scale).",
+    "description": "The data-quality / freshness signals the optimizer's input gate runs before invoking the digital twin and planner. Each field maps to a gate check: freshness (freshness[]), sensor health (faults[]), actuator health (on each ActuatorSnapshot), controller mode (controller_mode), and clock mode (time_scale). Completeness is measured separately from telemetry[] summary-bucket coverage (SummaryBucket.count), not from this block.",
     "properties": {
       "controller_mode": { "$ref": "#/ControllerMode" },
       "time_scale": {
@@ -337,7 +337,7 @@
       },
       "freshness": {
         "type": "array",
-        "description": "Per-metric freshness/completeness, one entry per metric/scope the greenhouse reports.",
+        "description": "Per-metric freshness, one entry per metric/scope the greenhouse reports.",
         "items": { "$ref": "#/MetricFreshness" }
       },
       "faults": {

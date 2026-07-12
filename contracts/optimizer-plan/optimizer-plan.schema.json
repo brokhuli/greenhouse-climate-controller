@@ -48,7 +48,7 @@
       "type": "array",
       "minItems": 1,
       "items": { "$ref": "#/$defs/TrajectoryPoint" },
-      "description": "The refined setpoint trajectory across the horizon, one point per hour. A planning artifact held in memory so a skipped cycle can extend the plan (carrying the next hour's setpoints forward); not written whole to Phase 2 - only immediate_setpoints is applied. Not the state-change gate's comparison input: the gate diffs the twin's predicted-climate forecast, a separate in-memory reference."
+      "description": "The refined setpoint trajectory across the horizon, one point per hour. A planning artifact held in memory so a skipped cycle can extend the plan - surfaced for review, never re-applied. On a skipped or held cycle nothing new is written: the last applied immediate_setpoints bundle stays in force (Phase 2 already holds it), so the trajectory is not written to Phase 2 - only a fresh, gated plan's immediate_setpoints reaches the greenhouse. Not the state-change gate's comparison input: the gate diffs the twin's predicted-climate forecast, a separate in-memory reference."
     },
     "immediate_setpoints": {
       "$ref": "https://greenhouse.local/contracts/optimizer-plan/setpoints.schema.json#/$defs/SetpointsPatch",

@@ -117,7 +117,7 @@
   `x(t+Δt) = x_target + (x(t) − x_target)·e^(−Δt/τ)` — exact at any step, unconditionally stable, and
   dependency-free (plain NumPy). It runs in **fixed sub-steps** of ≤ `twin.solver_max_step_minutes`
   ([configuration](./11-spec-optimizer-configuration.md)) from a **seed**, with the per-step
-  non-finite / physical-plausibility / non-convergence checks from
+  non-finite / physical-plausibility checks from
   [digital twin §2](./03-spec-optimizer-digital-twin.md#2-robustness--fidelity). A seeded, fixed-step,
   closed-form integrator is what makes the twin a **reproducible** forward model — the optimizer-side
   analog of the controller's seeded HAL (`P1-TEST-2`,

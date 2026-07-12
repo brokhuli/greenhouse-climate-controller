@@ -35,12 +35,17 @@ The trajectory is a **planning artifact** spanning the horizon; Phase 3 does **n
 trajectory to Phase 2. Each cadence the optimizer applies only the **immediate next setpoint bundle** —
 a single `SetpointsPatch` through the
 [Phase 2 write path](./06-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application) —
-while the rest of the horizon is held in memory so a skipped cycle can **extend the plan** by carrying
-the next hour's setpoints forward ([state-change gate](#invocation-strategy)). That setpoint horizon is
-**not** what the gate diffs — the gate compares the twin's **predicted-climate** forecast across cycles
-(below), a climate series, not this setpoint series. A scheduled or multi-step plan contract that hands
-Phase 2 a future trajectory is deliberately out of Phase 3 scope ([scope](./13-spec-optimizer-scope.md));
-the single-authority write path stays a current-target merge.
+while the rest of the horizon is held in memory as an **advisory artifact**
+([state-change gate](#invocation-strategy)). A **skipped or held cycle writes nothing**: the optimizer
+only ever writes on a cadence where a fresh plan clears the gates, so on any other cadence the **last
+applied bundle stays in force** (Phase 2 already holds it) and the retained trajectory is surfaced for
+review, **never replayed point-by-point** — which is why the 30-minute cadence never has to interpolate
+against the hourly trajectory points. That setpoint horizon is **not** what the gate diffs — the gate
+compares the twin's **predicted-climate** forecast across cycles (below), a climate series, not this
+setpoint series. A scheduled or multi-step plan contract that hands Phase 2 a future trajectory is
+deliberately out of Phase 3 scope ([scope](./13-spec-optimizer-scope.md)); the single-authority write
+path stays a current-target merge — to **extend** a plan is to *hold* the last applied bundle, not to
+replay the trajectory forward.
 
 The planner emits a **structured plan** (not prose) conforming to the schema in
 [`contracts/`](../../../../contracts/), so the constraint engine and applier can consume it
@@ -61,7 +66,7 @@ local:
 | **Fixed token budget** | `PlanContext` is serialized to a fixed token budget (default 4 000 tokens). If the budget is exceeded the serializer raises an explicit error — no silent truncation. |
 | **Hourly telemetry summaries** | History is serialized as `(min, mean, max)` per sensor per hour, not raw readings. |
 | **Adaptive horizon** | Default 12-hour horizon; extended to 24 h only when the cycle window crosses a day boundary (within 4 h of sunrise/sunset). |
-| **State-change gate** | The LLM is not invoked if the twin's **predicted-climate forecast** for this cycle deviates from the **reference forecast** — the forecast retained from the last cycle that ran the planner — by less than a configurable threshold, over their overlapping window. The current plan is **extended** instead: the retained setpoint trajectory is carried forward, or the Phase 2 baseline is held if no prior plan exists ([resilience](./09-spec-optimizer-resilience.md)). Both the reference forecast and the setpoint trajectory are **in-memory only**, so on the first cycle after a restart there is nothing to diff against — the gate is skipped and the LLM runs to rebuild the baseline ([resilience — stateless restart](./09-spec-optimizer-resilience.md)). The reference is a twin **climate** series, never `OptimizerPlan.trajectory` (setpoints); the two are kept distinct ([digital twin §1.6](./03-spec-optimizer-digital-twin.md#16-twin-output-predicted-trajectory)). |
+| **State-change gate** | The LLM is not invoked if the twin's **predicted-climate forecast** for this cycle deviates from the **reference forecast** — the forecast retained from the last cycle that ran the planner — by less than `state_change_threshold` ([configuration](./11-spec-optimizer-configuration.md), default `0.05`), measured the same way as the twin's [fidelity residual](./03-spec-optimizer-digital-twin.md#parameter-fidelity--drift): per required metric (`temperature`, `humidity`, `co2`, `par`; derived VPD/DLI excluded), at each hourly point in the two forecasts' **overlapping** window, `r = \|current − reference\| / span` normalized by the metric's [plausibility-envelope width](./03-spec-optimizer-digital-twin.md#11-state-vector); the gate's distance is `D = mean(r)` over those metrics and shared points, and it suppresses the call when `D < state_change_threshold`. If the two forecasts do not overlap — the first cycle after a restart, when both are **in-memory only** and none was retained — the gate is **skipped** and the LLM runs to rebuild the baseline ([resilience — stateless restart](./09-spec-optimizer-resilience.md)). When the call is suppressed the cycle is **extended**: no LLM call and **no write** — the last applied bundle stays in force (Phase 2 holds it) and the retained trajectory is surfaced, not replayed; with no prior plan the Phase 2 baseline is simply held ([resilience](./09-spec-optimizer-resilience.md)). The reference is a twin **climate** series, never `OptimizerPlan.trajectory` (setpoints); the two are kept distinct ([digital twin §1.6](./03-spec-optimizer-digital-twin.md#16-twin-output-predicted-trajectory)). |
 | **Fixed cycle cadence** | Planning cycles run on a fixed interval (default 30 minutes). The state-change gate controls actual LLM call frequency within that cadence. |
 
 All five levers are configurable ([configuration](./11-spec-optimizer-configuration.md)).

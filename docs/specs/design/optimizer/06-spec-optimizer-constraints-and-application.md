@@ -31,12 +31,12 @@ these two are the whole of it:
   **Bounds are optional, and absence is a legal state — not [contract drift](./10-spec-optimizer-interfaces.md#escalation-reason-codes).**
   The read contract makes `bounds` absent "when the stage defines none"
   ([optimizer-read-rest](../../../../contracts/optimizer-read-rest/README.md)), and a `StageBounds` may
-  omit any per-field bound or leave one open on a side. The optimizer reads absence as *no envelope to
-  refine within* and **holds that target's baseline**: a target with no per-field bound is left
-  unrefined; a one-sided bound (only `min` **or** only `max`) is refined within its open envelope,
-  clamped on the bounded side; and if the whole `bounds` object is absent, no target is refined this
-  cycle — the optimizer holds the entire baseline and records a benign `extended` (no new application),
-  **not** an escalation. Holding an unbounded target is safe because Phase 2's write-path bounds
+  **omit any per-field bound** — but a *present* `Bound` always carries **both** `min` and `max` (the
+  read contract requires both, and the platform enforces both sides on the write path). The optimizer
+  reads absence as *no envelope to refine within* and **holds that target's baseline**: a target with no
+  per-field bound is left unrefined, and if the whole `bounds` object is absent, no target is refined
+  this cycle — the optimizer holds the entire baseline and records a benign `extended` (no new
+  application), **not** an escalation. Holding an unbounded target is safe because Phase 2's write-path bounds
   enforcement remains the backstop for anything that *is* written.
 - **Bundle self-consistency** — cross-field invariants that hold with no physical model, checkable from
   the bundle alone: `humidity_low_pct ≤ humidity_high_pct`, each zone's

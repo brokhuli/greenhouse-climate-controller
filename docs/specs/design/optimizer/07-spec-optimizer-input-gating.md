@@ -25,7 +25,7 @@ The gate checks:
 | Check | Rule |
 |---|---|
 | **Freshness** | The latest reading for each required metric — **and each declared irrigation zone's `soil_moisture`** — is no older than `max_telemetry_age_minutes` ([configuration](./11-spec-optimizer-configuration.md)). Age is computed from the reading's `ts`. |
-| **Completeness** | All `required_metrics` are present — **plus per-zone `soil_moisture` for every irrigation zone the greenhouse declares** (the twin integrates and the optimizer refines per-zone soil, so a zone without fresh soil telemetry is as unplannable as a missing climate metric) — and the history window contains at least `min_history_coverage` of its expected samples. A window pocked with large gaps is not a basis for simulation. |
+| **Completeness** | All `required_metrics` are present — **plus per-zone `soil_moisture` for every irrigation zone the greenhouse declares** (the twin integrates and the optimizer refines per-zone soil, so a zone without fresh soil telemetry is as unplannable as a missing climate metric) — and the history window's **summary-bucket coverage** is at least `min_history_coverage`: the fraction of **non-empty** buckets over the expected bucket count (window duration ÷ `interval`), an empty bucket (`SummaryBucket.count == 0`) counting as a gap. A window pocked with large gaps is not a basis for simulation. |
 | **Sensor / actuator health** | Inputs are untrusted if a metric the plan depends on is faulted or the controller is degraded — read from the signals the controller already publishes: the `system-state` snapshot's active-fault array and controller `mode` (normal / degraded / interlock), per-sensor fault events (`stuck`, `out_of_range`, `sensor_disagreement`, `temperature_unavailable`), and actuator-state `health` (`ok` / `stuck` / `no_response`). |
 | **Identity consistency** | Every row or object Data Access reads carries the `greenhouse_id` it queried for, zone-scoped rows carry a non-null `zone_id` valid for that greenhouse, and every payload's `schema_version` is one the optimizer understands ([RFC-007 identity & envelope](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)). A REST response returning another greenhouse's rows, a `zone_id` polarity violation, or an unknown `schema_version` means the read API or a contract has **drifted** — the window is not a trustworthy basis for planning. |
 | **Clock mode** *(simulated greenhouses)* | The greenhouse's reported simulation `time_scale` ([controller HAL §7](../controller/03-spec-controller-hal-simulation.md#time-scale-speed-without-breaking-determinism)) is **1.0** (real-time). The optimizer's fixed planning cadence and horizons are wall-clock-paced, so an **accelerated or slowed** controller (`time_scale ≠ 1.0`) is outside its operating envelope — telemetry arrives faster/slower than wall-clock and a wall-clock-anchored plan would desync from the plant. Phase 3 is explicitly allowed not to operate off 1× ([scope](./13-spec-optimizer-scope.md)); this is a **transient** hold like freshness — returning the controller to 1× clears it. The field is sim-only; a real-hardware controller never reports a non-1× scale. |
@@ -33,8 +33,9 @@ The gate checks:
 **When the gate fails, the optimizer degrades rather than plans on bad data** — mirroring the
 controller's own
 [degradation ladder](../controller/04-spec-controller-sensing.md#5-the-degradation-ladder) ("down a
-ladder, never off a cliff"). It does **not** invoke the LLM; it **extends the last accepted plan** —
-the same fallback the state-change gate already uses
+ladder, never off a cliff"). It does **not** invoke the LLM; it **holds the last applied bundle in
+force** — nothing new is written (to *extend* a plan is to hold, not replay it), the same fallback the
+state-change gate already uses
 ([planning](./04-spec-optimizer-planning.md#1-llm-driven-planning)), degenerating to **holding the
 Phase 2 baseline** when no plan has been accepted yet
 ([resilience — degrade fallback](./09-spec-optimizer-resilience.md)) — and raises an **escalation**
@@ -55,7 +56,8 @@ cycle never destabilizes control — it only forgoes refinement until trusted in
 > now authored as the [`optimizer-read-rest`](../../../../contracts/optimizer-read-rest/) contract: the
 > `PlanningContext` response carries a `data_quality` block (`controller_mode`, `time_scale`,
 > per-metric `freshness[]`, and active `faults[]`) plus per-actuator `health` on each `ActuatorSnapshot`.
-> The gate's four checks map straight onto these fields — **freshness/completeness** → `freshness[]`,
+> The gate's checks map onto these fields — **freshness** → `freshness[]`, **completeness** → the
+> `telemetry[]` summary buckets (bucket coverage from `SummaryBucket.count`; an empty bucket is a gap),
 > **sensor health** → `faults[]`, **actuator health** → `ActuatorSnapshot.health`, **clock mode** →
 > `time_scale` (with `controller_mode` for the controller-degraded case) — so the optimizer consumes
 > them as plain response fields rather than recomputing them from the raw reading `ts` and the

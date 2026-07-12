@@ -105,10 +105,12 @@ the response `from`/`to` report the resolved span. `interval` is the summary buc
 
 The `data_quality` block and per-actuator `health` resolve the RFC-008 open question the input-gating
 spec flagged (*"which fields the API carries… to resolve when the REST contract is authored"*): the
-gate's four checks map to fields here — **freshness/completeness** → `freshness[]`, **sensor health** →
-`faults[]`, **actuator health** → `ActuatorSnapshot.health`, **clock mode** → `time_scale` (with
-`controller_mode` for the controller-degraded case). When a check fails the optimizer holds the cycle
-and extends the last accepted plan rather than planning over untrusted inputs.
+gate's checks map to fields here — **freshness** → `freshness[]`, **completeness** → the `telemetry[]`
+summary buckets (bucket coverage from `SummaryBucket.count`; an empty bucket is a gap), **sensor health**
+→ `faults[]`, **actuator health** → `ActuatorSnapshot.health`, **clock mode** → `time_scale` (with
+`controller_mode` for the controller-degraded case). When a check fails the optimizer holds the cycle —
+nothing new is written, the last applied bundle stays in force — rather than planning over untrusted
+inputs.
 
 ## Identity
 

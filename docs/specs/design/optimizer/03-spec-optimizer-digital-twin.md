@@ -242,12 +242,14 @@ future the plan was built on.
 The integrator runs with a bounded step (`twin.solver_max_step_minutes`,
 [configuration](./11-spec-optimizer-configuration.md)) — taken with the analytic exponential
 update ([§1.2](#12-governing-equations)), which stays stable even when that step ceiling far
-exceeds the fastest τ — and checks every step for **non-finite** state (NaN / Inf), states
+exceeds the fastest τ — and checks every step for **non-finite** state (NaN / Inf) and states
 outside the **physically plausible** envelopes ([§1.1](#11-state-vector): temperature past
-sensor range, negative humidity or CO₂), and **non-convergence** within a step budget. A diverged simulation is
+sensor range, negative humidity or CO₂). The analytic update is closed-form and non-iterative, so there
+is no convergence loop to fail — divergence surfaces as a non-finite or out-of-envelope step, never as
+non-convergence. A diverged simulation is
 treated exactly like a failed input precondition ([input gating](./07-spec-optimizer-input-gating.md)):
-the optimizer does **not** hand a garbage trajectory to the planner — it extends the last accepted
-plan (or holds the Phase 2 baseline if none exists,
+the optimizer does **not** hand a garbage trajectory to the planner — it **holds the last applied
+bundle** (or the Phase 2 baseline if none exists,
 [resilience — degrade fallback](./09-spec-optimizer-resilience.md)) and raises a `twin_diverged` escalation
 ([reason codes](./10-spec-optimizer-interfaces.md#escalation-reason-codes)), traced by `optimizer_run_id`
 ([P3-OBS-1](../../artifacts/non-functional-requirements.md)). The solver is fixed-step / seeded so a

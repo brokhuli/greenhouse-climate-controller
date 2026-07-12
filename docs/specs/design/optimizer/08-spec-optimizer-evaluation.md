@@ -92,9 +92,13 @@ scope note in [the overview](./01-spec-optimizer-overview.md).)
    [`contracts/optimizer-plan/`](../../../../contracts/optimizer-plan/); catalogued in
    [spec-contracts §2.6](../spec-contracts.md#26-optimizer-plan-schema)) is exercised by the shared
    **contract harness**, the way every other contract's fixtures are: the valid fixtures
-   (`optimizer-plan.json`, `plan-record.applied.json`, `plan-record.escalated-low-confidence.json`)
-   must validate, and the deliberately-invalid `optimizer-plan.bad-confidence.json` (`confidence`
-   outside `[0, 1]`) must be **rejected**. This pins the `.with_structured_output(OptimizerPlan)`
+   (`optimizer-plan.json`, `plan-record.applied.json`, `plan-record.escalated-low-confidence.json`, and
+   the pre-planner held-cycle records `plan-record.escalated-input-stale.json` and
+   `plan-record.extended.json` — both `plan: null`) must validate, and the deliberately-invalid
+   `optimizer-plan.bad-confidence.json` (`confidence` outside `[0, 1]`),
+   `plan-record.bad-escalated-no-reason.json` (`escalated` with no `reason_code`), and
+   `plan-record.bad-applied-null-plan.json` (`applied` with `plan: null`) must be **rejected**.
+   This pins the `.with_structured_output(OptimizerPlan)`
    boundary ([planning §1](./04-spec-optimizer-planning.md#1-llm-driven-planning)) — the exact shape
    the planner is asked to fill — independently of any model run.
 
@@ -103,5 +107,6 @@ applier — against the deterministic twin, asserting the gates route the cycle 
 `PlanRecord.outcome.status`
 ([plan contract §3](./05-spec-optimizer-plan-contract.md#3-planrecord--the-optimizer-service-envelope)):
 `applied` when a plan clears both gates, `escalated` (with `low_confidence` or the tripped twin reason
-code) when a gate holds it, and `extended` when the state-change gate carries the prior plan forward
+code) when a gate holds it, and `extended` (`plan: null`) when the state-change gate skips the LLM and
+the last applied bundle stays in force
 ([application gate](./06-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application)).

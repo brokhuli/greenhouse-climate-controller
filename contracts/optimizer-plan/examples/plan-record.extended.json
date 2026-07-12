@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "optimizer_run_id": "018f9d55-2b3c-7d4e-9f50-6b7c8d9e0f11",
+  "greenhouse_id": "gh-04",
+  "created_at": "2026-07-11T14:00:00.000Z",
+  "horizon": { "start": "2026-07-11T14:00:00.000Z", "end": "2026-07-12T02:00:00.000Z" },
+  "backend": { "provider": "ollama", "model": "llama3", "prompt_version": "v1", "role": "primary" },
+  "plan": null,
+  "source_plan_id": "018f9c2e-6b7a-7c31-9e4d-2a1b5c6d7e8f",
+  "outcome": {
+    "status": "extended",
+    "message": "predicted climate within state_change_threshold of the reference forecast; LLM skipped and the last applied bundle held in force"
+  }
+}
