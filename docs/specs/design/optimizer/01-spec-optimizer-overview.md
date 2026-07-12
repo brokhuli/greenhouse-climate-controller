@@ -38,7 +38,7 @@ these VPD / DLI / CO₂ / temperature targets"). Neither layer anticipates: the 
 error after it appears, and the baseline does not move with the time of day or a cost signal.
 
 Phase 3 closes that gap. It pulls a greenhouse's history, **simulates its climate forward**, uses an
-LLM to propose a refined plan, **validates that plan against crop-safe and physical constraints**,
+LLM to propose a refined plan, **validates that plan against crop-safe range and bundle consistency**,
 and pushes the refined targets down — pre-positioning for the known diurnal cycle, coordinating
 coupled actuators, and trimming energy cost, all **within the crop-safe bounds Phase 2's profile
 defines**. It optimizes setpoint *management*; it does not introduce the crop→targets mapping (that

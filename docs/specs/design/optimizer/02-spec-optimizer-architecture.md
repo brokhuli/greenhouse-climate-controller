@@ -34,7 +34,7 @@ Digital Twin / Simulation            ← rolls climate forward over the planning
 LLM Planner                          ← proposes refined setpoint trajectories
       │  candidate plan
       ▼
-Constraint Engine                    ← validates against crop-safe bounds + physical limits
+Constraint Engine                    ← validates crop-safe range + bundle consistency
       │  within bounds          │  out of bounds / low confidence
       ▼                         ▼
 Plan Applier              Operator Escalation
@@ -51,7 +51,7 @@ Phase 1 Controller
 | Data Access | Read historical telemetry, actuator states, current setpoints, and data-quality/freshness signals for one greenhouse from Phase 2's REST API; never writes. Runs the input data-quality / freshness gate ([input gating](./07-spec-optimizer-input-gating.md)) before planning |
 | Digital Twin / Simulation | Roll heat / humidity / CO₂ / VPD / DLI forward over the planning horizon under the current baseline setpoints (see [cycle order](#cycle-order-simulate-then-plan)) |
 | LLM Planner | Propose refined setpoint trajectories from the simulated trajectory and objectives, accounting for actuator coupling without issuing actuator commands |
-| Constraint Engine | Validate every candidate plan against crop-safe bounds and physical limits before it can be applied |
+| Constraint Engine | Validate every candidate plan against crop-safe range and bundle consistency before it can be applied |
 | Plan Applier | Write within-bounds plans down via the Phase 2 REST API; route the rest to operator escalation |
 | Service / API | FastAPI surface for triggering cycles, inspecting plans, and exposing escalations; service config & health |
 
@@ -66,7 +66,7 @@ simulates the **baseline** trajectory — the current Phase 2 setpoints ([write-
 carried forward over the horizon under the twin's model. The [planner](./04-spec-optimizer-planning.md)
 consumes *that* trajectory (plus bounds and objectives) and proposes a candidate setpoint trajectory. The
 [constraint engine](./06-spec-optimizer-constraints-and-application.md#1-constraint-engine--safety) then
-validates the candidate's **targets** against crop-safe and physical bounds, and the
+validates the candidate's **targets** against crop-safe range and bundle consistency, and the
 [application gate](./06-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application)
 applies only the immediate next bundle. **Phase 3 v1 does not re-simulate the planner's candidate
 trajectory** — it validates the proposed targets against bounds, not by rolling the candidate forward

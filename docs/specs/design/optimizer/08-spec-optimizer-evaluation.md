@@ -39,7 +39,7 @@ scope note in [the overview](./01-spec-optimizer-overview.md).)
    escalate, or attenuate confidence — not yield a confident plan over a bad trajectory), contradictory
    objectives, and the near-day-boundary horizon extension.
    Each scenario fixes observed state, history, and bounds, then asserts the resulting plan stays within
-   crop-safe and physical bounds and moves the objectives
+   crop-safe range and bundle consistency and moves the objectives
    ([objectives](./04-spec-optimizer-planning.md#2-optimization-objectives)) in the intended direction.
 
 3. **Plan-variance baselines.** Because the LLM is stochastic even at temperature 0

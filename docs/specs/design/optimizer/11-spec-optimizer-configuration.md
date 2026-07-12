@@ -80,8 +80,10 @@ required_metrics = ["temperature", "humidity", "co2", "par"]   # VPD / DLI are d
 min_history_coverage = 0.8            # fraction of expected samples in the window; large gaps fail the gate
 
 [twin]
-solver_max_step_minutes = 5           # integrator step ceiling; non-finite / non-converging step = sim divergence → twin robustness
-divergence_threshold = 0.15           # one-step predicted-vs-observed residual fraction; sustained breach = fidelity fault → twin robustness
+solver_max_step_minutes = 5           # integrator sub-step ceiling; exponential update stays stable above the fastest τ; non-finite / non-converging step = sim divergence → twin robustness
+output_interval_minutes = 60          # spacing of the twin's predicted-trajectory points handed to the planner (planner's hourly granularity); internal sub-steps are finer
+divergence_threshold = 0.15           # one-step predicted-vs-observed residual fraction (mean over required metrics, normalized by plausibility-range) → twin robustness
+fidelity_breach_cycles = 3            # consecutive divergence_threshold breaches before a fidelity fault caps confidence and escalates → twin robustness
 
 [service]
 cycle_timeout_seconds = 60            # a cycle exceeding this is abandoned and the last plan extended; aligns with P3-PERF-2

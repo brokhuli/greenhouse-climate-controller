@@ -14,9 +14,13 @@ Phase 2 platform that owns intended state.
 ## 1. Constraint engine & safety
 
 Every candidate plan passes through a deterministic **constraint engine** before it can be applied.
-The engine validates the plan against:
+The engine validates the setpoints the optimizer would write — the `immediate_setpoints` bundle, and
+`trajectory[0]` as its first step ([plan contract](./05-spec-optimizer-plan-contract.md)) — against the
+**two checks it can make deterministically from data already in hand**: the crop-safe bounds delivered
+in the planning context, and the bundle itself. It has no actuator model and no reachability oracle, so
+these two are the whole of it:
 
-- **Crop-safe bounds** — the min/max envelope the active crop profile stage defines for each scalar
+- **Crop-safe range** — the min/max envelope the active crop profile stage defines for each scalar
   climate target and, uniformly across zones, the numeric per-zone irrigation targets (`StageBounds`,
   including its `zones` envelope, on the profile — [platform crop-profiles §1](../platform/05-spec-platform-crop-profiles.md#1-profiles-and-assignment)),
   read from the [planning-context](./07-spec-optimizer-input-gating.md) `setpoints.bounds` at the start
@@ -24,19 +28,42 @@ The engine validates the plan against:
   Phase 2 enforces the same envelope on the write path, this engine is the optimizer's local pre-filter
   on the authoritative bounds, not a second definition of them (a `202`/`422` disagreement is handled in
   [§3](#3-write-path-concurrency--reconciliation)).
-- **Physical limits** — actuator ranges, rate limits, and physically achievable setpoint combinations.
+- **Bundle self-consistency** — cross-field invariants that hold with no physical model, checkable from
+  the bundle alone: `humidity_low_pct ≤ humidity_high_pct`, each zone's
+  `moisture_low_threshold ≤ moisture_high_threshold`, a well-formed day window (`day_start` before
+  `day_end`), and non-negative durations (`drain_period_secs`). This is the only sense in which the
+  engine judges "achievable combinations" — a bundle whose own fields contradict each other is rejected
+  before it can be written, independent of physics.
 
-A plan that clears the engine is eligible for **auto-apply**
-([application gate](#2-setpoint-refinement--application)); a plan that violates any bound is **never
+A plan that clears both checks is eligible for **auto-apply**
+([application gate](#2-setpoint-refinement--application)); a plan that violates either is **never
 applied** — it is rejected and escalated.
 
-Safety is **layered and the controller is final**. The optimizer's constraint engine is an *advisory*
-pre-filter on intended targets; it does **not** replace or override the Phase 1 controller's safety
-interlocks, which remain controller-owned, run unconditionally on the live system, and are never
-reachable by Phase 3
-([P1 spec](../controller/02-spec-controller-architecture.md#2-the-tick-pipeline)). Because the optimizer
-writes only setpoints — never actuator commands — the controller's interlocks and actuator
-constraints still bound everything that actually happens in the greenhouse.
+**What the engine does not validate — and why.** Actuator ranges, slew / rate limits, and hardware
+interlocks are **controller-owned by construction**. The optimizer writes climate *targets*, never
+actuator commands, so the Phase 1 controller HAL is what clamps every actuator to its range, ramps it
+within its slew limit, and runs the interlocks — unconditionally, on the live system, and never
+reachable by Phase 3 ([P1 spec](../controller/02-spec-controller-architecture.md#2-the-tick-pipeline)).
+The engine cannot see actuator authority and does not try to. (The CO₂ vent-interlock *threshold*,
+`co2_vent_interlock_threshold_pct`, is itself a setpoint the optimizer may move within its crop-safe
+bound — but *enforcing* the interlock is the controller's job, not the engine's.) Whether a target is
+*thermodynamically reachable* — achievable given actuator authority and the day's disturbances — is
+likewise **not** checked in v1: that would require re-simulating the planner's candidate through the
+digital twin, which is deferred (the twin simulates the *baseline* forward, not the candidate —
+[scope](./13-spec-optimizer-scope.md)). Reachability surfaces indirectly instead — an unattainable
+target shows up as twin divergence / fidelity drift ([digital twin §2](./03-spec-optimizer-digital-twin.md#2-robustness--fidelity)),
+or as the next cycle re-planning from the observed baseline ([§3](#3-write-path-concurrency--reconciliation)).
+
+Safety is thus **layered and the controller is final**: the constraint engine is an *advisory*
+pre-filter on intended targets, and because everything the optimizer emits is a setpoint, the
+controller's interlocks and actuator constraints still bound everything that actually happens in the
+greenhouse.
+
+This engine gates the planner's **output**. Input *trustworthiness* — telemetry freshness and
+completeness, sensor and actuator health, `controller_mode`, and clock mode — is a separate concern
+handled **upstream** by the input gate before the planner ever runs
+([input gating](./07-spec-optimizer-input-gating.md)); the constraint engine assumes inputs already
+cleared that gate and does not re-check health.
 
 ---
 
@@ -68,7 +95,7 @@ with no change to the bundle or the `202`/`422` contract.
 | Plan outcome | Action |
 |---|---|
 | Passes constraint engine **and** meets the confidence threshold | **Auto-applied** via the Phase 2 REST API |
-| Fails the constraint engine (out of crop-safe / physical bounds) | **Not applied** — escalated to an operator |
+| Fails the constraint engine (out of crop-safe range, or an inconsistent setpoint bundle) | **Not applied** — escalated to an operator |
 | Below the confidence threshold | **Not applied** — escalated to an operator |
 
 Escalations are **surfaced, not executed**: the optimizer exposes the proposed plan and the reason it

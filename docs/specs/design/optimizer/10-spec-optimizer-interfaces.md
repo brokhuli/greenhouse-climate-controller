@@ -67,7 +67,7 @@ raising gates reference it rather than re-listing codes.
 | `contract_drift` | input gating — identity / `schema_version` mismatch | persistent |
 | `twin_diverged` | twin — numerical divergence (non-finite / non-converging step) | transient |
 | `twin_fidelity_fault` | twin — sustained parameter drift | persistent |
-| `constraint_violation` | constraint engine — target out of crop-safe / physical bounds | persistent (for this plan) |
+| `constraint_violation` | constraint engine — target out of crop-safe range, or an inconsistent setpoint bundle | persistent (for this plan) |
 | `low_confidence` | application gate — plan below the confidence threshold | transient |
 | `bounds_mismatch` | write path — Phase 2 `422` disagreement with local bounds | persistent |
 | `cycle_timeout` | resilience — cycle overran `cycle_timeout_seconds` | transient |

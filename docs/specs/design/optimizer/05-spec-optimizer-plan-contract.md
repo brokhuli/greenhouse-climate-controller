@@ -100,7 +100,7 @@ rather than a cross-contract `$ref`.
 2. The **service** wraps it in a `PlanRecord`, stamping `optimizer_run_id`, `greenhouse_id`,
    `created_at`, `horizon`, and `backend`.
 3. The **constraint engine** validates `immediate_setpoints` (and, for regression, `trajectory[0]`)
-   against the crop-safe and physical bounds
+   against the crop-safe range and bundle consistency
    ([constraint engine](./06-spec-optimizer-constraints-and-application.md#1-constraint-engine--safety)).
 4. The **application gate** checks `confidence` against the threshold
    ([application gate](./06-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application)).
