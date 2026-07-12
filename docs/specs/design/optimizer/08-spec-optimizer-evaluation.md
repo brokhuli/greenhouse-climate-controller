@@ -79,13 +79,16 @@ scope note in [the overview](./01-spec-optimizer-overview.md).)
 3. **Plan-variance baselines.** Because the LLM is stochastic even at temperature 0
    ([determinism](./04-spec-optimizer-planning.md#determinism--reproducibility)), regression is
    **bounded comparison, not exact match**: a re-run of a scenario must land within a tolerance band of
-   the recorded baseline plan. A baseline is keyed by `(backend model, prompt_version, sampling)` and is
-   re-captured **deliberately** when any of the three changes — the same trigger as the model pin and the
-   [`prompt_version` pin](./04-spec-optimizer-planning.md#prompt-template--versioning) in
-   [planning](./04-spec-optimizer-planning.md#1-llm-driven-planning), each a reviewed ADR event — and
-   baselines are kept **per backend**, since each configured backend (the default local Ollama model, an
-   opt-in cloud model, or any fallback) produces a different distribution and must each be held to its own
-   baseline.
+   the recorded baseline plan. A baseline is keyed by `(provider, model, prompt_version, sampling)` and kept
+   **per backend**, since each configured backend (any allowlisted local Ollama model, an opt-in cloud model,
+   or a fallback) produces a different distribution and must be held to its own baseline. Capturing a baseline
+   is a **deliberate, offline** act: a **provider** or `prompt_version` change is a reviewed ADR event that
+   re-captures baselines, and **adding a model to a provider's [`available_models`](./11-spec-optimizer-configuration.md)
+   allowlist** captures that model's baseline before it is offered for selection. An operator **switching the
+   `model` at runtime** among already-allowlisted models
+   ([`POST /api/optimizer/model`](./10-spec-optimizer-interfaces.md#service-api-endpoints)) is **not** a
+   baseline event — it selects the pre-captured baseline keyed by the now-active `model`, which is exactly why
+   every runtime-selectable model must be baseline-captured offline first.
 
 4. **Plan-contract schema checks.** The `OptimizerPlan` / `PlanRecord` JSON Schema
    ([plan contract](./05-spec-optimizer-plan-contract.md),

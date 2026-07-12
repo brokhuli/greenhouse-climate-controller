@@ -8,6 +8,53 @@ alternatives and tradeoffs.
 
 ---
 
+## 2026-07-12 — Phase 3 runtime model changes: operator-mutable model (allowlisted), provider stays offline
+
+**Decision:** Split the single "a model **or** provider change is a reviewed ADR event" rule into two
+governance paths. The **`provider`** (`ollama` default / `anthropic` / `openai`) stays an **offline config
+change** — Compose/env + restart, a reviewed ADR event — as do `prompt_version` and the sampling pins. The
+active **`model`** becomes **operator-mutable at runtime**: an operator switches it via a new
+`POST /api/optimizer/model` endpoint (`GET /api/optimizer/model` inspects), choosing from a **per-provider
+allowlist** — a new `[llm.available_models]` config table (default `ollama = ["llama3.2", "mistral",
+"qwen2.5:7b", "llama3.1:8b"]`; cloud entries fill in when a cloud provider is used). The switch takes effect
+on the **next** planning cycle, is an in-memory override that **resets to the configured `model` on restart**
+(config stays the default and source of truth), and is gated as an **operator write** (untokened under
+`trusted_network`; the Keycloak **operator** role under `oidc` — not the service `setpoints:write` role). The
+default `model` moves `llama3` → `qwen2.5:7b`. Provenance is unchanged — `PlanRecord.backend.model` already
+stamps the model on every plan — so a runtime switch is fully traceable by `optimizer_run_id`.
+
+Reproducibility is preserved because every allowlisted model is **baseline-captured offline before** it can
+be selected: evaluation baselines are keyed by `(provider, model, prompt_version, sampling)`, and a runtime
+switch merely selects the pre-captured baseline for the now-active model. **Expanding a provider's allowlist
+is the offline, baseline-capturing step** (and remains ADR-governed); switching among already-vetted models
+is not a baseline event. This **supersedes the "model or provider" wording** of the
+[2026-07-09 entry](#2026-07-09--phase-3-llm-default-flips-to-local-ollama-cloud-providers-become-opt-in) and
+the model-pin governance of the
+[2026-07-12 prompt-template entry](#2026-07-12--phase-3-planner-prompt-template-location-versioning-and-plan-provenance):
+the provider stays an offline change; the allowlisted model becomes runtime.
+
+Touches the optimizer spec set ([04 planning](../specs/design/optimizer/04-spec-optimizer-planning.md#determinism--reproducibility),
+[05 plan contract](../specs/design/optimizer/05-spec-optimizer-plan-contract.md),
+[08 evaluation](../specs/design/optimizer/08-spec-optimizer-evaluation.md),
+[10 interfaces](../specs/design/optimizer/10-spec-optimizer-interfaces.md#service-api-endpoints),
+[11 configuration](../specs/design/optimizer/11-spec-optimizer-configuration.md),
+[12 tech-stack](../specs/design/optimizer/12-spec-optimizer-tech-stack.md)). **No contract-schema change**:
+`PlanRecord.backend.model` already carries the model, so the plan contract's `schema_version` **stays 1**.
+
+**Why:** Operators need to A/B model variants and step off a regressing model **without a service restart**
+that would halt planning across greenhouses — but an unbounded runtime model field would break the
+pinned-planner reproducibility the evaluation suite depends on. Restricting runtime selection to a
+**pre-vetted, pre-baselined allowlist** keeps both: live operational flexibility and the guarantee that
+every plan is reproducible from `(provider, model, prompt_version, sampling)`. Keeping **provider** offline
+preserves the structural invariants a provider carries — client wrapper, auth/credentials, egress posture,
+cost model — none of which should flip mid-flight. All three providers stay first-class; realistically the
+deployment is Ollama with various models. No Phase 3 code exists yet, so this lands as spec + config ahead of
+implementation.
+
+**RFC:** [RFC-004](./request-for-comments.md#rfc-004-phase-3-llm-integration-interface)
+
+---
+
 ## 2026-07-12 — Phase 3 planner prompt template: location, versioning, and plan provenance
 
 **Decision:** Defined how the planner's prompt is managed — which RFC-004 named as a

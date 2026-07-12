@@ -21,6 +21,20 @@ variables / the Compose file**, mirroring the Phase 2
 convention rather than a per-greenhouse TOML (contrast the controller's config). Per-greenhouse inputs
 (which house to plan, its crop-safe bounds) are read from Phase 2 at cycle time, not configured here.
 
+**Runtime-mutable vs. offline-only.** Almost all of this is a **deploy-time** choice — set in the Compose
+file / env and changed only by restarting the service. The one exception is the active **`model`**: an
+operator may switch it **at runtime**, within the active provider's allowlist (the `[llm.available_models]`
+table below), via `POST /api/optimizer/model`
+([interfaces](./10-spec-optimizer-interfaces.md#service-api-endpoints)) — no restart — to A/B a variant or
+step off a regressing model between cycles. Everything else stays offline: the **`provider`** (still one of
+`ollama` / `anthropic` / `openai`; a provider change is a config/Compose change + restart, a reviewed
+[ADR event](../../../decisions/architecture-design-record.md)), the `endpoint`, `api_key`, `prompt_version`,
+the sampling pins (`temperature` / `top_p` / `max_tokens`), and the `fallback_*` backend. A runtime `model`
+switch takes effect on the **next planning cycle** and is stamped into that cycle's `PlanRecord.backend.model`
+([plan contract §3](./05-spec-optimizer-plan-contract.md#3-planrecord--the-optimizer-service-envelope)); it
+is an **in-memory override that resets to the configured `model` on restart** (the config value stays the
+default and source of truth).
+
 ```toml
 [data]
 platform_api_url = "https://platform/api"
@@ -35,24 +49,37 @@ oidc_client_id = "optimizer"          # confidential client; narrow setpoints:wr
 oidc_client_secret = ""               # set via PLANNER_OIDC_CLIENT_SECRET env var; never in file
 
 [llm]
-# Planning backend. Defaults to a local Ollama model — offline, no API key, no data
-# leaves the host. Set provider to "anthropic" or "openai" (and supply an API key via
-# PLANNER_API_KEY) to plan with a higher-capability cloud model instead.
-provider = "ollama"                   # "ollama" (default) | "anthropic" | "openai"
-model = "llama3"
-prompt_version = "v1"                 # pins the planner prompt template; resolves prompts/planner.v{version}.md. A change is a deliberate ADR event (re-captures eval baselines); see planner prompt template & versioning
-endpoint = "http://ollama:11434"      # Ollama base URL; ignored for cloud providers
+# Planning backend. PROVIDER is an OFFLINE choice (one of "ollama"/"anthropic"/"openai"), fixed at deploy
+# time — changing it is a config/Compose change + restart. MODEL is OPERATOR-MUTABLE at runtime within the
+# active provider's allowlist ([llm.available_models]) via POST /api/optimizer/model — no restart. Defaults
+# to a local Ollama model — offline, no API key, no data leaves the host. Set provider to "anthropic" or
+# "openai" (and supply an API key via PLANNER_API_KEY) to plan with a higher-capability cloud model instead.
+provider = "ollama"                   # OFFLINE: "ollama" (default) | "anthropic" | "openai"
+model = "qwen2.5:7b"                  # OPERATOR-MUTABLE at runtime; must be in available_models[provider]
+prompt_version = "v1"                 # OFFLINE-only. pins the planner prompt template; resolves prompts/planner.v{version}.md. A change is a deliberate ADR event (re-captures eval baselines); see planner prompt template & versioning
+endpoint = "http://ollama:11434"      # Ollama base URL; ignored for cloud providers. Offline-only.
 api_key = ""                          # set via PLANNER_API_KEY env var; required for cloud providers, never in file
 # Optional secondary backend, wired via LangChain .with_fallbacks() and used only if the
 # primary is unreachable mid-cycle. Empty = no fallback: the local Ollama primary is itself
 # the always-available backstop. Typically set only when a *cloud* provider is the primary
 # (e.g. fallback_provider = "ollama") to keep planning continuous through a network outage.
+# Fallback provider/model/endpoint are all offline-only.
 fallback_provider = ""                # "" (none, default) | "ollama" | "anthropic" | "openai"
 fallback_model = ""
 fallback_endpoint = ""
-temperature = 0                       # greedy decoding for reproducible plans; see planner determinism
-top_p = 1.0
-max_tokens = 1024                     # response budget; distinct from the 4000-token context budget
+temperature = 0                       # greedy decoding for reproducible plans; offline-only, see planner determinism
+top_p = 1.0                           # offline-only
+max_tokens = 1024                     # response budget; offline-only; distinct from the 4000-token context budget
+
+# Runtime model allowlist, per provider — the set an operator may switch the active `model` to at runtime
+# (POST /api/optimizer/model rejects anything not listed for the active provider). Editing a list here
+# (adding/removing a model) is an OFFLINE change: a newly added model must have its evaluation baseline
+# captured before it is offered for runtime selection (see evaluation §3). The default `ollama` provider
+# lists the four local models; the cloud entries fill in when a cloud provider is configured.
+[llm.available_models]
+ollama = ["llama3.2", "mistral", "qwen2.5:7b", "llama3.1:8b"]
+anthropic = []
+openai = []
 
 [planning]
 cycle_interval_minutes = 30

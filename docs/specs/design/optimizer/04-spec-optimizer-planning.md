@@ -99,15 +99,21 @@ and the
 are. Sampling is pinned to make plans *reproducible enough to regression-test*
 ([evaluation](./08-spec-optimizer-evaluation.md)), not to guarantee identical output.
 
-The active model is **pinned** in configuration (default `llama3` on the local Ollama backend; a cloud
-model such as `claude-sonnet-4-6` when a cloud provider is configured,
-[configuration](./11-spec-optimizer-configuration.md)). A model change — including switching provider —
-is a deliberate, reviewed event recorded as an ADR entry — never a silent upgrade —
-because it shifts the plan distribution and invalidates the evaluation baselines
-([evaluation](./08-spec-optimizer-evaluation.md)). Any configured fallback backend is a **different
-model** and will produce different plans for the same input; failover is therefore logged and traced
-(`optimizer_run_id`, [P3-OBS-1](../../artifacts/non-functional-requirements.md)) and held to its own
-baseline, not the primary backend's.
+The active backend is set in configuration ([configuration](./11-spec-optimizer-configuration.md)): the
+**`provider`** (default local Ollama; a cloud provider when configured) and the active **`model`** (default
+`qwen2.5:7b` on Ollama; a cloud model such as `claude-sonnet-4-6` under a cloud provider). The two are
+governed differently. A **provider** change — like a `prompt_version` change — is a deliberate **offline
+config change recorded as an ADR entry**, never a silent upgrade, because it shifts the plan distribution
+and swaps the evaluation baselines. Changing the **`model`** *within the active provider's allowlist* is
+instead an **operator runtime action** — a deliberate human switch via
+[`POST /api/optimizer/model`](./10-spec-optimizer-interfaces.md#service-api-endpoints), not program logic —
+that takes effect on the **next** cycle and selects that model's own **pre-captured** baseline. Because every
+allowlisted model is baseline-captured *offline before* it can be selected (expanding the allowlist is the
+offline, baseline-capturing step, [evaluation §3](./08-spec-optimizer-evaluation.md)), runtime switching
+never escapes the reproducibility discipline. Either change is traced by `optimizer_run_id` and stamped into
+`PlanRecord.backend` ([P3-OBS-1](../../artifacts/non-functional-requirements.md)). Any configured fallback
+backend is a **different model** and will produce different plans for the same input; failover is therefore
+logged and traced and held to its own baseline, not the primary backend's.
 
 ### Prompt template & versioning
 
@@ -121,14 +127,14 @@ the `ChatPromptTemplate`; the per-cycle `PlanContext` is the **human turn**, ass
 serializer described under [invocation strategy](#invocation-strategy) (fixed token budget, hourly
 summaries), not baked into the template file.
 
-The active template is **pinned by a `prompt_version`** in configuration, alongside the model pin
+The active template is **pinned by a `prompt_version`** in configuration, alongside `model` and `provider`
 ([`[llm]` config](./11-spec-optimizer-configuration.md)); the chain resolves
 `prompts/planner.v{prompt_version}.md` at construction. A released `planner.vN.md` is treated as
 **immutable — like an applied SQL migration, it is never edited in place**: a prompt change ships a new
 `planner.v{N+1}.md` and bumps the pin, so `prompt_version` always names the exact text that ran.
 
 A prompt change is therefore a **deliberate, reviewed event recorded as an ADR entry — never a silent
-edit** — the same governance as the model pin above, because it shifts the plan distribution and
+edit** — the same offline, ADR-governed discipline as a **provider** change above, because it shifts the plan distribution and
 invalidates the evaluation baselines, which are **re-captured per backend** on a prompt bump
 ([evaluation §3](./08-spec-optimizer-evaluation.md)). The pinned `prompt_version` is stamped into
 `PlanRecord.backend` next to `model` and traced with `optimizer_run_id`

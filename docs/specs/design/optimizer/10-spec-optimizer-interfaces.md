@@ -41,6 +41,8 @@ versioned wire contract.
 | `GET /api/optimizer/greenhouses/{id}/plans/latest` | Inspect the latest proposed / applied plan for one greenhouse |
 | `GET /api/optimizer/escalations` | List open escalations (held cycles awaiting operator review) |
 | `POST /api/optimizer/escalations/{id}/resolve` | Act on / clear an escalation |
+| `GET /api/optimizer/model` | Inspect the active backend (`provider`, `model`, `prompt_version`, `role`) and the active provider's runtime `available_models` allowlist ([configuration](./11-spec-optimizer-configuration.md)) |
+| `POST /api/optimizer/model` | Operator-gated: switch the active **`model`** within the active provider's allowlist (body `{ model, reason? }`). Takes effect on the **next** cycle; `400` if the model is not in `available_models[provider]`, `401` / `403` in `oidc` mode without the operator role. The **`provider`** is *not* changeable here — a provider change is an offline config change ([auth](#authenticating-the-model-change-endpoint)) |
 
 Every plan and escalation these endpoints expose is traced by `optimizer_run_id`
 ([P3-OBS-1](../../artifacts/non-functional-requirements.md)) and stamped with the `backend` that
@@ -99,3 +101,22 @@ client secret and the `SERVICE_AUTH_MODE` the optimizer targets are
 [configuration](./11-spec-optimizer-configuration.md), never committed; the setpoint contract itself is
 **identical** with or without the token. This is the optimizer half of the deferred service-auth seam —
 dormant in the single-host local deployment, enabled by configuration alone.
+
+### Authenticating the model-change endpoint
+
+`POST /api/optimizer/model` (switch the active planning `model` at runtime) is an **operator write**, gated
+like the other mutating operator endpoints (`POST …/cycles`, `POST …/escalations/{id}/resolve`) — **not**
+the service-auth seam above. Choosing the planning model is an **operator decision**, so in `oidc` mode the
+caller must present a Keycloak token carrying the **operator role**, *not* the narrow service
+`setpoints:write` role the Phase 2 write path uses. By default (`trusted_network`) the call is untokened,
+like the rest of the single-host local surface. Either way the change is **structured-logged with the
+operator's identity and the supplied `reason`**, and the resulting model is stamped into every subsequent
+`PlanRecord.backend.model` and traced by `optimizer_run_id` (`P3-OBS-1`) — so who changed the model, when,
+and which plans each model produced are all recoverable. Two guard rails bound the action: the operator may
+only select among the pre-vetted [`available_models`](./11-spec-optimizer-configuration.md) for the **active
+provider** (expanding that allowlist is an offline, baseline-capturing change —
+[evaluation §3](./08-spec-optimizer-evaluation.md)), and the `provider` itself cannot be changed here — a
+provider change stays an offline config/Compose change, a reviewed
+[ADR event](../../../decisions/architecture-design-record.md). The active model is an **in-memory override
+that resets to the configured [`model`](./11-spec-optimizer-configuration.md) on restart**; the config value
+remains the default and source of truth.
