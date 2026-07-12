@@ -8,6 +8,45 @@ alternatives and tradeoffs.
 
 ---
 
+## 2026-07-12 — Phase 3 planner prompt template: location, versioning, and plan provenance
+
+**Decision:** Defined how the planner's prompt is managed — which RFC-004 named as a
+`ChatPromptTemplate` but left as unspecified implementation work. The prompt is a **versioned text
+asset checked into the service** at `climate-optimizer/prompts/planner.v{N}.md` (the system-prompt
+template the chain wraps; the per-cycle `PlanContext` stays the runtime-assembled human turn), the
+analog of the controller's checked-in `config/greenhouse.example.toml` and the platform's numbered
+`internal/store/migrations/` — not an inline string or an env var. The active template is pinned by a
+new `prompt_version` in the `[llm]` config block beside `model`; a released `planner.vN.md` is
+**immutable like an applied migration** (a change ships `planner.v{N+1}.md` and bumps the pin). A
+prompt change is therefore a **deliberate, reviewed ADR event — never a silent edit** — the same
+governance as the model pin, because it shifts the plan distribution and re-captures the per-backend
+evaluation baselines, now keyed by `(backend model, prompt_version, sampling)`. For provenance,
+`prompt_version` is stamped into `PlanRecord.backend` (beside `model`, required) so every stored or
+surfaced plan is traceable to the exact `(model, prompt_version)` that produced it.
+
+Touches the optimizer spec set ([04 planning](../specs/design/optimizer/04-spec-optimizer-planning.md#prompt-template--versioning),
+[05 plan contract](../specs/design/optimizer/05-spec-optimizer-plan-contract.md),
+[08 evaluation](../specs/design/optimizer/08-spec-optimizer-evaluation.md),
+[10 interfaces](../specs/design/optimizer/10-spec-optimizer-interfaces.md),
+[11 configuration](../specs/design/optimizer/11-spec-optimizer-configuration.md),
+[12 tech-stack](../specs/design/optimizer/12-spec-optimizer-tech-stack.md)) and the plan contract
+schema + fixtures in [`contracts/optimizer-plan/`](../../contracts/optimizer-plan/). The plan
+contract's `schema_version` **stays 1**: the contract was authored 2026-07-11, nothing consumes it
+yet, so adding the provenance field is a pre-implementation refinement recorded here rather than a
+version bump.
+
+**Why:** "Prompt change re-captures the baselines" was already a rule in [08 §3](../specs/design/optimizer/08-spec-optimizer-evaluation.md)
+with no defined artifact behind "the prompt" — nothing said where it lived, how a change was governed,
+or how a stored plan named the prompt that made it. A checked-in, pinned, immutable-per-version file
+makes the prompt diffable and reviewable, and stamping `prompt_version` into `PlanRecord` makes a plan
+fully reproducible from `(model, prompt_version, sampling)`. Modeling it on the model-pin governance
+and the migrations convention keeps it symmetric with existing decisions rather than inventing a new
+mechanism. No Phase 3 code exists yet, so this lands as spec + contract ahead of implementation.
+
+**RFC:** [RFC-004](./request-for-comments.md#rfc-004-phase-3-llm-integration-interface)
+
+---
+
 ## 2026-07-11 — Phase 3 plan contract authored (`OptimizerPlan` + `PlanRecord`)
 
 **Decision:** Authored the Phase 3 optimizer plan contract that RFC-004 named but left unspecified — the

@@ -104,6 +104,33 @@ model** and will produce different plans for the same input; failover is therefo
 (`optimizer_run_id`, [P3-OBS-1](../../artifacts/non-functional-requirements.md)) and held to its own
 baseline, not the primary backend's.
 
+### Prompt template & versioning
+
+The `ChatPromptTemplate`'s instruction text is **not** an inline Python string or an environment
+variable — it is a **versioned text asset checked into the service**, at
+`climate-optimizer/prompts/planner.v{N}.md`. This mirrors how the rest of the fleet stores a governed,
+diffable asset in its service tree: the controller's `climate-controller/config/greenhouse.example.toml`
+and the platform's numbered `climate-platform/internal/store/migrations/`. The file holds the planner's
+**system-prompt template** — the static instruction and objective framing — which the chain wraps into
+the `ChatPromptTemplate`; the per-cycle `PlanContext` is the **human turn**, assembled by the
+serializer described under [invocation strategy](#invocation-strategy) (fixed token budget, hourly
+summaries), not baked into the template file.
+
+The active template is **pinned by a `prompt_version`** in configuration, alongside the model pin
+([`[llm]` config](./11-spec-optimizer-configuration.md)); the chain resolves
+`prompts/planner.v{prompt_version}.md` at construction. A released `planner.vN.md` is treated as
+**immutable — like an applied SQL migration, it is never edited in place**: a prompt change ships a new
+`planner.v{N+1}.md` and bumps the pin, so `prompt_version` always names the exact text that ran.
+
+A prompt change is therefore a **deliberate, reviewed event recorded as an ADR entry — never a silent
+edit** — the same governance as the model pin above, because it shifts the plan distribution and
+invalidates the evaluation baselines, which are **re-captured per backend** on a prompt bump
+([evaluation §3](./08-spec-optimizer-evaluation.md)). The pinned `prompt_version` is stamped into
+`PlanRecord.backend` next to `model` and traced with `optimizer_run_id`
+([plan contract §3](./05-spec-optimizer-plan-contract.md#3-planrecord--the-optimizer-service-envelope),
+`P3-OBS-1`), so every stored or surfaced plan is traceable to the exact `(model, prompt_version,
+sampling)` that produced it.
+
 ---
 
 ## 2. Optimization objectives

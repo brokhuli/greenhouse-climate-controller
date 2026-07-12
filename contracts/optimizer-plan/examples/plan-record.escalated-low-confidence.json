@@ -4,7 +4,7 @@
   "greenhouse_id": "gh-04",
   "created_at": "2026-07-11T14:00:00.000Z",
   "horizon": { "start": "2026-07-11T14:00:00.000Z", "end": "2026-07-12T02:00:00.000Z" },
-  "backend": { "provider": "anthropic", "model": "claude-sonnet-4-6", "role": "primary" },
+  "backend": { "provider": "anthropic", "model": "claude-sonnet-4-6", "prompt_version": "v1", "role": "primary" },
   "plan": {
     "confidence": 0.62,
     "explanation": "Sensor gap left the CO₂ trajectory uncertain; low confidence in the enrichment target.",

@@ -15,7 +15,7 @@ Catalogued in [`spec-contracts.md §2.6`](../../docs/specs/design/spec-contracts
 | Schema | Written by | Purpose |
 |---|---|---|
 | [`optimizer-plan.schema.json`](./optimizer-plan.schema.json) — `OptimizerPlan` | the LLM (`.with_structured_output`) | The refined plan itself — the horizon `trajectory`, the `immediate_setpoints` bundle applied this cadence, a load-bearing `confidence`, an `explanation`, and optional advisory `objective_scores` / `escalation_hint`. **Proposed, not authoritative.** |
-| [`plan-record.schema.json`](./plan-record.schema.json) — `PlanRecord` | the optimizer service | The envelope around one `OptimizerPlan` for one cycle: `optimizer_run_id`, `greenhouse_id`, `created_at`, the chosen `horizon` window, the `backend` that produced it, and the gate `outcome`. Returned by `GET .../plans/latest`; referenced by escalations. |
+| [`plan-record.schema.json`](./plan-record.schema.json) — `PlanRecord` | the optimizer service | The envelope around one `OptimizerPlan` for one cycle: `optimizer_run_id`, `greenhouse_id`, `created_at`, the chosen `horizon` window, the `backend` (provider / model / `prompt_version` / role) that produced it, and the gate `outcome`. Returned by `GET .../plans/latest`; referenced by escalations. |
 
 [`setpoints.schema.json`](./setpoints.schema.json) is a **local copy** of the platform `Setpoints` /
 `SetpointsPatch` shape (self-contained-contract convention; mirrors
@@ -38,6 +38,9 @@ each schema's `description`s carry the per-field detail. In brief:
 - `outcome.reason_code` (on escalation) is one of the canonical
   [escalation reason codes](../../docs/specs/design/optimizer/10-spec-optimizer-interfaces.md#escalation-reason-codes);
   the raising gate assigns it, not the model.
+- `backend.prompt_version` pins the prompt template that produced the plan (resolving
+  `climate-optimizer/prompts/planner.v{version}.md`); with `backend.model` it makes a stored plan
+  traceable to its exact (model, prompt) provenance. A prompt change is a deliberate ADR event.
 
 ## Consuming the schemas
 

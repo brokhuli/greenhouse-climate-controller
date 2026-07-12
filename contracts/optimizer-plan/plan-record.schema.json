@@ -28,13 +28,14 @@
     },
     "Backend": {
       "type": "object",
-      "description": "Which model produced the plan. A fallback is a different model held to its own evaluation baseline, so failover is recorded here, not hidden.",
+      "description": "Which model and prompt produced the plan. A fallback is a different model held to its own evaluation baseline, so failover is recorded here, not hidden; prompt_version records the exact prompt template so a stored plan is traceable to its (model, prompt) provenance.",
       "properties": {
         "provider": { "type": "string", "enum": ["ollama", "anthropic", "openai"], "description": "The active planning backend provider." },
         "model": { "type": "string", "minLength": 1, "description": "The pinned model id (e.g. llama3, claude-sonnet-4-6)." },
+        "prompt_version": { "type": "string", "minLength": 1, "description": "The pinned planner prompt-template version that produced this plan (e.g. v1), resolving climate-optimizer/prompts/planner.v{version}.md. Co-located with model because (model, prompt_version, sampling) is the provenance tuple a plan is reproduced from; a change is a deliberate ADR event that re-captures the per-backend evaluation baselines." },
         "role": { "type": "string", "enum": ["primary", "fallback"], "description": "Whether the primary backend or the configured fallback produced this plan." }
       },
-      "required": ["provider", "model", "role"],
+      "required": ["provider", "model", "prompt_version", "role"],
       "additionalProperties": false
     },
     "Horizon": {

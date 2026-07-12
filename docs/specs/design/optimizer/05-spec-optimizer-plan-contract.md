@@ -27,7 +27,8 @@ The plan is defined in **two layers**, because two different producers write it:
   suggestion until the [gates](./06-spec-optimizer-constraints-and-application.md) clear it.
 - **`PlanRecord`** — the **optimizer service's envelope** around one `OptimizerPlan` for one cycle.
   It stamps on the provenance and outcome the model must **not** be trusted to invent:
-  `optimizer_run_id`, the horizon window the service chose, which backend produced the plan, and
+  `optimizer_run_id`, the horizon window the service chose, which backend and
+  [prompt version](./04-spec-optimizer-planning.md#prompt-template--versioning) produced the plan, and
   what the gates decided. This is what
   [`GET …/plans/latest`](./10-spec-optimizer-interfaces.md#service-api-endpoints) returns and what an
   [escalation](./10-spec-optimizer-interfaces.md#escalation-reason-codes) references.
@@ -87,7 +88,7 @@ rather than a cross-contract `$ref`.
 | `greenhouse_id` | `string` | ✓ | The greenhouse this plan is for — one plan is one greenhouse's cycle. |
 | `created_at` | `string` (RFC 3339, UTC) | ✓ | When the cycle produced the plan. |
 | `horizon` | `{ start, end }` (RFC 3339, UTC) | ✓ | The **adaptive window** the service chose for the cycle: 12 h by default, 24 h near a day boundary ([invocation strategy](./04-spec-optimizer-planning.md#invocation-strategy)). `trajectory` spans `[start, end]`. |
-| `backend` | `{ provider, model, role }` | ✓ | Which model produced the plan. `provider ∈ { ollama, anthropic, openai }`; `model` is the pinned id (e.g. `llama3`, `claude-sonnet-4-6`); `role ∈ { primary, fallback }`. A fallback is a **different model** held to its own [evaluation baseline](./08-spec-optimizer-evaluation.md), so failover is recorded here, not hidden ([determinism](./04-spec-optimizer-planning.md#determinism--reproducibility)). |
+| `backend` | `{ provider, model, prompt_version, role }` | ✓ | Which **model and prompt** produced the plan. `provider ∈ { ollama, anthropic, openai }`; `model` is the pinned id (e.g. `llama3`, `claude-sonnet-4-6`); `prompt_version` is the pinned [prompt-template version](./04-spec-optimizer-planning.md#prompt-template--versioning) (e.g. `v1`); `role ∈ { primary, fallback }`. `(model, prompt_version, sampling)` is the provenance tuple a plan is reproduced from — a fallback is a **different model** held to its own [evaluation baseline](./08-spec-optimizer-evaluation.md), so failover is recorded here, not hidden ([determinism](./04-spec-optimizer-planning.md#determinism--reproducibility)). |
 | `plan` | `OptimizerPlan` | ✓ | The layer-1 plan (§2). |
 | `outcome` | `{ status, reason_code?, message? }` | ✓ | What the gates decided. `status ∈ { applied, escalated, extended }`; on `escalated`, `reason_code` (one of the [canonical reason codes](./10-spec-optimizer-interfaces.md#escalation-reason-codes)) is **required** — the schema enforces it with a conditional rule ([plan-record.schema.json](../../../../contracts/optimizer-plan/plan-record.schema.json)) — and `message` is the operator-facing detail. `extended` means no new plan was applied: the [state-change gate](./04-spec-optimizer-planning.md#invocation-strategy) skipped the LLM (or there was nothing to refine), and the prior plan or Phase 2 baseline is carried forward. |
 
@@ -141,7 +142,7 @@ An **applied** `PlanRecord` (trajectory truncated to two points for brevity):
   "greenhouse_id": "gh-04",
   "created_at": "2026-07-11T13:30:00.000Z",
   "horizon": { "start": "2026-07-11T13:30:00.000Z", "end": "2026-07-12T01:30:00.000Z" },
-  "backend": { "provider": "ollama", "model": "llama3", "role": "primary" },
+  "backend": { "provider": "ollama", "model": "llama3", "prompt_version": "v1", "role": "primary" },
   "plan": {
     "confidence": 0.91,
     "explanation": "Pre-cool ahead of the 15:00 solar peak; ease VPD up toward the night band.",
@@ -166,7 +167,7 @@ the threshold:
   "greenhouse_id": "gh-04",
   "created_at": "2026-07-11T14:00:00.000Z",
   "horizon": { "start": "2026-07-11T14:00:00.000Z", "end": "2026-07-12T02:00:00.000Z" },
-  "backend": { "provider": "anthropic", "model": "claude-sonnet-4-6", "role": "primary" },
+  "backend": { "provider": "anthropic", "model": "claude-sonnet-4-6", "prompt_version": "v1", "role": "primary" },
   "plan": {
     "confidence": 0.62,
     "explanation": "Sensor gap left the CO₂ trajectory uncertain; low confidence in the enrichment target.",

@@ -43,8 +43,12 @@ versioned wire contract.
 | `POST /api/optimizer/escalations/{id}/resolve` | Act on / clear an escalation |
 
 Every plan and escalation these endpoints expose is traced by `optimizer_run_id`
-([P3-OBS-1](../../artifacts/non-functional-requirements.md)); each escalation carries a
-[reason code](#escalation-reason-codes).
+([P3-OBS-1](../../artifacts/non-functional-requirements.md)) and stamped with the `backend` that
+produced it — provider, `model`, and the pinned
+[`prompt_version`](./04-spec-optimizer-planning.md#prompt-template--versioning)
+([plan contract §3](./05-spec-optimizer-plan-contract.md#3-planrecord--the-optimizer-service-envelope)) —
+so a returned plan is traceable to its exact `(model, prompt_version)` provenance; each escalation
+carries a [reason code](#escalation-reason-codes).
 
 ### Escalation reason codes
 

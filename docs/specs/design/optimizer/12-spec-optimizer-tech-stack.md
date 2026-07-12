@@ -81,14 +81,18 @@
   `.with_fallbacks()` replace bespoke prompt construction, output parsing, and try/catch failover —
   keeping the invocation strategy **backend-agnostic** (`P3-MOD-1`).
 - **How:** The planner is the chain `ChatPromptTemplate | LLM | StructuredOutputParser`
-  ([planning §1](./04-spec-optimizer-planning.md#1-llm-driven-planning)). The active wrapper is chosen
+  ([planning §1](./04-spec-optimizer-planning.md#1-llm-driven-planning)). The `ChatPromptTemplate`'s
+  instruction text is a **checked-in, versioned asset** loaded from `climate-optimizer/prompts/` and
+  pinned by `prompt_version` — the prompt analog of the pinned `.python-version` and model id
+  ([planning — prompt template & versioning](./04-spec-optimizer-planning.md#prompt-template--versioning)) —
+  not an inline string. The active wrapper is chosen
   by configuration: `ChatOllama` is the **default** local backend, with `ChatAnthropic` / `ChatOpenAI`
   available as opt-in cloud backends; an optional secondary is wired via `.with_fallbacks([...])`.
   Sampling is **pinned** — default model `llama3` (a cloud model such as `claude-sonnet-4-6` when a
   cloud provider is configured), temperature `0`, `top_p 1.0`, `max_tokens` from
   [configuration](./11-spec-optimizer-configuration.md) — so plans are reproducible enough to
   regression-test ([planning — determinism](./04-spec-optimizer-planning.md#determinism--reproducibility)).
-  A model or provider change is a reviewed **ADR event**, never a silent upgrade; any configured fallback
+  A model, provider, or `prompt_version` change is a reviewed **ADR event**, never a silent upgrade; any configured fallback
   is a different model held to its own evaluation baseline, and failover is logged and traced by
   `optimizer_run_id` (`P3-OBS-1`). Cloud API keys are supplied via `PLANNER_API_KEY` and **never logged**
   (`P3-SEC-1`).

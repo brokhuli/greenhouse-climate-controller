@@ -40,6 +40,7 @@ oidc_client_secret = ""               # set via PLANNER_OIDC_CLIENT_SECRET env v
 # PLANNER_API_KEY) to plan with a higher-capability cloud model instead.
 provider = "ollama"                   # "ollama" (default) | "anthropic" | "openai"
 model = "llama3"
+prompt_version = "v1"                 # pins the planner prompt template; resolves prompts/planner.v{version}.md. A change is a deliberate ADR event (re-captures eval baselines); see planner prompt template & versioning
 endpoint = "http://ollama:11434"      # Ollama base URL; ignored for cloud providers
 api_key = ""                          # set via PLANNER_API_KEY env var; required for cloud providers, never in file
 # Optional secondary backend, wired via LangChain .with_fallbacks() and used only if the
