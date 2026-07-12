@@ -77,6 +77,8 @@ confidence_threshold = 0.8            # below → escalate to operator
 [data_quality]
 max_telemetry_age_minutes = 35        # latest reading per required metric must be newer; else gate fails → input gating
 required_metrics = ["temperature", "humidity", "co2", "par"]   # VPD / DLI are derived from these
+# per-zone soil_moisture is additionally required when the greenhouse declares irrigation zones
+# (gated on zone presence, not this flat greenhouse-scoped list) → input gating
 min_history_coverage = 0.8            # fraction of expected samples in the window; large gaps fail the gate
 
 [twin]

@@ -48,11 +48,11 @@
       "type": "array",
       "minItems": 1,
       "items": { "$ref": "#/$defs/TrajectoryPoint" },
-      "description": "The refined setpoint trajectory across the horizon, one point per hour. A planning artifact held in memory to drive the next cycle's state-change gate; not written whole to Phase 2 - only immediate_setpoints is applied."
+      "description": "The refined setpoint trajectory across the horizon, one point per hour. A planning artifact held in memory so a skipped cycle can extend the plan (carrying the next hour's setpoints forward); not written whole to Phase 2 - only immediate_setpoints is applied. Not the state-change gate's comparison input: the gate diffs the twin's predicted-climate forecast, a separate in-memory reference."
     },
     "immediate_setpoints": {
       "$ref": "https://greenhouse.local/contracts/optimizer-plan/setpoints.schema.json#/$defs/SetpointsPatch",
-      "description": "The single next bundle the applier submits to Phase 2 this cadence (the refined targets of trajectory[0] as a partial patch). The one part of the plan that reaches the greenhouse."
+      "description": "The single next bundle the applier submits to Phase 2 this cadence (the refined targets of trajectory[0] as a partial patch). Must equal trajectory[0].setpoints field-for-field; JSON Schema cannot express this cross-field relationship, so it is enforced by the optimizer's constraint engine, not this schema. The one part of the plan that reaches the greenhouse."
     },
     "confidence": {
       "type": "number",

@@ -20,6 +20,8 @@
         "constraint_violation",
         "low_confidence",
         "bounds_mismatch",
+        "write_unauthorized",
+        "platform_unavailable",
         "cycle_timeout",
         "llm_unavailable"
       ]
@@ -47,18 +49,20 @@
     },
     "Outcome": {
       "type": "object",
-      "description": "What the gates decided. reason_code + message are present when status is escalated.",
+      "description": "What the gates decided. reason_code is required when status is escalated (enforced by the if/then below); message is the optional operator-facing detail.",
       "properties": {
         "status": {
           "type": "string",
           "enum": ["applied", "escalated", "extended"],
-          "description": "applied = submitted to Phase 2; escalated = surfaced, not applied; extended = the state-change gate skipped the LLM and carried the prior plan forward."
+          "description": "applied = submitted to Phase 2; escalated = surfaced, not applied; extended = no new plan applied - the state-change gate skipped the LLM (or there was nothing to refine) and the prior plan or Phase 2 baseline is carried forward."
         },
         "reason_code": { "$ref": "#/$defs/ReasonCode" },
         "message": { "type": "string", "description": "Operator-facing detail for an escalation." }
       },
       "required": ["status"],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "if": { "properties": { "status": { "const": "escalated" } }, "required": ["status"] },
+      "then": { "required": ["reason_code"] }
     }
   },
   "properties": {

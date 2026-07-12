@@ -102,21 +102,27 @@
 - **What:** The numerical core of the forward climate model.
 - **Why:** Fixed by
   [tech-stack-decisions.md](../tech-stack-decisions.md#phase-3--llm-climate-optimizer-python-only).
-  The twin integrates coupled heat / humidity / CO₂ / VPD / DLI dynamics with actuator lag
-  ([digital twin §1](./03-spec-optimizer-digital-twin.md#1-the-forward-model)) — exactly the ODE /
-  array workload NumPy + SciPy exist for.
-- **How ⚑:** The integrator is SciPy's `solve_ivp` run with a **bounded step**
-  (`twin.solver_max_step_minutes`, [configuration](./11-spec-optimizer-configuration.md)) and a
-  **seed**, with the per-step non-finite / physical-plausibility / non-convergence checks from
-  [digital twin §2](./03-spec-optimizer-digital-twin.md#2-robustness--fidelity). A seeded, fixed-step
-  solver is what makes the twin a **reproducible** forward model — the optimizer-side analog of the
-  controller's seeded HAL (`P1-TEST-2`,
+  The twin evolves coupled heat / humidity / CO₂ / VPD / DLI dynamics with actuator lag
+  ([digital twin §1](./03-spec-optimizer-digital-twin.md#1-the-forward-model)) — the vectorized array
+  workload NumPy exists for, with SciPy on hand for the supporting numerics and as the home of a
+  numerical ODE solver should the model ever need one (below).
+- **How ⚑:** The v1 integrator is **not** a general ODE solver. Because each variable is a
+  **first-order lag** toward a target held constant across a sub-step under a **zero-order hold**
+  ([digital twin §1.2](./03-spec-optimizer-digital-twin.md#12-governing-equations)), the twin advances
+  it with the **closed-form analytic exponential** update
+  `x(t+Δt) = x_target + (x(t) − x_target)·e^(−Δt/τ)` — exact at any step, unconditionally stable, and
+  dependency-free (plain NumPy). It runs in **fixed sub-steps** of ≤ `twin.solver_max_step_minutes`
+  ([configuration](./11-spec-optimizer-configuration.md)) from a **seed**, with the per-step
+  non-finite / physical-plausibility / non-convergence checks from
+  [digital twin §2](./03-spec-optimizer-digital-twin.md#2-robustness--fidelity). A seeded, fixed-step,
+  closed-form integrator is what makes the twin a **reproducible** forward model — the optimizer-side
+  analog of the controller's seeded HAL (`P1-TEST-2`,
   [controller HAL — determinism](../controller/03-spec-controller-hal-simulation.md#7-determinism--seeding))
   — which the evaluation suite ([evaluation](./08-spec-optimizer-evaluation.md), `P3-TEST-1`) relies
-  on. **⚑ Alternatives & trip-wire:** a **hand-rolled RK step** (more code to vet for the same
-  behavior) or a **stiff/implicit specialized solver** (JiTCODE, assimulo). Reach past
-  `solve_ivp` only if the greenhouse dynamics prove stiff enough that a bounded explicit step can't
-  hold plausibility without an impractically small step.
+  on. **⚑ Alternatives & trip-wire:** SciPy's `solve_ivp` (or a stiff/implicit solver such as
+  assimulo) run with a bounded step. Reach for a **numerical** solver only if future coupling makes the
+  per-variable closed form inexact — e.g. cross-variable terms that no longer hold `x_target` constant
+  across a sub-step; v1's dynamics do, so the exponential is exact and no solver is invoked.
 
 ---
 

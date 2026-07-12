@@ -26,26 +26,43 @@ and the platform's operational resilience
 
 - **Stateless restart.** The optimizer holds no authoritative persistent state. Intended state lives
   in Phase 2. The optimizer's only across-cycle memory is the last accepted plan — its applied
-  **setpoint bundle** (the baseline) *and* the full **horizon trajectory** that the state-change gate
-  ([planning](./04-spec-optimizer-planning.md#invocation-strategy)) and the degrade fallbacks
-  ([input gating](./07-spec-optimizer-input-gating.md),
-  [twin robustness](./03-spec-optimizer-digital-twin.md#2-robustness--fidelity)) compare against — and the
-  two recover **asymmetrically** on restart. The applied bundle *is* reconstructable: it is the current
-  setpoints Phase 2 already holds. The horizon **trajectory**, though, is **in-memory only** — it is a
-  per-cycle planning artifact ([planning](./04-spec-optimizer-planning.md#1-llm-driven-planning)) Phase 3
-  v1 persists nowhere, so it **cannot** be rebuilt from Phase 2. A restart therefore re-reads config,
-  reconnects to the Phase 2 REST API
+  **setpoint bundle** (the baseline), the full **horizon setpoint trajectory** the degrade fallbacks
+  carry forward to **extend** the plan ([input gating](./07-spec-optimizer-input-gating.md),
+  [twin robustness](./03-spec-optimizer-digital-twin.md#2-robustness--fidelity)), *and* the **reference
+  climate forecast** the state-change gate
+  ([planning](./04-spec-optimizer-planning.md#invocation-strategy)) diffs against
+  ([digital twin §1.6](./03-spec-optimizer-digital-twin.md#16-twin-output-predicted-trajectory)) — and
+  these recover **asymmetrically** on restart. The applied bundle *is* reconstructable: it is the current
+  setpoints Phase 2 already holds. The setpoint **trajectory** and the **reference forecast**, though, are
+  **in-memory only** — per-cycle planning artifacts ([planning](./04-spec-optimizer-planning.md#1-llm-driven-planning))
+  Phase 3 v1 persists nowhere, so they **cannot** be rebuilt from Phase 2. A restart therefore re-reads
+  config, reconnects to the Phase 2 REST API
   ([RFC-008](../../../decisions/request-for-comments.md#rfc-008-phase-3-telemetry-read-path)), reads the
-  current setpoints as its baseline, and resumes on the next cadence tick with **no prior trajectory**:
-  the [state-change gate](./04-spec-optimizer-planning.md#invocation-strategy) is **disabled for that
-  first cycle** — it has nothing to diff against, so it plans fresh — and rebuilds from the baseline
-  trajectory that first cycle produces. There is nothing to replay. While the optimizer
+  current setpoints as its baseline, and resumes on the next cadence tick with **no prior trajectory and
+  no reference forecast**: the [state-change gate](./04-spec-optimizer-planning.md#invocation-strategy) is
+  **disabled for that first cycle** — it has nothing to diff against, so it plans fresh — and rebuilds
+  from the baseline that first cycle produces. There is nothing to replay. While the optimizer
   is down, the Phase 2 baseline continues unchanged
   ([P3-RESIL-1](../../artifacts/non-functional-requirements.md)) and the controller holds its last
   accepted setpoints ([P3-REL-1](../../artifacts/non-functional-requirements.md)) — a restart costs a
   cycle of refinement, not control. Auto-restart has the **same precondition as the controller's**:
   an external supervisor (a Docker `restart:` policy plus a healthcheck), a deployment
   responsibility, not self-supervision ([P3-AVAIL-1](../../artifacts/non-functional-requirements.md)).
+- **Degrade fallback — extend, else hold the baseline.** Several paths hold a cycle rather than plan:
+  the [state-change gate](./04-spec-optimizer-planning.md#invocation-strategy) skipping the LLM, the
+  [input gate](./07-spec-optimizer-input-gating.md) failing, a
+  [twin divergence](./03-spec-optimizer-digital-twin.md#2-robustness--fidelity), a cycle **timeout**
+  (below), or an LLM backend outage with no fallback
+  ([planning](./04-spec-optimizer-planning.md#1-llm-driven-planning)). Each **extends the last accepted
+  plan** — carrying its retained setpoint trajectory forward. When **no plan has ever been accepted** —
+  a cold-started service before its first successful cycle, or the first cycle after a restart cleared
+  the in-memory trajectory — there is nothing to extend, so the fallback **degenerates to holding the
+  Phase 2 baseline**: the current setpoints Phase 2 already holds, which are *always* available even
+  with no optimizer plan. Nothing is applied, the greenhouse runs on the crop-profile / operator
+  baseline, and the path's canonical [reason code](./10-spec-optimizer-interfaces.md#escalation-reason-codes)
+  is surfaced — the universal **surfaced, not applied** invariant
+  ([P3-RESIL-1](../../artifacts/non-functional-requirements.md)). A first cycle that fails this way
+  costs a cycle of refinement, never control.
 - **Fail-fast configuration validation.** Config ([configuration](./11-spec-optimizer-configuration.md))
   is validated **on startup**; an invalid config **blocks the service from coming up** rather than
   letting it run on silent defaults — the same startup-gate discipline the platform applies to schema
@@ -81,5 +98,6 @@ and the platform's operational resilience
   conditions graphable and alertable in the platform's shared Grafana, not just pollable point-in-time. A cycle that overruns its cadence — LLM latency past the
   [P3-PERF-2](../../artifacts/non-functional-requirements.md) bound, or a hung read — is **timed out**
   (`service.cycle_timeout_seconds`, [configuration](./11-spec-optimizer-configuration.md)) and the
-  current plan extended ([P3-PERF-2](../../artifacts/non-functional-requirements.md)): the cadence is a
+  current plan extended — or, with no prior plan, the Phase 2 baseline held (the degrade fallback above)
+  ([P3-PERF-2](../../artifacts/non-functional-requirements.md)): the cadence is a
   ceiling, not a best-effort target, and the loop self-heals to the next tick rather than wedging.

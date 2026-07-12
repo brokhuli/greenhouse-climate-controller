@@ -50,8 +50,8 @@ the Python `OptimizerPlan` Pydantic model.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `trajectory` | `TrajectoryPoint[]` (non-empty) | ✓ | The refined setpoint trajectory across the horizon, one point per hour ([hourly granularity](./04-spec-optimizer-planning.md#invocation-strategy)). A **planning artifact**: it is held in memory to drive the next cycle's [state-change gate](./04-spec-optimizer-planning.md#invocation-strategy) and is **not** written whole to Phase 2 — only `immediate_setpoints` is applied. |
-| `immediate_setpoints` | `SetpointsPatch` | ✓ | The **single next bundle** the applier submits to Phase 2 this cadence — the refined targets of `trajectory[0]` expressed as a partial [setpoints patch](../../../../contracts/optimizer-write-rest/components/schemas/setpoints.json). The one part of the plan that reaches the greenhouse. |
+| `trajectory` | `TrajectoryPoint[]` (non-empty) | ✓ | The refined setpoint trajectory across the horizon, one point per hour ([hourly granularity](./04-spec-optimizer-planning.md#invocation-strategy)). A **planning artifact**: it is held in memory so a skipped cycle can **extend the plan** ([state-change gate](./04-spec-optimizer-planning.md#invocation-strategy)) by carrying the next hour's setpoints forward, and is **not** written whole to Phase 2 — only `immediate_setpoints` is applied. It is **not** the gate's comparison input: the gate diffs the twin's predicted-**climate** forecast, a separate in-memory reference ([digital twin §1.6](./03-spec-optimizer-digital-twin.md#16-twin-output-predicted-trajectory)). |
+| `immediate_setpoints` | `SetpointsPatch` | ✓ | The **single next bundle** the applier submits to Phase 2 this cadence — the refined targets of `trajectory[0]` expressed as a partial [setpoints patch](../../../../contracts/optimizer-write-rest/components/schemas/setpoints.json). This is a **normative, engine-enforced invariant** — `immediate_setpoints` ≡ `trajectory[0].setpoints` field-for-field, not just a description — and a mismatch is rejected ([constraint engine](./06-spec-optimizer-constraints-and-application.md#1-constraint-engine--safety)). The one part of the plan that reaches the greenhouse. |
 | `confidence` | `number` ∈ [0, 1] | ✓ | The planner's self-assessed confidence in the immediate bundle. **Load-bearing**: below the configured `confidence_threshold` ([configuration](./11-spec-optimizer-configuration.md), default `0.8`) the plan is **escalated, not applied** ([application gate](./06-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application)). |
 | `explanation` | `string` | ✓ | A short natural-language reason summary — the "reasoning/audit trace" surfaced to an operator when the plan is escalated or inspected. |
 | `objective_scores` | `{ anticipation, coupling, efficiency }`, each `number` ∈ [0, 1] | – | The planner's self-reported weighting of how each [objective](./04-spec-optimizer-planning.md#2-optimization-objectives) shaped the plan. **Advisory / explainability only** — surfaced for review and telemetry, never consumed by the gate (the gate reads `confidence` and the deterministic constraint engine, not these). |
@@ -89,7 +89,7 @@ rather than a cross-contract `$ref`.
 | `horizon` | `{ start, end }` (RFC 3339, UTC) | ✓ | The **adaptive window** the service chose for the cycle: 12 h by default, 24 h near a day boundary ([invocation strategy](./04-spec-optimizer-planning.md#invocation-strategy)). `trajectory` spans `[start, end]`. |
 | `backend` | `{ provider, model, role }` | ✓ | Which model produced the plan. `provider ∈ { ollama, anthropic, openai }`; `model` is the pinned id (e.g. `llama3`, `claude-sonnet-4-6`); `role ∈ { primary, fallback }`. A fallback is a **different model** held to its own [evaluation baseline](./08-spec-optimizer-evaluation.md), so failover is recorded here, not hidden ([determinism](./04-spec-optimizer-planning.md#determinism--reproducibility)). |
 | `plan` | `OptimizerPlan` | ✓ | The layer-1 plan (§2). |
-| `outcome` | `{ status, reason_code?, message? }` | ✓ | What the gates decided. `status ∈ { applied, escalated, extended }`; on `escalated`, `reason_code` is one of the [canonical reason codes](./10-spec-optimizer-interfaces.md#escalation-reason-codes) and `message` is the operator-facing detail. `extended` means the [state-change gate](./04-spec-optimizer-planning.md#invocation-strategy) skipped the LLM and carried the prior plan forward. |
+| `outcome` | `{ status, reason_code?, message? }` | ✓ | What the gates decided. `status ∈ { applied, escalated, extended }`; on `escalated`, `reason_code` (one of the [canonical reason codes](./10-spec-optimizer-interfaces.md#escalation-reason-codes)) is **required** — the schema enforces it with a conditional rule ([plan-record.schema.json](../../../../contracts/optimizer-plan/plan-record.schema.json)) — and `message` is the operator-facing detail. `extended` means no new plan was applied: the [state-change gate](./04-spec-optimizer-planning.md#invocation-strategy) skipped the LLM (or there was nothing to refine), and the prior plan or Phase 2 baseline is carried forward. |
 
 ---
 
@@ -100,7 +100,7 @@ rather than a cross-contract `$ref`.
 2. The **service** wraps it in a `PlanRecord`, stamping `optimizer_run_id`, `greenhouse_id`,
    `created_at`, `horizon`, and `backend`.
 3. The **constraint engine** validates `immediate_setpoints` (and, for regression, `trajectory[0]`)
-   against the crop-safe range and bundle consistency
+   against the crop-safe range and bundle consistency, and enforces that the two are equal
    ([constraint engine](./06-spec-optimizer-constraints-and-application.md#1-constraint-engine--safety)).
 4. The **application gate** checks `confidence` against the threshold
    ([application gate](./06-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application)).
@@ -109,8 +109,11 @@ rather than a cross-contract `$ref`.
    `outcome.status = applied`. On any failure the plan is **surfaced, not applied**: `outcome.status
    = escalated` with the gate's `reason_code`, leaving the Phase 2 baseline in force
    ([write path](./06-spec-optimizer-constraints-and-application.md#3-write-path-concurrency--reconciliation)).
-6. The **state-change gate** of the *next* cycle diffs the current simulated trajectory against this
-   plan's `trajectory`; a small deviation yields `outcome.status = extended` with no new LLM call.
+6. The **state-change gate** of the *next* cycle diffs the current twin **climate** forecast against
+   the **reference forecast** retained from this cycle's planner run
+   ([planning — state-change gate](./04-spec-optimizer-planning.md#invocation-strategy)); a small
+   deviation yields `outcome.status = extended` — this plan's `trajectory` is carried forward with no
+   new LLM call.
 
 ---
 

@@ -193,7 +193,10 @@ This is **not** the [`OptimizerPlan.trajectory`](./05-spec-optimizer-plan-contra
 The twin's series is a predicted *climate* future the [planner](./04-spec-optimizer-planning.md)
 reads as context; `OptimizerPlan.trajectory` is the planner's proposed *setpoint* refinements.
 Keeping the two distinct is what lets the planner reason about *where the baseline climate is
-heading* separately from *what it wants to change*.
+heading* separately from *what it wants to change* — and it is this **climate** forecast, retained
+in memory from the last planner run as the **reference forecast**, that the next cycle's
+[state-change gate](./04-spec-optimizer-planning.md#invocation-strategy) diffs against
+(climate-vs-climate), never the setpoint trajectory.
 
 ### 1.7 Initialization (from planning context)
 
@@ -213,9 +216,11 @@ anchored at the context `to` (the greenhouse's latest stored instant):
 - **Actuator start levels** come from the actuator snapshots (`observed`, else `commanded`) —
   informational only, since §1.3 recomputes levels each sub-step.
 
-A required-metric hole never reaches the twin: the
-[input-quality gate](./07-spec-optimizer-input-gating.md) has already failed the cycle
-upstream.
+A required-metric hole never reaches the twin — including a **missing or stale per-zone
+`soil_moisture`** for a greenhouse that declares irrigation zones, which the
+[input-quality gate](./07-spec-optimizer-input-gating.md) now requires just like a climate metric: the
+gate has already failed the cycle upstream, so the twin always seeds every integrated variable
+(per-zone soil included) from real telemetry rather than a fabricated default.
 
 ---
 
@@ -242,7 +247,8 @@ outside the **physically plausible** envelopes ([§1.1](#11-state-vector): tempe
 sensor range, negative humidity or CO₂), and **non-convergence** within a step budget. A diverged simulation is
 treated exactly like a failed input precondition ([input gating](./07-spec-optimizer-input-gating.md)):
 the optimizer does **not** hand a garbage trajectory to the planner — it extends the last accepted
-plan and raises a `twin_diverged` escalation
+plan (or holds the Phase 2 baseline if none exists,
+[resilience — degrade fallback](./09-spec-optimizer-resilience.md)) and raises a `twin_diverged` escalation
 ([reason codes](./10-spec-optimizer-interfaces.md#escalation-reason-codes)), traced by `optimizer_run_id`
 ([P3-OBS-1](../../artifacts/non-functional-requirements.md)). The solver is fixed-step / seeded so a
 scenario reproduces, making the twin the deterministic forward model

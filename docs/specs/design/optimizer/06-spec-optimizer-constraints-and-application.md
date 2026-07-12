@@ -23,11 +23,21 @@ these two are the whole of it:
 - **Crop-safe range** — the min/max envelope the active crop profile stage defines for each scalar
   climate target and, uniformly across zones, the numeric per-zone irrigation targets (`StageBounds`,
   including its `zones` envelope, on the profile — [platform crop-profiles §1](../platform/05-spec-platform-crop-profiles.md#1-profiles-and-assignment)),
-  read from the [planning-context](./07-spec-optimizer-input-gating.md) `setpoints.bounds` at the start
-  of the cycle; the optimizer may move targets *within* this envelope but never outside it. Because
+  read from the [planning-context](./07-spec-optimizer-input-gating.md) `setpoints.bounds` **when
+  present**; the optimizer may move a target *within* its envelope but never outside it. Because
   Phase 2 enforces the same envelope on the write path, this engine is the optimizer's local pre-filter
   on the authoritative bounds, not a second definition of them (a `202`/`422` disagreement is handled in
   [§3](#3-write-path-concurrency--reconciliation)).
+  **Bounds are optional, and absence is a legal state — not [contract drift](./10-spec-optimizer-interfaces.md#escalation-reason-codes).**
+  The read contract makes `bounds` absent "when the stage defines none"
+  ([optimizer-read-rest](../../../../contracts/optimizer-read-rest/README.md)), and a `StageBounds` may
+  omit any per-field bound or leave one open on a side. The optimizer reads absence as *no envelope to
+  refine within* and **holds that target's baseline**: a target with no per-field bound is left
+  unrefined; a one-sided bound (only `min` **or** only `max`) is refined within its open envelope,
+  clamped on the bounded side; and if the whole `bounds` object is absent, no target is refined this
+  cycle — the optimizer holds the entire baseline and records a benign `extended` (no new application),
+  **not** an escalation. Holding an unbounded target is safe because Phase 2's write-path bounds
+  enforcement remains the backstop for anything that *is* written.
 - **Bundle self-consistency** — cross-field invariants that hold with no physical model, checkable from
   the bundle alone: `humidity_low_pct ≤ humidity_high_pct`, each zone's
   `moisture_low_threshold ≤ moisture_high_threshold`, a well-formed day window (`day_start` before
@@ -35,8 +45,16 @@ these two are the whole of it:
   engine judges "achievable combinations" — a bundle whose own fields contradict each other is rejected
   before it can be written, independent of physics.
 
-A plan that clears both checks is eligible for **auto-apply**
-([application gate](#2-setpoint-refinement--application)); a plan that violates either is **never
+**Structural precondition — `immediate_setpoints` ≡ `trajectory[0].setpoints`.** The contract defines
+`immediate_setpoints` as the refined targets of `trajectory[0]` ([plan contract §2](./05-spec-optimizer-plan-contract.md#2-optimizerplan--the-planners-structured-output));
+JSON Schema cannot express that cross-field relationship, so the engine enforces it deterministically in
+service code — the two must be **field-for-field equal** on the patched fields (same keys, same values,
+zones matched by `zone_id`). A mismatch is a malformed plan: the applied bundle would diverge from the
+trajectory the state-change gate and the evaluation suite reason about, so it is rejected and escalated
+as a `constraint_violation`, never written.
+
+A plan that clears both checks and this precondition is eligible for **auto-apply**
+([application gate](#2-setpoint-refinement--application)); a plan that violates any is **never
 applied** — it is rejected and escalated.
 
 **What the engine does not validate — and why.** Actuator ranges, slew / rate limits, and hardware
@@ -82,9 +100,10 @@ Phase 2 is the **single authority for controller setpoints**
 it enforces crop-safe bounds, records provenance (source `optimizer`, with an `optimizer_run_id` for
 tracing), and is the sole delivery path to the controller — applying on change, re-asserting on
 reconnect, and detecting drift. The optimizer submits refined targets via
-`POST /api/greenhouses/{id}/setpoints` and either receives `202` (accepted) or `422` (rejected with the
-violated bound); it does **not** write to controllers directly and does **not** publish actuator
-commands. The call is trusted on the local network by default; under the platform's hardened
+`POST /api/greenhouses/{id}/setpoints`; the expected outcomes are `202` (accepted) and `422` (rejected
+with the violated bound), with the full response set — auth, missing greenhouse, controller-offline, and
+transport failures — handled in [Write outcomes](#write-outcomes) below. It does **not** write to
+controllers directly and does **not** publish actuator commands. The call is trusted on the local network by default; under the platform's hardened
 `SERVICE_AUTH_MODE=oidc` posture it carries a Keycloak `setpoints:write` service token
 ([interfaces — authenticating the Phase 2 write path](./10-spec-optimizer-interfaces.md#authenticating-the-phase-2-write-path),
 [RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009)),
@@ -101,6 +120,23 @@ with no change to the bundle or the `202`/`422` contract.
 Escalations are **surfaced, not executed**: the optimizer exposes the proposed plan and the reason it
 was held for an operator to review, rather than applying a plan it cannot vouch for. The
 within-bounds / confidence thresholds are configuration ([configuration](./11-spec-optimizer-configuration.md)).
+
+### Write outcomes
+
+The application gate above decides *whether* to write; this table defines how the optimizer treats
+*each* response the [write path](../../../../contracts/optimizer-write-rest/paths/setpoints.json) can
+return, so no status is silently unhandled. A held write never mutates intended state — the Phase 2
+baseline stays in force ([P3-RESIL-1](../../artifacts/non-functional-requirements.md)) — and every held
+cycle carries a canonical [reason code](./10-spec-optimizer-interfaces.md#escalation-reason-codes).
+
+| Response | Meaning | Optimizer behavior | Outcome · reason code |
+|---|---|---|---|
+| `202 Accepted` | Recorded as intended state — delivered to the controller, or held for one that is offline. | The refinement landed. | `applied` |
+| `503 Service Unavailable` | Phase 2 **recorded** the intended state but could not reach the controller at write; it re-asserts on reconnect — "retry is not required" ([contract](../../../../contracts/optimizer-write-rest/components/responses.json)). | The refinement landed in the single authority; controller delivery is Phase 2's to complete. | `applied` (controller-offline noted) |
+| `422 Unprocessable` | The optimizer's view of the bounds disagrees with Phase 2's — the crop profile changed mid-cycle, or the bounds contract drifted. | Never retried in a loop; cycle abandoned ([§3](#3-write-path-concurrency--reconciliation)). | `escalated` · `bounds_mismatch` (persistent) |
+| `401 Unauthorized` / `403 Forbidden` | Under `SERVICE_AUTH_MODE=oidc` only: a missing/invalid token, or one lacking the `setpoints:write` role ([authenticating the write path](./10-spec-optimizer-interfaces.md#authenticating-the-phase-2-write-path)). A deployment/credential fault, not a data fault. | Not retried — the same credential cannot succeed. | `escalated` · `write_unauthorized` (persistent) |
+| `404 Not Found` | The greenhouse does not exist — the optimizer is configured for one the platform's registry does not hold. | Not retried; an identity/registry mismatch to fix, not a transient miss. | `escalated` · `contract_drift` (persistent) |
+| Transport failure (connection refused, timeout, 5xx gateway, no response) | The POST never reached Phase 2's authority, or no confirmation returned — distinct from the well-formed `503` above; the same failure shape as a Phase 2 **read** that cannot reach the platform. | Cycle held and retried next cadence; deduplicated into a standing escalation while it persists ([resilience — escalation backpressure](./09-spec-optimizer-resilience.md)). | `escalated` · `platform_unavailable` (transient) |
 
 ---
 

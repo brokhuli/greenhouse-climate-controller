@@ -64,12 +64,14 @@ raising gates reference it rather than re-listing codes.
 | `sensor_fault` | input gating — sensor health (faulted / degraded) | transient |
 | `actuator_fault` | input gating — actuator health (`stuck` / `no_response`) | transient |
 | `clock_mode_unsupported` | input gating — `time_scale ≠ 1.0` | transient |
-| `contract_drift` | input gating — identity / `schema_version` mismatch | persistent |
+| `contract_drift` | input gating — identity / `schema_version` mismatch; write path — Phase 2 `404` (greenhouse not in the platform registry) | persistent |
 | `twin_diverged` | twin — numerical divergence (non-finite / non-converging step) | transient |
 | `twin_fidelity_fault` | twin — sustained parameter drift | persistent |
 | `constraint_violation` | constraint engine — target out of crop-safe range, or an inconsistent setpoint bundle | persistent (for this plan) |
 | `low_confidence` | application gate — plan below the confidence threshold | transient |
 | `bounds_mismatch` | write path — Phase 2 `422` disagreement with local bounds | persistent |
+| `write_unauthorized` | write path — Phase 2 `401` / `403` (missing/invalid token or absent `setpoints:write` role, `SERVICE_AUTH_MODE=oidc`) | persistent |
+| `platform_unavailable` | read / write path — Phase 2 REST unreachable (transport failure / timeout / 5xx gateway) | transient |
 | `cycle_timeout` | resilience — cycle overran `cycle_timeout_seconds` | transient |
 | `llm_unavailable` | planner — backend unreachable and no fallback configured | transient |
 

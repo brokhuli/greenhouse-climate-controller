@@ -35,11 +35,12 @@ The trajectory is a **planning artifact** spanning the horizon; Phase 3 does **n
 trajectory to Phase 2. Each cadence the optimizer applies only the **immediate next setpoint bundle** —
 a single `SetpointsPatch` through the
 [Phase 2 write path](./06-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application) —
-while the rest of the horizon informs the next cycle's
-[state-change gate](#invocation-strategy) (which compares the current simulated trajectory against the
-last accepted plan's). A scheduled or multi-step plan contract that hands Phase 2 a future trajectory is
-deliberately out of Phase 3 scope ([scope](./13-spec-optimizer-scope.md)); the single-authority write
-path stays a current-target merge.
+while the rest of the horizon is held in memory so a skipped cycle can **extend the plan** by carrying
+the next hour's setpoints forward ([state-change gate](#invocation-strategy)). That setpoint horizon is
+**not** what the gate diffs — the gate compares the twin's **predicted-climate** forecast across cycles
+(below), a climate series, not this setpoint series. A scheduled or multi-step plan contract that hands
+Phase 2 a future trajectory is deliberately out of Phase 3 scope ([scope](./13-spec-optimizer-scope.md));
+the single-authority write path stays a current-target merge.
 
 The planner emits a **structured plan** (not prose) conforming to the schema in
 [`contracts/`](../../../../contracts/), so the constraint engine and applier can consume it
@@ -60,13 +61,13 @@ local:
 | **Fixed token budget** | `PlanContext` is serialized to a fixed token budget (default 4 000 tokens). If the budget is exceeded the serializer raises an explicit error — no silent truncation. |
 | **Hourly telemetry summaries** | History is serialized as `(min, mean, max)` per sensor per hour, not raw readings. |
 | **Adaptive horizon** | Default 12-hour horizon; extended to 24 h only when the cycle window crosses a day boundary (within 4 h of sunrise/sunset). |
-| **State-change gate** | The LLM is not invoked if the current simulated trajectory deviates from the last accepted plan's trajectory by less than a configurable threshold. The current plan is extended instead. The compared trajectory is **in-memory only**, so on the first cycle after a restart there is nothing to diff against — the gate is skipped and the LLM runs to rebuild the baseline ([resilience — stateless restart](./09-spec-optimizer-resilience.md)). |
+| **State-change gate** | The LLM is not invoked if the twin's **predicted-climate forecast** for this cycle deviates from the **reference forecast** — the forecast retained from the last cycle that ran the planner — by less than a configurable threshold, over their overlapping window. The current plan is **extended** instead: the retained setpoint trajectory is carried forward, or the Phase 2 baseline is held if no prior plan exists ([resilience](./09-spec-optimizer-resilience.md)). Both the reference forecast and the setpoint trajectory are **in-memory only**, so on the first cycle after a restart there is nothing to diff against — the gate is skipped and the LLM runs to rebuild the baseline ([resilience — stateless restart](./09-spec-optimizer-resilience.md)). The reference is a twin **climate** series, never `OptimizerPlan.trajectory` (setpoints); the two are kept distinct ([digital twin §1.6](./03-spec-optimizer-digital-twin.md#16-twin-output-predicted-trajectory)). |
 | **Fixed cycle cadence** | Planning cycles run on a fixed interval (default 30 minutes). The state-change gate controls actual LLM call frequency within that cadence. |
 
 All five levers are configurable ([configuration](./11-spec-optimizer-configuration.md)).
 
 > **These levers assume real-time (1×) operation.** The fixed cycle cadence and the
-> adaptive horizon are **wall-clock-paced**, and the state-change gate compares trajectories over
+> adaptive horizon are **wall-clock-paced**, and the state-change gate compares climate forecasts over
 > wall-clock-anchored windows — all of which presume the controller's clock tracks wall-clock. When a
 > greenhouse runs under the P1 simulation
 > [time-scale knob](../controller/03-spec-controller-hal-simulation.md#time-scale-speed-without-breaking-determinism)
