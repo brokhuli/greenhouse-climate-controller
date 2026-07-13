@@ -25,6 +25,9 @@
     { "fixture": "optimizer-escalation.json", "schema": "optimizer.json#/Escalation", "expect": "pass" },
     { "fixture": "optimizer-escalation.bad-reason.json", "schema": "optimizer.json#/Escalation", "expect": "fail" },
     { "fixture": "optimizer-model.json", "schema": "optimizer.json#/ModelState", "expect": "pass" },
-    { "fixture": "optimizer-enabled.json", "schema": "optimizer.json#/EnableState", "expect": "pass" }
+    { "fixture": "optimizer-enabled.json", "schema": "optimizer.json#/EnableState", "expect": "pass" },
+    { "fixture": "optimizer-status.json", "schema": "optimizer.json#/OptimizerStatus", "expect": "pass" },
+    { "fixture": "optimizer-status.degraded.json", "schema": "optimizer.json#/OptimizerStatus", "expect": "pass" },
+    { "fixture": "optimizer-status.bad-reason.json", "schema": "optimizer.json#/OptimizerStatus", "expect": "fail" }
   ]
 }

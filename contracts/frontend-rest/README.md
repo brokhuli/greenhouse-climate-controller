@@ -36,6 +36,7 @@ paths/                       # one file per path
   events.json                #   /api/events                                 (GET)
   profiles.json              #   /api/profiles                               (GET, POST)  (2b)
   profile-by-id.json         #   /api/profiles/{profile_id}                  (GET, PATCH, DELETE) (2b)
+  optimizer-status.json      #   /api/optimizer/status                       (GET)  (3)
   optimizer-fleet.json       #   /api/optimizer/fleet                        (GET)  (3)
   optimizer-plan.json        #   /api/optimizer/greenhouses/{greenhouse_id}/plan   (GET)  (3)
   optimizer-cycle.json       #   /api/optimizer/greenhouses/{greenhouse_id}/cycles (POST) (3)
@@ -54,7 +55,7 @@ components/
     events.json              #   EventEntry
     sim.json                 #   TimeScale, TimeScalePatch, FleetTimeScaleResult (sim-only)
     profiles.json            #   CropProfile, CropProfilePatch, ProfileStage, StageBounds, ZoneBounds, Bound, Assignment, AssignmentInput (2b)
-    optimizer.json           #   OptimizerPlanView/Detail, SetpointDiff, Escalation, FleetOptimizerSummary, ModelState/Selection, EnableState/Request, CycleRequest/Accepted, ReasonCode/Class (3)
+    optimizer.json           #   OptimizerPlanView/Detail, SetpointDiff, Escalation, FleetOptimizerSummary, ModelState/Selection, EnableState/Request, OptimizerStatus, DegradedReason, CycleRequest/Accepted, ReasonCode/Class (3)
   parameters.json            # shared path/query parameters
   responses.json             # shared error responses (400, 401, 403, 404, 409, 422)
 examples/                    # fixtures used as tests (see below)
@@ -92,6 +93,7 @@ nginx-proxied prefix.
 | `DELETE /api/profiles/{profile_id}` | Delete a profile | 2b | 204 | 401, 403, 404, 422 |
 | `GET /api/greenhouses/{greenhouse_id}/assignment` | Current assignment | 2b | 200 `Assignment` | 404 |
 | `PUT /api/greenhouses/{greenhouse_id}/assignment` | Assign profile/stage | 2b | 200 `Assignment` | 401, 403, 404, 422 |
+| `GET /api/optimizer/status` | Optimizer service health | 3 | 200 `OptimizerStatus` | — |
 | `GET /api/optimizer/fleet` | Optimizer fleet queue + rollup | 3 | 200 `FleetOptimizerSummary` | — |
 | `GET /api/optimizer/greenhouses/{greenhouse_id}/plan` | Latest plan + setpoint diff | 3 | 200 `OptimizerPlanDetail` | 404 |
 | `POST /api/optimizer/greenhouses/{greenhouse_id}/cycles` | Trigger an on-demand cycle | 3 | 202 `CycleAccepted` | 401, 403, 404, 409 |
@@ -109,7 +111,7 @@ ad-hoc edit above is the operator's path.
 The `optimizer/*` paths (slice 3) are the **operator console** surface — the Go API's proxy/aggregate over
 the optimizer's own [Service API](../../docs/specs/design/optimizer/10-spec-optimizer-interfaces.md#service-api-endpoints),
 so the SPA reaches the optimizer through the one Go-API origin and never opens a second connection. Reads
-(`fleet`, `plan`, `escalations`, `model`, `enabled`) are viewer-open and **polled**, not streamed; the
+(`status`, `fleet`, `plan`, `escalations`, `model`, `enabled`) are viewer-open and **polled**, not streamed; the
 mutations (`cycles`, `escalations/{id}/resolve`, `model`, `enabled`) are operator writes. The one optimizer
 signal on the live WebSocket is the applied-plan **activity event** (`kind: optimizer_plan_applied`,
 `source: optimizer`); escalations stay in the polled queue.
@@ -219,6 +221,9 @@ validate against their component schema; the `*.bad-*.json` counter-examples mus
 | `optimizer-escalation.bad-reason.json` | `Escalation` | **fail** (`reason_code` outside the canonical enum) |
 | `optimizer-model.json` | `ModelState` | valid |
 | `optimizer-enabled.json` | `EnableState` | valid |
+| `optimizer-status.json` | `OptimizerStatus` | valid (healthy, enabled) |
+| `optimizer-status.degraded.json` | `OptimizerStatus` | valid (degraded — `platform_unreachable`, no successful cycle yet) |
+| `optimizer-status.bad-reason.json` | `OptimizerStatus` | **fail** (`degraded_reason` outside the enum) |
 
 ## Validation
 

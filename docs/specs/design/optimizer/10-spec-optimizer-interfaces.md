@@ -63,6 +63,11 @@ the platform **Go API proxies and aggregates** these operator endpoints — plan
 reads, the `fleet` rollup, and the operator-gated mutations — and re-exposes them to the SPA under the
 **versioned** [`contracts/frontend-rest/`](../../../../contracts/frontend-rest/) surface
 ([platform interfaces §3](../platform/09-spec-platform-interfaces.md#3-api-surface-inventory)). The Go
+API also **derives** the internal `GET /health` above into a versioned frontend
+`GET /api/optimizer/status` for the console's service-health badge — overall status + degraded reason,
+last-successful-cycle time vs cadence, and the read-only reason; when the optimizer is unreachable the
+Go API synthesizes `status: unavailable` rather than surfacing a proxy `5xx`, so the badge always
+renders. The internal `/health` itself stays the optimizer's own unversioned surface. The Go
 API additionally **composes** the setpoint-diff the dashboard renders — the plan's proposed
 `immediate_setpoints` against the greenhouse's **current** setpoints and its **crop-safe bounds**, both
 platform-owned — since neither the current bundle nor the bounds lives here. So this Service API stays the

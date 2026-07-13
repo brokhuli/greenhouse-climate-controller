@@ -341,6 +341,46 @@
     "required": ["enabled"],
     "additionalProperties": false
   },
+  "DegradedReason": {
+    "type": "string",
+    "enum": ["platform_unreachable", "llm_unreachable", "cycle_stalled", "cold_start"],
+    "description": "Service-level degradation cause for OptimizerStatus.degraded_reason. platform_unreachable / llm_unreachable = a dependency the optimizer needs is down; cycle_stalled = enabled but no successful cycle within the expected cadence; cold_start = enabled but no successful cycle yet. Distinct from the per-cycle escalation ReasonCode (why one greenhouse's cycle was held)."
+  },
+  "OptimizerStatus": {
+    "type": "object",
+    "description": "Service-level optimizer health for the console overview badge (GET /api/optimizer/status). The Go API's proxy/derivation of the optimizer's internal GET /health (optimizer interfaces §Service API endpoints). Polled. Distinct from per-greenhouse cycle outcomes (FleetOptimizerSummary) — this is the planner service as a whole. The open-escalation backlog is not repeated here; it lives on FleetOptimizerSummary.rollup.backlog.",
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": ["healthy", "degraded", "unavailable"],
+        "description": "healthy = planning normally, or intentionally paused (a read-only pause is a healthy, intentional state, not a stall); degraded = a dependency/cadence problem, see degraded_reason; unavailable = the Go API could not reach the optimizer at all — synthesized by the Go API, not the optimizer, so the console still renders a badge instead of a proxy 5xx."
+      },
+      "degraded_reason": {
+        "oneOf": [{ "$ref": "#/DegradedReason" }, { "type": "null" }],
+        "description": "Machine-readable cause when status = degraded; null otherwise."
+      },
+      "enabled": {
+        "type": "boolean",
+        "description": "false = read-only mode (planning paused). Mirrors GET /api/optimizer/enabled, included so the health badge is self-contained."
+      },
+      "read_only_reason": {
+        "type": ["string", "null"],
+        "description": "Why the service is in read-only mode when enabled = false (the operator's supplied pause note, or a config-default marker); null when enabled."
+      },
+      "last_successful_cycle_at": {
+        "type": ["string", "null"],
+        "format": "date-time",
+        "description": "When the most recent cycle last applied/extended successfully (RFC 3339 UTC, ms); null before the first successful cycle (cold start)."
+      },
+      "cadence_secs": {
+        "type": "integer",
+        "minimum": 1,
+        "description": "The fixed scheduled planning interval in seconds (optimizer config cycle_interval_minutes × 60), so the badge can flag staleness against the expected schedule."
+      }
+    },
+    "required": ["status", "enabled", "last_successful_cycle_at", "cadence_secs"],
+    "additionalProperties": false
+  },
   "CycleRequest": {
     "type": "object",
     "description": "POST /api/optimizer/greenhouses/{id}/cycles body — trigger an on-demand planning cycle. Bypasses state-change suppression but not the input/safety/application gates.",

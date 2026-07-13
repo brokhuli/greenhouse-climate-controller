@@ -331,6 +331,19 @@ export const wireModelState = z.object({
 export const wireEnableState = z.object({
   enabled: z.boolean(),                           // false = read-only mode (planning paused)
 });
+
+// Service-level health for the console overview badge — the Go API's derivation of the
+// optimizer's internal /health (`unavailable` synthesized when it's unreachable). Distinct
+// from the per-greenhouse fleet outcomes; backlog stays on the fleet rollup, not repeated here.
+export const wireOptimizerStatus = z.object({
+  status: z.enum(["healthy", "degraded", "unavailable"]),
+  degraded_reason: z.enum(["platform_unreachable", "llm_unreachable", "cycle_stalled", "cold_start"])
+    .nullable(),                                  // present when status = degraded, else null
+  enabled: z.boolean(),                           // false = read-only (paused is a healthy, intentional state)
+  read_only_reason: z.string().nullable(),        // why paused when !enabled; null when enabled
+  last_successful_cycle_at: z.coerce.date().nullable(), // null before the first successful cycle (cold start)
+  cadence_secs: z.number().int(),                 // fixed scheduled interval — flag staleness against it
+});
 ```
 
 The adapter flips these to camelCase VMs like every other shape (the representative
@@ -480,6 +493,7 @@ entries:
 | `["optimizer-plan", id]` *(3)* | `GET /api/optimizer/greenhouses/:id/plan` | latest plan + composed setpoint diff for the detail panel; polled |
 | `["optimizer-escalations"]` *(3)* | `GET /api/optimizer/escalations` | open escalation set; polled |
 | `["optimizer-model"]` / `["optimizer-enabled"]` *(3)* | `GET /api/optimizer/model` · `…/enabled` | active model + allowlist, enable/read-only state; polled |
+| `["optimizer-status"]` *(3)* | `GET /api/optimizer/status` | service-health badge (status/degraded-reason, last-cycle vs cadence, read-only reason); polled |
 
 Strategy:
 

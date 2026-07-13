@@ -162,7 +162,10 @@ actions**, **role**.
   console of its own, the plan detail lives with the greenhouse): the proposed-vs-current
   **setpoint diff** against crop-safe bounds, the plan's confidence and explanation, and
   the backend that produced it (provider / model / prompt version). The active **model**
-  and the **enabled / read-only** state are shown too.
+  and the **enabled / read-only** state are shown too, alongside a **service-health badge** —
+  the optimizer's overall status (healthy / degraded / unavailable) and, when degraded, the
+  reason; the last-successful-cycle time against the expected cadence; and, when paused, the
+  read-only reason ([optimizer interfaces](../optimizer/10-spec-optimizer-interfaces.md#the-operator-dashboard-reaches-this-surface-through-the-platform-go-api)).
 - **Primary actions:** *(operator)* resolve an open escalation; trigger an **on-demand**
   planning cycle for one greenhouse; switch the active **model** within the allowlist;
   **pause / resume** planning (read-only mode). All relay through the Go API's

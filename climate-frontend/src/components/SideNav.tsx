@@ -13,7 +13,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Fleet", icon: LayoutGrid, end: true },
   { to: "/profiles", label: "Profiles", icon: Sprout, end: false },
   { to: "/activity", label: "Activity", icon: Activity, end: false },
-  { to: "/verdant-force", label: "Optimizer", icon: Sparkle, end: false },
+  { to: "/optimizer", label: "Optimizer", icon: Sparkle, end: false },
 ];
 
 /** Primary navigation rail (architecture §8). */

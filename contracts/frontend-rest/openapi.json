@@ -38,6 +38,7 @@
     "/api/events": { "$ref": "./paths/events.json" },
     "/api/profiles": { "$ref": "./paths/profiles.json" },
     "/api/profiles/{profile_id}": { "$ref": "./paths/profile-by-id.json" },
+    "/api/optimizer/status": { "$ref": "./paths/optimizer-status.json" },
     "/api/optimizer/fleet": { "$ref": "./paths/optimizer-fleet.json" },
     "/api/optimizer/greenhouses/{greenhouse_id}/plan": { "$ref": "./paths/optimizer-plan.json" },
     "/api/optimizer/greenhouses/{greenhouse_id}/cycles": { "$ref": "./paths/optimizer-cycle.json" },

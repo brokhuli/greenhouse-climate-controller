@@ -8,6 +8,42 @@ alternatives and tradeoffs.
 
 ---
 
+## 2026-07-13 — Phase 3 SPA-facing optimizer health/status: `GET /api/optimizer/status`
+
+**Decision:** Add a versioned frontend-rest endpoint `GET /api/optimizer/status` (`OptimizerStatus`
+schema) so the operator console's overview can render a **service-health badge** for the optimizer as a
+whole — overall `status` (`healthy` / `degraded` / `unavailable`), a machine-readable `degraded_reason`
+(`platform_unreachable` / `llm_unreachable` / `cycle_stalled` / `cold_start`), the `enabled` /
+`read_only_reason` pair, and `last_successful_cycle_at` against `cadence_secs`. The Go API **derives** this
+from the optimizer's internal, unversioned `GET /health` (the same proxy/compose role it already plays for
+the `optimizer/*` reads and the setpoint diff); when the optimizer is unreachable the Go API synthesizes
+`status: unavailable` rather than surfacing a proxy `5xx`, so the badge always renders. The internal
+`/health` is unchanged and stays the optimizer's own surface. The open-escalation backlog is **not**
+duplicated here — it stays on `FleetOptimizerSummary.rollup.backlog`; and per-dependency reachability is
+carried only via `degraded_reason`, not as raw booleans. A read-only (paused) optimizer is `healthy`
+(intentional, not a stall). Read is viewer-open and **polled**, like the other `optimizer/*` reads.
+
+Touches the [frontend-rest contract](../../contracts/frontend-rest/) (new path, `OptimizerStatus` /
+`DegradedReason` schemas, three fixtures) and the spec set
+([optimizer 10 interfaces](../specs/design/optimizer/10-spec-optimizer-interfaces.md#the-operator-dashboard-reaches-this-surface-through-the-platform-go-api),
+[platform 09 interfaces](../specs/design/platform/09-spec-platform-interfaces.md),
+[frontend 02 views](../specs/design/frontend/02-spec-frontend-purpose-and-views.md),
+[frontend 05 data model](../specs/design/frontend/05-spec-frontend-data-model.md)). This is an **additive,
+backward-compatible** change — a new optional endpoint — so `info.version` does **not** bump the major (per
+the contract's [versioning rules](../../contracts/frontend-rest/README.md#versioning), RFC-007).
+
+**Why:** The console could already show per-greenhouse cycle outcomes (`fleet`) and a bare `enabled`
+boolean, but had no structured signal for the optimizer service itself being degraded (a dependency down,
+cycles stalling) or unreachable, when it last planned, its cadence, or *why* it is paused — an operator
+would only see the `fleet`/`enabled` polls error out. A single derived status response gives the overview
+badge one poll and keeps the browser talking only to the Go API. No Phase 3 code exists yet, so this lands
+as contract + spec ahead of implementation.
+
+**RFC:** contract convention [RFC-007](./request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format);
+optimizer operator surface [RFC-004](./request-for-comments.md#rfc-004-phase-3-llm-integration-interface)
+
+---
+
 ## 2026-07-12 — Phase 3 runtime model changes: operator-mutable model (allowlisted), provider stays offline
 
 **Decision:** Split the single "a model **or** provider change is a reviewed ADR event" rule into two
