@@ -6,7 +6,7 @@
 > httpx). Each entry states **what** it is, **why** it's chosen over alternatives, and **how**
 > it's used here. Choices are constrained by the
 > [NFR doc](../../artifacts/non-functional-requirements.md)
-> (`P3-PERF-2` LLM call < 60 s; `P3-MOD-1` backend-agnostic invocation; `P3-TEST-1` every plan
+> (`P3-PERF-2` planning cycle < 90 s; `P3-MOD-1` backend-agnostic invocation; `P3-TEST-1` every plan
 > through the constraint engine; `P3-REL-1`/`P3-RESIL-1`/`P3-AVAIL-1` optimizer failure never
 > disrupts control; `P3-SCAL-1` one greenhouse at a time; `P3-OBS-1` `optimizer_run_id` tracing;
 > `P3-SEC-1` API key via secret, never logged; `P3-PORT-1` Python under Compose, no cloud) and by
@@ -89,7 +89,8 @@
   by configuration: `ChatOllama` is the **default** local backend, with `ChatAnthropic` / `ChatOpenAI`
   available as opt-in cloud backends; an optional secondary is wired via `.with_fallbacks([...])`.
   Sampling is **pinned** — default model `qwen2.5:7b` (a cloud model such as `claude-sonnet-4-6` when a
-  cloud provider is configured), temperature `0`, `top_p 1.0`, `max_tokens` from
+  cloud provider is configured), temperature `0`, `top_p 1.0`, and the `output_token_budget`
+  (the backend's `max_tokens`) from
   [configuration](./11-spec-optimizer-configuration.md) — so plans are reproducible enough to
   regression-test ([planning — determinism](./04-spec-optimizer-planning.md#determinism--reproducibility)).
   A **provider** or `prompt_version` change is a reviewed **ADR event**, never a silent upgrade (offline
@@ -270,6 +271,15 @@
   `endpoint` (`http://ollama:11434`). The optimizer is a **client** of Phase 2
   ([architecture](./02-spec-optimizer-architecture.md)) — it reads and writes through
   Phase 2's API; it opens **no** channel to a Phase 1 controller.
+- **GPU acceleration — opportunistic:** the `ollama` service declares an **optional** NVIDIA GPU
+  reservation (Compose `deploy.resources.reservations.devices` with `driver: nvidia`,
+  `capabilities: [gpu]`) so Ollama runs the local model on the **GPU when the host exposes one**
+  (via the [NVIDIA Container Toolkit](../required-dependencies.md#phase-3--local-llm-climate-optimizer))
+  and transparently **falls back to CPU** otherwise. The reservation is a best-effort hint, not a hard
+  constraint, so the default `docker compose up` still comes up on a GPU-less host — keeping the
+  no-special-hardware `P3-PORT-1` posture intact. GPU is a **deployment** concern of the `ollama`
+  container, not an optimizer setting: no field is added to the `[llm]`
+  [configuration](./11-spec-optimizer-configuration.md) block.
 
 ---
 

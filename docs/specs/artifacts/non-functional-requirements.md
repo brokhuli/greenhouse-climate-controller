@@ -263,9 +263,10 @@ HAL time constants ([HAL §2](../design/controller/03-spec-controller-hal-simula
 
 - **P3-PERF-1** — Each planning cycle completes **within its 30-min cadence** (default
   `cycle_interval_minutes = 30`). *(Spec §4.)*
-- **P3-PERF-2** — A single LLM plan call returns in **< 60 s**; on timeout the current plan is extended
-  rather than blocking. *(Committed default; spec §4 state-change gate.)*
-- **P3-PERF-3** — `PlanContext` serializes to a **fixed 4 000-token budget**; exceeding it raises an
+- **P3-PERF-2** — A single planning cycle — bounded by `service.cycle_timeout_seconds` and dominated by
+  its LLM plan call — completes in **< 90 s**; on timeout the current plan is extended rather than
+  blocking. *(Committed default; spec §4 state-change gate.)*
+- **P3-PERF-3** — `PlanContext` serializes to a **fixed 3 000-token budget**; exceeding it raises an
   explicit error (no silent truncation). *(Spec §4.)*
 
 **Testability**

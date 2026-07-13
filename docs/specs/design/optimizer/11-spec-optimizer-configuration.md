@@ -29,7 +29,7 @@ table below), via `POST /api/optimizer/model`
 step off a regressing model between cycles. Everything else stays offline: the **`provider`** (still one of
 `ollama` / `anthropic` / `openai`; a provider change is a config/Compose change + restart, a reviewed
 [ADR event](../../../decisions/architecture-design-record.md)), the `endpoint`, `api_key`, `prompt_version`,
-the sampling pins (`temperature` / `top_p` / `max_tokens`), and the `fallback_*` backend. A runtime `model`
+the sampling pins (`temperature` / `top_p`) and the `output_token_budget` (the backend's `max_tokens`), and the `fallback_*` backend. A runtime `model`
 switch takes effect on the **next planning cycle** and is stamped into that cycle's `PlanRecord.backend.model`
 ([plan contract §3](./05-spec-optimizer-plan-contract.md#3-planrecord--the-optimizer-service-envelope)); it
 is an **in-memory override that resets to the configured `model` on restart** (the config value stays the
@@ -69,7 +69,7 @@ fallback_model = ""
 fallback_endpoint = ""
 temperature = 0                       # greedy decoding for reproducible plans; offline-only, see planner determinism
 top_p = 1.0                           # offline-only
-max_tokens = 1024                     # response budget; offline-only; distinct from the 4000-token context budget
+output_token_budget = 640             # the backend's max_tokens (response cap); offline-only; distinct from the 3000-token context input budget
 
 # Runtime model allowlist, per provider — the set an operator may switch the active `model` to at runtime
 # (POST /api/optimizer/model rejects anything not listed for the active provider). Editing a list here
@@ -84,7 +84,7 @@ openai = []
 [planning]
 cycle_interval_minutes = 30
 horizon_hours = 12                    # extended to 24 only near day boundaries
-context_token_budget = 4000           # serializer raises if exceeded; no silent truncation
+context_token_budget = 3000           # serializer raises if exceeded; no silent truncation
 state_change_threshold = 0.05         # normalized mean predicted-climate residual (twin fidelity-residual method) below which the LLM call is suppressed → planning state-change gate
 objective_weights = { anticipation = 1.0, coupling = 1.0, efficiency = 0.5 }
 
@@ -116,6 +116,6 @@ divergence_threshold = 0.15           # one-step predicted-vs-observed residual 
 fidelity_breach_cycles = 3            # consecutive divergence_threshold breaches before a fidelity fault caps confidence and escalates → twin robustness
 
 [service]
-cycle_timeout_seconds = 60            # a cycle exceeding this is abandoned and the last applied bundle held; aligns with P3-PERF-2
+cycle_timeout_seconds = 90            # a cycle exceeding this is abandoned and the last applied bundle held; aligns with P3-PERF-2
 escalation_dedup_window_minutes = 60  # recurring escalations for one greenhouse collapse into one standing entry → resilience
 ```
