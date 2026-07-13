@@ -129,6 +129,15 @@ one.
    applied bundle stays in force while this plan's `trajectory` is retained in memory (surfaced, not
    re-applied), referenced by the next record's `source_plan_id`.
 
+Beyond the cycle that produces it, a `PlanRecord`'s **retention** is a service concern, not a field the
+model or gates author. The `outcome` is **immutable** — it records what the gates decided at cycle time and
+is never rewritten by a later resolution. An **escalated** record is retained while its escalation is
+**open** and is pruned together with that escalation once it closes (`operator` / `superseded` / `expired`),
+except that the **latest** record per greenhouse is always kept so
+[`GET …/plans/latest`](./10-spec-optimizer-interfaces.md#service-api-endpoints) never goes empty. The
+escalation lifecycle, the periodic sweep, and the retention window are defined in
+[resilience — escalation lifecycle & backpressure](./09-spec-optimizer-resilience.md).
+
 ---
 
 ## 5. Versioning & governance

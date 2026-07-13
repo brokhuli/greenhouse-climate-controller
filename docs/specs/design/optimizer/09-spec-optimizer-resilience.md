@@ -73,13 +73,36 @@ and the platform's operational resilience
   is validated **on startup**; an invalid config **blocks the service from coming up** rather than
   letting it run on silent defaults — the same startup-gate discipline the platform applies to schema
   migrations ([08-spec-platform-operations.md](../platform/08-spec-platform-operations.md)). Validation covers
-  presence and ranges (thresholds in `[0, 1]`, positive intervals and horizons, a reachable Phase 2
+  presence and ranges (thresholds in `[0, 1]`, positive intervals and horizons — plus a positive
+  `max_concurrent_cycles` and positive `escalation_ttl_minutes` / `escalation_retention_minutes`, and a
+  boolean `enabled` — a reachable Phase 2
   endpoint, a known LLM provider — the default local Ollama backend needs no credentials, a cloud
   provider requires an API key — and a **pinned model id matching the
   [evaluation](./08-spec-optimizer-evaluation.md) baseline**). Because the active model id pins
   the regression baselines ([planning](./04-spec-optimizer-planning.md#1-llm-driven-planning)), a config
   that changes it without the corresponding ADR entry and baseline recapture is a reviewable event, not
   silent drift.
+- **Enable / disable — read-only mode.** An `enabled` flag
+  ([configuration](./11-spec-optimizer-configuration.md)), default on, lets an operator pause the whole
+  optimizer at runtime via
+  [`POST /api/optimizer/enabled`](./10-spec-optimizer-interfaces.md#service-api-endpoints) — the same
+  operator-gated, structured-logged, in-memory-and-resets-on-restart treatment as the runtime `model`
+  switch. When **disabled** the optimizer is **read-only**: it keeps serving every read surface —
+  `GET /health`, `GET /metrics`, and the
+  [`GET …/plans/latest` and `GET …/escalations`](./10-spec-optimizer-interfaces.md#service-api-endpoints)
+  inspection endpoints — but the cadence scheduler **starts no cycles** and the applier **submits no
+  setpoint writes**; the out-of-band
+  [`POST …/cycles`](./10-spec-optimizer-interfaces.md#service-api-endpoints) trigger is refused for the
+  same reason. This is deliberately the **same downstream posture as an optimizer that is down** — Phase 2
+  intended state stays authoritative and unchanged
+  ([P3-RESIL-1](../../artifacts/non-functional-requirements.md)) and the controller holds its last
+  delivered setpoints ([P3-REL-1](../../artifacts/non-functional-requirements.md)) — except the service is
+  **up and observable**, so an operator can still read the last plans and standing escalations while
+  planning is paused. It is the **service-wide, manual** analog of the automatic, per-greenhouse pause the
+  [input gate](./07-spec-optimizer-input-gating.md) applies when a greenhouse reports `time_scale ≠ 1.0`
+  ([scope](./13-spec-optimizer-scope.md)); the escalation sweep (below) still runs, and the health
+  watchdog (below) reports the disabled state rather than reading the growing cycle-age as a stall.
+  Re-enabling resumes normal cadence on the next tick.
 - **Escalation backpressure.** Escalations are the optimizer's only operator-facing output for held
   cycles, each tagged with a canonical [reason code](./10-spec-optimizer-interfaces.md#escalation-reason-codes)
   ([application gate](./06-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application),
@@ -94,10 +117,37 @@ and the platform's operational resilience
   damping the platform uses for recurring drift
   ([crop-profiles §3](../platform/05-spec-platform-crop-profiles.md#3-reconciliation--the-platform-is-the-source-of-truth)):
   it bounds operator load — the escalation-backlog failure mode — without dropping signal.
+- **Escalation lifecycle — open, then closed and pruned.** An escalation is **open** from when it is
+  raised until it is **closed** in one of three ways, so an escalated plan an operator never acts on does
+  **not** pile up unbounded:
+  - **`operator`** — an operator acts on it via
+    [`POST …/escalations/{id}/resolve`](./10-spec-optimizer-interfaces.md#service-api-endpoints).
+  - **`superseded`** — a later cycle for the **same greenhouse** produces a fresh outcome (an `applied`
+    or `extended` cycle, or an escalation with a *different* reason), so the earlier open escalation no
+    longer reflects the greenhouse's situation and is closed automatically. A recurring *identical* fault
+    does not supersede itself — it updates the standing entry's recurrence count and last-seen (above)
+    instead.
+  - **`expired`** — neither acted on nor re-raised within `service.escalation_ttl_minutes`
+    ([configuration](./11-spec-optimizer-configuration.md)): the age backstop for a greenhouse that goes
+    quiet, or whose cycles are paused because the optimizer is disabled (above).
+
+  This **resolution** — *how* the escalation closed — is recorded distinctly from its
+  [reason code](./10-spec-optimizer-interfaces.md#escalation-reason-codes) — *why* it was raised. A
+  **periodic sweep**, run independently of the planning scheduler so it fires even while the optimizer is
+  disabled (above), applies the TTL expiry and then **prunes** closed escalations and their held
+  `PlanRecord`s past `service.escalation_retention_minutes`, while the **latest** plan per greenhouse is
+  always kept so [`GET …/plans/latest`](./10-spec-optimizer-interfaces.md#service-api-endpoints) never
+  goes empty. This mirrors the platform's setpoint-ledger prune — latest kept, superseded dropped past a
+  window ([platform data-model](../platform/03-spec-platform-data-model.md)) — but **in-memory**: like the
+  trajectory and reference forecast above, this operator-surface store is per-service memory a restart
+  clears and cycles re-derive, so the sweep bounds its growth *between* restarts, not across them.
 - **Health & cadence watchdog.** The FastAPI surface ([interfaces](./10-spec-optimizer-interfaces.md))
   exposes a health endpoint reporting Phase 2 reachability, LLM backend reachability, the
   last-successful-cycle time, and the current escalation backlog, so a supervisor can restart an
-  unresponsive container and an operator can see a stalled loop. (The optimizer holds **no** DB
+  unresponsive container and an operator can see a stalled loop. When the optimizer is **disabled**
+  (read-only mode, above) the health endpoint reports that state explicitly and the last-successful-cycle
+  age is **expected** to grow — a paused loop is a healthy, intentional state, not a stall to alert on.
+  (The optimizer holds **no** DB
   connection — it reads Phase 2 over REST per [RFC-008](../../../decisions/request-for-comments.md#rfc-008-phase-3-telemetry-read-path) — so there is no DB reachability to report.) The same surface exposes a Prometheus **`/metrics`** endpoint
   ([tech stack §Observability](./12-spec-optimizer-tech-stack.md#observability)) — last-successful-cycle
   age, cycle duration, twin divergence, and planner-failover counts make the same stall/overrun

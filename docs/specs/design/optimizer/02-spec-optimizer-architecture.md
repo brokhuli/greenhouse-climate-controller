@@ -53,11 +53,36 @@ Phase 1 Controller
 | LLM Planner | Propose refined setpoint trajectories from the simulated trajectory and objectives, accounting for actuator coupling without issuing actuator commands |
 | Constraint Engine | Validate every candidate plan against crop-safe range and bundle consistency before it can be applied |
 | Plan Applier | Write within-bounds plans down via the Phase 2 REST API; route the rest to operator escalation |
-| Service / API | FastAPI surface for triggering cycles, inspecting plans, and exposing escalations; service config & health |
+| Service / API | FastAPI surface for operator-triggered on-demand cycles, model selection, plan inspection, and escalation review; service config & health. Schedules the fixed-cadence cycles — **concurrently across greenhouses**, bounded by `max_concurrent_cycles`, single-flight per greenhouse — and gates the whole loop on the `enabled` flag (read-only mode when off) |
 
 The optimizer is a **client** of Phase 2, not a peer of Phase 1: it reads history through Phase 2's
 optimizer read API and writes through Phase 2's setpoint API exactly as an operator edit would,
 layered on the crop-profile baseline ([P2 crop profiles](../platform/05-spec-platform-crop-profiles.md)).
+
+### Scheduling: concurrent, per greenhouse, single-flight
+
+A planning cycle is **scoped** to one greenhouse — "a planning cycle per greenhouse" describes what one
+cycle covers, **not** serial processing of the fleet. The Service dispatches the fixed-cadence cycles for
+the N greenhouses **concurrently**, so a slow cycle on one greenhouse does not delay the others and
+aggregate fleet cycle time does not grow linearly with N ([P3-SCAL-1](../../artifacts/non-functional-requirements.md),
+[P3-PERF-1](../../artifacts/non-functional-requirements.md)). Concurrency is bounded by
+`max_concurrent_cycles` ([configuration](./11-spec-optimizer-configuration.md)) — a worker-pool ceiling that
+keeps the shared LLM backend and the Phase 2 API from being stampeded — and the **single-flight-per-greenhouse**
+guard still holds: parallelism is **across** greenhouses, while within any one greenhouse at most one cycle
+is ever in flight ([constraints §3](./06-spec-optimizer-constraints-and-application.md#3-write-path-concurrency--reconciliation)).
+The whole scheduler is gated on the service [`enabled`](./11-spec-optimizer-configuration.md) flag: while the
+optimizer is **disabled** (read-only mode) it dispatches no cycles and the Plan Applier is inert — no
+setpoint write leaves the service — though every read surface stays live
+([resilience](./09-spec-optimizer-resilience.md)).
+
+Operators may also request an **on-demand** cycle for one greenhouse through the Service API
+([interfaces](./10-spec-optimizer-interfaces.md#service-api-endpoints)). This uses the same single-flight
+guard as scheduled work: if that greenhouse already has a cycle in flight the request is refused rather
+than queued behind it. An on-demand request runs outside the fixed cadence and asks for a fresh plan, so it
+bypasses only the state-change suppression that would otherwise extend a prior plan; it does **not** bypass
+the `enabled` gate, input-quality gate, twin robustness checks, crop-safe bounds, confidence gate, or Phase 2
+write validation. In other words, it is an operator way to say "plan now," not a way to force unsafe output
+through the system.
 
 ### Cycle order: simulate then plan
 

@@ -16,7 +16,7 @@ schemas.
 |---|---|---|
 | **Phase 2 REST API (read)** | Platform → optimizer | Read-only planning context for one greenhouse: historical telemetry, actuator states, current setpoints, and data-quality/freshness signals. Per the revised [RFC-008](../../../decisions/request-for-comments.md#rfc-008-phase-3-telemetry-read-path), this is a REST contract; the platform may back it with internal SQL views or continuous aggregates, but the optimizer never connects to TimescaleDB directly. |
 | **Phase 2 REST API (write)** | Optimizer → platform | Write refined setpoint bundles (layered on the crop baseline); platform reconciles to the controller |
-| **Service API (FastAPI)** | Operator/tools → optimizer | Trigger planning cycles, inspect proposed plans, review and act on escalations |
+| **Service API (FastAPI)** | Operator/tools → optimizer | Trigger on-demand planning cycles, select the active allowlisted model, inspect proposed plans, review and act on escalations |
 | **`/metrics` (Prometheus)** | Prometheus → optimizer | Operational *optimizer-health* scrape served on the FastAPI service — an unauthenticated read, **outside** the versioned contracts, the metrics sibling of `/health`. Joins the platform's shared Prometheus/Grafana ([platform operations §1](../platform/08-spec-platform-operations.md#1-observability), [tech stack §Observability](./12-spec-optimizer-tech-stack.md#observability)) |
 
 The optimizer **consumes** the contracts owned by [`contracts/`](../../../../contracts/) and the Phase 2
@@ -35,14 +35,16 @@ versioned wire contract.
 
 | Method + path | Purpose |
 |---|---|
-| `GET /health` | Liveness/readiness — Phase 2 reachability, LLM backend reachability, last-successful-cycle time, escalation backlog ([resilience — watchdog](./09-spec-optimizer-resilience.md)) |
+| `GET /health` | Liveness/readiness — Phase 2 reachability, LLM backend reachability, last-successful-cycle time, escalation backlog, and whether planning is **enabled** or the service is in read-only mode ([resilience — watchdog](./09-spec-optimizer-resilience.md)) |
 | `GET /metrics` | Prometheus optimizer-health scrape (the `/metrics` row above) |
-| `POST /api/optimizer/greenhouses/{id}/cycles` | Trigger a planning cycle for one greenhouse, out of band from the fixed cadence |
+| `POST /api/optimizer/greenhouses/{id}/cycles` | Operator-gated: trigger an **on-demand** planning cycle for one greenhouse, out of band from the fixed cadence (body `{ reason? }`). The request asks for a fresh plan, so it bypasses state-change suppression but not input/safety/application gates; `409` while the optimizer is **disabled** (read-only — [resilience](./09-spec-optimizer-resilience.md)) or that greenhouse already has a cycle in flight |
 | `GET /api/optimizer/greenhouses/{id}/plans/latest` | Inspect the latest proposed / applied plan for one greenhouse |
-| `GET /api/optimizer/escalations` | List open escalations (held cycles awaiting operator review) |
-| `POST /api/optimizer/escalations/{id}/resolve` | Act on / clear an escalation |
+| `GET /api/optimizer/escalations` | List **open** escalations (held cycles awaiting operator review); see the escalation-lifecycle note below |
+| `POST /api/optimizer/escalations/{id}/resolve` | Operator-gated: resolve an open escalation (the `operator` resolution). Open escalations also close **automatically** as `superseded` or `expired` ([resilience](./09-spec-optimizer-resilience.md)) |
 | `GET /api/optimizer/model` | Inspect the active backend (`provider`, `model`, `prompt_version`, `role`) and the active provider's runtime `available_models` allowlist ([configuration](./11-spec-optimizer-configuration.md)) |
 | `POST /api/optimizer/model` | Operator-gated: switch the active **`model`** within the active provider's allowlist (body `{ model, reason? }`). Takes effect on the **next** cycle; `400` if the model is not in `available_models[provider]`, `401` / `403` in `oidc` mode without the operator role. The **`provider`** is *not* changeable here — a provider change is an offline config change ([auth](#authenticating-the-model-change-endpoint)) |
+| `GET /api/optimizer/enabled` | Inspect whether planning is **enabled** or the service is in read-only mode |
+| `POST /api/optimizer/enabled` | Operator-gated: enable or disable the optimizer at runtime (body `{ enabled, reason? }`). Disabling drops the service into **read-only mode** — no scheduled cycles, no setpoint writes, reads still served ([resilience](./09-spec-optimizer-resilience.md)); takes effect immediately and is **in-memory**, resetting to the configured default on restart. `401` / `403` in `oidc` mode without the operator role ([auth](#authenticating-the-enable-disable-endpoint)) |
 
 Every plan and escalation these endpoints expose is traced by `optimizer_run_id`
 ([P3-OBS-1](../../artifacts/non-functional-requirements.md)) and stamped with the `backend` that
@@ -51,6 +53,19 @@ produced it — provider, `model`, and the pinned
 ([plan contract §3](./05-spec-optimizer-plan-contract.md#3-planrecord--the-optimizer-service-envelope)) —
 so a returned plan is traceable to its exact `(model, prompt_version)` provenance; each escalation
 carries a [reason code](#escalation-reason-codes).
+
+### Escalation lifecycle
+
+`GET /api/optimizer/escalations` returns the **open** set — held cycles still awaiting review. An open
+escalation is **closed** either by an operator (`POST …/escalations/{id}/resolve`, the `operator`
+resolution) or **automatically**: `superseded` when a newer cycle for the same greenhouse produces a fresh
+outcome, or `expired` when it is neither acted on nor re-raised within the configured TTL. This
+**resolution** — *how* it closed — is a field distinct from the raise-time [reason code](#escalation-reason-codes)
+below — *why* it was raised. The standing-escalation deduplication, the periodic sweep that applies TTL
+expiry, and the retention window that then prunes closed escalations (keeping the latest plan per
+greenhouse) all live in
+[resilience — escalation lifecycle & backpressure](./09-spec-optimizer-resilience.md), so an escalated plan
+an operator never acts on does not accumulate unbounded.
 
 ### Escalation reason codes
 
@@ -102,6 +117,17 @@ client secret and the `SERVICE_AUTH_MODE` the optimizer targets are
 **identical** with or without the token. This is the optimizer half of the deferred service-auth seam —
 dormant in the single-host local deployment, enabled by configuration alone.
 
+### Authenticating the manual-cycle endpoint
+
+`POST /api/optimizer/greenhouses/{id}/cycles` (run an on-demand optimizer cycle for one greenhouse) is an
+**operator write**, gated like escalation resolution and model selection — **not** the service-auth seam
+above. In `oidc` mode the caller must present a Keycloak token carrying the **operator role**; by default
+(`trusted_network`) the call is untokened like the rest of the single-host local surface. The request is
+structured-logged with the operator identity, greenhouse id, supplied `reason`, and resulting
+`optimizer_run_id`. Manual cycles use the same single-flight and safety gates as scheduled cycles: a request
+is refused if the optimizer is disabled or that greenhouse is already planning, and a plan can still be held
+or escalated rather than applied.
+
 ### Authenticating the model-change endpoint
 
 `POST /api/optimizer/model` (switch the active planning `model` at runtime) is an **operator write**, gated
@@ -120,3 +146,17 @@ provider change stays an offline config/Compose change, a reviewed
 [ADR event](../../../decisions/architecture-design-record.md). The active model is an **in-memory override
 that resets to the configured [`model`](./11-spec-optimizer-configuration.md) on restart**; the config value
 remains the default and source of truth.
+
+### Authenticating the enable-disable endpoint
+
+`POST /api/optimizer/enabled` (pause or resume the optimizer at runtime) is an **operator write**, gated
+exactly like `POST /api/optimizer/model` above — **not** the service-auth seam. Enabling or disabling
+planning is an **operator decision**, so in `oidc` mode the caller must present a Keycloak token carrying the
+**operator role**, not the narrow `setpoints:write` service role the Phase 2 write path uses; by default
+(`trusted_network`) the call is untokened, like the rest of the single-host local surface. Either way the
+change is **structured-logged with the operator's identity and the supplied `reason`**, so who paused or
+resumed the optimizer, and when, is recoverable. The flag is an **in-memory override that resets to the
+configured [`enabled`](./11-spec-optimizer-configuration.md) default on restart** — a disable is an
+operational pause, not a persisted state change. Disabling takes effect **immediately**: the scheduler stops
+dispatching new cycles and the applier goes inert, so no setpoint write leaves the service while it is
+disabled, and an out-of-band [`POST …/cycles`](#service-api-endpoints) is refused with `409`.

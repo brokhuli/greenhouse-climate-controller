@@ -44,10 +44,13 @@ coupled actuators, and trimming energy cost, all **within the crop-safe bounds P
 defines**. It optimizes setpoint *management*; it does not introduce the crop→targets mapping (that
 is Phase 2's) and it does not command actuators directly (that is Phase 1's).
 
-The optimizer is the intelligence layer above **each** greenhouse's controller. It operates on **one
-greenhouse at a time** — N independent planning problems, mirroring the N independent control loops
-of Phase 1. Site-wide orchestration across greenhouses, weather-reactive control, and combustion-heater
-coordination are out of scope (see [scope](./13-spec-optimizer-scope.md)).
+The optimizer is the intelligence layer above **each** greenhouse's controller. Each planning cycle is
+**scoped to a single greenhouse** — N independent planning problems, mirroring the N independent control
+loops of Phase 1 — and the service plans those greenhouses **concurrently** (bounded, single-flight per
+greenhouse; see [architecture — scheduling](./02-spec-optimizer-architecture.md#scheduling-concurrent-per-greenhouse-single-flight)).
+Site-wide *orchestration* across greenhouses — coordinating their behavior or sharing constrained resources —
+is a different concern and remains out of scope, as are weather-reactive control and combustion-heater
+coordination (see [scope](./13-spec-optimizer-scope.md)).
 
 ---
 

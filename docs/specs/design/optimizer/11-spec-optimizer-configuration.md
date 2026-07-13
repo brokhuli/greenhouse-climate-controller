@@ -22,18 +22,23 @@ convention rather than a per-greenhouse TOML (contrast the controller's config).
 (which house to plan, its crop-safe bounds) are read from Phase 2 at cycle time, not configured here.
 
 **Runtime-mutable vs. offline-only.** Almost all of this is a **deploy-time** choice — set in the Compose
-file / env and changed only by restarting the service. The one exception is the active **`model`**: an
-operator may switch it **at runtime**, within the active provider's allowlist (the `[llm.available_models]`
-table below), via `POST /api/optimizer/model`
-([interfaces](./10-spec-optimizer-interfaces.md#service-api-endpoints)) — no restart — to A/B a variant or
-step off a regressing model between cycles. Everything else stays offline: the **`provider`** (still one of
+file / env and changed only by restarting the service. **Two** settings are the exception, both mutable
+**at runtime** with no restart: the active **`model`** — an operator may switch it within the active
+provider's allowlist (the `[llm.available_models]` table below) via `POST /api/optimizer/model`
+([interfaces](./10-spec-optimizer-interfaces.md#service-api-endpoints)) to A/B a variant or step off a
+regressing model between cycles — and the service **`enabled`** flag — an operator may pause or resume the
+optimizer via `POST /api/optimizer/enabled`
+([interfaces](./10-spec-optimizer-interfaces.md#service-api-endpoints)), dropping it into read-only mode
+(no scheduled cycles, no writes) or lifting it back out, without tearing the container down. Everything else
+stays offline: the **`provider`** (still one of
 `ollama` / `anthropic` / `openai`; a provider change is a config/Compose change + restart, a reviewed
 [ADR event](../../../decisions/architecture-design-record.md)), the `endpoint`, `api_key`, `prompt_version`,
 the sampling pins (`temperature` / `top_p`) and the `output_token_budget` (the backend's `max_tokens`), and the `fallback_*` backend. A runtime `model`
 switch takes effect on the **next planning cycle** and is stamped into that cycle's `PlanRecord.backend.model`
-([plan contract §3](./05-spec-optimizer-plan-contract.md#3-planrecord--the-optimizer-service-envelope)); it
-is an **in-memory override that resets to the configured `model` on restart** (the config value stays the
-default and source of truth).
+([plan contract §3](./05-spec-optimizer-plan-contract.md#3-planrecord--the-optimizer-service-envelope)). Both
+runtime overrides are **in-memory and reset to their configured values on restart** (the config values stay
+the defaults and source of truth); a runtime `enabled` toggle takes effect immediately — the scheduler stops
+dispatching new cycles and the applier goes inert — rather than on the next cadence tick.
 
 ```toml
 [data]
@@ -116,6 +121,10 @@ divergence_threshold = 0.15           # one-step predicted-vs-observed residual 
 fidelity_breach_cycles = 3            # consecutive divergence_threshold breaches before a fidelity fault caps confidence and escalates → twin robustness
 
 [service]
+enabled = true                        # false → read-only mode: starts no scheduled cycles and submits no setpoint writes; health / metrics / latest plans / escalations are still served → resilience. OPERATOR-MUTABLE at runtime via POST /api/optimizer/enabled (interfaces); in-memory, resets to this default on restart
+max_concurrent_cycles = 4             # ceiling on per-greenhouse planning cycles run in parallel each cadence tick; single-flight stays per greenhouse (at most one cycle per greenhouse) → architecture, constraints §3. Conservative default with headroom for the 20–50 greenhouse range
 cycle_timeout_seconds = 90            # a cycle exceeding this is abandoned and the last applied bundle held; aligns with P3-PERF-2
 escalation_dedup_window_minutes = 60  # recurring escalations for one greenhouse collapse into one standing entry → resilience
+escalation_ttl_minutes = 1440         # an OPEN escalation neither acted on by an operator nor re-raised within this window auto-closes as `expired` → resilience; exceeds the dedup window so a genuinely recurring fault stays standing
+escalation_retention_minutes = 1440   # CLOSED escalations (operator / superseded / expired) and their held PlanRecords are pruned past this; the latest plan per greenhouse is always kept → resilience
 ```

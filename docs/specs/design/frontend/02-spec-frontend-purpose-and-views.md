@@ -95,7 +95,7 @@ actions**, **role**.
   a **speed indicator** shows the current time-scale.
 - **Primary actions:** open the setpoint editor (view 3, its own route); change the
   historical time range; *(2a, simulation-only)* adjust the controller's
-  **simulation speed** (0.5×/1×/2×/4×) as a **live** control; jump to this
+  **simulation speed** (0.5×/1×/2×/4×/8×) as a **live** control; jump to this
   greenhouse's filtered activity feed; (2b) view/assign the crop profile.
 - **Role:** Viewer (read) / Operator (edits, speed).
 

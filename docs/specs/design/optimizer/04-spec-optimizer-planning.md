@@ -71,6 +71,12 @@ local:
 
 All five levers are configurable ([configuration](./11-spec-optimizer-configuration.md)).
 
+An operator-triggered **on-demand** cycle enters the same planner pipeline outside the fixed cadence
+([architecture — scheduling](./02-spec-optimizer-architecture.md#scheduling-concurrent-per-greenhouse-single-flight)).
+Because the operator is deliberately asking for a fresh decision, the cycle bypasses only the
+state-change suppression above; all input, safety, confidence, and write-path gates still run unchanged.
+The resulting plan is recorded like any scheduled plan, including the active backend and `optimizer_run_id`.
+
 > **These levers assume real-time (1×) operation.** The fixed cycle cadence and the
 > adaptive horizon are **wall-clock-paced**, and the state-change gate compares climate forecasts over
 > wall-clock-anchored windows — all of which presume the controller's clock tracks wall-clock. When a

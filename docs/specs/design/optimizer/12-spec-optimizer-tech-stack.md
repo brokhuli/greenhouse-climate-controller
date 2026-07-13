@@ -8,7 +8,7 @@
 > [NFR doc](../../artifacts/non-functional-requirements.md)
 > (`P3-PERF-2` planning cycle < 90 s; `P3-MOD-1` backend-agnostic invocation; `P3-TEST-1` every plan
 > through the constraint engine; `P3-REL-1`/`P3-RESIL-1`/`P3-AVAIL-1` optimizer failure never
-> disrupts control; `P3-SCAL-1` one greenhouse at a time; `P3-OBS-1` `optimizer_run_id` tracing;
+> disrupts control; `P3-SCAL-1` independent per-greenhouse planners; `P3-OBS-1` `optimizer_run_id` tracing;
 > `P3-SEC-1` API key via secret, never logged; `P3-PORT-1` Python under Compose, no cloud) and by
 > the [scope boundary](./13-spec-optimizer-scope.md). Host tooling (Python install, Ollama, editor
 > LSP) is in
@@ -62,9 +62,10 @@
   schemas in [`contracts/`](../../../../contracts/), and its async model fits the LLM- and
   HTTP-bound I/O.
 - **How:** Serves the operator surface from
-  [interfaces](./10-spec-optimizer-interfaces.md) — trigger planning cycles, inspect proposed plans,
-  and review/act on escalations (`P3-USE-1`). Pydantic models mirror the contract schemas so a
-  malformed request or plan fails at the boundary, not mid-cycle.
+  [interfaces](./10-spec-optimizer-interfaces.md) — trigger on-demand planning cycles, select the
+  active allowlisted model, inspect proposed plans, and review/act on escalations (`P3-USE-1`).
+  Pydantic models mirror the contract schemas so a malformed request or plan fails at the boundary,
+  not mid-cycle.
 
 ---
 

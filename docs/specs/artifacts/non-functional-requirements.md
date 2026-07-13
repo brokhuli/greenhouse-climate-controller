@@ -301,8 +301,9 @@ HAL time constants ([HAL §2](../design/controller/03-spec-controller-hal-simula
 
 **Scalability**
 
-- **P3-SCAL-1** — The optimizer plans **one greenhouse at a time** — N independent planners, no shared
-  state. *(Spec §1.)*
+- **P3-SCAL-1** — The optimizer plans **each greenhouse independently** — N independent planners, no shared
+  state — and runs their cycles **concurrently**, bounded by `max_concurrent_cycles`, with single-flight
+  per greenhouse. *(Spec §1, §2.)*
 
 **Security**
 

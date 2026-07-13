@@ -311,7 +311,9 @@ Reused across views; typed props; zero domain knowledge.
   `TimeScaleIndicator` — `scale`.
 - **Data:** reads `greenhouseSummary.timeScale` (kept live by the `status` frame); the control's
   `onChange` fires `PATCH .../sim/time-scale` (or the fleet path).
-- **Interaction:** a segmented 0.5×/1×/2×/4×/8×/16×/32× control (or a slider over 0.25–32×) that writes
+- **Interaction:** a segmented 0.5×/1×/2×/4×/8× operator control. The platform/controller API still
+  accepts the full 0.25–32× range for direct/headless use, including 16×/32×, but those speeds are
+  intentionally not offered in the frontend because live rendering can become choppy. It writes
   **immediately** — no confirmation dialog — with optimistic-pending + rollback
   ([interactions §7](./08-spec-frontend-interactions.md#7-writes--setpoint-edits--profile-apply)).
 - **States:** hidden/disabled when the greenhouse reports no `timeScale` (real hardware); pending
