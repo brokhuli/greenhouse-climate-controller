@@ -70,7 +70,9 @@ actions**, **role**.
   accumulated light, rather than the instantaneous PAR, which the detail view still charts).
   Site-wide rollup of how many greenhouses are
   healthy vs need attention. On simulated controllers, each card also shows its
-  current **simulation speed** (time-scale) when it is not 1×.
+  current **simulation speed** (time-scale) when it is not 1×. In **Phase 3**, a compact
+  **optimizer backlog** indicator flags greenhouses with an open escalation (held cycle
+  awaiting review), linking into the [optimizer console](#6-optimizer-operator-console-3).
 - **Primary actions:** open a greenhouse; (2a) register / retire a greenhouse
   (`RegisterGreenhouseDialog` / `RetireGreenhouseAction`, [components §3](./06-spec-frontend-components.md#3-primitives-components));
   *(2a, simulation-only)* set the simulation speed for the **whole fleet** at once
@@ -92,7 +94,11 @@ actions**, **role**.
   **watering now**, whether it is **faulted**, and when it **last watered**. Active
   faults and interlock activations are raised prominently. Charts
   plot on **simulated time** (the controller's clock), and on a simulated controller
-  a **speed indicator** shows the current time-scale.
+  a **speed indicator** shows the current time-scale. In **Phase 3**, an **optimizer plan
+  panel** surfaces this greenhouse's latest optimizer cycle — the proposed-vs-current
+  setpoint diff, the cycle outcome and [reason code](../optimizer/10-spec-optimizer-interfaces.md#escalation-reason-codes),
+  the plan's confidence and explanation, and the backend that produced it — with the
+  operator actions from the [optimizer console](#6-optimizer-operator-console-3).
 - **Primary actions:** open the setpoint editor (view 3, its own route); change the
   historical time range; *(2a, simulation-only)* adjust the controller's
   **simulation speed** (0.5×/1×/2×/4×/8×) as a **live** control; jump to this
@@ -143,6 +149,27 @@ actions**, **role**.
   drill from one greenhouse into its full history.
 - **Role:** Viewer (read).
 
+### 6. Optimizer operator console *(3)*
+
+- **Purpose:** review and operate the Phase 3 optimizer — the LLM planner that refines
+  setpoints on a fixed cadence — without leaving the dashboard or opening a second tool.
+- **Shows:** a **fleet plan/escalation queue** — per greenhouse, its latest optimizer
+  cycle outcome (`applied` / `escalated` / `extended`) and, for held cycles, the
+  [reason code](../optimizer/10-spec-optimizer-interfaces.md#escalation-reason-codes) and
+  age — plus site rollups (open-escalation **backlog**, counts by outcome, oldest open
+  age). Drilling into one greenhouse's plan opens the **optimizer plan panel** on that
+  greenhouse's [detail view](#2-per-greenhouse-detail-2a) (hybrid split — the queue is a
+  console of its own, the plan detail lives with the greenhouse): the proposed-vs-current
+  **setpoint diff** against crop-safe bounds, the plan's confidence and explanation, and
+  the backend that produced it (provider / model / prompt version). The active **model**
+  and the **enabled / read-only** state are shown too.
+- **Primary actions:** *(operator)* resolve an open escalation; trigger an **on-demand**
+  planning cycle for one greenhouse; switch the active **model** within the allowlist;
+  **pause / resume** planning (read-only mode). All relay through the Go API's
+  [optimizer operator API](../platform/09-spec-platform-interfaces.md#3-api-surface-inventory);
+  the optimizer re-validates and still applies only through the platform write path.
+- **Role:** Viewer (read — queue, plans, diff, state) / Operator (the actions above).
+
 ---
 
 ## What it is **not**
@@ -168,4 +195,5 @@ These belong elsewhere and are out of scope for the dashboard — see
 - The components that render these views: [`06-spec-frontend-components.md`](./06-spec-frontend-components.md)
 - The data behind each view: [`05-spec-frontend-data-model.md`](./05-spec-frontend-data-model.md)
 - Routing between views: [`03-spec-frontend-architecture.md`](./03-spec-frontend-architecture.md#3-route-tree)
+- Optimizer operator surface the console fronts (view 6): [optimizer interfaces](../optimizer/10-spec-optimizer-interfaces.md#service-api-endpoints)
 - Usability targets `P2-USE-1` / `P2-TEST-2`: [NFR doc](../../artifacts/non-functional-requirements.md)

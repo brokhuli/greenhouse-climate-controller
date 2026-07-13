@@ -39,6 +39,7 @@ versioned wire contract.
 | `GET /metrics` | Prometheus optimizer-health scrape (the `/metrics` row above) |
 | `POST /api/optimizer/greenhouses/{id}/cycles` | Operator-gated: trigger an **on-demand** planning cycle for one greenhouse, out of band from the fixed cadence (body `{ reason? }`). The request asks for a fresh plan, so it bypasses state-change suppression but not input/safety/application gates; `409` while the optimizer is **disabled** (read-only — [resilience](./09-spec-optimizer-resilience.md)) or that greenhouse already has a cycle in flight |
 | `GET /api/optimizer/greenhouses/{id}/plans/latest` | Inspect the latest proposed / applied plan for one greenhouse |
+| `GET /api/optimizer/fleet` | Fleet-wide optimizer rollup for the operator overview: for **each** greenhouse its latest cycle outcome (`status`, `reason_code?`, `created_at`), plus site aggregates — the open-escalation **backlog** count, counts **by outcome** (`applied` / `escalated` / `extended`), and the **oldest open escalation age**. Computed server-side from the plan store (the optimizer already owns it), so the operator surface reads **one** endpoint rather than fanning out `plans/latest` per greenhouse. The scalar backlog it reports is the same one `GET /health` surfaces |
 | `GET /api/optimizer/escalations` | List **open** escalations (held cycles awaiting operator review); see the escalation-lifecycle note below |
 | `POST /api/optimizer/escalations/{id}/resolve` | Operator-gated: resolve an open escalation (the `operator` resolution). Open escalations also close **automatically** as `superseded` or `expired` ([resilience](./09-spec-optimizer-resilience.md)) |
 | `GET /api/optimizer/model` | Inspect the active backend (`provider`, `model`, `prompt_version`, `role`) and the active provider's runtime `available_models` allowlist ([configuration](./11-spec-optimizer-configuration.md)) |
@@ -53,6 +54,20 @@ produced it — provider, `model`, and the pinned
 ([plan contract §3](./05-spec-optimizer-plan-contract.md#3-planrecord--the-optimizer-service-envelope)) —
 so a returned plan is traceable to its exact `(model, prompt_version)` provenance; each escalation
 carries a [reason code](#escalation-reason-codes).
+
+### The operator dashboard reaches this surface through the platform Go API
+
+The browser SPA does **not** call this FastAPI surface directly. Per the frontend integration
+boundary ([frontend constraints — the browser talks only to the Go API](../frontend/09-spec-frontend-constraints.md#the-browser-talks-only-to-the-go-api)),
+the platform **Go API proxies and aggregates** these operator endpoints — plan/escalation/model/enable
+reads, the `fleet` rollup, and the operator-gated mutations — and re-exposes them to the SPA under the
+**versioned** [`contracts/frontend-rest/`](../../../../contracts/frontend-rest/) surface
+([platform interfaces §3](../platform/09-spec-platform-interfaces.md#3-api-surface-inventory)). The Go
+API additionally **composes** the setpoint-diff the dashboard renders — the plan's proposed
+`immediate_setpoints` against the greenhouse's **current** setpoints and its **crop-safe bounds**, both
+platform-owned — since neither the current bundle nor the bounds lives here. So this Service API stays the
+optimizer's **own internal surface** (schemas deferred, as above); the frontend-facing wire shapes are the
+Go API's, and the SPA never opens a second origin to the optimizer.
 
 ### Escalation lifecycle
 

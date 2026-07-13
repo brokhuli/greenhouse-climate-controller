@@ -38,5 +38,21 @@
         "schema": { "$ref": "./schemas/common.json#/Error" }
       }
     }
+  },
+  "BadRequest": {
+    "description": "The request is malformed or references an inadmissible value — e.g. (3) a model not in the active provider's available_models allowlist (optimizer interfaces).",
+    "content": {
+      "application/json": {
+        "schema": { "$ref": "./schemas/common.json#/Error" }
+      }
+    }
+  },
+  "Conflict": {
+    "description": "(3) The requested action conflicts with current optimizer state — the optimizer is disabled (read-only), or the greenhouse already has a cycle in flight (optimizer interfaces).",
+    "content": {
+      "application/json": {
+        "schema": { "$ref": "./schemas/common.json#/Error" }
+      }
+    }
   }
 }

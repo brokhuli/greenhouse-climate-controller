@@ -1,0 +1,47 @@
+{
+  "get": {
+    "operationId": "getOptimizerModel",
+    "summary": "Active model + allowlist",
+    "description": "The active planning backend and the active provider's runtime allowlist (frontend data model §Optimizer plans, key [\"optimizer-model\"]) — backs the ModelSelector. Polled. Open to anyone — reads need no token (anonymous-viewer posture, platform security §4).",
+    "x-slice": "3",
+    "security": [],
+    "responses": {
+      "200": {
+        "description": "The active model state.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "../components/schemas/optimizer.json#/ModelState" }
+          }
+        }
+      }
+    }
+  },
+  "post": {
+    "operationId": "setOptimizerModel",
+    "summary": "Switch the active model",
+    "description": "Switch the active planning model within the active provider's allowlist (operator only, slice 3). Takes effect on the next cycle; the provider cannot be changed here (an offline change). A model not in available_models is rejected 400.",
+    "x-slice": "3",
+    "security": [{ "bearerAuth": [] }],
+    "requestBody": {
+      "required": true,
+      "content": {
+        "application/json": {
+          "schema": { "$ref": "../components/schemas/optimizer.json#/ModelSelection" }
+        }
+      }
+    },
+    "responses": {
+      "200": {
+        "description": "The model state after the switch (effective next cycle).",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "../components/schemas/optimizer.json#/ModelState" }
+          }
+        }
+      },
+      "400": { "$ref": "../components/responses.json#/BadRequest" },
+      "401": { "$ref": "../components/responses.json#/Unauthorized" },
+      "403": { "$ref": "../components/responses.json#/Forbidden" }
+    }
+  }
+}

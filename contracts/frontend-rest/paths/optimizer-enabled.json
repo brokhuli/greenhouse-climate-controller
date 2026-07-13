@@ -1,0 +1,46 @@
+{
+  "get": {
+    "operationId": "getOptimizerEnabled",
+    "summary": "Enabled / read-only state",
+    "description": "Whether planning is enabled or the optimizer is in read-only mode (frontend data model §Optimizer plans, key [\"optimizer-enabled\"]). Polled. Open to anyone — reads need no token (anonymous-viewer posture, platform security §4).",
+    "x-slice": "3",
+    "security": [],
+    "responses": {
+      "200": {
+        "description": "The enable state.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "../components/schemas/optimizer.json#/EnableState" }
+          }
+        }
+      }
+    }
+  },
+  "post": {
+    "operationId": "setOptimizerEnabled",
+    "summary": "Pause / resume planning",
+    "description": "Enable or disable the optimizer at runtime (operator only, slice 3). Disabling drops it into read-only mode immediately — no scheduled cycles, no setpoint writes, reads still served. In-memory override; resets to the configured default on restart.",
+    "x-slice": "3",
+    "security": [{ "bearerAuth": [] }],
+    "requestBody": {
+      "required": true,
+      "content": {
+        "application/json": {
+          "schema": { "$ref": "../components/schemas/optimizer.json#/EnableRequest" }
+        }
+      }
+    },
+    "responses": {
+      "200": {
+        "description": "The enable state after the change.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "../components/schemas/optimizer.json#/EnableState" }
+          }
+        }
+      },
+      "401": { "$ref": "../components/responses.json#/Unauthorized" },
+      "403": { "$ref": "../components/responses.json#/Forbidden" }
+    }
+  }
+}

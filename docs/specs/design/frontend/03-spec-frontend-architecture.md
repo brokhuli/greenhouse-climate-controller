@@ -74,7 +74,8 @@ frontend/
 │   │   ├── fleet/              ← FleetOverview + its pieces
 │   │   ├── greenhouse/         ← GreenhouseDetail, charts, setpoint edit
 │   │   ├── profiles/           ← ProfileLibrary, ProfileEditor (2b)
-│   │   └── activity/           ← ActivityFeed, health surfacing
+│   │   ├── activity/           ← ActivityFeed, health surfacing
+│   │   └── optimizer/          ← OptimizerConsole (fleet queue) + OptimizerPlanPanel (3)
 │   ├── components/             ← reusable primitives (Card, StatusBadge, …)
 │   ├── hooks/                  ← cross-feature hooks (useLiveSeries, useRole)
 │   ├── lib/                    ← pure helpers (formatting, derivations, time)
@@ -122,6 +123,8 @@ path so deep links resolve (SPA fallback,
 | `/profiles/:profileId` | Profile editor | 2b | Stage-aware target bundle |
 | `/activity` | Activity / health feed | 2a | Drift entries appear in 2b |
 | `/activity?greenhouse_id=…&kind=…` | (same) | 2a | Greenhouse/kind filter as query params (deep-linkable; the detail view links here) |
+| `/optimizer` | Optimizer operator console | 3 | Fleet plan/escalation queue; plan **detail** is a panel on `/greenhouses/:id`, not a separate route (hybrid split) |
+| `/optimizer?greenhouse_id=…&status=…` | (same) | 3 | Greenhouse/outcome filter as query params (deep-linkable) |
 | `/login/callback` | OIDC redirect handler | 2b | Client-owned (not under `/auth`); consumes Keycloak code, then redirects |
 | `*` | 404 | 2a | On-brand not-found |
 
@@ -234,6 +237,21 @@ keeps the views live-ish over REST instead of going dark. `ConnectionStatus` sho
   telemetry range query advances the chart's *historical* portion while live ring-buffer
   appends are paused; the chart renders from the refreshed range. When the socket returns,
   normal WS appends resume after a backfill range query — **no silent holes**.
+
+### Optimizer console — REST polling (no WebSocket)
+
+The Phase 3 optimizer surface (`/optimizer` + the detail plan panel) is **REST-polled**, not
+streamed. Optimizer cycles run on a fixed multi-hour cadence, so plan outcomes and the escalation
+queue change on the order of minutes — nothing like the sub-second telemetry the WebSocket carries,
+and not worth a new frame type or fan-out. The optimizer queries (`["optimizer-fleet"]`,
+`["optimizer-escalations"]`, `["optimizer-plan", id]`, `["optimizer-model"]`, `["optimizer-enabled"]`)
+use a modest TanStack Query `refetchInterval`
+([data-model §6](./05-spec-frontend-data-model.md#6-query-keys--cache-strategy)) — the **same**
+mechanism as the WS polling-fallback above, but here it is the **primary** update path, not a degraded
+one. No optimizer frame joins the WebSocket union. The one optimizer signal that *does* ride the live
+stream is the `optimizer_plan_applied` **activity event** — an applied plan is a setpoint write stamped
+`source: optimizer`, so it flows through the existing `event` frame into the activity feed; held-cycle
+**escalations** stay in the polled console queue, not the stream.
 
 ---
 

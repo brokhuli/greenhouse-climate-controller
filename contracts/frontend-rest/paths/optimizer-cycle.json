@@ -1,0 +1,32 @@
+{
+  "parameters": [{ "$ref": "../components/parameters.json#/GreenhouseId" }],
+  "post": {
+    "operationId": "triggerOptimizerCycle",
+    "summary": "Trigger an on-demand cycle",
+    "description": "Run an on-demand planning cycle for one greenhouse, out of band from the fixed cadence (operator only, slice 3). Uses the same single-flight and safety gates as a scheduled cycle: refused 409 if the optimizer is disabled or that greenhouse already has a cycle in flight. The resulting plan is fetched from GET /api/optimizer/greenhouses/{id}/plan once the cycle completes.",
+    "x-slice": "3",
+    "security": [{ "bearerAuth": [] }],
+    "requestBody": {
+      "required": false,
+      "content": {
+        "application/json": {
+          "schema": { "$ref": "../components/schemas/optimizer.json#/CycleRequest" }
+        }
+      }
+    },
+    "responses": {
+      "202": {
+        "description": "The cycle was accepted for dispatch.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "../components/schemas/optimizer.json#/CycleAccepted" }
+          }
+        }
+      },
+      "401": { "$ref": "../components/responses.json#/Unauthorized" },
+      "403": { "$ref": "../components/responses.json#/Forbidden" },
+      "404": { "$ref": "../components/responses.json#/NotFound" },
+      "409": { "$ref": "../components/responses.json#/Conflict" }
+    }
+  }
+}

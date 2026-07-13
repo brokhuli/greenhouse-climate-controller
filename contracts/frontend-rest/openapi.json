@@ -3,7 +3,7 @@
   "info": {
     "title": "Greenhouse Platform — Operator/Fleet REST API",
     "version": "1.0.0",
-    "description": "The platform Go API's operator-facing REST surface (catalog contract #4) — the request/response half of the contract the React SPA (and operator tooling) consumes (frontend data model §1; platform interfaces §3). It covers the fleet registry, per-greenhouse detail, ad-hoc setpoint edits, historical telemetry range queries, and aggregated analytics (slice 2a), plus crop-profile CRUD and assignments (slice 2b). Each operation is tagged with `x-slice`. Live push (telemetry, status, drift, events) is a separate WebSocket contract and is not described here. Identity, units, and timestamps follow RFC-007 — the same `greenhouse_id` / `zone_id` slugs that key MQTT topics, controller REST paths, and DB rows; field names are snake_case to match the MQTT and controller-rest contracts (the SPA maps them to its camelCase types). Authentication is slice-dependent: 2a is unauthenticated on the trusted local Docker network (RFC-011, superseding RFC-009) — its operations declare `security: []`. In 2b, reads stay open to anyone (the anonymous-viewer posture — reads declare `security: []`); only writes require a Keycloak OIDC bearer token (`bearerAuth`) carrying the operator role (platform security §4). A rejected write returns 422 with a body naming the violated field and bound, mirroring the controller REST contract. `info.version` is the contract version; its major bumps on a breaking change, recorded in an ADR (RFC-007). This document is split: each path is a file under `paths/`, and shared schemas, parameters, and responses live under `components/`; run `redocly bundle` to emit a single self-contained file."
+    "description": "The platform Go API's operator-facing REST surface (catalog contract #4) — the request/response half of the contract the React SPA (and operator tooling) consumes (frontend data model §1; platform interfaces §3). It covers the fleet registry, per-greenhouse detail, ad-hoc setpoint edits, historical telemetry range queries, and aggregated analytics (slice 2a), plus crop-profile CRUD and assignments (slice 2b), plus the Phase 3 optimizer operator console — the Go API's proxy/aggregate over the optimizer's own Service API (fleet queue + per-greenhouse plan/diff, escalations, model + enable state, and the operator mutations), tagged `x-slice: 3`. Each operation is tagged with `x-slice`. Live push (telemetry, status, drift, events) is a separate WebSocket contract and is not described here. Identity, units, and timestamps follow RFC-007 — the same `greenhouse_id` / `zone_id` slugs that key MQTT topics, controller REST paths, and DB rows; field names are snake_case to match the MQTT and controller-rest contracts (the SPA maps them to its camelCase types). Authentication is slice-dependent: 2a is unauthenticated on the trusted local Docker network (RFC-011, superseding RFC-009) — its operations declare `security: []`. In 2b, reads stay open to anyone (the anonymous-viewer posture — reads declare `security: []`); only writes require a Keycloak OIDC bearer token (`bearerAuth`) carrying the operator role (platform security §4). A rejected write returns 422 with a body naming the violated field and bound, mirroring the controller REST contract. `info.version` is the contract version; its major bumps on a breaking change, recorded in an ADR (RFC-007). This document is split: each path is a file under `paths/`, and shared schemas, parameters, and responses live under `components/`; run `redocly bundle` to emit a single self-contained file."
   },
   "servers": [
     {
@@ -37,6 +37,13 @@
     "/api/sim/time-scale": { "$ref": "./paths/sim-time-scale-all.json" },
     "/api/events": { "$ref": "./paths/events.json" },
     "/api/profiles": { "$ref": "./paths/profiles.json" },
-    "/api/profiles/{profile_id}": { "$ref": "./paths/profile-by-id.json" }
+    "/api/profiles/{profile_id}": { "$ref": "./paths/profile-by-id.json" },
+    "/api/optimizer/fleet": { "$ref": "./paths/optimizer-fleet.json" },
+    "/api/optimizer/greenhouses/{greenhouse_id}/plan": { "$ref": "./paths/optimizer-plan.json" },
+    "/api/optimizer/greenhouses/{greenhouse_id}/cycles": { "$ref": "./paths/optimizer-cycle.json" },
+    "/api/optimizer/escalations": { "$ref": "./paths/optimizer-escalations.json" },
+    "/api/optimizer/escalations/{escalation_id}/resolve": { "$ref": "./paths/optimizer-escalation-resolve.json" },
+    "/api/optimizer/model": { "$ref": "./paths/optimizer-model.json" },
+    "/api/optimizer/enabled": { "$ref": "./paths/optimizer-enabled.json" }
   }
 }

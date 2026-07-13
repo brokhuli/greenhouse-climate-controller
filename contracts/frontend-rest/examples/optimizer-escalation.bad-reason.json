@@ -1,0 +1,10 @@
+{
+  "id": "esc-018f9c2e-77b0",
+  "greenhouse_id": "gh-b",
+  "optimizer_run_id": "018f9c2e-77b0-7a12-8c55-9f0e1d2c3b4a",
+  "reason_code": "vibes_off",
+  "reason_class": "transient",
+  "created_at": "2026-06-29T13:28:00.000Z",
+  "message": "not a canonical reason code — must fail",
+  "resolution": null
+}

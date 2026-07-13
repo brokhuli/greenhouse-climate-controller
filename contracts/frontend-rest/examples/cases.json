@@ -18,6 +18,13 @@
     { "fixture": "sim-time-scale.patch.json", "schema": "sim.json#/TimeScalePatch", "expect": "pass" },
     { "fixture": "sim-time-scale.json", "schema": "sim.json#/TimeScale", "expect": "pass" },
     { "fixture": "sim-time-scale.bad-range.json", "schema": "sim.json#/TimeScalePatch", "expect": "fail" },
-    { "fixture": "sim-time-scale-all.json", "schema": "sim.json#/FleetTimeScaleResult", "expect": "pass" }
+    { "fixture": "sim-time-scale-all.json", "schema": "sim.json#/FleetTimeScaleResult", "expect": "pass" },
+    { "fixture": "optimizer-fleet.json", "schema": "optimizer.json#/FleetOptimizerSummary", "expect": "pass" },
+    { "fixture": "optimizer-plan.json", "schema": "optimizer.json#/OptimizerPlanDetail", "expect": "pass" },
+    { "fixture": "optimizer-plan.held.json", "schema": "optimizer.json#/OptimizerPlanDetail", "expect": "pass" },
+    { "fixture": "optimizer-escalation.json", "schema": "optimizer.json#/Escalation", "expect": "pass" },
+    { "fixture": "optimizer-escalation.bad-reason.json", "schema": "optimizer.json#/Escalation", "expect": "fail" },
+    { "fixture": "optimizer-model.json", "schema": "optimizer.json#/ModelState", "expect": "pass" },
+    { "fixture": "optimizer-enabled.json", "schema": "optimizer.json#/EnableState", "expect": "pass" }
   ]
 }

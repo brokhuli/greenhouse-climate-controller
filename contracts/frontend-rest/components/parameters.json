@@ -13,6 +13,23 @@
     "description": "Crop-profile identity, unique within the site.",
     "schema": { "$ref": "./schemas/common.json#/Slug" }
   },
+  "EscalationId": {
+    "name": "escalation_id",
+    "in": "path",
+    "required": true,
+    "description": "Open-escalation identity (optimizer console, slice 3).",
+    "schema": { "type": "string" }
+  },
+  "OptimizerStatus": {
+    "name": "status",
+    "in": "query",
+    "required": false,
+    "description": "Filter the optimizer fleet queue to one latest-cycle outcome.",
+    "schema": {
+      "type": "string",
+      "enum": ["applied", "escalated", "extended"]
+    }
+  },
   "Window": {
     "name": "window",
     "in": "query",
@@ -59,7 +76,7 @@
     "description": "Filter the feed to one event kind.",
     "schema": {
       "type": "string",
-      "enum": ["fault", "interlock", "profile_applied", "setpoint_edit", "drift"]
+      "enum": ["fault", "interlock", "profile_applied", "setpoint_edit", "drift", "optimizer_plan_applied"]
     }
   },
   "EventSeverity": {

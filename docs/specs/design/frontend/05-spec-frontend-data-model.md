@@ -247,6 +247,97 @@ export const wireAssignment = z.object({
 > write path, so the SPA never edits it
 > ([platform data model boundary](../platform/03-spec-platform-data-model.md)).
 
+### Optimizer plans & escalations (3)
+
+The Phase 3 optimizer console reads mirror the optimizer's
+[`PlanRecord`](../optimizer/05-spec-optimizer-plan-contract.md#3-planrecord--the-optimizer-service-envelope)
+as the Go API **proxies and aggregates** it — the SPA invents no optimizer fields and reaches the
+optimizer only through the Go API's
+[optimizer operator API](../platform/09-spec-platform-interfaces.md#3-api-surface-inventory). These are
+**polled**, not streamed ([architecture — optimizer console](./03-spec-frontend-architecture.md#optimizer-console--rest-polling-no-websocket)).
+*(wire)* — mirror
+[`OptimizerPlanView` / `SetpointDiff` / `Escalation` / `FleetOptimizerSummary` / `ModelState` / `EnableState`](../../../../contracts/frontend-rest/components/schemas/optimizer.json):
+
+```ts
+export const wireOptimizerOutcome = z.object({
+  status: z.enum(["applied", "escalated", "extended"]),
+  reason_code: z.string().nullable().optional(),  // canonical code, required when status = escalated (optimizer interfaces)
+  message: z.string().nullable().optional(),      // operator-facing detail
+});
+
+// One PlanRecord flattened for the detail plan panel.
+export const wireOptimizerPlanView = z.object({
+  optimizer_run_id: z.string(),
+  greenhouse_id: greenhouseId,
+  created_at: z.coerce.date(),
+  horizon: z.object({ start: z.coerce.date(), end: z.coerce.date() }),
+  backend: z.object({                             // which model + prompt produced the plan
+    provider: z.string(), model: z.string(),
+    prompt_version: z.string(), role: z.enum(["primary", "fallback"]),
+  }),
+  outcome: wireOptimizerOutcome,
+  plan: z.object({                                // null on a pre-planner held cycle
+    confidence: z.number().min(0).max(1),
+    explanation: z.string(),
+    immediate_setpoints: wireSetpoints.partial(), // proposed next bundle (a SetpointsPatch)
+    objective_scores: z.object({
+      anticipation: z.number(), coupling: z.number(), efficiency: z.number(),
+    }).partial().optional(),                       // advisory / explainability only
+  }).nullable(),
+});
+
+// Go-API-composed diff for the plan panel: proposed vs current vs crop-safe bounds (all platform-owned).
+export const wireSetpointDiff = z.object({
+  proposed: wireSetpoints.partial(),              // = plan.immediate_setpoints
+  current: wireSetpoints,                         // the greenhouse's current bundle (greenhouse detail)
+  bounds: z.record(z.object({ min: z.number(), max: z.number() })), // crop-safe range per scalar field
+});
+
+export const wireEscalation = z.object({          // one entry of the open (awaiting-review) set
+  id: z.string(),
+  greenhouse_id: greenhouseId,
+  optimizer_run_id: z.string(),
+  reason_code: z.string(),
+  reason_class: z.enum(["transient", "persistent"]), // triage hint (optimizer interfaces)
+  created_at: z.coerce.date(),
+  message: z.string().nullable().optional(),
+});
+
+// The one fleet-rollup endpoint (#3) — the console does NOT derive these from N per-greenhouse calls.
+export const wireFleetOptimizerSummary = z.object({
+  greenhouses: z.array(z.object({
+    greenhouse_id: greenhouseId,
+    status: wireOptimizerOutcome.shape.status,
+    reason_code: z.string().nullable().optional(),
+    created_at: z.coerce.date(),
+  })),
+  rollup: z.object({
+    backlog: z.number().int(),                    // open-escalation count (same scalar as /health)
+    by_outcome: z.object({
+      applied: z.number().int(), escalated: z.number().int(), extended: z.number().int(),
+    }),
+    oldest_open_age_secs: z.number().int().nullable(), // null when the backlog is empty
+  }),
+});
+
+export const wireModelState = z.object({
+  provider: z.string(),                           // fixed per instance (offline change)
+  model: z.string(),                              // active id — operator-mutable within the allowlist
+  prompt_version: z.string(),
+  role: z.enum(["primary", "fallback"]),
+  available_models: z.array(z.string()),          // the active provider's allowlist — the ModelSelector's options
+});
+
+export const wireEnableState = z.object({
+  enabled: z.boolean(),                           // false = read-only mode (planning paused)
+});
+```
+
+The adapter flips these to camelCase VMs like every other shape (the representative
+[`toGreenhouseSummary`](#3-relational-shapes-config--metadata) pattern above). Reason codes are **not**
+re-listed here — the [canonical table](../optimizer/10-spec-optimizer-interfaces.md#escalation-reason-codes)
+is the single source of truth; the `ReasonCodeChip` renders `reason_code` + `reason_class`.
+
 ---
 
 ## 4. Time-series shapes (telemetry & events)
@@ -294,7 +385,7 @@ export const actuatorState = z.object({
 export const eventEntry = z.object({
   greenhouse_id: greenhouseId,
   ts: z.coerce.date(),
-  kind: z.enum(["fault", "interlock", "profile_applied", "setpoint_edit", "drift"]),
+  kind: z.enum(["fault", "interlock", "profile_applied", "setpoint_edit", "drift", "optimizer_plan_applied"]),
   severity: z.enum(["info", "warning", "critical"]),
   message: z.string(),
   source: z.string().optional(),  // who/what (audit, platform §6)
@@ -304,6 +395,13 @@ export const eventEntry = z.object({
 Metrics covered (matching the controller's published surface,
 [P1 §11](../controller/08-spec-controller-interfaces.md)): temperature, humidity, CO₂,
 PAR, per-zone soil moisture, actuator positions.
+
+> **`optimizer_plan_applied` (3).** An **applied** optimizer plan is a setpoint write stamped
+> `source: optimizer` ([RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain)),
+> so it lands in the activity feed as its own kind and rides the live `event` frame like any other write.
+> Held-cycle **escalations** are **not** writes — they stay in the polled
+> [optimizer console](./03-spec-frontend-architecture.md#optimizer-console--rest-polling-no-websocket) queue,
+> not the feed.
 
 > **`ts` is simulated time.** Each reading's `ts` comes from the controller's injected clock, so on a
 > simulated greenhouse it is the *simulated* instant, advancing at that controller's
@@ -378,6 +476,10 @@ entries:
 | `["analytics", id, range, interval]` | `GET /api/greenhouses/:id/analytics?window&interval` | aggregated long-range chart series (replaces raw telemetry past the range threshold — [architecture §4](./03-spec-frontend-architecture.md#4-runtime-data-flow)) |
 | `["events", scope]` | `GET /api/events?…` | activity feed; prepended by `event` frames |
 | `["profiles"]` / `["profile", id]` *(2b)* | `GET /api/profiles…` | profile library + editor |
+| `["optimizer-fleet"]` *(3)* | `GET /api/optimizer/fleet` | console queue + rollup; **polled** (`refetchInterval`), not WS |
+| `["optimizer-plan", id]` *(3)* | `GET /api/optimizer/greenhouses/:id/plan` | latest plan + composed setpoint diff for the detail panel; polled |
+| `["optimizer-escalations"]` *(3)* | `GET /api/optimizer/escalations` | open escalation set; polled |
+| `["optimizer-model"]` / `["optimizer-enabled"]` *(3)* | `GET /api/optimizer/model` · `…/enabled` | active model + allowlist, enable/read-only state; polled |
 
 Strategy:
 
@@ -390,6 +492,14 @@ Strategy:
   ([interactions](./08-spec-frontend-interactions.md)). **Register**
   (`POST /api/greenhouses`) and **retire** (`DELETE /api/greenhouses/:id`) both
   invalidate `["fleet"]`; retire also drops `["greenhouse", id]`.
+- **Optimizer mutations (3)** — resolve escalation (`POST …/escalations/:id/resolve`),
+  trigger cycle (`POST …/greenhouses/:id/cycles`), switch model (`POST …/model`), and
+  enable/disable (`POST …/enabled`) settle on the server response and invalidate the relevant
+  polled keys (`["optimizer-escalations"]` + `["optimizer-fleet"]` on resolve/cycle;
+  `["optimizer-model"]` / `["optimizer-enabled"]` on the toggles). The model/enable toggles
+  patch optimistically then reconcile, reusing the setpoint-edit settle/rollback machinery
+  ([interactions §13](./08-spec-frontend-interactions.md#13-optimizer-console-3)). All are
+  operator-gated (2b role); a `409` (optimizer disabled / cycle in flight) surfaces as an error toast.
 - **Backfill** after a WS gap re-runs the affected `["telemetry", id, range]` query
   ([architecture §4](./03-spec-frontend-architecture.md#4-runtime-data-flow)).
 
@@ -430,6 +540,8 @@ unit-tested and never embedded in components:
 | **In-band / out-of-band band** | reading vs humidity/temperature band | chart threshold shading (chart tokens) |
 | **Zone moisture status & band fill** | zone reading + low/high thresholds + `irrigating`/`faulted` | `ZoneMoisturePanel` — headline status pill (Watering/Dry/Saturated/OK/Fault/No data) + the band-tinted gauge fill |
 | **Simulated-time axis** | series `ts` + `timeScale` | the detail chart's x-axis (plots on simulated time) + the speed indicator label |
+| **Optimizer setpoint-diff rows** *(3)* | `SetpointDiff` (proposed patch + current bundle + crop-safe bounds) | `SetpointDiff` — per **changed** field only, old → new, delta direction, and a near-bound flag |
+| **Escalation triage grouping** *(3)* | open escalations + `reasonClass` | `EscalationQueue` ordering (persistent before transient) + the queue count/badge |
 
 Keeping these pure means a view never recomputes climate logic inline, and the
 derivations are testable in isolation (`P2-TEST-2`-adjacent unit coverage).

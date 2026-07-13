@@ -36,6 +36,13 @@ paths/                       # one file per path
   events.json                #   /api/events                                 (GET)
   profiles.json              #   /api/profiles                               (GET, POST)  (2b)
   profile-by-id.json         #   /api/profiles/{profile_id}                  (GET, PATCH, DELETE) (2b)
+  optimizer-fleet.json       #   /api/optimizer/fleet                        (GET)  (3)
+  optimizer-plan.json        #   /api/optimizer/greenhouses/{greenhouse_id}/plan   (GET)  (3)
+  optimizer-cycle.json       #   /api/optimizer/greenhouses/{greenhouse_id}/cycles (POST) (3)
+  optimizer-escalations.json #   /api/optimizer/escalations                  (GET)  (3)
+  optimizer-escalation-resolve.json # /api/optimizer/escalations/{escalation_id}/resolve (POST) (3)
+  optimizer-model.json       #   /api/optimizer/model                        (GET, POST) (3)
+  optimizer-enabled.json     #   /api/optimizer/enabled                      (GET, POST) (3)
 components/
   schemas/                   # request/response body schemas, one file per resource
     common.json              #   Slug, Connectivity, ActuatorName, Error, ValidationError (shared)
@@ -47,8 +54,9 @@ components/
     events.json              #   EventEntry
     sim.json                 #   TimeScale, TimeScalePatch, FleetTimeScaleResult (sim-only)
     profiles.json            #   CropProfile, CropProfilePatch, ProfileStage, StageBounds, ZoneBounds, Bound, Assignment, AssignmentInput (2b)
+    optimizer.json           #   OptimizerPlanView/Detail, SetpointDiff, Escalation, FleetOptimizerSummary, ModelState/Selection, EnableState/Request, CycleRequest/Accepted, ReasonCode/Class (3)
   parameters.json            # shared path/query parameters
-  responses.json             # shared error responses (401, 403, 404, 422)
+  responses.json             # shared error responses (400, 401, 403, 404, 409, 422)
 examples/                    # fixtures used as tests (see below)
 redocly.yaml                 # lint config
 ```
@@ -84,10 +92,27 @@ nginx-proxied prefix.
 | `DELETE /api/profiles/{profile_id}` | Delete a profile | 2b | 204 | 401, 403, 404, 422 |
 | `GET /api/greenhouses/{greenhouse_id}/assignment` | Current assignment | 2b | 200 `Assignment` | 404 |
 | `PUT /api/greenhouses/{greenhouse_id}/assignment` | Assign profile/stage | 2b | 200 `Assignment` | 401, 403, 404, 422 |
+| `GET /api/optimizer/fleet` | Optimizer fleet queue + rollup | 3 | 200 `FleetOptimizerSummary` | — |
+| `GET /api/optimizer/greenhouses/{greenhouse_id}/plan` | Latest plan + setpoint diff | 3 | 200 `OptimizerPlanDetail` | 404 |
+| `POST /api/optimizer/greenhouses/{greenhouse_id}/cycles` | Trigger an on-demand cycle | 3 | 202 `CycleAccepted` | 401, 403, 404, 409 |
+| `GET /api/optimizer/escalations` | Open escalations | 3 | 200 `Escalation[]` | — |
+| `POST /api/optimizer/escalations/{escalation_id}/resolve` | Resolve an escalation | 3 | 200 `Escalation` | 401, 403, 404 |
+| `GET /api/optimizer/model` | Active model + allowlist | 3 | 200 `ModelState` | — |
+| `POST /api/optimizer/model` | Switch the active model | 3 | 200 `ModelState` | 400, 401, 403 |
+| `GET /api/optimizer/enabled` | Enabled / read-only state | 3 | 200 `EnableState` | — |
+| `POST /api/optimizer/enabled` | Pause / resume planning | 3 | 200 `EnableState` | 401, 403 |
 
 The optimizer's single-authority `POST /greenhouses/{id}/setpoints` (RFC-005 write path) is a
 **different** contract ([`optimizer-write-rest/`](../optimizer-write-rest/), catalog #3) and is not here; the
 ad-hoc edit above is the operator's path.
+
+The `optimizer/*` paths (slice 3) are the **operator console** surface — the Go API's proxy/aggregate over
+the optimizer's own [Service API](../../docs/specs/design/optimizer/10-spec-optimizer-interfaces.md#service-api-endpoints),
+so the SPA reaches the optimizer through the one Go-API origin and never opens a second connection. Reads
+(`fleet`, `plan`, `escalations`, `model`, `enabled`) are viewer-open and **polled**, not streamed; the
+mutations (`cycles`, `escalations/{id}/resolve`, `model`, `enabled`) are operator writes. The one optimizer
+signal on the live WebSocket is the applied-plan **activity event** (`kind: optimizer_plan_applied`,
+`source: optimizer`); escalations stay in the polled queue.
 
 The `sim/time-scale` paths are a **simulation-only** surface (marked `x-simulation-only`): they read
 and set the controller's simulated-clock speed (0.25–32×) for one greenhouse or — at `/api/sim/time-scale`
@@ -102,11 +127,11 @@ WebSocket `status` frame.
 
 ## Delivery slices
 
-Every operation carries an `x-slice` extension (`2a` or `2b`), matching the spec set's `(2a)`/`(2b)`
-convention ([ADR 2026-06-11](../../docs/decisions/architecture-design-record.md)). **2a** is the
-monitoring + setpoint-edit MVP (fleet, detail, telemetry, events, registration, edits); **2b** adds
-crop-profile authority and assignments. The split is a property of the surface, not two documents —
-one contract carries both.
+Every operation carries an `x-slice` extension (`2a`, `2b`, or `3`), matching the spec set's
+`(2a)`/`(2b)`/`(3)` convention ([ADR 2026-06-11](../../docs/decisions/architecture-design-record.md)).
+**2a** is the monitoring + setpoint-edit MVP (fleet, detail, telemetry, events, registration, edits);
+**2b** adds crop-profile authority and assignments; **3** adds the optimizer operator console. The split
+is a property of the surface, not separate documents — one contract carries all three.
 
 ## Identity
 
@@ -166,7 +191,7 @@ not restated. This differs from the controller-rest contract, which is unauthent
 ## Examples
 
 [`examples/`](./examples/) holds request/response fixtures used as tests. Positive fixtures must
-validate against their component schema; the four `*.bad-*.json` counter-examples must **fail**:
+validate against their component schema; the `*.bad-*.json` counter-examples must **fail**:
 
 | Fixture | Schema | Expect |
 |---|---|---|
@@ -187,6 +212,13 @@ validate against their component schema; the four `*.bad-*.json` counter-example
 | `sim-time-scale.json` | `TimeScale` | valid |
 | `sim-time-scale.bad-range.json` | `TimeScalePatch` | **fail** (`scale` 100, outside 0.25–32) |
 | `sim-time-scale-all.json` | `FleetTimeScaleResult` | valid |
+| `optimizer-fleet.json` | `FleetOptimizerSummary` | valid |
+| `optimizer-plan.json` | `OptimizerPlanDetail` | valid (an applied plan + composed setpoint diff) |
+| `optimizer-plan.held.json` | `OptimizerPlanDetail` | valid (a pre-planner held cycle — `plan` and `diff` null) |
+| `optimizer-escalation.json` | `Escalation` | valid (open — `resolution` null) |
+| `optimizer-escalation.bad-reason.json` | `Escalation` | **fail** (`reason_code` outside the canonical enum) |
+| `optimizer-model.json` | `ModelState` | valid |
+| `optimizer-enabled.json` | `EnableState` | valid |
 
 ## Validation
 

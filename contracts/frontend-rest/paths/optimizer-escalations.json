@@ -1,0 +1,22 @@
+{
+  "get": {
+    "operationId": "listOptimizerEscalations",
+    "summary": "Open optimizer escalations",
+    "description": "The open (awaiting-review) escalation set — held cycles across the fleet (frontend data model §Optimizer plans, key [\"optimizer-escalations\"]). Proxied from the optimizer's GET /api/optimizer/escalations. Polled, not streamed. Open to anyone — reads need no token (anonymous-viewer posture, platform security §4).",
+    "x-slice": "3",
+    "security": [],
+    "responses": {
+      "200": {
+        "description": "The open escalation set.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "array",
+              "items": { "$ref": "../components/schemas/optimizer.json#/Escalation" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

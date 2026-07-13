@@ -33,7 +33,7 @@ data access; the shell owns chrome.
 
 ### `SideNav`
 
-- **Purpose:** Primary navigation: Fleet, Activity, Profiles (2b).
+- **Purpose:** Primary navigation: Fleet, Activity, Optimizer (3), Profiles (2b).
 - **Props:** active route.
 - **Interaction:** client-side route links; collapses to a top bar + drawer below
   the mobile breakpoint ([interactions](./08-spec-frontend-interactions.md)). The
@@ -132,6 +132,7 @@ route in [architecture §3](./03-spec-frontend-architecture.md#3-route-tree).
   `TimeSeriesChart` (readings vs setpoint bands, plotted on simulated time); `ActuatorStatePanel`;
   a `ZoneMoisturePanel` (live per-zone irrigation status); a **Recent Activity** card
   (`EventList`) that links to this greenhouse's filtered [`ActivityFeed`](#activityfeed-2a-drift-entries-2b);
+  *(3)* an [`OptimizerPlanPanel`](#optimizerplanpanel-3) showing the latest optimizer cycle + setpoint diff;
   a **link/button to the `/greenhouses/:id/setpoints` route** (the `SetpointEditForm` lives on
   that route, not inline — [architecture §3](./03-spec-frontend-architecture.md#3-route-tree)); a `RangePicker`.
 - **States:** loading → skeleton charts; offline → charts show history + a live gap
@@ -166,6 +167,39 @@ route in [architecture §3](./03-spec-frontend-architecture.md#3-route-tree).
 - **Renders:** severity-grouped `EventList`; a greenhouse/kind filter control bound to
   the query params.
 - **States:** loading/empty/error standard; critical events also raise a toast.
+
+### `OptimizerConsole` *(3)*
+
+- **Purpose:** The `/optimizer` view — the fleet plan/escalation queue and the site rollup
+  (view 6 in purpose-and-views). The **plan detail** is not here; it is the
+  `OptimizerPlanPanel` on the greenhouse detail view (hybrid split).
+- **Data:** `useOptimizerFleet()` (`["optimizer-fleet"]`) + `useOptimizerEscalations()`
+  (`["optimizer-escalations"]`) + `useOptimizerModel()` / `useOptimizerEnabled()`, all **polled**
+  ([data-model §6](./05-spec-frontend-data-model.md#6-query-keys--cache-strategy)); no live subscription.
+- **Renders:** an `OptimizerRollupBar` (backlog, counts-by-outcome, oldest-open age from the
+  fleet rollup); an `EscalationQueue` of `EscalationRow`s (each with a `ReasonCodeChip`,
+  `PlanOutcomeBadge`, a link to the greenhouse's plan panel, and a **Resolve** action); a global
+  `OptimizerEnableToggle` (pause/resume) and `ModelSelector` in the view toolbar. The queue filter
+  (`greenhouse_id` / `status`) is bound to the URL query params.
+- **States:** loading → skeletons; empty → `EmptyState` ("no open escalations — all cycles applied
+  or extended"); error → `ErrorState` with retry; a read-only banner when the optimizer is disabled.
+- **Role-gating (2b):** the queue/rollup/state are viewer-readable; every action (Resolve, trigger,
+  model switch, pause/resume) is operator-only (rendered disabled with a reason for viewers).
+
+### `OptimizerPlanPanel` *(3)*
+
+- **Purpose:** One greenhouse's latest optimizer cycle, rendered as a panel **on the detail view**
+  (`/greenhouses/:id`) — the per-greenhouse half of the hybrid split.
+- **Data:** `useOptimizerPlan(id)` (`["optimizer-plan", id]`, polled) — the flattened plan plus the
+  Go-API-composed setpoint diff.
+- **Renders:** a `PlanOutcomeBadge` (+ `ReasonCodeChip` when escalated), the plan's `confidence` and
+  `explanation`, the `backend` provenance (provider / model / prompt version / role), a `SetpointDiff`
+  (proposed vs current vs bounds), and — for this greenhouse — a `TriggerCycleAction` and, when the
+  cycle is escalated, a **Resolve** action.
+- **States:** loading → skeleton; empty → "no optimizer plan yet" (cold start / pre-first-cycle);
+  a **held-cycle** record (plan `null`) shows the outcome + reason with no diff ("cycle ran; nothing
+  applied"). Absent entirely on a real deployment without the optimizer.
+- **Role-gating (2b):** read for viewers; trigger/resolve operator-only.
 
 ---
 
@@ -321,6 +355,34 @@ Reused across views; typed props; zero domain knowledge.
 - **a11y:** a labeled group (radio semantics for the segmented form); not color-only.
 - **Visual:** uses `--size-control-sm`/`-md` like the other segmented controls/pills.
 
+### Optimizer primitives *(3)*
+
+Presentational pieces the `OptimizerConsole` and `OptimizerPlanPanel` compose; typed props, no data
+access. **No `GateTraceStepper`** — the plan exposes a final `outcome` + `explanation`, not a
+step-by-step gate trace ([data-model](./05-spec-frontend-data-model.md#optimizer-plans--escalations-3)),
+so a decision-trace panel is deliberately out of v1.
+
+- **`OptimizerRollupBar`** — site rollup cards (backlog, counts by outcome, oldest-open age) from the
+  fleet summary; same `Card` shell as `FleetSummaryBar`, with a text label per number (never color-only).
+- **`EscalationQueue` / `EscalationRow`** — the open-escalation table; rows ordered persistent-before-transient
+  ([data-model §8](./05-spec-frontend-data-model.md#8-view-model-derivations)). Each row: greenhouse,
+  `ReasonCodeChip`, age, message, a link to the plan panel, and an operator **Resolve** action.
+- **`PlanOutcomeBadge`** — the `applied` / `escalated` / `extended` status pill; text label + icon,
+  **never color-only** ([constraints](./09-spec-frontend-constraints.md)).
+- **`ReasonCodeChip`** — renders a `reason_code` + its `reason_class` (transient / persistent) from the
+  [canonical table](../optimizer/10-spec-optimizer-interfaces.md#escalation-reason-codes); a tooltip
+  carries the human description. Does **not** hardcode the code list — it maps whatever the API sends.
+- **`SetpointDiff`** — a field-by-field table of **changed** setpoints (proposed vs current), each with
+  direction and a near-bound flag against the crop-safe bounds; unchanged fields are collapsed. Props:
+  `proposed`, `current`, `bounds` ([data-model](./05-spec-frontend-data-model.md#optimizer-plans--escalations-3)).
+- **`ModelSelector`** — a segmented/select control over the active provider's `available_models`
+  allowlist; `onChange` fires `POST …/model`. Shows the active `model` + `prompt_version`; the
+  `provider` is read-only (an offline change). Operator-gated.
+- **`OptimizerEnableToggle`** — pause/resume planning (`enabled` ↔ read-only); a `danger`-adjacent
+  confirm on disable. Operator-gated; reflects the polled `EnableState`.
+- **`TriggerCycleAction`** — run an on-demand cycle for one greenhouse (`POST …/cycles`, optional
+  `reason`); disabled while the optimizer is off or a cycle is in flight (`409`). Operator-gated.
+
 ### `Button`, `Pill`, `Table`, `Dialog`, `Skeleton`, `EmptyState`, `ErrorState`, `Toast`
 
 - **Purpose:** Standard primitives. `Button` variants (primary/secondary/danger);
@@ -349,11 +411,12 @@ Reused across views; typed props; zero domain knowledge.
 | View / route | Components |
 |---|---|
 | `/` Fleet overview | `FleetOverview` → `FleetSummaryBar`, `RegisterGreenhouseDialog`, `FleetTimeScaleControl` (sim-only), `GreenhouseCard` → `StatusBadge`, `MetricTile`, `TimeScaleIndicator` (sim-only) |
-| `/greenhouses/:id` Detail | `GreenhouseDetail` → `GreenhouseSummaryBar`/`MetricTile`, `TimeSeriesChart`, `ActuatorStatePanel`, `ZoneMoisturePanel`, `EventList` (Recent Activity), `RetireGreenhouseAction`, `RangePicker`, `TimeScaleControl`/`TimeScaleIndicator` (sim-only) |
+| `/greenhouses/:id` Detail | `GreenhouseDetail` → `GreenhouseSummaryBar`/`MetricTile`, `TimeSeriesChart`, `ActuatorStatePanel`, `ZoneMoisturePanel`, `EventList` (Recent Activity), `OptimizerPlanPanel` (3) → `PlanOutcomeBadge`/`ReasonCodeChip`/`SetpointDiff`/`TriggerCycleAction`, `RetireGreenhouseAction`, `RangePicker`, `TimeScaleControl`/`TimeScaleIndicator` (sim-only) |
 | `/greenhouses/:id/setpoints` Setpoint editor | `SetpointsView` → `SetpointEditForm` |
 | `/profiles` (2b) | `ProfileLibrary` → profile cards, assignment panel |
 | `/profiles/:id` (2b) | `ProfileEditor` → `SetpointFields`, stage selector |
 | `/activity` | `ActivityFeed` → `EventList` |
+| `/optimizer` (3) | `OptimizerConsole` → `OptimizerRollupBar`, `EscalationQueue`/`EscalationRow`, `ReasonCodeChip`, `PlanOutcomeBadge`, `ModelSelector`, `OptimizerEnableToggle` |
 | Persistent (chrome) | `AppFrame`, `SideNav`, `TopBar`, `ConnectionStatus`, `ToastHost` |
 
 ---

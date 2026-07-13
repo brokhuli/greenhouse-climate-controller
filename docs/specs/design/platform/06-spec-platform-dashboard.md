@@ -31,6 +31,14 @@ greenhouse is the fleet-of-one case. Its monitoring and setpoint-edit core ships
   ([constraints](./11-spec-platform-constraints.md)).
 - **Health surfacing** *(2a)* — faults, offline controllers, and interlock activations
   raised prominently (drift surfacing arrives with reconciliation in 2b).
+- **Optimizer operator console** *(3)* — review the Phase 3 optimizer's proposed/applied
+  plans and its held-cycle **escalation** queue, see the proposed-vs-current setpoint diff,
+  and act on the optimizer at runtime (resolve an escalation, trigger an on-demand cycle,
+  switch the active model, pause/resume planning). All of it is surfaced and driven **through
+  the Go API** ([API surface](./09-spec-platform-interfaces.md#3-api-surface-inventory)); the
+  optimizer still refines setpoints only through the platform's single write path
+  ([crop profiles](./05-spec-platform-crop-profiles.md)), so this console **observes and
+  operates** the optimizer, it does not add a second control path.
 
 ---
 

@@ -84,13 +84,13 @@ is versioned and accompanied by an ADR, per [`contracts/README.md`](../../../con
 
 | | |
 |---|---|
-| **Purpose** | The operator-facing surface: greenhouse registry, historical telemetry range queries, analytics, and ad-hoc setpoint edits (**2a**); crop-profile CRUD and assignments (**2b**). Includes a simulation-only time-scale relay (per-greenhouse + fleet-wide `/sim/time-scale`) — the one explicit exception to setpoint-only downward control. |
-| **Parties / direction** | SPA / operator tooling → platform |
+| **Purpose** | The operator-facing surface: greenhouse registry, historical telemetry range queries, analytics, and ad-hoc setpoint edits (**2a**); crop-profile CRUD and assignments (**2b**); and the **optimizer operator console** (**3**) — the Go API's proxy/aggregate over the optimizer's own [Service API](./optimizer/10-spec-optimizer-interfaces.md#service-api-endpoints): the `optimizer/*` paths (fleet queue + rollup, per-greenhouse plan + composed setpoint diff, open escalations + resolve, model + enable state and their mutations, on-demand cycles). Includes a simulation-only time-scale relay (per-greenhouse + fleet-wide `/sim/time-scale`) — the one explicit exception to setpoint-only downward control. |
+| **Parties / direction** | SPA / operator tooling → platform (the SPA reaches the optimizer **only** here, never a second origin) |
 | **Format** | OpenAPI 3.1 (uses the JSON Schema 2020-12 dialect); `/api`-prefixed, greenhouse-scoped paths; 422 names the violated bound |
-| **Phase introduced** | Phase 2 — registration/telemetry/edits in 2a, profiles/assignments in 2b |
+| **Phase introduced** | Phase 2 — registration/telemetry/edits in 2a, profiles/assignments in 2b; **Phase 3** adds the `optimizer/*` operator-console paths |
 | **Governing decision** | [P2 API surface](./platform/09-spec-platform-interfaces.md#3-api-surface-inventory), [ADR 2026-06-17](../../decisions/architecture-design-record.md) |
 | **Location** | [`contracts/frontend-rest/`](../../../contracts/frontend-rest/) |
-| **Status** | Authored — `openapi.json` + README + example fixtures exist under [`contracts/frontend-rest/`](../../../contracts/frontend-rest/) |
+| **Status** | Authored — `openapi.json` + README + example fixtures exist under [`contracts/frontend-rest/`](../../../contracts/frontend-rest/), validated by the contract harness (incl. the Phase 3 `optimizer/*` paths + fixtures) |
 
 ### 2.5 Phase 2 WebSocket fan-out
 

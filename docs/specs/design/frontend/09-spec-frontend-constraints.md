@@ -190,9 +190,22 @@ Mirrors [platform constraints](../platform/11-spec-platform-constraints.md#7-sco
   ([platform observability](../platform/08-spec-platform-operations.md#1-observability)); this is greenhouse
   climate.
 - **Not multi-site / multi-tenant** — a single site.
-- **Not the optimizer's UI** — Phase 3 refines setpoints through the same platform
-  write path ([platform crop profiles](../platform/05-spec-platform-crop-profiles.md));
-  no separate optimizer console here.
+- **Not a second optimizer control path.** The Phase 3 **optimizer operator console**
+  *is* part of the dashboard (review proposed/applied plans and the held-cycle escalation
+  queue, see the proposed-vs-current setpoint diff, and resolve / trigger a cycle /
+  switch model / pause-resume) — but it reaches the optimizer **only through the Go API**
+  and only **observes and operates** it. The optimizer still refines setpoints solely
+  through the platform's [single write path](../platform/05-spec-platform-crop-profiles.md),
+  so the console adds no control path.
+  - **Forces:** optimizer reads (plans, escalations, `fleet` rollup, model/enable state)
+    and operator writes go through the platform's
+    [optimizer operator API](../platform/09-spec-platform-interfaces.md#3-api-surface-inventory);
+    the console **surfaces** plans and [reason codes](../optimizer/10-spec-optimizer-interfaces.md#escalation-reason-codes)
+    and gates its mutations to the operator role.
+  - **Forbids:** the SPA calling the optimizer's FastAPI directly (a second origin —
+    [it talks only to the Go API](#the-browser-talks-only-to-the-go-api)); any console
+    affordance that applies a plan or setpoint outside the platform authority, commands a
+    controller, or overrides an optimizer gate.
 
 If a future capability crosses one of these lines, it belongs in the platform/
 controller/optimizer specs first — not bolted onto the SPA.

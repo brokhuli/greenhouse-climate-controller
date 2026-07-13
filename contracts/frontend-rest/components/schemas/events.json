@@ -11,8 +11,8 @@
       },
       "kind": {
         "type": "string",
-        "enum": ["fault", "interlock", "profile_applied", "setpoint_edit", "drift"],
-        "description": "Closed set of event kinds surfaced to the operator."
+        "enum": ["fault", "interlock", "profile_applied", "setpoint_edit", "drift", "optimizer_plan_applied"],
+        "description": "Closed set of event kinds surfaced to the operator. `optimizer_plan_applied` (3) is an applied optimizer plan — a setpoint write stamped `source: optimizer` (RFC-005); held-cycle escalations are not events (they live in the polled optimizer console queue)."
       },
       "severity": {
         "type": "string",
