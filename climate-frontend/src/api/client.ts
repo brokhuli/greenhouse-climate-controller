@@ -4,7 +4,7 @@ import { getAccessToken, handleUnauthorized } from "./authToken";
 
 /**
  * The single REST client for the SPA. Every request/response shape is validated against the
- * Zod schemas in `schemas.ts` (which mirror `contracts/frontend-rest/`). Nothing outside
+ * Zod schemas in `schemas.ts` (which mirror `contracts/platform-dashboard-rest/`). Nothing outside
  * `src/api/` calls `fetch` directly (architecture §2, boundary 1).
  *
  * Base URL: empty by default — the SPA is same-origin with the API in both dev (Vite proxies

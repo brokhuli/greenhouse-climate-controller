@@ -12,9 +12,9 @@
 > [`contracts/`](../../../../contracts/) under the conventions in
 > [RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format),
 > and the API *surface* by [platform API surface](../platform/09-spec-platform-interfaces.md#3-api-surface-inventory).
-> `contracts/` formalizes `mqtt/` (telemetry, platform-internal),
-> `controller-rest/` (platform-to-controller), `frontend-rest/` (Go API to SPA REST),
-> and `frontend-ws/` (Go API to SPA live push). The snippets here are the client's
+> `contracts/` formalizes `controller-platform-telemetry-mqtt/` (telemetry, platform-internal),
+> `platform-controller-control-rest/` (platform-to-controller), `platform-dashboard-rest/` (Go API to SPA REST),
+> and `platform-dashboard-live-ws/` (Go API to SPA live push). The snippets here are the client's
 > working model and explanatory mirror of those formal contracts; the implementation
 > Zod schemas must validate against the formal contracts. The shapes below mirror the platform's
 > [data model](../platform/03-spec-platform-data-model.md) so the mapping stays thin.
@@ -86,7 +86,7 @@ Mirror the platform's relational model
 
 ### Fleet & greenhouse (2a)
 
-*(wire)* — mirrors [`GreenhouseSummary`](../../../../contracts/frontend-rest/components/schemas/greenhouses.json):
+*(wire)* — mirrors [`GreenhouseSummary`](../../../../contracts/platform-dashboard-rest/components/schemas/greenhouses.json):
 
 ```ts
 export const wireGreenhouseSummary = z.object({
@@ -137,7 +137,7 @@ export const toGreenhouseSummary =
 ### Greenhouse registration (2a)
 
 The body an operator POSTs to register a greenhouse into the fleet *(wire)* — mirrors
-[`GreenhouseRegistration`](../../../../contracts/frontend-rest/components/schemas/greenhouses.json):
+[`GreenhouseRegistration`](../../../../contracts/platform-dashboard-rest/components/schemas/greenhouses.json):
 
 ```ts
 export const wireGreenhouseRegistration = z.object({
@@ -159,7 +159,7 @@ export const wireGreenhouseRegistration = z.object({
 ### Setpoints / target bundle
 
 *(wire)* — mirrors the contract's
-[`Setpoints`](../../../../contracts/frontend-rest/components/schemas/setpoints.json) field
+[`Setpoints`](../../../../contracts/platform-dashboard-rest/components/schemas/setpoints.json) field
 for field, which in turn mirrors the controller's runtime-adjustable
 [`[setpoints]`](../platform/03-spec-platform-data-model.md) plus per-zone irrigation, so a
 profile resolves by direct mapping. Every field is required (the contract's `Setpoints`
@@ -193,8 +193,8 @@ export const wireSetpoints = z.object({
 The detail endpoint returns a greenhouse's summary fields, its full current `setpoints`
 bundle, **and** a live per-zone irrigation `zone_status` array — the read-only counterpart
 to the mutable per-zone targets on `setpoints.zones`, keyed by `zone_id`. *(wire)* — mirrors
-[`GreenhouseDetail`](../../../../contracts/frontend-rest/components/schemas/greenhouses.json#L75)
-and [`ZoneStatus`](../../../../contracts/frontend-rest/components/schemas/zones.json):
+[`GreenhouseDetail`](../../../../contracts/platform-dashboard-rest/components/schemas/greenhouses.json#L75)
+and [`ZoneStatus`](../../../../contracts/platform-dashboard-rest/components/schemas/zones.json):
 
 ```ts
 export const wireZoneStatus = z.object({
@@ -220,8 +220,8 @@ faulted zone reports `soil_moisture_vwc: null` — the UI shows "—", never a s
 
 ### Crop profiles & assignment (2b)
 
-*(wire)* — mirror [`CropProfile`](../../../../contracts/frontend-rest/components/schemas/profiles.json#L15)
-and [`Assignment`](../../../../contracts/frontend-rest/components/schemas/profiles.json#L49):
+*(wire)* — mirror [`CropProfile`](../../../../contracts/platform-dashboard-rest/components/schemas/profiles.json#L15)
+and [`Assignment`](../../../../contracts/platform-dashboard-rest/components/schemas/profiles.json#L49):
 
 ```ts
 export const wireCropProfile = z.object({
@@ -256,7 +256,7 @@ optimizer only through the Go API's
 [optimizer operator API](../platform/09-spec-platform-interfaces.md#3-api-surface-inventory). These are
 **polled**, not streamed ([architecture — optimizer console](./03-spec-frontend-architecture.md#optimizer-console--rest-polling-no-websocket)).
 *(wire)* — mirror
-[`OptimizerPlanView` / `SetpointDiff` / `Escalation` / `FleetOptimizerSummary` / `ModelState` / `EnableState`](../../../../contracts/frontend-rest/components/schemas/optimizer.json):
+[`OptimizerPlanView` / `SetpointDiff` / `Escalation` / `FleetOptimizerSummary` / `ModelState` / `EnableState`](../../../../contracts/platform-dashboard-rest/components/schemas/optimizer.json):
 
 ```ts
 export const wireOptimizerOutcome = z.object({
@@ -369,7 +369,7 @@ export const telemetryRange = z.object({
 });
 
 // Aggregated counterpart for long ranges — time-bucketed min/max/avg per metric/scope.
-// Mirrors contracts/frontend-rest AnalyticsResponse; the chart switches to this past a
+// Mirrors contracts/platform-dashboard-rest AnalyticsResponse; the chart switches to this past a
 // range threshold (architecture §4 "Historical + live merge").
 export const analyticsResponse = z.object({
   greenhouse_id: greenhouseId,
@@ -481,7 +481,7 @@ buffer and the rest to Query-cache patches
 Unknown `type` values are ignored (forward-compatible).
 
 > The final wire shapes are owned by the WebSocket contract (catalog #5,
-> [`contracts/frontend-ws/`](../../../../contracts/frontend-ws/)); the union above mirrors
+> [`contracts/platform-dashboard-live-ws/`](../../../../contracts/platform-dashboard-live-ws/)); the union above mirrors
 > it field-for-field. The `event` frame's `greenhouse_id`/`ts` come from the envelope (the
 > REST `eventEntry` embeds them inline because REST bodies carry no envelope). Any per-channel
 > shape `ws.ts` derives *after* parsing is an **internal adapter type**, not the wire.
@@ -545,7 +545,7 @@ Every REST response and WS frame is parsed through its Zod schema in
   "data format changed — update the dashboard" notice.
 
 This is the client's runtime enforcement point. The Go-API-to-SPA REST and WebSocket contracts
-are authored under [`contracts/`](../../../../contracts/) (`frontend-rest/`, `frontend-ws/`), so
+are authored under [`contracts/`](../../../../contracts/) (`platform-dashboard-rest/`, `platform-dashboard-live-ws/`), so
 these Zod schemas validate against them rather than standing as a parallel source of truth.
 
 ---

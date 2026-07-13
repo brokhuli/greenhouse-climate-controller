@@ -11,7 +11,7 @@ deterministic gates in
 deterministic forward model in
 [digital twin](./03-spec-optimizer-digital-twin.md), and the structured
 [plan contract](./05-spec-optimizer-plan-contract.md) whose schema and fixtures live in
-[`contracts/optimizer-plan/`](../../../../contracts/optimizer-plan/).
+[`contracts/optimizer-internal-plan-schema/`](../../../../contracts/optimizer-internal-plan-schema/).
 
 ---
 
@@ -92,7 +92,7 @@ scope note in [the overview](./01-spec-optimizer-overview.md).)
 
 4. **Plan-contract schema checks.** The `OptimizerPlan` / `PlanRecord` JSON Schema
    ([plan contract](./05-spec-optimizer-plan-contract.md),
-   [`contracts/optimizer-plan/`](../../../../contracts/optimizer-plan/); catalogued in
+   [`contracts/optimizer-internal-plan-schema/`](../../../../contracts/optimizer-internal-plan-schema/); catalogued in
    [spec-contracts §2.6](../spec-contracts.md#26-optimizer-plan-schema)) is exercised by the shared
    **contract harness**, the way every other contract's fixtures are: the valid fixtures
    (`optimizer-plan.json`, `plan-record.applied.json`, `plan-record.escalated-low-confidence.json`, and

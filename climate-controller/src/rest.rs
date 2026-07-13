@@ -1,4 +1,4 @@
-//! REST API — the sole inbound write path ([interfaces §3], `contracts/controller-rest/`).
+//! REST API — the sole inbound write path ([interfaces §3], `contracts/platform-controller-control-rest/`).
 //!
 //! Reads come from a snapshot [`RuntimeView`] the tick task publishes each tick; writes are
 //! **latched**: a handler validates synchronously (returning `422` with the violated bound on
@@ -396,7 +396,7 @@ pub fn router(state: AppState) -> Router {
             get(get_time_scale).put(put_time_scale),
         )
         // Operational metrics for Prometheus — top-level (not greenhouse-scoped) and a GET, so the
-        // write-auth middleware leaves it open. Outside the versioned controller-rest contract.
+        // write-auth middleware leaves it open. Outside the versioned platform-controller-control-rest contract.
         .route("/metrics", get(get_metrics))
         .layer(middleware::from_fn_with_state(
             auth_token,

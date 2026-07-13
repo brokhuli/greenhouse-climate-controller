@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://greenhouse.local/contracts/mqtt/actuator-state.schema.json",
+  "$id": "https://greenhouse.local/contracts/controller-platform-telemetry-mqtt/actuator-state.schema.json",
   "title": "Actuator State",
   "description": "Current state of a single actuator, published on gh/{greenhouse_id}/actuator/{actuator}/state. Carries both the controller's `commanded` output and the `observed` readback from the HAL; the two agree in the fault-free case and diverge when the actuator is stuck/jammed. One unified shape covers on/off, variable-position, and modulating actuators: `level_pct` is null for pure on/off devices and 0–100 for variable/modulating ones. `health` reports the actuator-health monitor verdict (controller safety spec §5).",
   "type": "object",
@@ -40,7 +40,7 @@
     }
   },
   "allOf": [
-    { "$ref": "https://greenhouse.local/contracts/mqtt/envelope.schema.json" },
+    { "$ref": "https://greenhouse.local/contracts/controller-platform-telemetry-mqtt/envelope.schema.json" },
     {
       "properties": {
         "actuator": { "$ref": "#/$defs/name" },

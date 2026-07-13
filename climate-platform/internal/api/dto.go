@@ -12,7 +12,7 @@ type errorBody struct {
 	Error string `json:"error"`
 }
 
-// validationBody mirrors the controller-rest ValidationError: it names the offending
+// validationBody mirrors the platform-controller-control-rest ValidationError: it names the offending
 // field and the violated bound, echoing the rejected value (RFC-005).
 type validationBody struct {
 	Error string `json:"error"`
@@ -92,11 +92,11 @@ type setpointsPatchDTO struct {
 // --- crop profiles & assignment (2b) ---
 //
 // Responses reuse the domain types directly (domain.CropProfile / domain.Assignment): their
-// JSON tags already match the frontend-rest contract, so no separate response DTO is needed.
+// JSON tags already match the platform-dashboard-rest contract, so no separate response DTO is needed.
 // Requests decode into these DTOs so a partial patch can distinguish an absent field from a
 // zero value.
 
-// cropProfilePatchDTO is a partial profile update (frontend-rest CropProfilePatch): any subset
+// cropProfilePatchDTO is a partial profile update (platform-dashboard-rest CropProfilePatch): any subset
 // of name/crop/stages. A present stages array replaces the stage set wholesale.
 type cropProfilePatchDTO struct {
 	Name   *string               `json:"name"`
@@ -105,7 +105,7 @@ type cropProfilePatchDTO struct {
 }
 
 // assignmentInputDTO assigns a profile/stage to the greenhouse named in the path
-// (frontend-rest AssignmentInput); the greenhouse identity comes from the path, not the body.
+// (platform-dashboard-rest AssignmentInput); the greenhouse identity comes from the path, not the body.
 type assignmentInputDTO struct {
 	ProfileID string `json:"profile_id"`
 	Stage     string `json:"stage"`

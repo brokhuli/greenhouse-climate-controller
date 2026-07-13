@@ -258,7 +258,7 @@ func zoneFromDTO(field string, dto zoneTargetsDTO) (domain.ZoneTargets, *valErro
 }
 
 // decodeSetpointsPatch parses the patch body, rejecting unknown fields to honor the
-// SetpointsPatch contract's additionalProperties:false (frontend-rest setpoints.json).
+// SetpointsPatch contract's additionalProperties:false (platform-dashboard-rest setpoints.json).
 // DisallowUnknownFields applies to nested zones[] objects too.
 func decodeSetpointsPatch(raw []byte) (setpointsPatchDTO, error) {
 	var patch setpointsPatchDTO

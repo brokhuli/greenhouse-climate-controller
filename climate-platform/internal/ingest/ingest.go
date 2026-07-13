@@ -169,7 +169,7 @@ func (ing *Ingester) handleMessage(_ mqtt.Client, msg mqtt.Message) {
 
 // mismatched drops (and logs) telemetry whose envelope greenhouse_id disagrees with the
 // topic it arrived on — topic and payload are one identity, no translation layer
-// (contracts/mqtt; ingestion §2). Routing is by the registry-validated topic id, so a
+// (contracts/controller-platform-telemetry-mqtt; ingestion §2). Routing is by the registry-validated topic id, so a
 // payload claiming a different (or empty) id is rejected rather than silently stored.
 func (ing *Ingester) mismatched(topicID, payloadID string) bool {
 	if payloadID == topicID {

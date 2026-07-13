@@ -55,7 +55,7 @@
 - **How:** Publishes the post-tick snapshot and fault events
   ([interfaces §2](./08-spec-controller-interfaces.md#2-mqtt--telemetry-out)); subscribes
   to nothing (telemetry-only). Topic taxonomy and envelope are owned by
-  [`contracts/mqtt/`](../../../../contracts/mqtt/). The client runs on its **own task**
+  [`contracts/controller-platform-telemetry-mqtt/`](../../../../contracts/controller-platform-telemetry-mqtt/). The client runs on its **own task**
   with a **bounded** outbound queue and `rumqttc`'s built-in **auto-reconnect**, so a slow
   or disconnected broker applies backpressure to the publisher — never to the control tick
   ([interfaces §7](./08-spec-controller-interfaces.md#7-mqtt-connection-resilience), `P1-RESIL-3`).
@@ -74,7 +74,7 @@
 - **How:** Serves the
   [controller REST surface](./08-spec-controller-interfaces.md#3-rest--the-sole-write-path);
   handlers latch writes into controller state. The contract is
-  [`contracts/controller-rest/`](../../../../contracts/controller-rest/) (OpenAPI
+  [`contracts/platform-controller-control-rest/`](../../../../contracts/platform-controller-control-rest/) (OpenAPI
   3.1); the server is unauthenticated by default, with an optional per-controller bearer token for
   hardened deployments
   ([RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009),

@@ -5,23 +5,23 @@ The platform Go API's **single-authority setpoint write path** — the request/r
 the platform. This is **catalog contract #3**
 ([`spec-contracts.md §2.3`](../../docs/specs/design/spec-contracts.md)); the normative artifact is
 [`openapi.json`](./openapi.json) (OpenAPI 3.1, which uses the JSON Schema 2020-12 dialect — the same
-dialect as the [MQTT](../mqtt/), [controller-rest](../controller-rest/), and [frontend-rest](../frontend-rest/)
+dialect as the [MQTT](../controller-platform-telemetry-mqtt/), [platform-controller-control-rest](../platform-controller-control-rest/), and [platform-dashboard-rest](../platform-dashboard-rest/)
 contracts, per
 [RFC-007](../../docs/decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)).
 
 **This is the platform's single authority for setpoints** ([RFC-005](../../docs/decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain)):
 the optimizer submits refined targets here; the platform validates them against crop-safe bounds,
 records provenance (`source = optimizer`), and delivers them to the controller over the
-[controller REST contract](../controller-rest/). MQTT is telemetry-only and is never a setpoint
+[controller REST contract](../platform-controller-control-rest/). MQTT is telemetry-only and is never a setpoint
 channel.
 
 **Scope — the optimizer write path only.** The operator's **ad-hoc** setpoint edit
 (`PATCH /api/greenhouses/{greenhouse_id}/setpoints`) is the human counterpart and lives in the
-separate operator/fleet contract ([`frontend-rest/`](../frontend-rest/), catalog #4). It shares this
+separate operator/fleet contract ([`platform-dashboard-rest/`](../platform-dashboard-rest/), catalog #4). It shares this
 contract's `Setpoints` / `SetpointsPatch` body shape but is a **different** operation, audience, and
 provenance (`source = operator_edit`, returned `200`). Crop-profile assignment (a third way a bundle
-is set, `source = profile`) is also in `frontend-rest`. The live-push WebSocket fan-out is
-[`frontend-ws/`](../frontend-ws/) (catalog #5). None of those are described here.
+is set, `source = profile`) is also in `platform-dashboard-rest`. The live-push WebSocket fan-out is
+[`platform-dashboard-live-ws/`](../platform-dashboard-live-ws/) (catalog #5). None of those are described here.
 
 ## File layout
 
@@ -41,12 +41,12 @@ examples/                    # fixtures used as tests (see below)
 redocly.yaml                 # lint config
 ```
 
-References are relative, the same convention as [`frontend-rest/`](../frontend-rest/) and
-[`controller-rest/`](../controller-rest/): the path file points at
+References are relative, the same convention as [`platform-dashboard-rest/`](../platform-dashboard-rest/) and
+[`platform-controller-control-rest/`](../platform-controller-control-rest/): the path file points at
 `../components/schemas/setpoints.json#/SetpointsPatch`, and schema files cross-reference siblings
 (e.g. `setpoints.json` → `./common.json#/Slug`). Any OpenAPI 3.1 tool that follows `$ref`s reads
 `openapi.json` directly; `redocly bundle` collapses the tree into one self-contained file. The
-`Setpoints` bundle is deliberately a **copy** of the one in `frontend-rest` (same Go DTO backs both
+`Setpoints` bundle is deliberately a **copy** of the one in `platform-dashboard-rest` (same Go DTO backs both
 operations), kept local to this contract rather than cross-contract `$ref`'d — the same self-contained
 convention the other contracts use for shared definitions.
 
@@ -61,7 +61,7 @@ The one greenhouse-scoped path. Base path `/api` is the nginx-proxied prefix.
 The `202 Accepted` body is the resulting **intended state**: the merged bundle recorded with
 `source = optimizer` provenance and delivered to the controller, or held and re-asserted when the
 controller is offline (platform §5). The operator's ad-hoc `PATCH` on the same path is a **different**
-contract (catalog #4, [`frontend-rest/`](../frontend-rest/)).
+contract (catalog #4, [`platform-dashboard-rest/`](../platform-dashboard-rest/)).
 
 ## Identity
 
@@ -72,7 +72,7 @@ this API — one identity, no translation layer
 ## Field naming
 
 Wire field names are **snake_case** (`temperature_day_c`, `greenhouse_id`), consistent with the MQTT,
-controller-rest, and frontend-rest contracts and RFC-007. REST bodies are **not** wrapped in the
+platform-controller-control-rest, and platform-dashboard-rest contracts and RFC-007. REST bodies are **not** wrapped in the
 RFC-007 `schema_version` envelope (matching the other REST contracts); identity (`greenhouse_id`) is
 embedded in the path and the contract version is `info.version`.
 
@@ -85,7 +85,7 @@ ISO 8601, UTC, millisecond precision.
 ## Validation semantics
 
 A submission is rejected with **422** and a `ValidationError` body that names the violated `field` and
-`bound` — the same shape the [controller REST](../controller-rest/) and [frontend-rest](../frontend-rest/)
+`bound` — the same shape the [controller REST](../platform-controller-control-rest/) and [platform-dashboard-rest](../platform-dashboard-rest/)
 contracts return and the platform relays under
 [RFC-005](../../docs/decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain).
 A rejected submission is **not** recorded as intended state. Two classes of rule:
@@ -98,12 +98,12 @@ A rejected submission is **not** recorded as intended state. Two classes of rule
   server-side and surface as the same 422.
 - **Crop-safe envelope** — beyond the generic physical bounds above, a submission on this path is
   additionally validated against the **active crop profile stage's crop-safe envelope** (the per-target
-  `min`/`max` an operator sets on the assigned profile, `frontend-rest StageBounds`). A target the plan
+  `min`/`max` an operator sets on the assigned profile, `platform-dashboard-rest StageBounds`). A target the plan
   moves outside its envelope is rejected **422** naming that field, with a crop-safe bound. This is the
   platform-side backstop that makes it the single authority for crop safety
   ([RFC-005](../../docs/decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain)):
   the optimizer's own constraint engine pre-filters to the same envelope (read from the
-  [planning-context](../optimizer-read-rest/) `bounds`), so a `202` is expected and a `422` means the
+  [planning-context](../platform-optimizer-planning-rest/) `bounds`), so a `202` is expected and a `422` means the
   optimizer's view of the bounds disagreed with the platform's — a mid-cycle profile change or contract
   drift, escalated rather than retried. A greenhouse with no assignment, or a stage that defines no
   envelope, is not gated here — only the generic physical bounds apply. The envelope is **not** in the
@@ -153,7 +153,7 @@ covers it). `security-defined` and `operation-4xx-response` stay **on**: the POS
 declared `bearerAuth` scheme and has 4xx error paths.
 
 ```
-npx @redocly/cli lint --config contracts/optimizer-write-rest/redocly.yaml contracts/optimizer-write-rest/openapi.json
+npx @redocly/cli lint --config contracts/optimizer-platform-setpoints-rest/redocly.yaml contracts/optimizer-platform-setpoints-rest/openapi.json
 ```
 
 This check is **automated** by the repo's contract harness —

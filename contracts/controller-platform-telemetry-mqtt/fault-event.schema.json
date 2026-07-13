@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://greenhouse.local/contracts/mqtt/fault-event.schema.json",
+  "$id": "https://greenhouse.local/contracts/controller-platform-telemetry-mqtt/fault-event.schema.json",
   "title": "Fault Event",
   "description": "A sensor, actuator, or subsystem fault detected by the controller, published on gh/{greenhouse_id}/fault (controller spec §7 safety interlocks, §8 sensor fault detection). The envelope zone_id scopes zone-local faults (e.g. a zone's soil-moisture sensor or irrigation valve).",
   "type": "object",
@@ -41,7 +41,7 @@
     }
   },
   "allOf": [
-    { "$ref": "https://greenhouse.local/contracts/mqtt/envelope.schema.json" },
+    { "$ref": "https://greenhouse.local/contracts/controller-platform-telemetry-mqtt/envelope.schema.json" },
     {
       "properties": {
         "component": { "$ref": "#/$defs/component" },

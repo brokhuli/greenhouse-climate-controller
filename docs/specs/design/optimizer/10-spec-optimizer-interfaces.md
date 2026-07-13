@@ -61,7 +61,7 @@ The browser SPA does **not** call this FastAPI surface directly. Per the fronten
 boundary ([frontend constraints — the browser talks only to the Go API](../frontend/09-spec-frontend-constraints.md#the-browser-talks-only-to-the-go-api)),
 the platform **Go API proxies and aggregates** these operator endpoints — plan/escalation/model/enable
 reads, the `fleet` rollup, and the operator-gated mutations — and re-exposes them to the SPA under the
-**versioned** [`contracts/frontend-rest/`](../../../../contracts/frontend-rest/) surface
+**versioned** [`contracts/platform-dashboard-rest/`](../../../../contracts/platform-dashboard-rest/) surface
 ([platform interfaces §3](../platform/09-spec-platform-interfaces.md#3-api-surface-inventory)). The Go
 API also **derives** the internal `GET /health` above into a versioned frontend
 `GET /api/optimizer/status` for the console's service-health badge — overall status + degraded reason,

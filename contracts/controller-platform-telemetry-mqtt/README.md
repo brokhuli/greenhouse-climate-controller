@@ -33,7 +33,7 @@ command/plan topics here
 - The simulated-clock **time-scale** rides inside the retained `gh/{id}/state` snapshot as an
   optional `simulation` object (`time_scale`, `tick_index`) — sim-only, omitted on real hardware.
   No new topic: it is part of the consolidated state, set over the controller's sim-only
-  [`/sim/time-scale`](../controller-rest/) REST surface (controller HAL §7).
+  [`/sim/time-scale`](../platform-controller-control-rest/) REST surface (controller HAL §7).
 - The `actuator/{actuator}/state` topic carries **house-level** actuators only. `irrigation_valve`
   is per-zone and is **not** published here — there is no zone-scoped actuator topic; per-zone valve
   state is reported only in the retained `gh/{id}/state` snapshot's `zones[].irrigation`. (The
@@ -112,7 +112,7 @@ one piece still deferred ([`docs/backlog.md`](../../docs/backlog.md)); the overa
 ## Consuming the schemas (`$ref` resolution)
 
 Each schema has a stable `$id` under the base
-`https://greenhouse.local/contracts/mqtt/`, and cross-schema references use absolute `$id`
+`https://greenhouse.local/contracts/controller-platform-telemetry-mqtt/`, and cross-schema references use absolute `$id`
 URIs (the envelope, and the shared `$defs` reused by `system-state`). The `$id` base is **not
 a network location** — register the local files under that base URI with your validator so
 refs resolve offline:

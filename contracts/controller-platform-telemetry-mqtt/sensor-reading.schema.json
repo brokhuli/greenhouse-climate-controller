@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://greenhouse.local/contracts/mqtt/sensor-reading.schema.json",
+  "$id": "https://greenhouse.local/contracts/controller-platform-telemetry-mqtt/sensor-reading.schema.json",
   "title": "Sensor Reading",
   "description": "A single conditioned sensor reading published by the controller. Used on both gh/{greenhouse_id}/sensor/{metric} (greenhouse-scoped, zone_id null) and gh/{greenhouse_id}/zone/{zone_id}/sensor/{metric} (zone-scoped). Scope is determined by the topic and the envelope zone_id, not by the metric.",
   "type": "object",
@@ -21,7 +21,7 @@
     }
   },
   "allOf": [
-    { "$ref": "https://greenhouse.local/contracts/mqtt/envelope.schema.json" },
+    { "$ref": "https://greenhouse.local/contracts/controller-platform-telemetry-mqtt/envelope.schema.json" },
     {
       "properties": {
         "metric": { "$ref": "#/$defs/metric" },

@@ -66,8 +66,8 @@ frontend terms.
   are the single source of truth.
 - **Forces:** Client schemas mirror the platform's shapes and validate at runtime
   ([data-model](./05-spec-frontend-data-model.md)); the client schemas validate
-  against the authored Go-API↔SPA contract in `contracts/` (`frontend-rest/`,
-  `frontend-ws/`).
+  against the authored Go-API↔SPA contract in `contracts/` (`platform-dashboard-rest/`,
+  `platform-dashboard-live-ws/`).
 - **Forbids:** Inventing payload shapes the API doesn't emit; silently tolerating a
   `schema_version` mismatch.
 

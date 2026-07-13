@@ -4,12 +4,12 @@ The platform Go API's **live-push surface** — the frames the Phase 2 React SPA
 WebSocket so the dashboard reflects the fleet in real time without polling. This is **catalog
 contract #5** ([`spec-contracts.md §2.5`](../../docs/specs/design/spec-contracts.md)); the normative
 artifacts are the JSON Schema files here (Draft 2020-12 — the same dialect as the
-[MQTT](../mqtt/), [controller-rest](../controller-rest/), and [frontend-rest](../frontend-rest/)
+[MQTT](../controller-platform-telemetry-mqtt/), [platform-controller-control-rest](../platform-controller-control-rest/), and [platform-dashboard-rest](../platform-dashboard-rest/)
 contracts, per
 [RFC-007](../../docs/decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)).
 
 The SPA's whole contract is with the Go API: **REST** for request/response
-([`frontend-rest/`](../frontend-rest/), catalog #4) and **WebSockets** for live push (this contract).
+([`platform-dashboard-rest/`](../platform-dashboard-rest/), catalog #4) and **WebSockets** for live push (this contract).
 The browser never reaches MQTT or the controllers directly
 ([frontend overview §3](../../docs/specs/design/frontend/01-spec-frontend-overview.md#3-system-context)).
 This contract formalizes the *client's working contract* previously sketched in
@@ -25,7 +25,7 @@ Platform → SPA, matching the catalog.
 ## File layout
 
 Each frame type is its own JSON Schema, composing a shared envelope — the same one-file-per-message
-layout as [`mqtt/`](../mqtt/):
+layout as [`controller-platform-telemetry-mqtt/`](../controller-platform-telemetry-mqtt/):
 
 ```
 envelope.schema.json       # the RFC-007 4-field envelope, composed into every frame via allOf
@@ -39,7 +39,7 @@ examples/                  # fixtures used as tests (see below)
 ```
 
 There is no `redocly.yaml` — that is an OpenAPI artifact (the REST contracts). This contract is
-validated with Ajv, exactly like [`mqtt/`](../mqtt/).
+validated with Ajv, exactly like [`controller-platform-telemetry-mqtt/`](../controller-platform-telemetry-mqtt/).
 
 ## Frame map
 
@@ -70,7 +70,7 @@ Telemetry frames may be zone-scoped (a zone's `soil_moisture` / `par`) and carry
 ## Envelope
 
 Every frame carries the four RFC-007 §3 fields ([`envelope.schema.json`](./envelope.schema.json)),
-composed via `allOf` — the same envelope the [MQTT](../mqtt/) frames carry, one transport down:
+composed via `allOf` — the same envelope the [MQTT](../controller-platform-telemetry-mqtt/) frames carry, one transport down:
 
 | Field | Type | Notes |
 |---|---|---|
@@ -90,9 +90,9 @@ Unlike the REST contracts, frames **do** carry this envelope (like MQTT); the co
 Each frame is **flat**: the envelope fields, a `type` discriminator, and the payload all sit at the
 top level — the same layout as an MQTT message, with `type` added. A frame schema is
 `allOf: [ {$ref: envelope}, { …type + payload } ]` closed with `unevaluatedProperties: false`, so no
-stray fields slip through. This mirrors `mqtt/` rather than nesting the payload under a `data` wrapper.
+stray fields slip through. This mirrors `controller-platform-telemetry-mqtt/` rather than nesting the payload under a `data` wrapper.
 
-The `event` frame is the [frontend-rest `EventEntry`](../frontend-rest/) shape with its `greenhouse_id`
+The `event` frame is the [platform-dashboard-rest `EventEntry`](../platform-dashboard-rest/) shape with its `greenhouse_id`
 and `ts` lifted into the envelope: REST bodies have no envelope so `EventEntry` embeds them inline,
 whereas here they are the envelope's. The dashboard `severity` grading (`info`/`warning`/`critical`)
 is distinct from the controller's fault severity (`warning`/`alarm`).
@@ -134,14 +134,14 @@ their frame schema (and the `message.schema.json` union); the three `*.bad-*.jso
 ## Validation
 
 The schemas and fixtures are validated with **Ajv** (Draft 2020-12, strict mode), the same way as the
-[MQTT](../mqtt/) contract: each schema is registered by its `$id`, each positive fixture must validate
+[MQTT](../controller-platform-telemetry-mqtt/) contract: each schema is registered by its `$id`, each positive fixture must validate
 against its frame schema and the union, and each `*.bad-*.json` must fail. The schemas also compile
 clean under strict mode, so strict validators in all three stacks accept them.
 
-Each schema has a stable `$id` under the base `https://greenhouse.local/contracts/frontend-ws/`, and
+Each schema has a stable `$id` under the base `https://greenhouse.local/contracts/platform-dashboard-live-ws/`, and
 cross-schema references (the envelope, the shared `$defs` in `common`) use absolute `$id` URIs. The
 base is **not a network location** — register the local files under that base with your validator so
-refs resolve offline (the same per-stack guidance as [`mqtt/README.md`](../mqtt/README.md#consuming-the-schemas-ref-resolution)).
+refs resolve offline (the same per-stack guidance as [`controller-platform-telemetry-mqtt/README.md`](../controller-platform-telemetry-mqtt/README.md#consuming-the-schemas-ref-resolution)).
 
 This check is **automated** by the repo's contract harness —
 [`scripts/validate-contracts.mjs`](../../scripts/validate-contracts.mjs) (`npm run validate:contracts`),

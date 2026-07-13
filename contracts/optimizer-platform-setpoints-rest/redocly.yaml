@@ -4,7 +4,7 @@ extends:
   - recommended
 rules:
   # This is an internal cross-component contract; licensing is covered by the repo LICENSE.md,
-  # not per-document (same posture as the controller-rest and frontend-rest contracts).
+  # not per-document (same posture as the platform-controller-control-rest and platform-dashboard-rest contracts).
   info-license: off
   # security-defined stays ON: the POST references the declared `bearerAuth` scheme as an optional
   # scheme (security: [{}, { bearerAuth: [] }]) — enforcement is gated on SERVICE_AUTH_MODE (RFC-011).

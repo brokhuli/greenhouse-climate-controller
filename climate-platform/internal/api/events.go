@@ -16,7 +16,7 @@ func (s *Server) listEvents(c echo.Context) error {
 		filter.GreenhouseID = &greenhouseID
 	}
 	// Unknown filter values are ignored rather than rejected — the activity feed only
-	// defines a 200 response (frontend-rest events).
+	// defines a 200 response (platform-dashboard-rest events).
 	if kind := c.QueryParam("kind"); domain.EventKinds[kind] {
 		filter.Kind = &kind
 	}

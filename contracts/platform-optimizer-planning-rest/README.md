@@ -5,12 +5,12 @@ The platform Go API's **Phase 3 telemetry read path** — the request/response c
 This is **catalog contract #7**
 ([`spec-contracts.md §2.7`](../../docs/specs/design/spec-contracts.md)); the normative artifact is
 [`openapi.json`](./openapi.json) (OpenAPI 3.1, which uses the JSON Schema 2020-12 dialect — the same
-dialect as the [MQTT](../mqtt/), [controller-rest](../controller-rest/), [frontend-rest](../frontend-rest/),
-and [optimizer-write-rest](../optimizer-write-rest/) contracts, per
+dialect as the [MQTT](../controller-platform-telemetry-mqtt/), [platform-controller-control-rest](../platform-controller-control-rest/), [platform-dashboard-rest](../platform-dashboard-rest/),
+and [optimizer-platform-setpoints-rest](../optimizer-platform-setpoints-rest/) contracts, per
 [RFC-007](../../docs/decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)).
 
 This is the optimizer's **read** counterpart to its setpoint **write** path
-([`optimizer-write-rest/`](../optimizer-write-rest/), catalog #3). Per the **revised**
+([`optimizer-platform-setpoints-rest/`](../optimizer-platform-setpoints-rest/), catalog #3). Per the **revised**
 [RFC-008](../../docs/decisions/request-for-comments.md#rfc-008-phase-3-telemetry-read-path)
 ([ADR 2026-07-07](../../docs/decisions/architecture-design-record.md)), the cross-service boundary is
 **REST**: the platform may back these handlers with **internal SQL views or TimescaleDB continuous
@@ -31,11 +31,11 @@ planning. History is returned as `(min, mean, max)` **summaries** per metric per
 not raw readings, so the payload stays bounded.
 
 This is **distinct** from the operator/fleet telemetry range query
-(`GET .../telemetry?window`, [`frontend-rest/`](../frontend-rest/), catalog #4): that seeds the SPA's
+(`GET .../telemetry?window`, [`platform-dashboard-rest/`](../platform-dashboard-rest/), catalog #4): that seeds the SPA's
 charts with raw readings; this serves the optimizer's planning context as summaries plus provenance
 and data-quality signals. The **setpoint write path** (`POST .../setpoints`) is
-[`optimizer-write-rest/`](../optimizer-write-rest/) (catalog #3); the live-push WebSocket fan-out is
-[`frontend-ws/`](../frontend-ws/) (catalog #5). None of those are described here.
+[`optimizer-platform-setpoints-rest/`](../optimizer-platform-setpoints-rest/) (catalog #3); the live-push WebSocket fan-out is
+[`platform-dashboard-live-ws/`](../platform-dashboard-live-ws/) (catalog #5). None of those are described here.
 
 ## File layout
 
@@ -57,11 +57,11 @@ examples/                    # fixtures used as tests (see below)
 redocly.yaml                 # lint config
 ```
 
-References are relative, the same convention as [`optimizer-write-rest/`](../optimizer-write-rest/) and
-[`frontend-rest/`](../frontend-rest/). Any OpenAPI 3.1 tool that follows `$ref`s reads `openapi.json`
+References are relative, the same convention as [`optimizer-platform-setpoints-rest/`](../optimizer-platform-setpoints-rest/) and
+[`platform-dashboard-rest/`](../platform-dashboard-rest/). Any OpenAPI 3.1 tool that follows `$ref`s reads `openapi.json`
 directly; `redocly bundle` collapses the tree into one self-contained file. The `Setpoints` /
 `ZoneTargets` bundle, the `Metric` enum, and the `ActuatorName` enum are deliberately **copies** of
-the definitions in `optimizer-write-rest` / `frontend-rest` (the same Go DTOs back them), kept local to this
+the definitions in `optimizer-platform-setpoints-rest` / `platform-dashboard-rest` (the same Go DTOs back them), kept local to this
 contract rather than cross-contract `$ref`'d — the same self-contained convention the other contracts
 use for shared definitions.
 
@@ -88,7 +88,7 @@ the response `from`/`to` report the resolved span. `interval` is the summary buc
 - **`from` / `to` / `interval`** — the resolved window span and bucket width; ages in `data_quality`
   are computed against `to`.
 - **`setpoints`** — `CurrentSetpoints`: the current intended state (`targets`, the same bundle
-  `optimizer-write-rest` accepts/returns) with its `source` (`optimizer` / `operator_edit` / `profile`) and
+  `optimizer-platform-setpoints-rest` accepts/returns) with its `source` (`optimizer` / `operator_edit` / `profile`) and
   `updated_at` provenance — the crop-safe baseline the optimizer refines against. It also carries the
   active stage's crop-safe **`bounds`** (`StageBounds`, an optional `min`/`max` per scalar climate
   target, plus an optional per-zone irrigation envelope under `bounds.zones`, `ZoneBounds`): the
@@ -123,7 +123,7 @@ Zone-scoped rows (soil-moisture series, per-zone actuators, per-zone faults) car
 
 ### schema_version in-body
 
-REST bodies in the platform's **write** contracts (`optimizer-write-rest`, `frontend-rest`) are **not**
+REST bodies in the platform's **write** contracts (`optimizer-platform-setpoints-rest`, `platform-dashboard-rest`) are **not**
 wrapped in the RFC-007 `schema_version` envelope — their identity is the path `greenhouse_id` and
 their version is `info.version`. This **read** contract is the one exception: it carries a top-level
 `schema_version` integer, because the optimizer's identity-consistency check explicitly reads it to
@@ -134,7 +134,7 @@ drifted"*, [input-gating spec](../../docs/specs/design/optimizer/07-spec-optimiz
 ## Field naming
 
 Wire field names are **snake_case** (`greenhouse_id`, `bucket_start`, `age_seconds`), consistent with
-the MQTT, controller-rest, frontend-rest, and optimizer-write-rest contracts and RFC-007.
+the MQTT, platform-controller-control-rest, platform-dashboard-rest, and optimizer-platform-setpoints-rest contracts and RFC-007.
 
 ## Units
 
@@ -153,7 +153,7 @@ cross-field write invariants; there is no 422 for body validation.
 
 **Unauthenticated on the trusted Docker network.** This is a **read** path: it carries no authority
 and no safety concern (it cannot drive the greenhouse to an unsafe state), so it matches the
-anonymous-viewer posture of the operator/fleet telemetry reads (`frontend-rest` slice 2a).
+anonymous-viewer posture of the operator/fleet telemetry reads (`platform-dashboard-rest` slice 2a).
 [RFC-011](../../docs/decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009)
 scopes config-gated service auth to the two **write** boundaries (controller REST, setpoint POST), not
 this read. The single operation declares `security: []` (explicitly public) and the document defines
@@ -182,7 +182,7 @@ covers it) and `security-defined` off because the contract is entirely unauthent
 check). `operation-4xx-response` stays **on**: the GET has 404/422 error paths.
 
 ```
-npx @redocly/cli lint --config contracts/optimizer-read-rest/redocly.yaml contracts/optimizer-read-rest/openapi.json
+npx @redocly/cli lint --config contracts/platform-optimizer-planning-rest/redocly.yaml contracts/platform-optimizer-planning-rest/openapi.json
 ```
 
 This check is **automated** by the repo's contract harness —

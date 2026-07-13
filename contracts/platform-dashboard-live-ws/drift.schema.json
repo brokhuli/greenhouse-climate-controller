@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://greenhouse.local/contracts/frontend-ws/drift.schema.json",
+  "$id": "https://greenhouse.local/contracts/platform-dashboard-live-ws/drift.schema.json",
   "title": "Drift Frame",
   "description": "A drift frame (2b): the platform's reconciliation detected that a greenhouse's intended setpoints differ from what the controller reports. The SPA patches greenhouseSummary.drift in the fleet cache and raises a drift event (frontend data model §5). Greenhouse-scoped — the envelope zone_id is null.",
   "type": "object",
   "allOf": [
-    { "$ref": "https://greenhouse.local/contracts/frontend-ws/envelope.schema.json" },
+    { "$ref": "https://greenhouse.local/contracts/platform-dashboard-live-ws/envelope.schema.json" },
     {
       "properties": {
         "type": {

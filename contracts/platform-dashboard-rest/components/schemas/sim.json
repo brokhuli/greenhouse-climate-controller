@@ -15,7 +15,7 @@
   },
   "TimeScale": {
     "type": "object",
-    "description": "A controller's simulated-clock speed state, as relayed from the controller (controller-rest `TimeScale`). On GET this is the current scheduler target; on PATCH this is the accepted scheduler target, with the WebSocket status frame / next telemetry snapshot serving as the authoritative observed value. Ephemeral on the controller — resets to 1.0 on restart. Simulated HAL only; a real-hardware controller has no time-scale.",
+    "description": "A controller's simulated-clock speed state, as relayed from the controller (platform-controller-control-rest `TimeScale`). On GET this is the current scheduler target; on PATCH this is the accepted scheduler target, with the WebSocket status frame / next telemetry snapshot serving as the authoritative observed value. Ephemeral on the controller — resets to 1.0 on restart. Simulated HAL only; a real-hardware controller has no time-scale.",
     "properties": {
       "scale": {
         "type": "number",

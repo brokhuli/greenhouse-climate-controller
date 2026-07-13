@@ -21,7 +21,7 @@
       "shade_screen",
       "irrigation_valve"
     ],
-    "description": "Closed set of actuators (physical-system-single.md §Outputs); the same names the MQTT, controller-rest, and frontend-rest contracts use. Kept as a local copy rather than a cross-contract $ref, matching this repo's self-contained-contract convention."
+    "description": "Closed set of actuators (physical-system-single.md §Outputs); the same names the MQTT, platform-controller-control-rest, and platform-dashboard-rest contracts use. Kept as a local copy rather than a cross-contract $ref, matching this repo's self-contained-contract convention."
   },
   "Error": {
     "type": "object",
@@ -37,7 +37,7 @@
   },
   "ValidationError": {
     "type": "object",
-    "description": "A rejected request, naming the field and the bound it violated — the same shape the controller REST, frontend-rest, and optimizer-write-rest contracts return. Here it is returned when a query parameter is out of range (e.g. an unknown window or interval).",
+    "description": "A rejected request, naming the field and the bound it violated — the same shape the controller REST, platform-dashboard-rest, and optimizer-platform-setpoints-rest contracts return. Here it is returned when a query parameter is out of range (e.g. an unknown window or interval).",
     "properties": {
       "error": {
         "type": "string",

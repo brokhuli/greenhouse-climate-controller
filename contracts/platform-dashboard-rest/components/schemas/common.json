@@ -21,7 +21,7 @@
       "shade_screen",
       "irrigation_valve"
     ],
-    "description": "Closed set of actuators (physical-system-single.md §Outputs); the same names the MQTT and controller-rest contracts use. Kept as a local copy rather than cross-contract $ref, matching this contract's convention for shared definitions."
+    "description": "Closed set of actuators (physical-system-single.md §Outputs); the same names the MQTT and platform-controller-control-rest contracts use. Kept as a local copy rather than cross-contract $ref, matching this contract's convention for shared definitions."
   },
   "Error": {
     "type": "object",

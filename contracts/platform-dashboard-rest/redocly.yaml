@@ -4,7 +4,7 @@ extends:
   - recommended
 rules:
   # This is an internal cross-component contract; licensing is covered by the repo LICENSE.md,
-  # not per-document (same posture as the controller-rest contract).
+  # not per-document (same posture as the platform-controller-control-rest contract).
   info-license: off
   # The fleet list (GET /api/greenhouses) and activity feed (GET /api/events) always return a
   # collection — they have no 4XX path — so they legitimately have no 4XX response.

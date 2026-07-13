@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://greenhouse.local/contracts/mqtt/envelope.schema.json",
+  "$id": "https://greenhouse.local/contracts/controller-platform-telemetry-mqtt/envelope.schema.json",
   "title": "MQTT Message Envelope",
   "description": "Common envelope carried by every MQTT telemetry message (RFC-007 §3). Message schemas compose this via allOf and add their message-specific fields, then close the object with `unevaluatedProperties: false`. This schema intentionally leaves `additionalProperties`/`unevaluatedProperties` unset so it annotates only its own four fields — setting `additionalProperties: true` here would mark every property as evaluated and defeat the composing schema's `unevaluatedProperties: false`. Identity fields are redundant with the topic so an ingested row stands alone.",
   "type": "object",

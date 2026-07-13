@@ -1,7 +1,7 @@
 {
   "ZoneStatus": {
     "type": "object",
-    "description": "An irrigation zone's live state for the detail view, served alongside (not inside) the target bundle. The mutable targets — thresholds, schedule — ride on Setpoints.zones (ZoneTargets); this is the read-only live half the controller reports (controller-rest ZoneStatus), keyed to a target by zone_id. The platform aggregates the controller's GET /zones into both.",
+    "description": "An irrigation zone's live state for the detail view, served alongside (not inside) the target bundle. The mutable targets — thresholds, schedule — ride on Setpoints.zones (ZoneTargets); this is the read-only live half the controller reports (platform-controller-control-rest ZoneStatus), keyed to a target by zone_id. The platform aggregates the controller's GET /zones into both.",
     "properties": {
       "zone_id": { "$ref": "./common.json#/Slug" },
       "soil_moisture_vwc": {

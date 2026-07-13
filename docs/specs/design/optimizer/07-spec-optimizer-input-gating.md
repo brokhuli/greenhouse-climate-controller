@@ -53,7 +53,7 @@ baseline stays in force regardless ([P3-RESIL-1](../../artifacts/non-functional-
 cycle never destabilizes control — it only forgoes refinement until trusted inputs return.
 
 > **Read-API note.** The gate's signals are exposed **directly on the RFC-008 telemetry read API**,
-> now authored as the [`optimizer-read-rest`](../../../../contracts/optimizer-read-rest/) contract: the
+> now authored as the [`platform-optimizer-planning-rest`](../../../../contracts/platform-optimizer-planning-rest/) contract: the
 > `PlanningContext` response carries a `data_quality` block (`controller_mode`, `time_scale`,
 > per-metric `freshness[]`, and active `faults[]`) plus per-actuator `health` on each `ActuatorSnapshot`.
 > The gate's checks map onto these fields — **freshness** → `freshness[]`, **completeness** → the

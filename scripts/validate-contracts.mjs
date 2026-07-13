@@ -5,15 +5,17 @@
 // previously tracked as "blocked on CI"): every positive example fixture must validate against
 // its schema, and every `*.bad-*.json` counter-example must fail. Two contract shapes:
 //
-//   - JSON-Schema contracts (mqtt/, frontend-ws/): each `examples/<frame>.*.json` is validated
+//   - JSON-Schema contracts (controller-platform-telemetry-mqtt/, platform-dashboard-live-ws/):
+//     each `examples/<frame>.*.json` is validated
 //     against `<frame>.schema.json`, named by the fixture's first dot-segment.
-//   - OpenAPI contracts (controller-rest/, frontend-rest/): each example is validated against a
+//   - OpenAPI contracts (platform-controller-control-rest/, platform-dashboard-rest/): each example is validated against a
 //     named component schema under `components/schemas/`, mapped by `examples/cases.json`; the
 //     `openapi.json` document is additionally linted with Redocly using the contract's redocly.yaml.
 //
 // Cross-schema `$ref`s resolve offline: every schema file is registered under an `$id` derived
 // from its repo-relative path (`https://greenhouse.local/<path>`), matching the base the MQTT/WS
-// schemas already embed (see contracts/mqtt/README.md "consuming the schemas").
+// schemas already embed (see contracts/controller-platform-telemetry-mqtt/README.md
+// "consuming the schemas").
 //
 // Exit code: 0 when every fixture matches its expectation and every lint passes; 1 otherwise.
 
@@ -35,7 +37,7 @@ const ID_BASE = 'https://greenhouse.local/';
 // property checked separately. allErrors so a failing fixture reports every violation.
 const ajv = addFormats(new Ajv2020({ strict: false, allErrors: true, allowUnionTypes: true }));
 
-/** Repo-relative POSIX path → stable `$id`. Matches the `$id` mqtt/ws schemas already embed. */
+/** Repo-relative POSIX path → stable `$id`. Matches the `$id` telemetry/ws schemas already embed. */
 const idFor = (absPath) => ID_BASE + relative(repoRoot, absPath).split(/[\\/]/).join(posix.sep);
 
 const listJson = (dir) =>
@@ -51,13 +53,13 @@ function registerSchema(absPath) {
 }
 
 const CONTRACTS = [
-  { dir: 'contracts/mqtt', kind: 'jsonschema' },
-  { dir: 'contracts/frontend-ws', kind: 'jsonschema' },
-  { dir: 'contracts/optimizer-plan', kind: 'jsonschema' },
-  { dir: 'contracts/controller-rest', kind: 'openapi' },
-  { dir: 'contracts/frontend-rest', kind: 'openapi' },
-  { dir: 'contracts/optimizer-write-rest', kind: 'openapi' },
-  { dir: 'contracts/optimizer-read-rest', kind: 'openapi' },
+  { dir: 'contracts/controller-platform-telemetry-mqtt', kind: 'jsonschema' },
+  { dir: 'contracts/platform-dashboard-live-ws', kind: 'jsonschema' },
+  { dir: 'contracts/optimizer-internal-plan-schema', kind: 'jsonschema' },
+  { dir: 'contracts/platform-controller-control-rest', kind: 'openapi' },
+  { dir: 'contracts/platform-dashboard-rest', kind: 'openapi' },
+  { dir: 'contracts/optimizer-platform-setpoints-rest', kind: 'openapi' },
+  { dir: 'contracts/platform-optimizer-planning-rest', kind: 'openapi' },
 ];
 
 const results = []; // { contract, name, ok, detail }

@@ -7,7 +7,7 @@
 -- the contract's exact field list.
 
 -- The crop-profile library. stages is a JSON array of {stage, targets:Setpoints}
--- (contracts/frontend-rest CropProfile). id is the operator-chosen RFC-007 slug.
+-- (contracts/platform-dashboard-rest CropProfile). id is the operator-chosen RFC-007 slug.
 CREATE TABLE crop_profiles (
     id         TEXT PRIMARY KEY,
     name       TEXT        NOT NULL,

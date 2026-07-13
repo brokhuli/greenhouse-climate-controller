@@ -8,7 +8,7 @@ import (
 )
 
 // The reconciler is the control-down owner, so it builds the controller REST resource paths
-// itself (the relay appends these to a controller's registered base URL; controller-rest
+// itself (the relay appends these to a controller's registered base URL; platform-controller-control-rest
 // serves every resource under /greenhouses/{greenhouse_id}).
 func controllerSetpointsPath(greenhouseID string) string {
 	return "/greenhouses/" + greenhouseID + "/setpoints"
@@ -24,7 +24,7 @@ func controllerZonePath(greenhouseID, zoneID string) string {
 
 // globalSetpointsBody marshals a bundle's global climate setpoints for the controller's
 // PATCH /setpoints, which owns only the global fields — the per-zone targets are delivered
-// separately and would be rejected here (controller-rest SetpointsPatch is
+// separately and would be rejected here (platform-controller-control-rest SetpointsPatch is
 // additionalProperties:false).
 func globalSetpointsBody(setpoints domain.Setpoints) ([]byte, error) {
 	fields, err := toFieldMap(setpoints)
@@ -36,7 +36,7 @@ func globalSetpointsBody(setpoints domain.Setpoints) ([]byte, error) {
 }
 
 // zoneBody marshals one zone's targets for the controller's PATCH /zones/{zone_id}. The
-// zone_id travels in the path, not the body (controller-rest ZoneConfigPatch).
+// zone_id travels in the path, not the body (platform-controller-control-rest ZoneConfigPatch).
 func zoneBody(zone domain.ZoneTargets) ([]byte, error) {
 	fields, err := toFieldMap(zone)
 	if err != nil {

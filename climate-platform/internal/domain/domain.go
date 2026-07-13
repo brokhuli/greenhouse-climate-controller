@@ -3,8 +3,8 @@
 // kinds/severities), the metric→unit binding, and the canonical telemetry/event
 // records that the store, ingester, REST API, and WebSocket hub all pass around.
 //
-// It deliberately mirrors the wire contracts under contracts/ (mqtt, frontend-rest,
-// frontend-ws) so there is one identity and one set of enums with no translation layer.
+// It deliberately mirrors the wire contracts under contracts/ (mqtt, platform-dashboard-rest,
+// platform-dashboard-live-ws) so there is one identity and one set of enums with no translation layer.
 package domain
 
 import (
@@ -74,7 +74,7 @@ var Actuators = map[string]bool{
 	"irrigation_valve": true,
 }
 
-// EventKinds is the closed set of activity-feed event kinds (frontend-rest EventEntry).
+// EventKinds is the closed set of activity-feed event kinds (platform-dashboard-rest EventEntry).
 // "drift" and "profile_applied" exist in the contract but are produced only in 2b.
 var EventKinds = map[string]bool{
 	"fault":           true,

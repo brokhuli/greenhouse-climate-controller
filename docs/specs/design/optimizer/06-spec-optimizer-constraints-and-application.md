@@ -30,7 +30,7 @@ these two are the whole of it:
   [§3](#3-write-path-concurrency--reconciliation)).
   **Bounds are optional, and absence is a legal state — not [contract drift](./10-spec-optimizer-interfaces.md#escalation-reason-codes).**
   The read contract makes `bounds` absent "when the stage defines none"
-  ([optimizer-read-rest](../../../../contracts/optimizer-read-rest/README.md)), and a `StageBounds` may
+  ([platform-optimizer-planning-rest](../../../../contracts/platform-optimizer-planning-rest/README.md)), and a `StageBounds` may
   **omit any per-field bound** — but a *present* `Bound` always carries **both** `min` and `max` (the
   read contract requires both, and the platform enforces both sides on the write path). The optimizer
   reads absence as *no envelope to refine within* and **holds that target's baseline**: a target with no
@@ -124,7 +124,7 @@ within-bounds / confidence thresholds are configuration ([configuration](./11-sp
 ### Write outcomes
 
 The application gate above decides *whether* to write; this table defines how the optimizer treats
-*each* response the [write path](../../../../contracts/optimizer-write-rest/paths/setpoints.json) can
+*each* response the [write path](../../../../contracts/optimizer-platform-setpoints-rest/paths/setpoints.json) can
 return, so no status is silently unhandled. A held write never mutates intended state — the Phase 2
 baseline stays in force ([P3-RESIL-1](../../artifacts/non-functional-requirements.md)) — and every held
 cycle carries a canonical [reason code](./10-spec-optimizer-interfaces.md#escalation-reason-codes).
@@ -132,7 +132,7 @@ cycle carries a canonical [reason code](./10-spec-optimizer-interfaces.md#escala
 | Response | Meaning | Optimizer behavior | Outcome · reason code |
 |---|---|---|---|
 | `202 Accepted` | Recorded as intended state — delivered to the controller, or held for one that is offline. | The refinement landed. | `applied` |
-| `503 Service Unavailable` | Phase 2 **recorded** the intended state but could not reach the controller at write; it re-asserts on reconnect — "retry is not required" ([contract](../../../../contracts/optimizer-write-rest/components/responses.json)). | The refinement landed in the single authority; controller delivery is Phase 2's to complete. | `applied` (controller-offline noted) |
+| `503 Service Unavailable` | Phase 2 **recorded** the intended state but could not reach the controller at write; it re-asserts on reconnect — "retry is not required" ([contract](../../../../contracts/optimizer-platform-setpoints-rest/components/responses.json)). | The refinement landed in the single authority; controller delivery is Phase 2's to complete. | `applied` (controller-offline noted) |
 | `422 Unprocessable` | The optimizer's view of the bounds disagrees with Phase 2's — the crop profile changed mid-cycle, or the bounds contract drifted. | Never retried in a loop; cycle abandoned ([§3](#3-write-path-concurrency--reconciliation)). | `escalated` · `bounds_mismatch` (persistent) |
 | `401 Unauthorized` / `403 Forbidden` | Under `SERVICE_AUTH_MODE=oidc` only: a missing/invalid token, or one lacking the `setpoints:write` role ([authenticating the write path](./10-spec-optimizer-interfaces.md#authenticating-the-phase-2-write-path)). A deployment/credential fault, not a data fault. | Not retried — the same credential cannot succeed. | `escalated` · `write_unauthorized` (persistent) |
 | `404 Not Found` | The greenhouse does not exist — the optimizer is configured for one the platform's registry does not hold. | Not retried; an identity/registry mismatch to fix, not a transient miss. | `escalated` · `contract_drift` (persistent) |

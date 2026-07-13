@@ -53,8 +53,8 @@ is versioned and accompanied by an ADR, per [`contracts/README.md`](../../../con
 | **Format** | JSON Schema (Draft 2020-12), one file per message type; hierarchical `gh/{greenhouse_id}/...` topic taxonomy; common payload envelope |
 | **Phase introduced** | Phase 1 |
 | **Governing decision** | [RFC-007](../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format) (taxonomy, envelope, format), [RFC-001](../../decisions/request-for-comments.md#rfc-001-mqtt-broker-selection) (broker, QoS, retained) |
-| **Location** | [`contracts/mqtt/`](../../../contracts/mqtt/) |
-| **Status** | Authored — envelope + per-message schemas exist under [`contracts/mqtt/`](../../../contracts/mqtt/) |
+| **Location** | [`contracts/controller-platform-telemetry-mqtt/`](../../../contracts/controller-platform-telemetry-mqtt/) |
+| **Status** | Authored — envelope + per-message schemas exist under [`contracts/controller-platform-telemetry-mqtt/`](../../../contracts/controller-platform-telemetry-mqtt/) |
 
 ### 2.2 Controller REST API
 
@@ -65,8 +65,8 @@ is versioned and accompanied by an ADR, per [`contracts/README.md`](../../../con
 | **Format** | OpenAPI 3.1 (uses the JSON Schema 2020-12 dialect); greenhouse-scoped paths; 422 names the violated bound |
 | **Phase introduced** | Phase 1 (consumed by the platform from Phase 2 — the ad-hoc setpoint relay in 2a, the full resolution path in 2b) |
 | **Governing decision** | [RFC-005](../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain) (controller is setpoint-only), [RFC-011](../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009) (unauthenticated by default — Docker network is the trust boundary — with an optional per-controller bearer token; supersedes [RFC-009](../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)), [P1 §11](./controller/08-spec-controller-interfaces.md) |
-| **Location** | [`contracts/controller-rest/`](../../../contracts/controller-rest/) |
-| **Status** | Authored — `openapi.json` + README + example fixtures exist under [`contracts/controller-rest/`](../../../contracts/controller-rest/) |
+| **Location** | [`contracts/platform-controller-control-rest/`](../../../contracts/platform-controller-control-rest/) |
+| **Status** | Authored — `openapi.json` + README + example fixtures exist under [`contracts/platform-controller-control-rest/`](../../../contracts/platform-controller-control-rest/) |
 
 ### 2.3 Phase 2 Setpoint API
 
@@ -77,8 +77,8 @@ is versioned and accompanied by an ADR, per [`contracts/README.md`](../../../con
 | **Format** | OpenAPI 3.1 (uses the JSON Schema 2020-12 dialect); `/api`-prefixed, greenhouse-scoped path; accept (202) / reject with violated bound (422). Shares the `Setpoints` / `SetpointsPatch` body shape with the operator/fleet contract's ad-hoc `PATCH` (#2.4), kept as a local copy per the self-contained-contract convention. |
 | **Phase introduced** | Phase 2b (the bounds-enforcing endpoint); first cross-phase consumer in Phase 3 |
 | **Governing decision** | [RFC-005](../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain) (single authority), [RFC-011](../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009) (config-gated `SERVICE_AUTH_MODE` service boundary — untokened by default, `setpoints:write` under `oidc`) |
-| **Location** | [`contracts/optimizer-write-rest/`](../../../contracts/optimizer-write-rest/) |
-| **Status** | Authored — `openapi.json` + README + example fixtures exist under [`contracts/optimizer-write-rest/`](../../../contracts/optimizer-write-rest/) |
+| **Location** | [`contracts/optimizer-platform-setpoints-rest/`](../../../contracts/optimizer-platform-setpoints-rest/) |
+| **Status** | Authored — `openapi.json` + README + example fixtures exist under [`contracts/optimizer-platform-setpoints-rest/`](../../../contracts/optimizer-platform-setpoints-rest/) |
 
 ### 2.4 Phase 2 operator/fleet REST API
 
@@ -89,8 +89,8 @@ is versioned and accompanied by an ADR, per [`contracts/README.md`](../../../con
 | **Format** | OpenAPI 3.1 (uses the JSON Schema 2020-12 dialect); `/api`-prefixed, greenhouse-scoped paths; 422 names the violated bound |
 | **Phase introduced** | Phase 2 — registration/telemetry/edits in 2a, profiles/assignments in 2b; **Phase 3** adds the `optimizer/*` operator-console paths |
 | **Governing decision** | [P2 API surface](./platform/09-spec-platform-interfaces.md#3-api-surface-inventory), [ADR 2026-06-17](../../decisions/architecture-design-record.md) |
-| **Location** | [`contracts/frontend-rest/`](../../../contracts/frontend-rest/) |
-| **Status** | Authored — `openapi.json` + README + example fixtures exist under [`contracts/frontend-rest/`](../../../contracts/frontend-rest/), validated by the contract harness (incl. the Phase 3 `optimizer/*` paths + fixtures) |
+| **Location** | [`contracts/platform-dashboard-rest/`](../../../contracts/platform-dashboard-rest/) |
+| **Status** | Authored — `openapi.json` + README + example fixtures exist under [`contracts/platform-dashboard-rest/`](../../../contracts/platform-dashboard-rest/), validated by the contract harness (incl. the Phase 3 `optimizer/*` paths + fixtures) |
 
 ### 2.5 Phase 2 WebSocket fan-out
 
@@ -101,8 +101,8 @@ is versioned and accompanied by an ADR, per [`contracts/README.md`](../../../con
 | **Format** | WebSocket message schema (JSON Schema, Draft 2020-12); shares the RFC-007 identity / timestamp envelope; one file per frame type, discriminated by `type` |
 | **Phase introduced** | Phase 2a |
 | **Governing decision** | [P2 API surface](./platform/09-spec-platform-interfaces.md#3-api-surface-inventory), [ADR 2026-06-17](../../decisions/architecture-design-record.md) |
-| **Location** | [`contracts/frontend-ws/`](../../../contracts/frontend-ws/) |
-| **Status** | Authored — JSON Schema files + README + example fixtures exist under [`contracts/frontend-ws/`](../../../contracts/frontend-ws/) |
+| **Location** | [`contracts/platform-dashboard-live-ws/`](../../../contracts/platform-dashboard-live-ws/) |
+| **Status** | Authored — JSON Schema files + README + example fixtures exist under [`contracts/platform-dashboard-live-ws/`](../../../contracts/platform-dashboard-live-ws/) |
 
 ### 2.6 Optimizer plan schema
 
@@ -113,8 +113,8 @@ is versioned and accompanied by an ADR, per [`contracts/README.md`](../../../con
 | **Format** | Structured schema (JSON Schema, Draft 2020-12) |
 | **Phase introduced** | Phase 3 (extended in Phase 4) |
 | **Governing decision** | [RFC-004](../../decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface) |
-| **Location** | [`contracts/optimizer-plan/`](../../../contracts/optimizer-plan/) |
-| **Status** | Authored — schemas + README + example fixtures exist under [`contracts/optimizer-plan/`](../../../contracts/optimizer-plan/), validated by the contract harness |
+| **Location** | [`contracts/optimizer-internal-plan-schema/`](../../../contracts/optimizer-internal-plan-schema/) |
+| **Status** | Authored — schemas + README + example fixtures exist under [`contracts/optimizer-internal-plan-schema/`](../../../contracts/optimizer-internal-plan-schema/), validated by the contract harness |
 
 ### 2.7 Phase 3 telemetry read API
 
@@ -125,8 +125,8 @@ is versioned and accompanied by an ADR, per [`contracts/README.md`](../../../con
 | **Format** | REST request/response (OpenAPI-style), with stable JSON response schemas. Internal SQL views are platform implementation details; breaking changes to the REST shape are ADR events. |
 | **Phase introduced** | Phase 2 (the REST surface and internal views) / Phase 3 (the consumer) |
 | **Governing decision** | [RFC-008 revision](../../decisions/request-for-comments.md#rfc-008-phase-3-telemetry-read-path) |
-| **Location** | [`contracts/optimizer-read-rest/`](../../../contracts/optimizer-read-rest/) |
-| **Status** | Authored — `openapi.json` + README + example fixtures exist under [`contracts/optimizer-read-rest/`](../../../contracts/optimizer-read-rest/). One consolidated `GET /api/greenhouses/{id}/planning-context` returning current setpoints, `(min, mean, max)` telemetry summaries, actuator states, and data-quality/freshness signals. |
+| **Location** | [`contracts/platform-optimizer-planning-rest/`](../../../contracts/platform-optimizer-planning-rest/) |
+| **Status** | Authored — `openapi.json` + README + example fixtures exist under [`contracts/platform-optimizer-planning-rest/`](../../../contracts/platform-optimizer-planning-rest/). One consolidated `GET /api/greenhouses/{id}/planning-context` returning current setpoints, `(min, mean, max)` telemetry summaries, actuator states, and data-quality/freshness signals. |
 
 ---
 

@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://greenhouse.local/contracts/frontend-ws/envelope.schema.json",
+  "$id": "https://greenhouse.local/contracts/platform-dashboard-live-ws/envelope.schema.json",
   "title": "Frontend WebSocket Frame Envelope",
-  "description": "Common envelope carried by every frontend WebSocket fan-out frame (RFC-007 §3). Frame schemas compose this via allOf, add their `type` discriminator and message-specific fields, then close the object with `unevaluatedProperties: false`. This is the same identity/timestamp/version envelope the MQTT contract carries (contracts/mqtt/envelope.schema.json), one transport down — frontend-ws is a local copy rather than a cross-contract $ref, matching how frontend-rest keeps its own common definitions. additionalProperties/unevaluatedProperties are intentionally left unset here so this schema annotates only its own four fields — setting additionalProperties: true would mark every property as evaluated and defeat the composing frame's unevaluatedProperties: false.",
+  "description": "Common envelope carried by every frontend WebSocket fan-out frame (RFC-007 §3). Frame schemas compose this via allOf, add their `type` discriminator and message-specific fields, then close the object with `unevaluatedProperties: false`. This is the same identity/timestamp/version envelope the MQTT contract carries (contracts/controller-platform-telemetry-mqtt/envelope.schema.json), one transport down — platform-dashboard-live-ws is a local copy rather than a cross-contract $ref, matching how platform-dashboard-rest keeps its own common definitions. additionalProperties/unevaluatedProperties are intentionally left unset here so this schema annotates only its own four fields — setting additionalProperties: true would mark every property as evaluated and defeat the composing frame's unevaluatedProperties: false.",
   "type": "object",
   "$defs": {
     "schema_version": {

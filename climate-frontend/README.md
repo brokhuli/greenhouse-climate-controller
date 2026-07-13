@@ -7,7 +7,7 @@ fleet health, and setpoint control. It is a pure client of the platform Go API �
 request/response and a single **WebSocket** (`/api/stream`) for live push — and never speaks MQTT
 or the controllers directly. Built as static assets and served by the platform's nginx in the full
 stack. Specs: [`docs/specs/design/frontend/`](../docs/specs/design/frontend/); wire contracts:
-[`contracts/frontend-rest/`](../contracts/frontend-rest/), [`contracts/frontend-ws/`](../contracts/frontend-ws/).
+[`contracts/platform-dashboard-rest/`](../contracts/platform-dashboard-rest/), [`contracts/platform-dashboard-live-ws/`](../contracts/platform-dashboard-live-ws/).
 
 ## Status — 2a + 2b UI (built & green)
 

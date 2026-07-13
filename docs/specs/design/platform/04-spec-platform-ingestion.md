@@ -4,7 +4,7 @@
 > the MQTT subscription, per-greenhouse routing, the streams it stores, liveness
 > derivation, and the retention policy that keeps an append-only store bounded.
 > Wire formats (topic taxonomy, payload envelope, QoS, retained policy) are owned by
-> [`contracts/mqtt`](../../../../contracts/mqtt/) under
+> [`contracts/controller-platform-telemetry-mqtt`](../../../../contracts/controller-platform-telemetry-mqtt/) under
 > [RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format);
 > this file lists *responsibilities*, not schemas.
 
@@ -17,7 +17,7 @@ This is the **telemetry-up** half of the platform's bidirectional model
 ## 1. Subscribe and store
 
 The API subscribes to the controllers' MQTT topics (topic map defined in
-[`contracts/mqtt`](../../../../contracts/mqtt/), following the taxonomy and envelope
+[`contracts/controller-platform-telemetry-mqtt`](../../../../contracts/controller-platform-telemetry-mqtt/), following the taxonomy and envelope
 fixed by RFC-007) and writes what it receives into the time-series store
 ([data model](./03-spec-platform-data-model.md)). Ingestion is the platform's only
 inbound path from the greenhouses.
@@ -155,4 +155,4 @@ property still holds.
 | How derived status feeds the fleet view + reconciliation | feeds | [`05-spec-platform-crop-profiles.md`](./05-spec-platform-crop-profiles.md) |
 | The lag/backlog metric that surfaces shedding | surfaced by | [operations §1](./08-spec-platform-operations.md#1-observability) |
 | The published surface being ingested | consumes | [controller interfaces](../controller/08-spec-controller-interfaces.md) |
-| Topic taxonomy, envelope, QoS, retained policy | defers to | [`contracts/mqtt`](../../../../contracts/mqtt/), [RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format) |
+| Topic taxonomy, envelope, QoS, retained policy | defers to | [`contracts/controller-platform-telemetry-mqtt`](../../../../contracts/controller-platform-telemetry-mqtt/), [RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format) |

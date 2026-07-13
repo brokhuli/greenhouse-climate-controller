@@ -4,7 +4,7 @@ extends:
   - recommended
 rules:
   # This is an internal cross-component contract; licensing is covered by the repo LICENSE.md,
-  # not per-document (same posture as the controller-rest, frontend-rest, and optimizer-write-rest contracts).
+  # not per-document (same posture as the platform-controller-control-rest, platform-dashboard-rest, and optimizer-platform-setpoints-rest contracts).
   info-license: off
   # security-defined is off because this contract is entirely unauthenticated: the read carries no
   # authority and no safety concern and is trusted on the Docker network (RFC-008 read path, RFC-011

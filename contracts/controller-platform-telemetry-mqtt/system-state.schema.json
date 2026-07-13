@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://greenhouse.local/contracts/mqtt/system-state.schema.json",
+  "$id": "https://greenhouse.local/contracts/controller-platform-telemetry-mqtt/system-state.schema.json",
   "title": "Consolidated System State",
   "description": "Last-known full snapshot of one greenhouse, published RETAINED on gh/{greenhouse_id}/state so a subscriber has current state on connect (RFC-007 §2, controller spec §10). Greenhouse-scoped: envelope zone_id is null; per-zone detail lives in the zones array. Reuses the actuator and fault shapes from their owning schemas so the snapshot cannot drift from the per-topic messages.",
   "type": "object",
@@ -86,7 +86,7 @@
           "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
         },
         "soil_moisture": { "$ref": "#/$defs/soil_moisture_reading" },
-        "irrigation": { "$ref": "https://greenhouse.local/contracts/mqtt/actuator-state.schema.json#/$defs/state" },
+        "irrigation": { "$ref": "https://greenhouse.local/contracts/controller-platform-telemetry-mqtt/actuator-state.schema.json#/$defs/state" },
         "faulted": {
           "type": "boolean",
           "description": "True when this zone's irrigation is disabled by a fault (controller spec §7, §8)."
@@ -98,11 +98,11 @@
     "actuator_entry": {
       "type": "object",
       "properties": {
-        "actuator": { "$ref": "https://greenhouse.local/contracts/mqtt/actuator-state.schema.json#/$defs/name" },
-        "commanded": { "$ref": "https://greenhouse.local/contracts/mqtt/actuator-state.schema.json#/$defs/state" },
-        "observed": { "$ref": "https://greenhouse.local/contracts/mqtt/actuator-state.schema.json#/$defs/state" },
-        "health": { "$ref": "https://greenhouse.local/contracts/mqtt/actuator-state.schema.json#/$defs/health" },
-        "overridden": { "$ref": "https://greenhouse.local/contracts/mqtt/actuator-state.schema.json#/$defs/overridden" }
+        "actuator": { "$ref": "https://greenhouse.local/contracts/controller-platform-telemetry-mqtt/actuator-state.schema.json#/$defs/name" },
+        "commanded": { "$ref": "https://greenhouse.local/contracts/controller-platform-telemetry-mqtt/actuator-state.schema.json#/$defs/state" },
+        "observed": { "$ref": "https://greenhouse.local/contracts/controller-platform-telemetry-mqtt/actuator-state.schema.json#/$defs/state" },
+        "health": { "$ref": "https://greenhouse.local/contracts/controller-platform-telemetry-mqtt/actuator-state.schema.json#/$defs/health" },
+        "overridden": { "$ref": "https://greenhouse.local/contracts/controller-platform-telemetry-mqtt/actuator-state.schema.json#/$defs/overridden" }
       },
       "required": ["actuator", "commanded", "observed", "health", "overridden"],
       "additionalProperties": false
@@ -110,10 +110,10 @@
     "fault_summary": {
       "type": "object",
       "properties": {
-        "component": { "$ref": "https://greenhouse.local/contracts/mqtt/fault-event.schema.json#/$defs/component" },
-        "zone_id": { "$ref": "https://greenhouse.local/contracts/mqtt/envelope.schema.json#/$defs/zone_id" },
-        "fault_type": { "$ref": "https://greenhouse.local/contracts/mqtt/fault-event.schema.json#/$defs/fault_type" },
-        "severity": { "$ref": "https://greenhouse.local/contracts/mqtt/fault-event.schema.json#/$defs/severity" }
+        "component": { "$ref": "https://greenhouse.local/contracts/controller-platform-telemetry-mqtt/fault-event.schema.json#/$defs/component" },
+        "zone_id": { "$ref": "https://greenhouse.local/contracts/controller-platform-telemetry-mqtt/envelope.schema.json#/$defs/zone_id" },
+        "fault_type": { "$ref": "https://greenhouse.local/contracts/controller-platform-telemetry-mqtt/fault-event.schema.json#/$defs/fault_type" },
+        "severity": { "$ref": "https://greenhouse.local/contracts/controller-platform-telemetry-mqtt/fault-event.schema.json#/$defs/severity" }
       },
       "required": ["component", "fault_type", "severity"],
       "additionalProperties": false
@@ -121,9 +121,9 @@
     "override_entry": {
       "type": "object",
       "properties": {
-        "actuator": { "$ref": "https://greenhouse.local/contracts/mqtt/actuator-state.schema.json#/$defs/name" },
-        "zone_id": { "$ref": "https://greenhouse.local/contracts/mqtt/envelope.schema.json#/$defs/zone_id" },
-        "state": { "$ref": "https://greenhouse.local/contracts/mqtt/actuator-state.schema.json#/$defs/state" },
+        "actuator": { "$ref": "https://greenhouse.local/contracts/controller-platform-telemetry-mqtt/actuator-state.schema.json#/$defs/name" },
+        "zone_id": { "$ref": "https://greenhouse.local/contracts/controller-platform-telemetry-mqtt/envelope.schema.json#/$defs/zone_id" },
+        "state": { "$ref": "https://greenhouse.local/contracts/controller-platform-telemetry-mqtt/actuator-state.schema.json#/$defs/state" },
         "expires_at": {
           "type": ["string", "null"],
           "format": "date-time",
@@ -154,7 +154,7 @@
     }
   },
   "allOf": [
-    { "$ref": "https://greenhouse.local/contracts/mqtt/envelope.schema.json" },
+    { "$ref": "https://greenhouse.local/contracts/controller-platform-telemetry-mqtt/envelope.schema.json" },
     {
       "properties": {
         "zone_id": {

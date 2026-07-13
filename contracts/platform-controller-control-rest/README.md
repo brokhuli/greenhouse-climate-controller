@@ -3,7 +3,7 @@
 The Phase 1 controller's REST configuration and control surface — the **single source of
 truth** for the HTTP API the Phase 2 platform (Go) calls as a client and the controller (Rust)
 serves. The normative artifact is [`openapi.json`](./openapi.json) (OpenAPI 3.1, which uses the
-JSON Schema 2020-12 dialect — the same dialect as the [MQTT contract](../mqtt/), per
+JSON Schema 2020-12 dialect — the same dialect as the [MQTT contract](../controller-platform-telemetry-mqtt/), per
 [RFC-007](../../docs/decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)).
 
 **This is the only write path into the controller.** MQTT is telemetry-only; setpoints reach the
@@ -145,17 +145,17 @@ platform stores the matching token and presents it on every downward write call.
 
 ## Relationship to the MQTT contract
 
-Several shapes are shared with the [MQTT contract](../mqtt/) and are **inlined** here in
+Several shapes are shared with the [MQTT contract](../controller-platform-telemetry-mqtt/) and are **inlined** here in
 `components.schemas` rather than `$ref`'d across folders (cleaner OpenAPI tooling resolution),
 with the obligation that they stay in sync:
 
 - The `ActuatorName` enum and the `{ on, level_pct }` `ActuatorOutputState` mirror
-  [`actuator-state.schema.json`](../mqtt/actuator-state.schema.json).
+  [`actuator-state.schema.json`](../controller-platform-telemetry-mqtt/actuator-state.schema.json).
 - `Health.mode` / `Health.healthy` and the `FaultSummary` shape mirror the `controller` and
-  `faults` of [`system-state.schema.json`](../mqtt/system-state.schema.json); `fault_type` /
-  `severity` mirror [`fault-event.schema.json`](../mqtt/fault-event.schema.json).
+  `faults` of [`system-state.schema.json`](../controller-platform-telemetry-mqtt/system-state.schema.json); `fault_type` /
+  `severity` mirror [`fault-event.schema.json`](../controller-platform-telemetry-mqtt/fault-event.schema.json).
 - The `InjectableMetric` enum mirrors the **measured subset** of the
-  [`sensor-reading.schema.json`](../mqtt/sensor-reading.schema.json) metric enum — the same
+  [`sensor-reading.schema.json`](../controller-platform-telemetry-mqtt/sensor-reading.schema.json) metric enum — the same
   values minus the derived `vpd`, which is not an injectable channel.
 
 All ultimately trace to the actuator and fault inventories in
@@ -206,7 +206,7 @@ is unauthenticated by design (RFC-009, no `securitySchemes`), and `info-license`
 `operation-4xx-response` are off for an internal contract whose `GET /health` has no error path:
 
 ```
-npx @redocly/cli lint --config contracts/controller-rest/redocly.yaml contracts/controller-rest/openapi.json
+npx @redocly/cli lint --config contracts/platform-controller-control-rest/redocly.yaml contracts/platform-controller-control-rest/openapi.json
 ```
 
 This check is **automated** by the repo's contract harness —

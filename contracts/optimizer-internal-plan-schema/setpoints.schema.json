@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://greenhouse.local/contracts/optimizer-plan/setpoints.schema.json",
-  "title": "Setpoints (optimizer-plan local copy)",
-  "description": "Local copy of the platform Setpoints / SetpointsPatch shape, carried so the optimizer-plan contract is self-contained (the self-contained-contract convention; mirrors contracts/optimizer-write-rest/components/schemas/setpoints.json). The plan carries a SetpointsPatch as immediate_setpoints and on every trajectory point. Cross-field invariants the schema cannot express (humidity_low_pct < humidity_high_pct, day_end after day_start, moisture_low < moisture_high) are enforced by Phase 2 on the write path and surface as 422.",
+  "$id": "https://greenhouse.local/contracts/optimizer-internal-plan-schema/setpoints.schema.json",
+  "title": "Setpoints (optimizer-internal-plan-schema local copy)",
+  "description": "Local copy of the platform Setpoints / SetpointsPatch shape, carried so the optimizer-internal-plan-schema contract is self-contained (the self-contained-contract convention; mirrors contracts/optimizer-platform-setpoints-rest/components/schemas/setpoints.json). The plan carries a SetpointsPatch as immediate_setpoints and on every trajectory point. Cross-field invariants the schema cannot express (humidity_low_pct < humidity_high_pct, day_end after day_start, moisture_low < moisture_high) are enforced by Phase 2 on the write path and surface as 422.",
   "$defs": {
     "Slug": {
       "type": "string",

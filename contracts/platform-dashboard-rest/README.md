@@ -4,7 +4,7 @@ The platform Go API's **operator-facing REST surface** — the request/response 
 the Phase 2 React SPA (and operator tooling) consumes, and the Go API (Echo) serves. This is
 **catalog contract #4** ([`spec-contracts.md §2.4`](../../docs/specs/design/spec-contracts.md));
 the normative artifact is [`openapi.json`](./openapi.json) (OpenAPI 3.1, which uses the JSON Schema
-2020-12 dialect — the same dialect as the [MQTT](../mqtt/) and [controller-rest](../controller-rest/)
+2020-12 dialect — the same dialect as the [MQTT](../controller-platform-telemetry-mqtt/) and [platform-controller-control-rest](../platform-controller-control-rest/)
 contracts, per
 [RFC-007](../../docs/decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)).
 
@@ -16,7 +16,7 @@ This contract formalizes the REST half of the *client's working contract* previo
 the SPA's Zod schemas in `src/api/schemas.ts` validate against it.
 
 **Scope — REST only.** The live-push WebSocket fan-out (telemetry, status, drift, events) is a
-**separate** contract ([`frontend-ws/`](../frontend-ws/), catalog #5) and is **not** described here.
+**separate** contract ([`platform-dashboard-live-ws/`](../platform-dashboard-live-ws/), catalog #5) and is **not** described here.
 
 ## File layout
 
@@ -62,7 +62,7 @@ examples/                    # fixtures used as tests (see below)
 redocly.yaml                 # lint config
 ```
 
-References are relative, the same convention as [`controller-rest/`](../controller-rest/): a path
+References are relative, the same convention as [`platform-controller-control-rest/`](../platform-controller-control-rest/): a path
 file points at `../components/schemas/greenhouses.json#/GreenhouseSummary`, and schema files
 cross-reference siblings (e.g. `greenhouses.json` → `./common.json#/Slug`, `profiles.json` →
 `./setpoints.json#/Setpoints`). Any OpenAPI 3.1 tool that follows `$ref`s reads `openapi.json`
@@ -105,7 +105,7 @@ nginx-proxied prefix.
 | `POST /api/optimizer/enabled` | Pause / resume planning | 3 | 200 `EnableState` | 401, 403 |
 
 The optimizer's single-authority `POST /greenhouses/{id}/setpoints` (RFC-005 write path) is a
-**different** contract ([`optimizer-write-rest/`](../optimizer-write-rest/), catalog #3) and is not here; the
+**different** contract ([`optimizer-platform-setpoints-rest/`](../optimizer-platform-setpoints-rest/), catalog #3) and is not here; the
 ad-hoc edit above is the operator's path.
 
 The `optimizer/*` paths (slice 3) are the **operator console** surface — the Go API's proxy/aggregate over
@@ -121,7 +121,7 @@ here and remains authoritative for operator action — the feed complements the 
 
 The `sim/time-scale` paths are a **simulation-only** surface (marked `x-simulation-only`): they read
 and set the controller's simulated-clock speed (0.25–32×) for one greenhouse or — at `/api/sim/time-scale`
-— the whole fleet, relaying to the controller's own sim-only [`/sim/time-scale`](../controller-rest/)
+— the whole fleet, relaying to the controller's own sim-only [`/sim/time-scale`](../platform-controller-control-rest/)
 (controller HAL §7). The fleet form fans out as **N independent per-controller writes** — there is no
 shared/master clock — and returns a per-greenhouse outcome. This is a diagnostic, **not a setpoint**: it
 is the one explicit, narrow exception to the platform's setpoint-only downward control
@@ -148,11 +148,11 @@ DB rows, and this API — one identity, no translation layer
 ## Field naming
 
 Wire field names are **snake_case** (`temperature_day_c`, `greenhouse_id`, `display_name`),
-consistent with the MQTT and controller-rest contracts and RFC-007. The SPA's TypeScript/Zod types
+consistent with the MQTT and platform-controller-control-rest contracts and RFC-007. The SPA's TypeScript/Zod types
 ([data model §2](../../docs/specs/design/frontend/05-spec-frontend-data-model.md)) are camelCase and
 map onto these — the data-model doc's snippets are explicitly *illustrative, not final field names*.
 Unlike the MQTT/WS frames, REST resources do **not** wrap bodies in the RFC-007 `schema_version`
-envelope (matching the controller-rest contract); identity (`greenhouse_id`) is embedded directly
+envelope (matching the platform-controller-control-rest contract); identity (`greenhouse_id`) is embedded directly
 where a body is greenhouse-scoped, and the contract version is `info.version`.
 
 ## Units
@@ -164,7 +164,7 @@ RFC 3339 / ISO 8601, UTC, millisecond precision.
 ## Validation semantics
 
 A write is rejected with **422** and a `ValidationError` body that names the violated `field` and
-`bound` — the same shape the [controller REST contract](../controller-rest/) returns and the
+`bound` — the same shape the [controller REST contract](../platform-controller-control-rest/) returns and the
 platform relays under [RFC-005](../../docs/decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain).
 Two classes of rule:
 
@@ -191,7 +191,7 @@ and maps its roles onto the platform's **viewer** (read) and **operator** (read 
 write with a missing/invalid token is **401**; an authenticated non-operator attempting a write is
 **403**. The capability matrix (which role may call what) is owned by
 [platform security §4](../../docs/specs/design/platform/07-spec-platform-security.md) — referenced,
-not restated. This differs from the controller-rest contract, which is unauthenticated in every mode.
+not restated. This differs from the platform-controller-control-rest contract, which is unauthenticated in every mode.
 
 ## Examples
 
@@ -230,7 +230,7 @@ validate against their component schema; the `*.bad-*.json` counter-examples mus
 
 ## Validation
 
-The document and fixtures are checked the same way as the MQTT and controller-rest contracts — a
+The document and fixtures are checked the same way as the MQTT and platform-controller-control-rest contracts — a
 3.1-aware lint of `openapi.json` (which resolves and validates every `$ref`'d path and component
 file) plus an Ajv (Draft 2020-12) run of each fixture against its schema under
 [`components/schemas/`](./components/schemas/). Each positive fixture must validate and each
@@ -241,7 +241,7 @@ collection reads with no 4XX path. `security-defined` stays **on**: 2b operation
 declared `bearerAuth` scheme and 2a operations declare `security: []`.
 
 ```
-npx @redocly/cli lint --config contracts/frontend-rest/redocly.yaml contracts/frontend-rest/openapi.json
+npx @redocly/cli lint --config contracts/platform-dashboard-rest/redocly.yaml contracts/platform-dashboard-rest/openapi.json
 ```
 
 This check is **automated** by the repo's contract harness —

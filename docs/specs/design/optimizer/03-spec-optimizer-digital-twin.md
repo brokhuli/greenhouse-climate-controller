@@ -201,7 +201,7 @@ in memory from the last planner run as the **reference forecast**, that the next
 ### 1.7 Initialization (from planning context)
 
 The sim is seeded from one
-[planning-context read](../../../../contracts/optimizer-read-rest/components/schemas/planning-context.json),
+[planning-context read](../../../../contracts/platform-optimizer-planning-rest/components/schemas/planning-context.json),
 anchored at the context `to` (the greenhouse's latest stored instant):
 
 - **Integrated variables** seed from the **mean of the latest telemetry bucket** at `to`

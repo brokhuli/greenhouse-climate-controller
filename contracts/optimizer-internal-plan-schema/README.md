@@ -4,7 +4,7 @@ The structured plan the Phase 3 LLM planner emits, and the record the optimizer 
 it — the single shape the planner, constraint engine, applier, service API, and tests all conform to.
 This is an **internal** contract (planner → constraint engine → applier, all inside the optimizer
 service), not a cross-service wire boundary: the only downward wire is Phase 2's unchanged
-[setpoint write path](../optimizer-write-rest/). JSON Schema, Draft 2020-12.
+[setpoint write path](../optimizer-platform-setpoints-rest/). JSON Schema, Draft 2020-12.
 
 Prose definition and rationale: [`docs/specs/design/optimizer/05-spec-optimizer-plan-contract.md`](../../docs/specs/design/optimizer/05-spec-optimizer-plan-contract.md).
 Catalogued in [`spec-contracts.md §2.6`](../../docs/specs/design/spec-contracts.md#26-optimizer-plan-schema); governed by
@@ -19,7 +19,7 @@ Catalogued in [`spec-contracts.md §2.6`](../../docs/specs/design/spec-contracts
 
 [`setpoints.schema.json`](./setpoints.schema.json) is a **local copy** of the platform `Setpoints` /
 `SetpointsPatch` shape (self-contained-contract convention; mirrors
-[`optimizer-write-rest`](../optimizer-write-rest/)). The plan carries a `SetpointsPatch` as
+[`optimizer-platform-setpoints-rest`](../optimizer-platform-setpoints-rest/)). The plan carries a `SetpointsPatch` as
 `immediate_setpoints` and on every trajectory point.
 
 The layers are kept separate so `.with_structured_output()` stays honest: the schema the model is
@@ -48,7 +48,7 @@ each schema's `description`s carry the per-field detail. In brief:
 
 ## Consuming the schemas
 
-Each schema embeds a stable `$id` under `https://greenhouse.local/contracts/optimizer-plan/…`; cross-file
+Each schema embeds a stable `$id` under `https://greenhouse.local/contracts/optimizer-internal-plan-schema/…`; cross-file
 `$ref`s use those `$id`s so they resolve offline (the same base the MQTT/WS schemas use). `PlanRecord`
 `$ref`s `OptimizerPlan`, and both `$ref` the local `SetpointsPatch`.
 

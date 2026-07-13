@@ -60,7 +60,7 @@ the harness half of the backlog item; the **CI** half stays open.
 - It needs no CI to be useful — it runs locally and in the pre-commit hook today, gated by staged
   paths so docs-only commits are not blocked on Node (mirroring the crate-scoped Rust gate).
 - `ajv`/`ajv-formats` were already present; `@redocly/cli` is the exact OpenAPI linter the
-  `controller-rest` / `frontend-rest` READMEs already mandate (and ship a `redocly.yaml` for), so
+  `platform-controller-control-rest` / `platform-dashboard-rest` READMEs already mandate (and ship a `redocly.yaml` for), so
   pinning it adds no new *conceptual* dependency — only determinism over ad-hoc `npx`. No runtime
   dependency is added.
 

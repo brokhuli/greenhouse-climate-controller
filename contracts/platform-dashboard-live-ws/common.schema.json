@@ -1,18 +1,18 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://greenhouse.local/contracts/frontend-ws/common.schema.json",
+  "$id": "https://greenhouse.local/contracts/platform-dashboard-live-ws/common.schema.json",
   "title": "Frontend WebSocket — Shared Definitions",
-  "description": "Shared $defs reused across the frontend WebSocket frame schemas: the connectivity enum, the activity-feed event kind/severity enums, and the metric→unit-bound sensor reading and actuator sample carried by telemetry frames. Mirrors the conventions of contracts/mqtt and contracts/frontend-rest (RFC-007 units, closed enums); kept local rather than cross-contract $ref'd, matching frontend-rest.",
+  "description": "Shared $defs reused across the frontend WebSocket frame schemas: the connectivity enum, the activity-feed event kind/severity enums, and the metric→unit-bound sensor reading and actuator sample carried by telemetry frames. Mirrors the conventions of contracts/controller-platform-telemetry-mqtt and contracts/platform-dashboard-rest (RFC-007 units, closed enums); kept local rather than cross-contract $ref'd, matching platform-dashboard-rest.",
   "$defs": {
     "connectivity": {
       "type": "string",
       "enum": ["online", "degraded", "offline"],
-      "description": "A greenhouse's controller connectivity as the platform sees it: online = fresh telemetry; degraded = a non-critical fault or stale stream; offline = no contact. Offline is data absence, not a fault. The same enum the frontend-rest contract carries."
+      "description": "A greenhouse's controller connectivity as the platform sees it: online = fresh telemetry; degraded = a non-critical fault or stale stream; offline = no contact. Offline is data absence, not a fault. The same enum the platform-dashboard-rest contract carries."
     },
     "event_kind": {
       "type": "string",
       "enum": ["fault", "interlock", "profile_applied", "setpoint_edit", "drift", "optimizer_plan_applied", "optimizer_plan_escalated", "optimizer_resolved", "optimizer_run_failed"],
-      "description": "Closed set of activity-feed event kinds surfaced to the operator (frontend data model §4). Matches the frontend-rest EventEntry kind. The four `optimizer_*` kinds ride the live `event` frame stamped `source: optimizer`: `optimizer_plan_applied` (an applied plan, itself a setpoint write) plus the escalation-lifecycle + run-failure audit events `optimizer_plan_escalated`, `optimizer_resolved`, and `optimizer_run_failed`. The actionable set of open holds stays in the polled optimizer console queue, not the stream."
+      "description": "Closed set of activity-feed event kinds surfaced to the operator (frontend data model §4). Matches the platform-dashboard-rest EventEntry kind. The four `optimizer_*` kinds ride the live `event` frame stamped `source: optimizer`: `optimizer_plan_applied` (an applied plan, itself a setpoint write) plus the escalation-lifecycle + run-failure audit events `optimizer_plan_escalated`, `optimizer_resolved`, and `optimizer_run_failed`. The actionable set of open holds stays in the polled optimizer console queue, not the stream."
     },
     "event_severity": {
       "type": "string",
@@ -63,11 +63,11 @@
         "shade_screen",
         "irrigation_valve"
       ],
-      "description": "Closed set of actuators (physical-system-single.md §Outputs); the same names the MQTT, controller-rest, and frontend-rest contracts use. Kept local rather than cross-contract $ref'd, matching this contract's convention."
+      "description": "Closed set of actuators (physical-system-single.md §Outputs); the same names the MQTT, platform-controller-control-rest, and platform-dashboard-rest contracts use. Kept local rather than cross-contract $ref'd, matching this contract's convention."
     },
     "actuator_sample": {
       "type": "object",
-      "description": "One actuator sample in a telemetry frame: commanded vs observed position (the output-side channel, controller safety §5). Mirrors the frontend-rest ActuatorState, with the sample time carried by the frame envelope `ts`. Position is a 0–100 number: variable/modulating actuators report their level (% open / speed / dim); pure on/off devices (misters, co2_injector, irrigation_valve) report 0 (off) or 100 (on) — the platform's flattening of the MQTT {on, level_pct} shape.",
+      "description": "One actuator sample in a telemetry frame: commanded vs observed position (the output-side channel, controller safety §5). Mirrors the platform-dashboard-rest ActuatorState, with the sample time carried by the frame envelope `ts`. Position is a 0–100 number: variable/modulating actuators report their level (% open / speed / dim); pure on/off devices (misters, co2_injector, irrigation_valve) report 0 (off) or 100 (on) — the platform's flattening of the MQTT {on, level_pct} shape.",
       "properties": {
         "actuator": { "$ref": "#/$defs/actuator_name" },
         "commanded": {
@@ -90,7 +90,7 @@
       "type": "number",
       "minimum": 0.25,
       "maximum": 32.0,
-      "description": "Simulation-only: the greenhouse controller's current simulated-clock speed multiplier (1.0 = real-time; <1 slow-motion; >1 fast-forward). Each controller's clock is independent. Drives the dashboard's per-greenhouse speed indicator; absent on real-hardware controllers. Mirrors the controller's `system-state.simulation.time_scale` and the controller-rest `TimeScale.scale` (controller HAL §7)."
+      "description": "Simulation-only: the greenhouse controller's current simulated-clock speed multiplier (1.0 = real-time; <1 slow-motion; >1 fast-forward). Each controller's clock is independent. Drives the dashboard's per-greenhouse speed indicator; absent on real-hardware controllers. Mirrors the controller's `system-state.simulation.time_scale` and the platform-controller-control-rest `TimeScale.scale` (controller HAL §7)."
     }
   }
 }

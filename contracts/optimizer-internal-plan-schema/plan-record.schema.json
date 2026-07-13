@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://greenhouse.local/contracts/optimizer-plan/plan-record.schema.json",
+  "$id": "https://greenhouse.local/contracts/optimizer-internal-plan-schema/plan-record.schema.json",
   "title": "PlanRecord",
   "description": "The optimizer service's envelope around one OptimizerPlan for one cycle - it stamps on the provenance and outcome the model must not be trusted to invent (run id, chosen horizon window, backend identity, gate decision). Layer 2 of the plan contract; returned by GET .../plans/latest and referenced by escalations. See docs/specs/design/optimizer/05-spec-optimizer-plan-contract.md §3.",
   "type": "object",
@@ -76,7 +76,7 @@
     "plan": {
       "description": "The layer-1 OptimizerPlan (§2), or null when the cycle produced no new plan: every pre-planner held cycle (an input-gate, clock-mode, contract-drift, twin-divergence, cycle-timeout, or llm-unavailable outcome, where the LLM never ran) and a cold-start `extended` that holds the Phase 2 baseline. An `applied` outcome always carries a non-null plan (enforced by the conditional below). A post-planner escalation (low_confidence, constraint_violation, twin_fidelity_fault, bounds_mismatch, write_unauthorized) still carries the plan it rejected.",
       "oneOf": [
-        { "$ref": "https://greenhouse.local/contracts/optimizer-plan/optimizer-plan.schema.json" },
+        { "$ref": "https://greenhouse.local/contracts/optimizer-internal-plan-schema/optimizer-plan.schema.json" },
         { "type": "null" }
       ]
     },
@@ -99,7 +99,7 @@
     "required": ["outcome"]
   },
   "then": {
-    "properties": { "plan": { "$ref": "https://greenhouse.local/contracts/optimizer-plan/optimizer-plan.schema.json" } },
+    "properties": { "plan": { "$ref": "https://greenhouse.local/contracts/optimizer-internal-plan-schema/optimizer-plan.schema.json" } },
     "required": ["plan"]
   }
 }

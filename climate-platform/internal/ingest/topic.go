@@ -2,7 +2,7 @@ package ingest
 
 import "strings"
 
-// topicKind classifies an ingested MQTT topic (contracts/mqtt topic map).
+// topicKind classifies an ingested MQTT topic (contracts/controller-platform-telemetry-mqtt topic map).
 type topicKind int
 
 const (

@@ -629,7 +629,7 @@ are corrected to match.
 **5. Schema format & versioning**
 
 - **JSON Schema (Draft 2020-12)** is the normative artifact: one schema file per message type under
-  `contracts/mqtt/`. Directly consumable for validation in all three stacks (Rust, Go, Python) with no
+  `contracts/controller-platform-telemetry-mqtt/`. Directly consumable for validation in all three stacks (Rust, Go, Python) with no
   intermediate tooling. AsyncAPI may later wrap these schemas as a documentation layer without
   becoming the source of truth.
 - **Versioning:** `schema_version` is an **integer major**. Additive, backward-compatible changes (a
@@ -672,7 +672,7 @@ is the `greenhouse_id` / `zone_id` kebab-slug pair, shared verbatim across MQTT 
 and DB rows. MQTT uses the hierarchical `gh/{greenhouse_id}/...` taxonomy and is **telemetry-only**
 (setpoints flow over REST per RFC-005). Every message carries the common envelope
 (`schema_version`, `greenhouse_id`, `zone_id`, `ts` in RFC 3339 UTC) and the units convention.
-Schemas are authored as **JSON Schema (Draft 2020-12)** under `contracts/mqtt/`, versioned by an
+Schemas are authored as **JSON Schema (Draft 2020-12)** under `contracts/controller-platform-telemetry-mqtt/`, versioned by an
 integer `schema_version` major (additive changes do not bump). See ADR entry 2026-06-07.
 
 ---
@@ -1236,5 +1236,5 @@ the setpoint contracts and the controller REST surface are identical in both mod
 whether an `Authorization` header is required. Implementation lands with the phases the seams live in
 (Phase 2b for the Keycloak service client + `SERVICE_AUTH_MODE`; the controller token check + registry
 field when managed-mode hardening is exercised); the contract documents
-([`controller-rest`](../../contracts/controller-rest/), [`frontend-rest`](../../contracts/frontend-rest/))
+([`platform-controller-control-rest`](../../contracts/platform-controller-control-rest/), [`platform-dashboard-rest`](../../contracts/platform-dashboard-rest/))
 gain the optional security scheme when those slices are built. See ADR entry 2026-06-21.

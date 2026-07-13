@@ -114,11 +114,11 @@ The cross-component oracle, now wired locally ([`scripts/validate-contracts.mjs`
 `npm run validate:contracts`). It automates the check each contract README specified and
 [`docs/backlog.md`](../../backlog.md) previously tracked as "blocked on CI":
 
-- **JSON-Schema contracts** ([`contracts/mqtt/`](../../../contracts/mqtt/),
-  [`contracts/frontend-ws/`](../../../contracts/frontend-ws/)) — every `examples/<frame>.*.json`
+- **JSON-Schema contracts** ([`contracts/controller-platform-telemetry-mqtt/`](../../../contracts/controller-platform-telemetry-mqtt/),
+  [`contracts/platform-dashboard-live-ws/`](../../../contracts/platform-dashboard-live-ws/)) — every `examples/<frame>.*.json`
   validates against `<frame>.schema.json`; every `*.bad-*.json` must **fail**.
-- **OpenAPI contracts** ([`contracts/controller-rest/`](../../../contracts/controller-rest/),
-  [`contracts/frontend-rest/`](../../../contracts/frontend-rest/)) — each example validates against
+- **OpenAPI contracts** ([`contracts/platform-controller-control-rest/`](../../../contracts/platform-controller-control-rest/),
+  [`contracts/platform-dashboard-rest/`](../../../contracts/platform-dashboard-rest/)) — each example validates against
   its named component schema (mapped by the dir's `examples/cases.json`), and `openapi.json` is
   linted with Redocly using the contract's `redocly.yaml`.
 - Cross-schema `$ref`s resolve **offline** — each schema is registered under an `$id` derived from

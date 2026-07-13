@@ -86,7 +86,7 @@ func (s *Server) getGreenhouse(c echo.Context) error {
 	if resp.Status != http.StatusOK {
 		return respondError(c, http.StatusServiceUnavailable, "controller did not return setpoints")
 	}
-	// The frontend-rest Setpoints bundle also carries per-zone targets, which the controller serves
+	// The platform-dashboard-rest Setpoints bundle also carries per-zone targets, which the controller serves
 	// as a separate resource; aggregate /zones into the setpoints the SPA receives.
 	zonesResp, err := s.relay.Do(ctx, http.MethodGet, endpoint.RESTBaseURL, controllerPath(id, "/zones"), endpoint.BearerToken, nil)
 	if err != nil {
