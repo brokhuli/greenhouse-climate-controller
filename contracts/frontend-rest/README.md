@@ -112,9 +112,12 @@ The `optimizer/*` paths (slice 3) are the **operator console** surface — the G
 the optimizer's own [Service API](../../docs/specs/design/optimizer/10-spec-optimizer-interfaces.md#service-api-endpoints),
 so the SPA reaches the optimizer through the one Go-API origin and never opens a second connection. Reads
 (`status`, `fleet`, `plan`, `escalations`, `model`, `enabled`) are viewer-open and **polled**, not streamed; the
-mutations (`cycles`, `escalations/{id}/resolve`, `model`, `enabled`) are operator writes. The one optimizer
-signal on the live WebSocket is the applied-plan **activity event** (`kind: optimizer_plan_applied`,
-`source: optimizer`); escalations stay in the polled queue.
+mutations (`cycles`, `escalations/{id}/resolve`, `model`, `enabled`) are operator writes. Four optimizer
+signals ride the live WebSocket as **activity events** (`source: optimizer`): the applied-plan write
+(`kind: optimizer_plan_applied`) plus the escalation-lifecycle + run-failure audit events
+(`optimizer_plan_escalated`, `optimizer_resolved`, `optimizer_run_failed`). Those three record
+*transitions* in the append-only feed; the *actionable* escalation **queue** stays in the polled path
+here and remains authoritative for operator action — the feed complements the queue, it does not replace it.
 
 The `sim/time-scale` paths are a **simulation-only** surface (marked `x-simulation-only`): they read
 and set the controller's simulated-clock speed (0.25–32×) for one greenhouse or — at `/api/sim/time-scale`

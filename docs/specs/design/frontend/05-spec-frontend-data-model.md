@@ -398,7 +398,7 @@ export const actuatorState = z.object({
 export const eventEntry = z.object({
   greenhouse_id: greenhouseId,
   ts: z.coerce.date(),
-  kind: z.enum(["fault", "interlock", "profile_applied", "setpoint_edit", "drift", "optimizer_plan_applied"]),
+  kind: z.enum(["fault", "interlock", "profile_applied", "setpoint_edit", "drift", "optimizer_plan_applied", "optimizer_plan_escalated", "optimizer_resolved", "optimizer_run_failed"]),
   severity: z.enum(["info", "warning", "critical"]),
   message: z.string(),
   source: z.string().optional(),  // who/what (audit, platform §6)
@@ -409,12 +409,25 @@ Metrics covered (matching the controller's published surface,
 [P1 §11](../controller/08-spec-controller-interfaces.md)): temperature, humidity, CO₂,
 PAR, per-zone soil moisture, actuator positions.
 
-> **`optimizer_plan_applied` (3).** An **applied** optimizer plan is a setpoint write stamped
-> `source: optimizer` ([RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain)),
-> so it lands in the activity feed as its own kind and rides the live `event` frame like any other write.
-> Held-cycle **escalations** are **not** writes — they stay in the polled
-> [optimizer console](./03-spec-frontend-architecture.md#optimizer-console--rest-polling-no-websocket) queue,
-> not the feed.
+> **Optimizer event kinds.** Four kinds carry optimizer activity, all stamped `source: optimizer`
+> and riding the live `event` frame like any other write:
+>
+> | Kind | Severity | Emitted when |
+> |---|---|---|
+> | `optimizer_plan_applied` | `info` | A plan is **applied** — itself a setpoint write ([RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain)) |
+> | `optimizer_plan_escalated` | `warning` | A cycle is **held** for review (an escalation opens) |
+> | `optimizer_resolved` | `info` | An operator **closes** a standing escalation |
+> | `optimizer_run_failed` | `warning` | A cycle produced **no outcome** (`cycle_timeout` / `llm_unavailable`) |
+>
+> The last three record escalation-lifecycle + run-failure **transitions** in the append-only feed;
+> they are *not* setpoint writes, so the platform emits them when it ingests the corresponding
+> optimizer outcome report (the optimizer→platform reporting path that also feeds the escalation
+> queue). The greenhouse, run id, and reason code (when applicable) ride the free-text `message`;
+> the `EventEntry` shape is unchanged. The *actionable* set of currently-open holds still lives in
+> the polled [optimizer console](./03-spec-frontend-architecture.md#optimizer-console--rest-polling-no-websocket)
+> queue — the feed complements it with a durable log, it does not replace it. `optimizer_plan_extended`
+> is deliberately **not** a feed kind: a suppressed cycle writes nothing and recurs on most cadences,
+> so it would be feed noise.
 
 > **`ts` is simulated time.** Each reading's `ts` comes from the controller's injected clock, so on a
 > simulated greenhouse it is the *simulated* instant, advancing at that controller's

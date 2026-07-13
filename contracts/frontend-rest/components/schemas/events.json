@@ -11,8 +11,8 @@
       },
       "kind": {
         "type": "string",
-        "enum": ["fault", "interlock", "profile_applied", "setpoint_edit", "drift", "optimizer_plan_applied"],
-        "description": "Closed set of event kinds surfaced to the operator. `optimizer_plan_applied` (3) is an applied optimizer plan — a setpoint write stamped `source: optimizer` (RFC-005); held-cycle escalations are not events (they live in the polled optimizer console queue)."
+        "enum": ["fault", "interlock", "profile_applied", "setpoint_edit", "drift", "optimizer_plan_applied", "optimizer_plan_escalated", "optimizer_resolved", "optimizer_run_failed"],
+        "description": "Closed set of event kinds surfaced to the operator. `optimizer_plan_applied` is an applied optimizer plan — a setpoint write stamped `source: optimizer` (RFC-005). `optimizer_plan_escalated` (a cycle held for review), `optimizer_resolved` (an operator closed an escalation), and `optimizer_run_failed` (a cycle that produced no outcome, e.g. `cycle_timeout`/`llm_unavailable`) are the optimizer's escalation-lifecycle + run-failure audit events, stamped `source: optimizer` with the run id and (when applicable) reason code in `message`. These record *transitions* in the append-only feed; the actionable set of currently-open holds stays in the polled optimizer console queue (`GET /api/optimizer/escalations`). `optimizer_plan_extended` is deliberately not a feed kind — a suppressed cycle writes nothing and recurs on most cadences, so it would be feed noise."
       },
       "severity": {
         "type": "string",

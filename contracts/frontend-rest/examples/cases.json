@@ -10,6 +10,7 @@
     { "fixture": "analytics.json", "schema": "analytics.json#/AnalyticsResponse", "expect": "pass" },
     { "fixture": "fleet-sparklines.json", "schema": "telemetry.json#/FleetSparklines", "expect": "pass" },
     { "fixture": "event.json", "schema": "events.json#/EventEntry", "expect": "pass" },
+    { "fixture": "event.optimizer.json", "schema": "events.json#/EventEntry", "expect": "pass" },
     { "fixture": "event.bad-kind.json", "schema": "events.json#/EventEntry", "expect": "fail" },
     { "fixture": "profile.json", "schema": "profiles.json#/CropProfile", "expect": "pass" },
     { "fixture": "profile.bad-bounds.json", "schema": "profiles.json#/CropProfile", "expect": "fail" },

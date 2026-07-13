@@ -11,8 +11,8 @@
     },
     "event_kind": {
       "type": "string",
-      "enum": ["fault", "interlock", "profile_applied", "setpoint_edit", "drift"],
-      "description": "Closed set of activity-feed event kinds surfaced to the operator (frontend data model §4). Matches the frontend-rest EventEntry kind."
+      "enum": ["fault", "interlock", "profile_applied", "setpoint_edit", "drift", "optimizer_plan_applied", "optimizer_plan_escalated", "optimizer_resolved", "optimizer_run_failed"],
+      "description": "Closed set of activity-feed event kinds surfaced to the operator (frontend data model §4). Matches the frontend-rest EventEntry kind. The four `optimizer_*` kinds ride the live `event` frame stamped `source: optimizer`: `optimizer_plan_applied` (an applied plan, itself a setpoint write) plus the escalation-lifecycle + run-failure audit events `optimizer_plan_escalated`, `optimizer_resolved`, and `optimizer_run_failed`. The actionable set of open holds stays in the polled optimizer console queue, not the stream."
     },
     "event_severity": {
       "type": "string",

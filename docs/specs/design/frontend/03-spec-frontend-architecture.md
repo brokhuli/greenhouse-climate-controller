@@ -248,10 +248,16 @@ and not worth a new frame type or fan-out. The optimizer queries (`["optimizer-f
 use a modest TanStack Query `refetchInterval`
 ([data-model §6](./05-spec-frontend-data-model.md#6-query-keys--cache-strategy)) — the **same**
 mechanism as the WS polling-fallback above, but here it is the **primary** update path, not a degraded
-one. No optimizer frame joins the WebSocket union. The one optimizer signal that *does* ride the live
-stream is the `optimizer_plan_applied` **activity event** — an applied plan is a setpoint write stamped
-`source: optimizer`, so it flows through the existing `event` frame into the activity feed; held-cycle
-**escalations** stay in the polled console queue, not the stream.
+one. No optimizer frame joins the WebSocket union. The optimizer signals that *do* ride the live
+stream are the four `optimizer_*` **activity events** — `optimizer_plan_applied` (an applied plan is
+a setpoint write stamped `source: optimizer`, so it flows through the existing `event` frame) plus the
+escalation-lifecycle + run-failure audit events `optimizer_plan_escalated`, `optimizer_resolved`, and
+`optimizer_run_failed` ([data-model §4](./05-spec-frontend-data-model.md#4-rest-payloads)). Those three
+record *transitions* in the append-only activity feed; the *actionable* escalation **queue** — the set
+of holds open right now — stays REST-polled here and remains authoritative for operator action. The feed
+and the queue are complementary: the feed is the durable log of what happened, the queue is the live
+worklist. (`optimizer_plan_extended` is not a feed kind — a suppressed cycle writes nothing and recurs on
+most cadences, so it would be feed noise.)
 
 ---
 
