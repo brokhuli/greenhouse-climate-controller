@@ -239,9 +239,13 @@
               "oneOf": [{ "$ref": "#/ReasonCode" }, { "type": "null" }],
               "description": "The reason code when the latest cycle escalated, else null."
             },
+            "enabled": {
+              "type": "boolean",
+              "description": "Whether the optimizer is enabled for this greenhouse — the per-greenhouse operator pause (POST /api/optimizer/greenhouses/{id}/enabled). false = this greenhouse's scheduled cycles are skipped even while the service is globally enabled; the SPA shows a Disabled pill (overriding `status`). Independent of the global EnableState — effective planning requires both, and the global pause takes precedence."
+            },
             "created_at": { "type": "string", "format": "date-time" }
           },
-          "required": ["greenhouse_id", "status", "created_at"],
+          "required": ["greenhouse_id", "status", "enabled", "created_at"],
           "additionalProperties": false
         }
       },
@@ -333,12 +337,25 @@
   },
   "EnableRequest": {
     "type": "object",
-    "description": "POST /api/optimizer/enabled body — pause or resume the optimizer at runtime. In-memory override; resets to the configured default on restart.",
+    "description": "POST /api/optimizer/enabled and POST /api/optimizer/greenhouses/{id}/enabled body — pause or resume the optimizer at runtime, service-wide or for one greenhouse. In-memory override; resets to the configured default on restart.",
     "properties": {
       "enabled": { "type": "boolean", "description": "Target state: false pauses (read-only), true resumes." },
       "reason": { "type": "string", "description": "Optional operator note, structured-logged with the change." }
     },
     "required": ["enabled"],
+    "additionalProperties": false
+  },
+  "GreenhouseEnableState": {
+    "type": "object",
+    "description": "Whether the optimizer is enabled for one greenhouse (GET/POST /api/optimizer/greenhouses/{id}/enabled) — the per-greenhouse analog of EnableState. A runtime, in-memory operator pause scoped to a single greenhouse, independent of the service-wide EnableState. Effective planning for a greenhouse requires both this and the global enable; the global pause takes precedence.",
+    "properties": {
+      "greenhouse_id": { "$ref": "./common.json#/Slug" },
+      "enabled": {
+        "type": "boolean",
+        "description": "true = this greenhouse's scheduled cycles run (subject to the global enable and the usual gates); false = the optimizer skips this greenhouse (no scheduled cycles, no setpoint writes for it), even while the service is globally enabled. In-memory override; resets to the configured default on restart."
+      }
+    },
+    "required": ["greenhouse_id", "enabled"],
     "additionalProperties": false
   },
   "DegradedReason": {

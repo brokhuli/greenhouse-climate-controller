@@ -1,0 +1,49 @@
+{
+  "parameters": [{ "$ref": "../components/parameters.json#/GreenhouseId" }],
+  "get": {
+    "operationId": "getGreenhouseOptimizerEnabled",
+    "summary": "Per-greenhouse enabled state",
+    "description": "Whether the optimizer is enabled for this greenhouse or paused just for it (the per-greenhouse analog of GET /api/optimizer/enabled). Independent of the service-wide enable; effective planning requires both, and the global pause takes precedence. Polled. Open to anyone — reads need no token (anonymous-viewer posture, platform security §4).",
+    "x-slice": "3",
+    "security": [],
+    "responses": {
+      "200": {
+        "description": "The per-greenhouse enable state.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "../components/schemas/optimizer.json#/GreenhouseEnableState" }
+          }
+        }
+      },
+      "404": { "$ref": "../components/responses.json#/NotFound" }
+    }
+  },
+  "post": {
+    "operationId": "setGreenhouseOptimizerEnabled",
+    "summary": "Pause / resume planning for one greenhouse",
+    "description": "Enable or disable the optimizer for a single greenhouse at runtime (operator only, slice 3). Disabling skips this greenhouse's scheduled cycles and setpoint writes immediately — no plan is produced for it — even while the service is globally enabled; reads still served. Gated exactly like POST /api/optimizer/enabled and the model switch. In-memory override; resets to the configured default on restart.",
+    "x-slice": "3",
+    "security": [{ "bearerAuth": [] }],
+    "requestBody": {
+      "required": true,
+      "content": {
+        "application/json": {
+          "schema": { "$ref": "../components/schemas/optimizer.json#/EnableRequest" }
+        }
+      }
+    },
+    "responses": {
+      "200": {
+        "description": "The per-greenhouse enable state after the change.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "../components/schemas/optimizer.json#/GreenhouseEnableState" }
+          }
+        }
+      },
+      "401": { "$ref": "../components/responses.json#/Unauthorized" },
+      "403": { "$ref": "../components/responses.json#/Forbidden" },
+      "404": { "$ref": "../components/responses.json#/NotFound" }
+    }
+  }
+}

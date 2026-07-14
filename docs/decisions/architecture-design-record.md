@@ -8,6 +8,44 @@ alternatives and tradeoffs.
 
 ---
 
+## 2026-07-13 — Phase 3 per-greenhouse optimizer enable/disable (alongside the service-wide pause)
+
+**Decision:** Add a **per-greenhouse** optimizer enable/disable toggle beside the existing service-wide one.
+A new pair of endpoints, `GET`/`POST /api/optimizer/greenhouses/{id}/enabled` (proxied by the Go API to the
+optimizer's own Service API), mirrors `GET`/`POST /api/optimizer/enabled` exactly — same operator-gating,
+same optional structured-logged `reason`, same **in-memory override that resets to the configured default on
+restart** — but scoped to one greenhouse: when it is disabled the scheduler **skips just that greenhouse**
+(no cycle, no setpoint write) and its out-of-band `POST …/cycles` is refused `409`, while the rest of the
+fleet plans on cadence. The two scopes compose as an **AND with the global taking precedence** — a greenhouse
+plans only when the service is globally enabled *and* that greenhouse is enabled, so a service-wide pause
+overrides every per-greenhouse flag. There is **no per-greenhouse config file** (the optimizer is configured
+by env convention, not a per-greenhouse TOML), so the per-greenhouse enable is a runtime-only state defaulting
+to on. The `FleetOptimizerSummary.greenhouses[]` rollup gains a per-greenhouse **`enabled`** field so the SPA
+paints the fleet cards, the console table, and the detail panel from the one rollup poll — no per-greenhouse
+fan-out — and a new `GreenhouseEnableState` schema backs the scoped GET/POST.
+
+Touches the [platform-dashboard-rest contract](../../contracts/platform-dashboard-rest/) (new
+`optimizer-greenhouse-enabled` path, `GreenhouseEnableState` schema, `FleetOptimizerSummary.enabled`, a fixture)
+and the spec set ([optimizer 10/09/02/11](../specs/design/optimizer/10-spec-optimizer-interfaces.md#service-api-endpoints),
+[platform 06/09](../specs/design/platform/09-spec-platform-interfaces.md#3-api-surface-inventory),
+[frontend 02/03/05/06/08/09](../specs/design/frontend/06-spec-frontend-components.md)). This is an **additive,
+backward-compatible** change — new optional endpoints plus one added, always-present response field within the
+current major — so `info.version` does **not** bump the major (per the contract's
+[versioning rules](../../contracts/platform-dashboard-rest/README.md#versioning), RFC-007).
+
+**Why:** The service-wide pause is all-or-nothing — an operator who wants to stop the optimizer perturbing a
+single greenhouse (a sensitive crop stage, an investigation, a misbehaving cycle) previously had to disable
+the whole fleet. A per-greenhouse pause makes that a routine, reversible, audited operator action while the
+rest of the fleet keeps optimizing, mirroring the automatic per-greenhouse input-gate pauses the optimizer
+already applies. Keeping it a runtime, in-memory override (not persisted config) matches the service-wide
+toggle's operational-pause posture. No Phase 3 code exists yet, so this lands as contract + spec ahead of
+implementation.
+
+**RFC:** contract convention [RFC-007](./request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format);
+optimizer operator surface [RFC-004](./request-for-comments.md#rfc-004-phase-3-llm-integration-interface)
+
+---
+
 ## 2026-07-13 — Phase 3 SPA-facing optimizer health/status: `GET /api/optimizer/status`
 
 **Decision:** Add a versioned platform-dashboard-rest endpoint `GET /api/optimizer/status` (`OptimizerStatus`

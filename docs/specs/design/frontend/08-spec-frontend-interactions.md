@@ -274,12 +274,22 @@ the optimizer through the Go API ([constraints](./09-spec-frontend-constraints.m
   - **Switch model** — the `ModelSelector` writes immediately (optimistic-pending like the time-scale knob)
     then reconciles to the echoed active model; a `400` (model not in the allowlist) rolls back. The change
     takes effect on the **next** cycle — the UI says so rather than implying an instant re-plan.
-  - **Pause / resume** — the `OptimizerEnableToggle` confirms on **disable** (it drops the optimizer into
-    read-only mode); the read-only banner appears immediately and the console's write affordances disable
-    while paused.
+  - **Pause / resume (service-wide)** — the global `OptimizerEnableToggle` confirms on **disable** (it drops
+    the optimizer into read-only mode); the read-only banner appears immediately and the console's write
+    affordances disable while paused.
+  - **Pause / resume (one greenhouse)** — the per-greenhouse `OptimizerEnableToggle` (on the greenhouse's
+    `OptimizerPlanPanel` and as a `FleetOptimizerRow` action) confirms on **disable** and toggles only that
+    greenhouse; its row/card flips to a **Disabled** pill and its `TriggerCycleAction` disables, while the
+    rest of the fleet keeps planning. **Global precedence:** while the service is globally paused, the
+    per-greenhouse toggle is shown **disabled with a reason** (a greenhouse plans only when both are on) and
+    its pill reads **Read-only** rather than Disabled.
+- **Fleet-card pill is read-only.** The `OptimizerStatusPill` on each `GreenhouseCard` (§ fleet overview)
+  is a status indicator, not a control — the card is a single link target; operators act from the console
+  table or the greenhouse's detail panel.
 - **Attribution.** An **applied** plan already appears in the `ActivityFeed` as an `optimizer_plan_applied`
   event ([data-model §4](./05-spec-frontend-data-model.md#4-time-series-shapes-telemetry--events)); the
-  operator actions here are audit-logged by the platform with the operator identity and supplied `reason`.
+  operator actions here are audit-logged by the platform with the operator identity and supplied `reason` —
+  a per-greenhouse pause/resume the same way as the service-wide one.
 - **Role-gating (2b).** Viewers see the full console **read-only** — queue, rollup, plans, diffs, and
   model/enable state — with every action rendered **disabled + reasoned** ("operator role required"),
   consistent with the rest of the dashboard (§11).

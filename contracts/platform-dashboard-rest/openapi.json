@@ -45,6 +45,7 @@
     "/api/optimizer/escalations": { "$ref": "./paths/optimizer-escalations.json" },
     "/api/optimizer/escalations/{escalation_id}/resolve": { "$ref": "./paths/optimizer-escalation-resolve.json" },
     "/api/optimizer/model": { "$ref": "./paths/optimizer-model.json" },
-    "/api/optimizer/enabled": { "$ref": "./paths/optimizer-enabled.json" }
+    "/api/optimizer/enabled": { "$ref": "./paths/optimizer-enabled.json" },
+    "/api/optimizer/greenhouses/{greenhouse_id}/enabled": { "$ref": "./paths/optimizer-greenhouse-enabled.json" }
   }
 }

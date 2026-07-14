@@ -85,9 +85,13 @@ route in [architecture §3](./03-spec-frontend-architecture.md#3-route-tree).
 ### `FleetOverview` *(2a)*
 
 - **Purpose:** The landing view — every greenhouse at a glance + a site rollup.
-- **Data:** `useFleet()` (`["fleet"]`), patched live by `status`/`drift` frames.
+- **Data:** `useFleet()` (`["fleet"]`), patched live by `status`/`drift` frames; *(3)*
+  `useOptimizerFleet()` (`["optimizer-fleet"]`, polled — the **same** query the
+  [`OptimizerConsole`](#optimizerconsole-3) reads) to source each card's optimizer pill,
+  joined to the fleet by `greenhouse_id`.
 - **Renders:** a `FleetSummaryBar` (status rollup derivation) + a grid of
-  `GreenhouseCard`. A **Register** CTA in the view toolbar opens
+  `GreenhouseCard` (each handed its `optimizerState` from the fleet optimizer summary in
+  3). A **Register** CTA in the view toolbar opens
   `RegisterGreenhouseDialog`. When any greenhouse is simulated, a `FleetTimeScaleControl` in the
   view toolbar sets the speed for the whole fleet at once (fan-out of independent
   per-controller writes — [interactions §7](./08-spec-frontend-interactions.md#7-writes--setpoint-edits--profile-apply)).
@@ -100,11 +104,18 @@ route in [architecture §3](./03-spec-frontend-architecture.md#3-route-tree).
 ### `GreenhouseCard` *(2a)*
 
 - **Purpose:** One greenhouse in the fleet grid.
-- **Props:** a `greenhouseSummary`.
+- **Props:** a `greenhouseSummary`; *(3)* an optional `optimizerState` (this greenhouse's
+  entry from the fleet optimizer summary, joined by `greenhouse_id` — absent when the
+  optimizer is not deployed).
 - **Renders:** name, crop, `StatusBadge`, a compact reading-vs-setpoint `MetricTile`
-  (or two), drift badge (2b), and a `TimeScaleIndicator` speed badge when the greenhouse
-  reports a non-1× `timeScale` (sim-only).
-- **Interaction:** whole card links to `/greenhouses/:id`.
+  (or two), drift badge (2b), a `TimeScaleIndicator` speed badge when the greenhouse
+  reports a non-1× `timeScale` (sim-only), and *(3)* an `OptimizerStatusPill` in the
+  status row (present only when `optimizerState` is supplied). The pill shows outcome /
+  Disabled / Read-only / No plan per the [`toOptimizerCardState`](./05-spec-frontend-data-model.md#8-view-model-derivations)
+  derivation; it carries no confidence (unavailable at fleet scope — that lives on the
+  detail [`OptimizerPlanPanel`](#optimizerplanpanel-3)).
+- **Interaction:** whole card links to `/greenhouses/:id`; the pill is read-only (the
+  card is a single link target, not a nested action).
 - **Visual:** fixed card anatomy: status row, title/crop row, metric pair, then a
   compact sparkline. Cards keep a stable min-height so online/offline states do
   not reshape the fleet grid. Offline/no-data cards show a muted empty state in
@@ -130,9 +141,10 @@ route in [architecture §3](./03-spec-frontend-architecture.md#3-route-tree).
   `TimeScaleIndicator`); a `GreenhouseSummaryBar` of `MetricTile`s (including the active
   **Day / Night** temperature setpoint, [data-model §8](./05-spec-frontend-data-model.md#8-view-model-derivations)); a stack of
   `TimeSeriesChart` (readings vs setpoint bands, plotted on simulated time); `ActuatorStatePanel`;
-  a `ZoneMoisturePanel` (live per-zone irrigation status); a **Recent Activity** card
+  a `ZoneMoisturePanel` (live per-zone irrigation status); *(3)* an
+  [`OptimizerPlanPanel`](#optimizerplanpanel-3) showing the latest optimizer cycle + setpoint diff
+  (positioned **between the `ZoneMoisturePanel` and the Recent Activity card**); a **Recent Activity** card
   (`EventList`) that links to this greenhouse's filtered [`ActivityFeed`](#activityfeed-2a-drift-entries-2b);
-  *(3)* an [`OptimizerPlanPanel`](#optimizerplanpanel-3) showing the latest optimizer cycle + setpoint diff;
   a **link/button to the `/greenhouses/:id/setpoints` route** (the `SetpointEditForm` lives on
   that route, not inline — [architecture §3](./03-spec-frontend-architecture.md#3-route-tree)); a `RangePicker`.
 - **States:** loading → skeleton charts; offline → charts show history + a live gap
@@ -170,36 +182,54 @@ route in [architecture §3](./03-spec-frontend-architecture.md#3-route-tree).
 
 ### `OptimizerConsole` *(3)*
 
-- **Purpose:** The `/optimizer` view — the fleet plan/escalation queue and the site rollup
-  (view 6 in purpose-and-views). The **plan detail** is not here; it is the
-  `OptimizerPlanPanel` on the greenhouse detail view (hybrid split).
-- **Data:** `useOptimizerFleet()` (`["optimizer-fleet"]`) + `useOptimizerEscalations()`
-  (`["optimizer-escalations"]`) + `useOptimizerModel()` / `useOptimizerEnabled()`, all **polled**
+- **Purpose:** The `/optimizer` view — the fleet optimizer table, the escalation worklist, the site
+  rollup, and the service-health metrics (view 6 in purpose-and-views). The **plan detail** is not
+  here; it is the `OptimizerPlanPanel` on the greenhouse detail view (hybrid split).
+- **Data:** `useOptimizerStatus()` (`["optimizer-status"]`) + `useOptimizerFleet()`
+  (`["optimizer-fleet"]`) + `useOptimizerEscalations()` (`["optimizer-escalations"]`) +
+  `useOptimizerModel()` / `useOptimizerEnabled()`, all **polled**
   ([data-model §6](./05-spec-frontend-data-model.md#6-query-keys--cache-strategy)); no live subscription.
-- **Renders:** an `OptimizerRollupBar` (backlog, counts-by-outcome, oldest-open age from the
-  fleet rollup); an `EscalationQueue` of `EscalationRow`s (each with a `ReasonCodeChip`,
-  `PlanOutcomeBadge`, a link to the greenhouse's plan panel, and a **Resolve** action); a global
-  `OptimizerEnableToggle` (pause/resume) and `ModelSelector` in the view toolbar. The queue filter
-  (`greenhouse_id` / `status`) is bound to the URL query params.
-- **States:** loading → skeletons; empty → `EmptyState` ("no open escalations — all cycles applied
-  or extended"); error → `ErrorState` with retry; a read-only banner when the optimizer is disabled.
-- **Role-gating (2b):** the queue/rollup/state are viewer-readable; every action (Resolve, trigger,
-  model switch, pause/resume) is operator-only (rendered disabled with a reason for viewers).
+- **Renders:** an `OptimizerHealthBadge` (service status / degraded reason, last-cycle vs cadence,
+  read-only reason) and an `OptimizerRollupBar` (backlog, counts-by-outcome, oldest-open age) as the
+  health-metrics header; a `FleetOptimizerTable` of `FleetOptimizerRow`s — **every** greenhouse with
+  its `PlanOutcomeBadge` (or **Disabled** pill from its per-greenhouse `enabled`), `ReasonCodeChip`
+  and age when escalated, a link to the greenhouse's plan panel, and per-row `TriggerCycleAction` +
+  per-greenhouse `OptimizerEnableToggle` (`scope="greenhouse"`) + **Resolve** (when escalated); a
+  global `OptimizerEnableToggle` (`scope="global"`, pause/resume) and `ModelSelector` in the view
+  toolbar. The table filter (`greenhouse_id` / `status`) is bound to the URL query params — filtering
+  to `status=escalated` yields the escalation worklist.
+- **States:** loading → skeletons; empty → `EmptyState` ("no greenhouses registered"); the
+  escalated-filter empty state reads "no open escalations — all cycles applied or extended"; error →
+  `ErrorState` with retry; a read-only banner when the optimizer is **globally** disabled (per-row
+  Disabled pills when only individual greenhouses are paused).
+- **Role-gating (2b):** the table/rollup/health/state are viewer-readable; every action (Resolve,
+  trigger, model switch, pause/resume — global or per-greenhouse) is operator-only (rendered disabled
+  with a reason for viewers).
 
 ### `OptimizerPlanPanel` *(3)*
 
 - **Purpose:** One greenhouse's latest optimizer cycle, rendered as a panel **on the detail view**
-  (`/greenhouses/:id`) — the per-greenhouse half of the hybrid split.
+  (`/greenhouses/:id`, between the `ZoneMoisturePanel` and the Recent Activity card) — the
+  per-greenhouse half of the hybrid split.
 - **Data:** `useOptimizerPlan(id)` (`["optimizer-plan", id]`, polled) — the flattened plan plus the
-  Go-API-composed setpoint diff.
-- **Renders:** a `PlanOutcomeBadge` (+ `ReasonCodeChip` when escalated), the plan's `confidence` and
-  `explanation`, the `backend` provenance (provider / model / prompt version / role), a `SetpointDiff`
-  (proposed vs current vs bounds), and — for this greenhouse — a `TriggerCycleAction` and, when the
-  cycle is escalated, a **Resolve** action.
+  Go-API-composed setpoint diff; the per-greenhouse `enabled` state (from the same greenhouse's
+  `["optimizer-fleet"]` entry, or `["optimizer-greenhouse-enabled", id]`), and the service
+  `["optimizer-status"]`/`["optimizer-enabled"]` for the read-only overlay.
+- **Renders:** an **Enabled / Disabled / Read-only** header pill + a per-greenhouse
+  `OptimizerEnableToggle` (`scope="greenhouse"`) for this greenhouse; a `PlanOutcomeBadge`
+  (+ `ReasonCodeChip` when escalated), the plan's `confidence` and `explanation`, the `backend`
+  provenance (provider / model / prompt version / role), a `SetpointDiff` (proposed vs current vs
+  bounds), and — for this greenhouse — a `TriggerCycleAction` and, when the cycle is escalated, a
+  **Resolve** action.
+- **Interaction:** the toggle pauses/resumes the optimizer **for this greenhouse** (confirm on
+  disable). When the service is globally paused it reflects **Read-only** and the per-greenhouse
+  toggle is disabled with a reason (global precedence — [interactions §13](./08-spec-frontend-interactions.md#13-optimizer-console-3)).
 - **States:** loading → skeleton; empty → "no optimizer plan yet" (cold start / pre-first-cycle);
   a **held-cycle** record (plan `null`) shows the outcome + reason with no diff ("cycle ran; nothing
-  applied"). Absent entirely on a real deployment without the optimizer.
-- **Role-gating (2b):** read for viewers; trigger/resolve operator-only.
+  applied"); **disabled for this greenhouse** → the plan reads as its last outcome under a Disabled
+  pill, `TriggerCycleAction` disabled (a `409`). Absent entirely on a real deployment without the optimizer.
+- **Role-gating (2b):** read for viewers; enable/disable, trigger, and resolve operator-only
+  (rendered disabled with a reason for viewers).
 
 ---
 
@@ -357,16 +387,27 @@ Reused across views; typed props; zero domain knowledge.
 
 ### Optimizer primitives *(3)*
 
-Presentational pieces the `OptimizerConsole` and `OptimizerPlanPanel` compose; typed props, no data
-access. **No `GateTraceStepper`** — the plan exposes a final `outcome` + `explanation`, not a
+Presentational pieces the `OptimizerConsole`, `OptimizerPlanPanel`, and `GreenhouseCard` compose; typed
+props, no data access. **No `GateTraceStepper`** — the plan exposes a final `outcome` + `explanation`, not a
 step-by-step gate trace ([data-model](./05-spec-frontend-data-model.md#optimizer-plans--escalations-3)),
 so a decision-trace panel is deliberately out of v1.
 
+- **`OptimizerHealthBadge`** — the service-health badge: `status` (healthy / degraded / unavailable) with
+  the `degraded_reason` when degraded, the last-successful-cycle time against `cadence_secs` (flagging
+  staleness), and the read-only reason when paused. Props: an `OptimizerStatus`; text label + icon,
+  **never color-only**. A read-only pause is rendered as a *healthy, intentional* state, not a stall.
+- **`OptimizerStatusPill`** — the compact per-greenhouse pill on `GreenhouseCard` (and reused as the
+  `FleetOptimizerRow` status cell): outcome (`Applied` / `Escalated` / `Extended`) / `Disabled` (per-gh) /
+  `Read-only` (global overlay) / `No plan`, from the [`toOptimizerCardState`](./05-spec-frontend-data-model.md#8-view-model-derivations)
+  derivation. Text label + icon, **never color-only**; carries no confidence (not available at fleet scope).
 - **`OptimizerRollupBar`** — site rollup cards (backlog, counts by outcome, oldest-open age) from the
   fleet summary; same `Card` shell as `FleetSummaryBar`, with a text label per number (never color-only).
-- **`EscalationQueue` / `EscalationRow`** — the open-escalation table; rows ordered persistent-before-transient
-  ([data-model §8](./05-spec-frontend-data-model.md#8-view-model-derivations)). Each row: greenhouse,
-  `ReasonCodeChip`, age, message, a link to the plan panel, and an operator **Resolve** action.
+- **`FleetOptimizerTable` / `FleetOptimizerRow`** — the whole-fleet optimizer table: one row per greenhouse
+  from the fleet summary. Each row: greenhouse, `OptimizerStatusPill` (+ `ReasonCodeChip` + age when
+  escalated), a link to the plan panel, and the operator actions (`TriggerCycleAction`, per-greenhouse
+  `OptimizerEnableToggle`, and **Resolve** when escalated). Filtering `status=escalated` yields the
+  escalation worklist, ordered persistent-before-transient
+  ([data-model §8](./05-spec-frontend-data-model.md#8-view-model-derivations)).
 - **`PlanOutcomeBadge`** — the `applied` / `escalated` / `extended` status pill; text label + icon,
   **never color-only** ([constraints](./09-spec-frontend-constraints.md)).
 - **`ReasonCodeChip`** — renders a `reason_code` + its `reason_class` (transient / persistent) from the
@@ -378,10 +419,14 @@ so a decision-trace panel is deliberately out of v1.
 - **`ModelSelector`** — a segmented/select control over the active provider's `available_models`
   allowlist; `onChange` fires `POST …/model`. Shows the active `model` + `prompt_version`; the
   `provider` is read-only (an offline change). Operator-gated.
-- **`OptimizerEnableToggle`** — pause/resume planning (`enabled` ↔ read-only); a `danger`-adjacent
-  confirm on disable. Operator-gated; reflects the polled `EnableState`.
+- **`OptimizerEnableToggle`** — pause/resume planning; a `danger`-adjacent confirm on disable.
+  Operator-gated. Props include a `scope`: `"global"` (whole service, `POST …/enabled`, reflects the
+  polled `EnableState`) or `"greenhouse"` (one greenhouse, `POST …/greenhouses/{id}/enabled`, reflects
+  its per-greenhouse `enabled`). The per-greenhouse toggle is **disabled with a reason** while the
+  service is globally paused (global precedence — [interactions §13](./08-spec-frontend-interactions.md#13-optimizer-console-3)).
 - **`TriggerCycleAction`** — run an on-demand cycle for one greenhouse (`POST …/cycles`, optional
-  `reason`); disabled while the optimizer is off or a cycle is in flight (`409`). Operator-gated.
+  `reason`); disabled while the optimizer is off — globally **or for that greenhouse** — or a cycle is
+  in flight (`409`). Operator-gated.
 
 ### `Button`, `Pill`, `Table`, `Dialog`, `Skeleton`, `EmptyState`, `ErrorState`, `Toast`
 
@@ -410,13 +455,13 @@ so a decision-trace panel is deliberately out of v1.
 
 | View / route | Components |
 |---|---|
-| `/` Fleet overview | `FleetOverview` → `FleetSummaryBar`, `RegisterGreenhouseDialog`, `FleetTimeScaleControl` (sim-only), `GreenhouseCard` → `StatusBadge`, `MetricTile`, `TimeScaleIndicator` (sim-only) |
-| `/greenhouses/:id` Detail | `GreenhouseDetail` → `GreenhouseSummaryBar`/`MetricTile`, `TimeSeriesChart`, `ActuatorStatePanel`, `ZoneMoisturePanel`, `EventList` (Recent Activity), `OptimizerPlanPanel` (3) → `PlanOutcomeBadge`/`ReasonCodeChip`/`SetpointDiff`/`TriggerCycleAction`, `RetireGreenhouseAction`, `RangePicker`, `TimeScaleControl`/`TimeScaleIndicator` (sim-only) |
+| `/` Fleet overview | `FleetOverview` → `FleetSummaryBar`, `RegisterGreenhouseDialog`, `FleetTimeScaleControl` (sim-only), `GreenhouseCard` → `StatusBadge`, `MetricTile`, `TimeScaleIndicator` (sim-only), `OptimizerStatusPill` (3) |
+| `/greenhouses/:id` Detail | `GreenhouseDetail` → `GreenhouseSummaryBar`/`MetricTile`, `TimeSeriesChart`, `ActuatorStatePanel`, `ZoneMoisturePanel`, `OptimizerPlanPanel` (3) → `PlanOutcomeBadge`/`ReasonCodeChip`/`SetpointDiff`/`TriggerCycleAction`/`OptimizerEnableToggle` (greenhouse), `EventList` (Recent Activity), `RetireGreenhouseAction`, `RangePicker`, `TimeScaleControl`/`TimeScaleIndicator` (sim-only) |
 | `/greenhouses/:id/setpoints` Setpoint editor | `SetpointsView` → `SetpointEditForm` |
 | `/profiles` (2b) | `ProfileLibrary` → profile cards, assignment panel |
 | `/profiles/:id` (2b) | `ProfileEditor` → `SetpointFields`, stage selector |
 | `/activity` | `ActivityFeed` → `EventList` |
-| `/optimizer` (3) | `OptimizerConsole` → `OptimizerRollupBar`, `EscalationQueue`/`EscalationRow`, `ReasonCodeChip`, `PlanOutcomeBadge`, `ModelSelector`, `OptimizerEnableToggle` |
+| `/optimizer` (3) | `OptimizerConsole` → `OptimizerHealthBadge`, `OptimizerRollupBar`, `FleetOptimizerTable`/`FleetOptimizerRow` → `OptimizerStatusPill`/`ReasonCodeChip`/`TriggerCycleAction`/`OptimizerEnableToggle` (greenhouse)/Resolve, `ModelSelector`, `OptimizerEnableToggle` (global) |
 | Persistent (chrome) | `AppFrame`, `SideNav`, `TopBar`, `ConnectionStatus`, `ToastHost` |
 
 ---

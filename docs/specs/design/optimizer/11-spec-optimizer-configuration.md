@@ -40,6 +40,14 @@ runtime overrides are **in-memory and reset to their configured values on restar
 the defaults and source of truth); a runtime `enabled` toggle takes effect immediately — the scheduler stops
 dispatching new cycles and the applier goes inert — rather than on the next cadence tick.
 
+The operator can also pause the optimizer **for a single greenhouse** via
+`POST /api/optimizer/greenhouses/{id}/enabled` ([interfaces](./10-spec-optimizer-interfaces.md#service-api-endpoints)).
+This is a **runtime-only** state with the same in-memory, resets-on-restart treatment as the service `enabled`
+flag — there is **no per-greenhouse config file** (this service is configured by environment convention, not a
+per-greenhouse TOML — see below), so the per-greenhouse enable simply **defaults to on** for every greenhouse
+and is toggled only through the API. A globally disabled service pauses every greenhouse regardless (global
+precedence).
+
 ```toml
 [data]
 platform_api_url = "https://platform/api"

@@ -37,15 +37,17 @@ versioned wire contract.
 |---|---|
 | `GET /health` | Liveness/readiness — Phase 2 reachability, LLM backend reachability, last-successful-cycle time, escalation backlog, and whether planning is **enabled** or the service is in read-only mode ([resilience — watchdog](./09-spec-optimizer-resilience.md)) |
 | `GET /metrics` | Prometheus optimizer-health scrape (the `/metrics` row above) |
-| `POST /api/optimizer/greenhouses/{id}/cycles` | Operator-gated: trigger an **on-demand** planning cycle for one greenhouse, out of band from the fixed cadence (body `{ reason? }`). The request asks for a fresh plan, so it bypasses state-change suppression but not input/safety/application gates; `409` while the optimizer is **disabled** (read-only — [resilience](./09-spec-optimizer-resilience.md)) or that greenhouse already has a cycle in flight |
+| `POST /api/optimizer/greenhouses/{id}/cycles` | Operator-gated: trigger an **on-demand** planning cycle for one greenhouse, out of band from the fixed cadence (body `{ reason? }`). The request asks for a fresh plan, so it bypasses state-change suppression but not input/safety/application gates; `409` while the optimizer is **disabled** — service-wide *or* for this greenhouse (read-only — [resilience](./09-spec-optimizer-resilience.md)) — or that greenhouse already has a cycle in flight |
 | `GET /api/optimizer/greenhouses/{id}/plans/latest` | Inspect the latest proposed / applied plan for one greenhouse |
-| `GET /api/optimizer/fleet` | Fleet-wide optimizer rollup for the operator overview: for **each** greenhouse its latest cycle outcome (`status`, `reason_code?`, `created_at`), plus site aggregates — the open-escalation **backlog** count, counts **by outcome** (`applied` / `escalated` / `extended`), and the **oldest open escalation age**. Computed server-side from the plan store (the optimizer already owns it), so the operator surface reads **one** endpoint rather than fanning out `plans/latest` per greenhouse. The scalar backlog it reports is the same one `GET /health` surfaces |
+| `GET /api/optimizer/fleet` | Fleet-wide optimizer rollup for the operator overview: for **each** greenhouse its latest cycle outcome (`status`, `reason_code?`, `created_at`) and its per-greenhouse **`enabled`** flag, plus site aggregates — the open-escalation **backlog** count, counts **by outcome** (`applied` / `escalated` / `extended`), and the **oldest open escalation age**. Computed server-side from the plan store (the optimizer already owns it), so the operator surface reads **one** endpoint rather than fanning out `plans/latest` per greenhouse. The scalar backlog it reports is the same one `GET /health` surfaces |
 | `GET /api/optimizer/escalations` | List **open** escalations (held cycles awaiting operator review); see the escalation-lifecycle note below |
 | `POST /api/optimizer/escalations/{id}/resolve` | Operator-gated: resolve an open escalation (the `operator` resolution). Open escalations also close **automatically** as `superseded` or `expired` ([resilience](./09-spec-optimizer-resilience.md)) |
 | `GET /api/optimizer/model` | Inspect the active backend (`provider`, `model`, `prompt_version`, `role`) and the active provider's runtime `available_models` allowlist ([configuration](./11-spec-optimizer-configuration.md)) |
 | `POST /api/optimizer/model` | Operator-gated: switch the active **`model`** within the active provider's allowlist (body `{ model, reason? }`). Takes effect on the **next** cycle; `400` if the model is not in `available_models[provider]`, `401` / `403` in `oidc` mode without the operator role. The **`provider`** is *not* changeable here — a provider change is an offline config change ([auth](#authenticating-the-model-change-endpoint)) |
 | `GET /api/optimizer/enabled` | Inspect whether planning is **enabled** or the service is in read-only mode |
 | `POST /api/optimizer/enabled` | Operator-gated: enable or disable the optimizer at runtime (body `{ enabled, reason? }`). Disabling drops the service into **read-only mode** — no scheduled cycles, no setpoint writes, reads still served ([resilience](./09-spec-optimizer-resilience.md)); takes effect immediately and is **in-memory**, resetting to the configured default on restart. `401` / `403` in `oidc` mode without the operator role ([auth](#authenticating-the-enable-disable-endpoint)) |
+| `GET /api/optimizer/greenhouses/{id}/enabled` | Inspect whether planning is **enabled** for one greenhouse or paused just for it — the per-greenhouse analog of `GET /api/optimizer/enabled` |
+| `POST /api/optimizer/greenhouses/{id}/enabled` | Operator-gated: enable or disable the optimizer for a **single greenhouse** at runtime (body `{ enabled, reason? }`). Disabling **skips that greenhouse's** scheduled cycles and setpoint writes even while the service is globally enabled; the rest of the fleet keeps planning ([resilience — per-greenhouse pause](./09-spec-optimizer-resilience.md)). Same immediate, **in-memory**, reset-on-restart treatment as the global toggle, gated identically ([auth](#authenticating-the-enable-disable-endpoint)). The global pause takes precedence — while the service is globally disabled, every greenhouse is paused regardless of this flag |
 
 Every plan and escalation these endpoints expose is traced by `optimizer_run_id`
 ([P3-OBS-1](../../artifacts/non-functional-requirements.md)) and stamped with the `backend` that
@@ -60,7 +62,7 @@ carries a [reason code](#escalation-reason-codes).
 The browser SPA does **not** call this FastAPI surface directly. Per the frontend integration
 boundary ([frontend constraints — the browser talks only to the Go API](../frontend/09-spec-frontend-constraints.md#the-browser-talks-only-to-the-go-api)),
 the platform **Go API proxies and aggregates** these operator endpoints — plan/escalation/model/enable
-reads, the `fleet` rollup, and the operator-gated mutations — and re-exposes them to the SPA under the
+reads (service-wide and per-greenhouse), the `fleet` rollup, and the operator-gated mutations — and re-exposes them to the SPA under the
 **versioned** [`contracts/platform-dashboard-rest/`](../../../../contracts/platform-dashboard-rest/) surface
 ([platform interfaces §3](../platform/09-spec-platform-interfaces.md#3-api-surface-inventory)). The Go
 API also **derives** the internal `GET /health` above into a versioned frontend
@@ -180,3 +182,13 @@ configured [`enabled`](./11-spec-optimizer-configuration.md) default on restart*
 operational pause, not a persisted state change. Disabling takes effect **immediately**: the scheduler stops
 dispatching new cycles and the applier goes inert, so no setpoint write leaves the service while it is
 disabled, and an out-of-band [`POST …/cycles`](#service-api-endpoints) is refused with `409`.
+
+`POST /api/optimizer/greenhouses/{id}/enabled` (pause or resume planning for a **single greenhouse**) is
+gated, logged, and scoped **identically** — same operator role, same immediate, in-memory, reset-on-restart
+treatment — but it toggles only that greenhouse: while it is disabled the scheduler skips *that* greenhouse's
+cycles and the applier writes nothing for it, and an out-of-band `POST …/cycles` for it is refused with `409`,
+while the rest of the fleet plans normally ([resilience — per-greenhouse pause](./09-spec-optimizer-resilience.md)).
+The two scopes compose as an **AND** with the **global taking precedence**: a greenhouse plans only when the
+service is globally enabled *and* the greenhouse is enabled, so a global pause overrides every per-greenhouse
+flag. Its in-memory default is "enabled" (there is no per-greenhouse config file —
+[configuration](./11-spec-optimizer-configuration.md)).

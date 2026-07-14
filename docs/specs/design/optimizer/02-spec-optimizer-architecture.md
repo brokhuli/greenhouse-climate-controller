@@ -73,14 +73,19 @@ is ever in flight ([constraints §3](./06-spec-optimizer-constraints-and-applica
 The whole scheduler is gated on the service [`enabled`](./11-spec-optimizer-configuration.md) flag: while the
 optimizer is **disabled** (read-only mode) it dispatches no cycles and the Plan Applier is inert — no
 setpoint write leaves the service — though every read surface stays live
-([resilience](./09-spec-optimizer-resilience.md)).
+([resilience](./09-spec-optimizer-resilience.md)). Each tick the scheduler also **skips any greenhouse the
+operator has individually disabled** via the per-greenhouse `enabled` flag
+([interfaces](./10-spec-optimizer-interfaces.md#service-api-endpoints)): a greenhouse is dispatched only when
+the service is globally enabled *and* that greenhouse is enabled (global pause takes precedence), so one
+greenhouse can be paused while the rest of the fleet plans on cadence.
 
 Operators may also request an **on-demand** cycle for one greenhouse through the Service API
 ([interfaces](./10-spec-optimizer-interfaces.md#service-api-endpoints)). This uses the same single-flight
 guard as scheduled work: if that greenhouse already has a cycle in flight the request is refused rather
 than queued behind it. An on-demand request runs outside the fixed cadence and asks for a fresh plan, so it
 bypasses only the state-change suppression that would otherwise extend a prior plan; it does **not** bypass
-the `enabled` gate, input-quality gate, twin robustness checks, crop-safe bounds, confidence gate, or Phase 2
+the `enabled` gate (service-wide *or* the greenhouse's own per-greenhouse flag — either being off refuses it
+with `409`), input-quality gate, twin robustness checks, crop-safe bounds, confidence gate, or Phase 2
 write validation. In other words, it is an operator way to say "plan now," not a way to force unsafe output
 through the system.
 

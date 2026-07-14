@@ -70,9 +70,13 @@ actions**, **role**.
   accumulated light, rather than the instantaneous PAR, which the detail view still charts).
   Site-wide rollup of how many greenhouses are
   healthy vs need attention. On simulated controllers, each card also shows its
-  current **simulation speed** (time-scale) when it is not 1×. In **Phase 3**, a compact
-  **optimizer backlog** indicator flags greenhouses with an open escalation (held cycle
-  awaiting review), linking into the [optimizer console](#6-optimizer-operator-console-3).
+  current **simulation speed** (time-scale) when it is not 1×. In **Phase 3**, each card
+  also carries a small **optimizer status pill** — this greenhouse's latest optimizer
+  cycle outcome (applied / escalated / extended), or **Disabled** when the optimizer is
+  paused for it (or **Read-only** under a service-wide pause), or **No plan** before its
+  first cycle — and a compact **optimizer backlog** indicator flags greenhouses with an
+  open escalation (held cycle awaiting review); both link into the
+  [optimizer console](#6-optimizer-operator-console-3).
 - **Primary actions:** open a greenhouse; (2a) register / retire a greenhouse
   (`RegisterGreenhouseDialog` / `RetireGreenhouseAction`, [components §3](./06-spec-frontend-components.md#3-primitives-components));
   *(2a, simulation-only)* set the simulation speed for the **whole fleet** at once
@@ -95,15 +99,20 @@ actions**, **role**.
   faults and interlock activations are raised prominently. Charts
   plot on **simulated time** (the controller's clock), and on a simulated controller
   a **speed indicator** shows the current time-scale. In **Phase 3**, an **optimizer plan
-  panel** surfaces this greenhouse's latest optimizer cycle — the proposed-vs-current
+  panel** — sitting **between the per-zone irrigation panel and the Recent Activity
+  card** — surfaces this greenhouse's latest optimizer cycle: the proposed-vs-current
   setpoint diff, the cycle outcome and [reason code](../optimizer/10-spec-optimizer-interfaces.md#escalation-reason-codes),
-  the plan's confidence and explanation, and the backend that produced it — with the
-  operator actions from the [optimizer console](#6-optimizer-operator-console-3).
+  the plan's confidence and explanation, and the backend that produced it. It also lets
+  the operator **enable/disable the optimizer for this greenhouse** (reflecting a
+  service-wide pause as read-only, since the global pause takes precedence) alongside the
+  trigger/resolve actions from the [optimizer console](#6-optimizer-operator-console-3).
 - **Primary actions:** open the setpoint editor (view 3, its own route); change the
   historical time range; *(2a, simulation-only)* adjust the controller's
   **simulation speed** (0.5×/1×/2×/4×/8×) as a **live** control; jump to this
-  greenhouse's filtered activity feed; (2b) view/assign the crop profile.
-- **Role:** Viewer (read) / Operator (edits, speed).
+  greenhouse's filtered activity feed; (2b) view/assign the crop profile; *(3)*
+  enable/disable the optimizer for this greenhouse, trigger an on-demand cycle, or
+  resolve a held escalation.
+- **Role:** Viewer (read) / Operator (edits, speed, optimizer actions).
 
 ### 3. Control — setpoint edits *(2a relay → sticky in 2b)*
 
@@ -153,25 +162,30 @@ actions**, **role**.
 
 - **Purpose:** review and operate the Phase 3 optimizer — the LLM planner that refines
   setpoints on a fixed cadence — without leaving the dashboard or opening a second tool.
-- **Shows:** a **fleet plan/escalation queue** — per greenhouse, its latest optimizer
-  cycle outcome (`applied` / `escalated` / `extended`) and, for held cycles, the
+- **Shows:** a **fleet optimizer table** — every greenhouse with its latest cycle
+  outcome (`applied` / `escalated` / `extended`), its per-greenhouse **enabled** state
+  (**Disabled** when paused for it), and, for held cycles, the
   [reason code](../optimizer/10-spec-optimizer-interfaces.md#escalation-reason-codes) and
-  age — plus site rollups (open-escalation **backlog**, counts by outcome, oldest open
-  age). Drilling into one greenhouse's plan opens the **optimizer plan panel** on that
-  greenhouse's [detail view](#2-per-greenhouse-detail-2a) (hybrid split — the queue is a
-  console of its own, the plan detail lives with the greenhouse): the proposed-vs-current
-  **setpoint diff** against crop-safe bounds, the plan's confidence and explanation, and
-  the backend that produced it (provider / model / prompt version). The active **model**
-  and the **enabled / read-only** state are shown too, alongside a **service-health badge** —
-  the optimizer's overall status (healthy / degraded / unavailable) and, when degraded, the
-  reason; the last-successful-cycle time against the expected cadence; and, when paused, the
-  read-only reason ([optimizer interfaces](../optimizer/10-spec-optimizer-interfaces.md#the-operator-dashboard-reaches-this-surface-through-the-platform-go-api)).
+  age — filterable down to the open-escalation worklist. Above it, **health metrics**: a
+  **service-health badge** (the optimizer's overall status healthy / degraded /
+  unavailable and, when degraded, the reason; the last-successful-cycle time against the
+  expected cadence; and, when paused, the read-only reason —
+  [optimizer interfaces](../optimizer/10-spec-optimizer-interfaces.md#the-operator-dashboard-reaches-this-surface-through-the-platform-go-api)),
+  the active **model**, the service **enabled / read-only** state, and the site rollups
+  (open-escalation **backlog**, counts by outcome, oldest open age). Drilling into one
+  greenhouse's plan opens the **optimizer plan panel** on that greenhouse's
+  [detail view](#2-per-greenhouse-detail-2a) (hybrid split — the fleet table is a console
+  of its own, the plan detail — proposed-vs-current **setpoint diff** against crop-safe
+  bounds, confidence, explanation, and the backend that produced it — lives with the
+  greenhouse, which is also where per-greenhouse confidence/backend live rather than the
+  fleet table).
 - **Primary actions:** *(operator)* resolve an open escalation; trigger an **on-demand**
   planning cycle for one greenhouse; switch the active **model** within the allowlist;
-  **pause / resume** planning (read-only mode). All relay through the Go API's
+  **pause / resume** planning **service-wide** (read-only mode) or **for one greenhouse**.
+  All relay through the Go API's
   [optimizer operator API](../platform/09-spec-platform-interfaces.md#3-api-surface-inventory);
   the optimizer re-validates and still applies only through the platform write path.
-- **Role:** Viewer (read — queue, plans, diff, state) / Operator (the actions above).
+- **Role:** Viewer (read — table, plans, diff, state) / Operator (the actions above).
 
 ---
 

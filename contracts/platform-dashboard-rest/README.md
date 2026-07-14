@@ -44,6 +44,7 @@ paths/                       # one file per path
   optimizer-escalation-resolve.json # /api/optimizer/escalations/{escalation_id}/resolve (POST) (3)
   optimizer-model.json       #   /api/optimizer/model                        (GET, POST) (3)
   optimizer-enabled.json     #   /api/optimizer/enabled                      (GET, POST) (3)
+  optimizer-greenhouse-enabled.json # /api/optimizer/greenhouses/{greenhouse_id}/enabled (GET, POST) (3)
 components/
   schemas/                   # request/response body schemas, one file per resource
     common.json              #   Slug, Connectivity, ActuatorName, Error, ValidationError (shared)
@@ -55,7 +56,7 @@ components/
     events.json              #   EventEntry
     sim.json                 #   TimeScale, TimeScalePatch, FleetTimeScaleResult (sim-only)
     profiles.json            #   CropProfile, CropProfilePatch, ProfileStage, StageBounds, ZoneBounds, Bound, Assignment, AssignmentInput (2b)
-    optimizer.json           #   OptimizerPlanView/Detail, SetpointDiff, Escalation, FleetOptimizerSummary, ModelState/Selection, EnableState/Request, OptimizerStatus, DegradedReason, CycleRequest/Accepted, ReasonCode/Class (3)
+    optimizer.json           #   OptimizerPlanView/Detail, SetpointDiff, Escalation, FleetOptimizerSummary, ModelState/Selection, EnableState/Request, GreenhouseEnableState, OptimizerStatus, DegradedReason, CycleRequest/Accepted, ReasonCode/Class (3)
   parameters.json            # shared path/query parameters
   responses.json             # shared error responses (400, 401, 403, 404, 409, 422)
 examples/                    # fixtures used as tests (see below)
@@ -103,6 +104,8 @@ nginx-proxied prefix.
 | `POST /api/optimizer/model` | Switch the active model | 3 | 200 `ModelState` | 400, 401, 403 |
 | `GET /api/optimizer/enabled` | Enabled / read-only state | 3 | 200 `EnableState` | — |
 | `POST /api/optimizer/enabled` | Pause / resume planning | 3 | 200 `EnableState` | 401, 403 |
+| `GET /api/optimizer/greenhouses/{greenhouse_id}/enabled` | Per-greenhouse enabled state | 3 | 200 `GreenhouseEnableState` | 404 |
+| `POST /api/optimizer/greenhouses/{greenhouse_id}/enabled` | Pause / resume one greenhouse | 3 | 200 `GreenhouseEnableState` | 401, 403, 404 |
 
 The optimizer's single-authority `POST /greenhouses/{id}/setpoints` (RFC-005 write path) is a
 **different** contract ([`optimizer-platform-setpoints-rest/`](../optimizer-platform-setpoints-rest/), catalog #3) and is not here; the
@@ -224,6 +227,7 @@ validate against their component schema; the `*.bad-*.json` counter-examples mus
 | `optimizer-escalation.bad-reason.json` | `Escalation` | **fail** (`reason_code` outside the canonical enum) |
 | `optimizer-model.json` | `ModelState` | valid |
 | `optimizer-enabled.json` | `EnableState` | valid |
+| `optimizer-greenhouse-enabled.json` | `GreenhouseEnableState` | valid (one greenhouse paused — `enabled` false) |
 | `optimizer-status.json` | `OptimizerStatus` | valid (healthy, enabled) |
 | `optimizer-status.degraded.json` | `OptimizerStatus` | valid (degraded — `platform_unreachable`, no successful cycle yet) |
 | `optimizer-status.bad-reason.json` | `OptimizerStatus` | **fail** (`degraded_reason` outside the enum) |

@@ -103,6 +103,20 @@ and the platform's operational resilience
   ([scope](./13-spec-optimizer-scope.md)); the escalation sweep (below) still runs, and the health
   watchdog (below) reports the disabled state rather than reading the growing cycle-age as a stall.
   Re-enabling resumes normal cadence on the next tick.
+- **Per-greenhouse pause — the scoped analog.** Alongside the service-wide flag, an operator can pause a
+  **single greenhouse** via
+  [`POST /api/optimizer/greenhouses/{id}/enabled`](./10-spec-optimizer-interfaces.md#service-api-endpoints) —
+  the **manual, per-greenhouse** analog of the whole-service pause above, with the same operator-gated,
+  structured-logged, in-memory, resets-on-restart treatment (default on). When one greenhouse is disabled the
+  scheduler **skips just that greenhouse** each tick and the applier writes nothing for it, while every other
+  greenhouse keeps planning on cadence; its out-of-band `POST …/cycles` is refused with `409` just as under a
+  global pause. The two scopes compose as an **AND with the global taking precedence** — a greenhouse plans
+  only when the service is globally enabled *and* that greenhouse is enabled — so a service-wide pause
+  overrides every per-greenhouse flag, and re-enabling the service restores each greenhouse to its own flag.
+  As with the global pause, the escalation sweep still prunes a disabled greenhouse's held cycles and the
+  watchdog does not read its idle cycle-age as a stall. The per-greenhouse `enabled` flag is reported for
+  every greenhouse on the [`GET /api/optimizer/fleet`](./10-spec-optimizer-interfaces.md#service-api-endpoints)
+  rollup so the operator surface renders a Disabled state without fanning out per greenhouse.
 - **Escalation backpressure.** Escalations are the optimizer's only operator-facing output for held
   cycles, each tagged with a canonical [reason code](./10-spec-optimizer-interfaces.md#escalation-reason-codes)
   ([application gate](./06-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application),

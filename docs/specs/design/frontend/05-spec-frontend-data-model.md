@@ -256,7 +256,7 @@ optimizer only through the Go API's
 [optimizer operator API](../platform/09-spec-platform-interfaces.md#3-api-surface-inventory). These are
 **polled**, not streamed ([architecture — optimizer console](./03-spec-frontend-architecture.md#optimizer-console--rest-polling-no-websocket)).
 *(wire)* — mirror
-[`OptimizerPlanView` / `SetpointDiff` / `Escalation` / `FleetOptimizerSummary` / `ModelState` / `EnableState`](../../../../contracts/platform-dashboard-rest/components/schemas/optimizer.json):
+[`OptimizerPlanView` / `SetpointDiff` / `Escalation` / `FleetOptimizerSummary` / `ModelState` / `EnableState` / `GreenhouseEnableState`](../../../../contracts/platform-dashboard-rest/components/schemas/optimizer.json):
 
 ```ts
 export const wireOptimizerOutcome = z.object({
@@ -309,6 +309,7 @@ export const wireFleetOptimizerSummary = z.object({
     greenhouse_id: greenhouseId,
     status: wireOptimizerOutcome.shape.status,
     reason_code: z.string().nullable().optional(),
+    enabled: z.boolean(),                         // per-greenhouse pause; false = Disabled pill (overrides status)
     created_at: z.coerce.date(),
   })),
   rollup: z.object({
@@ -329,7 +330,14 @@ export const wireModelState = z.object({
 });
 
 export const wireEnableState = z.object({
-  enabled: z.boolean(),                           // false = read-only mode (planning paused)
+  enabled: z.boolean(),                           // false = read-only mode (planning paused, service-wide)
+});
+
+// Per-greenhouse enable state — the GET/POST …/greenhouses/{id}/enabled shape (the scoped analog of
+// wireEnableState). Effective planning requires this AND the global enable; the global pause wins.
+export const wireGreenhouseEnableState = z.object({
+  greenhouse_id: greenhouseId,
+  enabled: z.boolean(),                           // false = this greenhouse is paused even while the service is enabled
 });
 
 // Service-level health for the console overview badge — the Go API's derivation of the
@@ -502,10 +510,11 @@ entries:
 | `["analytics", id, range, interval]` | `GET /api/greenhouses/:id/analytics?window&interval` | aggregated long-range chart series (replaces raw telemetry past the range threshold — [architecture §4](./03-spec-frontend-architecture.md#4-runtime-data-flow)) |
 | `["events", scope]` | `GET /api/events?…` | activity feed; prepended by `event` frames |
 | `["profiles"]` / `["profile", id]` *(2b)* | `GET /api/profiles…` | profile library + editor |
-| `["optimizer-fleet"]` *(3)* | `GET /api/optimizer/fleet` | console queue + rollup; **polled** (`refetchInterval`), not WS |
+| `["optimizer-fleet"]` *(3)* | `GET /api/optimizer/fleet` | fleet table + rollup; **polled** (`refetchInterval`), not WS. Also read by `FleetOverview` to source each `GreenhouseCard`'s optimizer pill |
 | `["optimizer-plan", id]` *(3)* | `GET /api/optimizer/greenhouses/:id/plan` | latest plan + composed setpoint diff for the detail panel; polled |
 | `["optimizer-escalations"]` *(3)* | `GET /api/optimizer/escalations` | open escalation set; polled |
-| `["optimizer-model"]` / `["optimizer-enabled"]` *(3)* | `GET /api/optimizer/model` · `…/enabled` | active model + allowlist, enable/read-only state; polled |
+| `["optimizer-model"]` / `["optimizer-enabled"]` *(3)* | `GET /api/optimizer/model` · `…/enabled` | active model + allowlist, service enable/read-only state; polled |
+| `["optimizer-greenhouse-enabled", id]` *(3)* | `GET /api/optimizer/greenhouses/:id/enabled` | one greenhouse's enable state for the detail panel toggle; polled (the fleet summary carries the same `enabled` for the cards/table) |
 | `["optimizer-status"]` *(3)* | `GET /api/optimizer/status` | service-health badge (status/degraded-reason, last-cycle vs cadence, read-only reason); polled |
 
 Strategy:
@@ -520,13 +529,16 @@ Strategy:
   (`POST /api/greenhouses`) and **retire** (`DELETE /api/greenhouses/:id`) both
   invalidate `["fleet"]`; retire also drops `["greenhouse", id]`.
 - **Optimizer mutations (3)** — resolve escalation (`POST …/escalations/:id/resolve`),
-  trigger cycle (`POST …/greenhouses/:id/cycles`), switch model (`POST …/model`), and
-  enable/disable (`POST …/enabled`) settle on the server response and invalidate the relevant
+  trigger cycle (`POST …/greenhouses/:id/cycles`), switch model (`POST …/model`),
+  service enable/disable (`POST …/enabled`), and per-greenhouse enable/disable
+  (`POST …/greenhouses/:id/enabled`) settle on the server response and invalidate the relevant
   polled keys (`["optimizer-escalations"]` + `["optimizer-fleet"]` on resolve/cycle;
-  `["optimizer-model"]` / `["optimizer-enabled"]` on the toggles). The model/enable toggles
+  `["optimizer-model"]` / `["optimizer-enabled"]` on the service toggles; `["optimizer-fleet"]` +
+  `["optimizer-greenhouse-enabled", id]` on the per-greenhouse toggle). The model/enable toggles
   patch optimistically then reconcile, reusing the setpoint-edit settle/rollback machinery
   ([interactions §13](./08-spec-frontend-interactions.md#13-optimizer-console-3)). All are
-  operator-gated (2b role); a `409` (optimizer disabled / cycle in flight) surfaces as an error toast.
+  operator-gated (2b role); a `409` (optimizer disabled — globally or for that greenhouse — / cycle
+  in flight) surfaces as an error toast.
 - **Backfill** after a WS gap re-runs the affected `["telemetry", id, range]` query
   ([architecture §4](./03-spec-frontend-architecture.md#4-runtime-data-flow)).
 
@@ -568,7 +580,8 @@ unit-tested and never embedded in components:
 | **Zone moisture status & band fill** | zone reading + low/high thresholds + `irrigating`/`faulted` | `ZoneMoisturePanel` — headline status pill (Watering/Dry/Saturated/OK/Fault/No data) + the band-tinted gauge fill |
 | **Simulated-time axis** | series `ts` + `timeScale` | the detail chart's x-axis (plots on simulated time) + the speed indicator label |
 | **Optimizer setpoint-diff rows** *(3)* | `SetpointDiff` (proposed patch + current bundle + crop-safe bounds) | `SetpointDiff` — per **changed** field only, old → new, delta direction, and a near-bound flag |
-| **Escalation triage grouping** *(3)* | open escalations + `reasonClass` | `EscalationQueue` ordering (persistent before transient) + the queue count/badge |
+| **Optimizer card state** *(3)* — `toOptimizerCardState` | a greenhouse's fleet-summary entry (`status`, `enabled`) + the service `EnableState`/`OptimizerStatus` | `OptimizerStatusPill` on `GreenhouseCard` / `FleetOptimizerRow` — resolves the pill: **Read-only** if the service is globally disabled → else **Disabled** if the greenhouse `enabled` is false → else the `status` outcome → else **No plan** (entry absent) |
+| **Escalation triage grouping** *(3)* | open escalations + `reasonClass` | `FleetOptimizerTable` `status=escalated` ordering (persistent before transient) + the backlog count/badge |
 
 Keeping these pure means a view never recomputes climate logic inline, and the
 derivations are testable in isolation (`P2-TEST-2`-adjacent unit coverage).
