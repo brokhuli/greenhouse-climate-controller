@@ -50,10 +50,17 @@ export default function FleetOverview() {
 
   const summaries = fleet.data ?? [];
   const anySim = summaries.some((summary) => summary.timeScale != null);
-  const distinctScales = new Set(
-    summaries.map((summary) => summary.timeScale).filter((scale): scale is number => scale != null),
+  // The fleet speed knob highlights the scale the *reachable* greenhouses share. An offline
+  // controller keeps reporting its last-known time_scale, but the fleet fan-out skips it
+  // (interactions §7), so counting it would blank the knob whenever a skipped greenhouse lags the
+  // speed the online fleet just took.
+  const liveScales = new Set(
+    summaries
+      .filter((summary) => summary.status !== "offline")
+      .map((summary) => summary.timeScale)
+      .filter((scale): scale is number => scale != null),
   );
-  const commonScale = distinctScales.size === 1 ? [...distinctScales][0] : null;
+  const commonScale = liveScales.size === 1 ? [...liveScales][0] : null;
 
   return (
     <div className="flex flex-col" style={{ gap: "var(--layout-section-gap)" }}>

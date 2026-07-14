@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://greenhouse.local/contracts/optimizer-internal-plan-schema/optimizer-plan.schema.json",
+  "title": "OptimizerPlan",
+  "description": "The LLM planner's structured output, parsed via .with_structured_output(OptimizerPlan) - the refined plan itself, proposed and not authoritative (every plan is gated by the constraint engine + confidence gate before anything is applied). Layer 1 of the plan contract; wrapped by PlanRecord for a cycle. See docs/specs/design/optimizer/05-spec-optimizer-plan-contract.md §2, governed by RFC-004.",
+  "type": "object",
+  "$defs": {
+    "TrajectoryPoint": {
+      "type": "object",
+      "description": "One hour of the refined setpoint trajectory across the horizon.",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The instant these targets apply (RFC 3339, UTC). trajectory[0].at is the cycle start; points are hour-spaced across the horizon."
+        },
+        "setpoints": {
+          "$ref": "https://greenhouse.local/contracts/optimizer-internal-plan-schema/setpoints.schema.json#/$defs/SetpointsPatch"
+        }
+      },
+      "required": ["at", "setpoints"],
+      "additionalProperties": false
+    },
+    "ObjectiveScores": {
+      "type": "object",
+      "description": "The planner's self-reported weighting of how each optimization objective shaped the plan. Advisory / explainability only - never consumed by the application gate.",
+      "properties": {
+        "anticipation": { "type": "number", "minimum": 0, "maximum": 1, "description": "Predictive / anticipatory-control weight." },
+        "coupling": { "type": "number", "minimum": 0, "maximum": 1, "description": "Coupling-aware-planning weight." },
+        "efficiency": { "type": "number", "minimum": 0, "maximum": 1, "description": "Per-greenhouse-efficiency weight." }
+      },
+      "required": ["anticipation", "coupling", "efficiency"],
+      "additionalProperties": false
+    },
+    "EscalationHint": {
+      "type": "object",
+      "description": "An optional planner self-flag (e.g. a target held near a bound). Advisory only - the authoritative escalation reason_code is assigned downstream by the gate, not taken from the model, so reason_code here is a free-form hint rather than the canonical enum.",
+      "properties": {
+        "reason_code": { "type": "string", "description": "Advisory hint at why the planner is uncertain; not the authoritative canonical code." },
+        "note": { "type": "string", "description": "Free-text hint for operator review." }
+      },
+      "minProperties": 1,
+      "additionalProperties": false
+    }
+  },
+  "properties": {
+    "trajectory": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/TrajectoryPoint" },
+      "description": "The refined setpoint trajectory across the horizon, one point per hour. A planning artifact held in memory so a skipped cycle can extend the plan - surfaced for review, never re-applied. On a skipped or held cycle nothing new is written: the last applied immediate_setpoints bundle stays in force (Phase 2 already holds it), so the trajectory is not written to Phase 2 - only a fresh, gated plan's immediate_setpoints reaches the greenhouse. Not the state-change gate's comparison input: the gate diffs the twin's predicted-climate forecast, a separate in-memory reference."
+    },
+    "immediate_setpoints": {
+      "$ref": "https://greenhouse.local/contracts/optimizer-internal-plan-schema/setpoints.schema.json#/$defs/SetpointsPatch",
+      "description": "The single next bundle the applier submits to Phase 2 this cadence (the refined targets of trajectory[0] as a partial patch). Must equal trajectory[0].setpoints field-for-field; JSON Schema cannot express this cross-field relationship, so it is enforced by the optimizer's constraint engine, not this schema. The one part of the plan that reaches the greenhouse."
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "The planner's self-assessed confidence in the immediate bundle. Load-bearing: below the configured confidence_threshold (default 0.8) the plan is escalated, not applied."
+    },
+    "explanation": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Short natural-language reason summary - the reasoning/audit trace surfaced to an operator on escalation or inspection."
+    },
+    "objective_scores": { "$ref": "#/$defs/ObjectiveScores" },
+    "escalation_hint": { "$ref": "#/$defs/EscalationHint" }
+  },
+  "required": ["trajectory", "immediate_setpoints", "confidence", "explanation"],
+  "additionalProperties": false
+}

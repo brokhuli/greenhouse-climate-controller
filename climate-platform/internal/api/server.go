@@ -1,5 +1,5 @@
 // Package api is the platform's served HTTP surface: the operator/fleet REST API
-// (frontend-rest contract) plus the WebSocket live channel (frontend-ws). Handlers
+// (platform-dashboard-rest contract) plus the WebSocket live channel (platform-dashboard-live-ws). Handlers
 // read from the store and the in-memory fleet state, validate writes, and relay
 // setpoint/time-scale edits down to the controllers. When OIDC is configured (2b) reads are
 // open to anyone (anonymous viewer) and writes require the operator role, enforced via the
@@ -104,7 +104,7 @@ func (s *Server) routes(router *echo.Echo) {
 	api.PUT("/greenhouses/:id/assignment", s.setAssignment, operator)
 
 	api.GET("/events", s.listEvents)
-	api.GET("/stream", s.stream) // WebSocket live fan-out (frontend-ws)
+	api.GET("/stream", s.stream) // WebSocket live fan-out (platform-dashboard-live-ws)
 }
 
 // Handler exposes the underlying http.Handler (for tests / embedding behind a proxy).

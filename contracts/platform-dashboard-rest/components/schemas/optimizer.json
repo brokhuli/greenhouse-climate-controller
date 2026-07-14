@@ -1,0 +1,431 @@
+{
+  "ReasonCode": {
+    "type": "string",
+    "enum": [
+      "input_stale",
+      "input_incomplete",
+      "sensor_fault",
+      "actuator_fault",
+      "clock_mode_unsupported",
+      "contract_drift",
+      "twin_diverged",
+      "twin_fidelity_fault",
+      "constraint_violation",
+      "low_confidence",
+      "bounds_mismatch",
+      "write_unauthorized",
+      "platform_unavailable",
+      "cycle_timeout",
+      "llm_unavailable"
+    ],
+    "description": "Canonical held-cycle reason code — a local copy of the optimizer's single-source-of-truth table (optimizer interfaces §Escalation reason codes), kept as a copy per this contract's self-contained convention. Required on an escalated outcome; the SPA renders it plus its class as a ReasonCodeChip."
+  },
+  "ReasonClass": {
+    "type": "string",
+    "enum": ["transient", "persistent"],
+    "description": "Operator-triage hint for a reason code: transient may clear on the next cycle once inputs/twin/clock/backend recover; persistent is a deployment/contract/model/bounds fault that will not self-heal (optimizer interfaces)."
+  },
+  "OptimizerOutcome": {
+    "type": "object",
+    "description": "What the gates decided for one cycle (optimizer plan contract §3 PlanRecord.outcome). `reason_code` is present (required upstream) when status = escalated.",
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": ["applied", "escalated", "extended"],
+        "description": "applied = the immediate bundle was written; escalated = held for operator review; extended = no new plan/write, the last applied bundle stays in force."
+      },
+      "reason_code": {
+        "oneOf": [{ "$ref": "#/ReasonCode" }, { "type": "null" }],
+        "description": "The canonical reason code; present when status = escalated, otherwise null/absent."
+      },
+      "message": {
+        "type": ["string", "null"],
+        "description": "Operator-facing detail (e.g. \"confidence 0.62 < threshold 0.80\")."
+      }
+    },
+    "required": ["status"],
+    "additionalProperties": false
+  },
+  "OptimizerBackend": {
+    "type": "object",
+    "description": "Which model and prompt produced the plan (optimizer plan contract §3 PlanRecord.backend) — the provenance stamped on every plan.",
+    "properties": {
+      "provider": {
+        "type": "string",
+        "enum": ["ollama", "anthropic", "openai"],
+        "description": "The LLM provider — fixed per optimizer instance (an offline config change), read-only in the console."
+      },
+      "model": {
+        "type": "string",
+        "description": "The active model id (e.g. qwen2.5:7b, claude-sonnet-4-6) — operator-mutable within the provider's allowlist."
+      },
+      "prompt_version": {
+        "type": "string",
+        "description": "The pinned prompt-template version (e.g. v1)."
+      },
+      "role": {
+        "type": "string",
+        "enum": ["primary", "fallback"],
+        "description": "Whether this was the primary backend or a fallback (a fallback is a different model held to its own evaluation baseline)."
+      }
+    },
+    "required": ["provider", "model", "prompt_version", "role"],
+    "additionalProperties": false
+  },
+  "OptimizerPlan": {
+    "type": "object",
+    "description": "The planner's proposed plan (optimizer plan contract §2 OptimizerPlan), flattened for display. Null on a pre-planner held cycle (the enclosing OptimizerPlanView carries the outcome).",
+    "properties": {
+      "confidence": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1,
+        "description": "The planner's self-assessed confidence in the immediate bundle; below the optimizer's threshold the plan is escalated."
+      },
+      "explanation": {
+        "type": "string",
+        "description": "Short natural-language reasoning summary surfaced to the operator."
+      },
+      "immediate_setpoints": {
+        "$ref": "./setpoints.json#/SetpointsPatch",
+        "description": "The proposed next bundle — the refined targets the optimizer would submit this cadence, as a partial of Setpoints. Equals SetpointDiff.proposed."
+      },
+      "objective_scores": {
+        "type": "object",
+        "description": "The planner's self-reported objective weighting — advisory / explainability only, never a gate input.",
+        "properties": {
+          "anticipation": { "type": "number", "minimum": 0, "maximum": 1 },
+          "coupling": { "type": "number", "minimum": 0, "maximum": 1 },
+          "efficiency": { "type": "number", "minimum": 0, "maximum": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": ["confidence", "explanation", "immediate_setpoints"],
+    "additionalProperties": false
+  },
+  "OptimizerPlanView": {
+    "type": "object",
+    "description": "One greenhouse's latest optimizer cycle, the Go API's flattening of the optimizer's PlanRecord (optimizer plan contract §3). `plan` is null on a held cycle that ran before the planner; an applied record always carries a non-null plan.",
+    "properties": {
+      "optimizer_run_id": {
+        "type": "string",
+        "format": "uuid",
+        "description": "The cycle's trace/provenance id (P3-OBS-1)."
+      },
+      "greenhouse_id": { "$ref": "./common.json#/Slug" },
+      "created_at": {
+        "type": "string",
+        "format": "date-time",
+        "description": "When the cycle ran (RFC 3339 UTC, ms)."
+      },
+      "horizon": {
+        "type": "object",
+        "description": "The adaptive planning window the service chose (12 h default, 24 h near a day boundary).",
+        "properties": {
+          "start": { "type": "string", "format": "date-time" },
+          "end": { "type": "string", "format": "date-time" }
+        },
+        "required": ["start", "end"],
+        "additionalProperties": false
+      },
+      "backend": { "$ref": "#/OptimizerBackend" },
+      "outcome": { "$ref": "#/OptimizerOutcome" },
+      "plan": {
+        "oneOf": [{ "$ref": "#/OptimizerPlan" }, { "type": "null" }],
+        "description": "The proposed plan, or null on a pre-planner held cycle."
+      }
+    },
+    "required": ["optimizer_run_id", "greenhouse_id", "created_at", "horizon", "backend", "outcome", "plan"],
+    "additionalProperties": false
+  },
+  "FieldBound": {
+    "type": "object",
+    "description": "The crop-safe range for one scalar setpoint field, used by the diff to flag a proposed value near or at a bound.",
+    "properties": {
+      "min": { "type": "number" },
+      "max": { "type": "number" }
+    },
+    "required": ["min", "max"],
+    "additionalProperties": false
+  },
+  "SetpointDiff": {
+    "type": "object",
+    "description": "The Go-API-composed diff the plan panel renders (frontend data model §Optimizer plans): the plan's proposed patch against the greenhouse's current bundle and its crop-safe bounds — both platform-owned, composed here so the SPA reads one response instead of stitching sources.",
+    "properties": {
+      "proposed": {
+        "$ref": "./setpoints.json#/SetpointsPatch",
+        "description": "The plan's immediate_setpoints (the proposed change)."
+      },
+      "current": {
+        "$ref": "./setpoints.json#/Setpoints",
+        "description": "The greenhouse's current in-force bundle."
+      },
+      "bounds": {
+        "type": "object",
+        "description": "Crop-safe range per scalar setpoint field (keys are Setpoints field names, e.g. temperature_day_c). The SPA flags a proposed value at/near a bound.",
+        "additionalProperties": { "$ref": "#/FieldBound" }
+      }
+    },
+    "required": ["proposed", "current", "bounds"],
+    "additionalProperties": false
+  },
+  "OptimizerPlanDetail": {
+    "type": "object",
+    "description": "The GET /api/optimizer/greenhouses/{id}/plan response — the latest plan view plus its composed setpoint diff. `diff` is null when the plan is null (a held cycle produced no proposed bundle).",
+    "properties": {
+      "plan": { "$ref": "#/OptimizerPlanView" },
+      "diff": {
+        "oneOf": [{ "$ref": "#/SetpointDiff" }, { "type": "null" }],
+        "description": "The proposed-vs-current-vs-bounds diff, or null on a held cycle with no proposed bundle."
+      }
+    },
+    "required": ["plan", "diff"],
+    "additionalProperties": false
+  },
+  "Escalation": {
+    "type": "object",
+    "description": "One held cycle awaiting (or, once resolved, having had) operator review. GET /api/optimizer/escalations returns the open set (resolution null); a resolve response echoes it with resolution set.",
+    "properties": {
+      "id": {
+        "type": "string",
+        "description": "Escalation identity (stable across the open→closed transition)."
+      },
+      "greenhouse_id": { "$ref": "./common.json#/Slug" },
+      "optimizer_run_id": {
+        "type": "string",
+        "format": "uuid",
+        "description": "The held cycle's run id — links to its PlanRecord/plan view."
+      },
+      "reason_code": { "$ref": "#/ReasonCode" },
+      "reason_class": { "$ref": "#/ReasonClass" },
+      "created_at": {
+        "type": "string",
+        "format": "date-time",
+        "description": "When the cycle was held (RFC 3339 UTC, ms)."
+      },
+      "message": {
+        "type": ["string", "null"],
+        "description": "Operator-facing detail for why the cycle was held."
+      },
+      "resolution": {
+        "oneOf": [
+          { "type": "string", "enum": ["operator", "superseded", "expired"] },
+          { "type": "null" }
+        ],
+        "description": "How the escalation closed — null while open; operator (resolved here), superseded (a newer cycle produced a fresh outcome), or expired (TTL). Distinct from reason_code (why it was raised)."
+      }
+    },
+    "required": ["id", "greenhouse_id", "optimizer_run_id", "reason_code", "reason_class", "created_at"],
+    "additionalProperties": false
+  },
+  "FleetOptimizerSummary": {
+    "type": "object",
+    "description": "The GET /api/optimizer/fleet rollup for the console overview — per-greenhouse latest outcome plus site aggregates, computed by the optimizer over its plan store so the SPA reads one endpoint instead of fanning out per greenhouse (optimizer interfaces).",
+    "properties": {
+      "greenhouses": {
+        "type": "array",
+        "description": "Per-greenhouse latest cycle summary.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "greenhouse_id": { "$ref": "./common.json#/Slug" },
+            "status": {
+              "type": "string",
+              "enum": ["applied", "escalated", "extended"],
+              "description": "The greenhouse's latest cycle outcome status."
+            },
+            "reason_code": {
+              "oneOf": [{ "$ref": "#/ReasonCode" }, { "type": "null" }],
+              "description": "The reason code when the latest cycle escalated, else null."
+            },
+            "enabled": {
+              "type": "boolean",
+              "description": "Whether the optimizer is enabled for this greenhouse — the per-greenhouse operator pause (POST /api/optimizer/greenhouses/{id}/enabled). false = this greenhouse's scheduled cycles are skipped even while the service is globally enabled; the SPA shows a Disabled pill (overriding `status`). Independent of the global EnableState — effective planning requires both, and the global pause takes precedence."
+            },
+            "created_at": { "type": "string", "format": "date-time" }
+          },
+          "required": ["greenhouse_id", "status", "enabled", "created_at"],
+          "additionalProperties": false
+        }
+      },
+      "rollup": {
+        "type": "object",
+        "description": "Site-wide aggregates.",
+        "properties": {
+          "backlog": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Open-escalation count (the same scalar GET /health reports)."
+          },
+          "by_outcome": {
+            "type": "object",
+            "description": "Count of greenhouses by their latest cycle outcome.",
+            "properties": {
+              "applied": { "type": "integer", "minimum": 0 },
+              "escalated": { "type": "integer", "minimum": 0 },
+              "extended": { "type": "integer", "minimum": 0 }
+            },
+            "required": ["applied", "escalated", "extended"],
+            "additionalProperties": false
+          },
+          "oldest_open_age_secs": {
+            "type": ["integer", "null"],
+            "minimum": 0,
+            "description": "Age of the oldest open escalation in seconds, or null when the backlog is empty."
+          }
+        },
+        "required": ["backlog", "by_outcome", "oldest_open_age_secs"],
+        "additionalProperties": false
+      }
+    },
+    "required": ["greenhouses", "rollup"],
+    "additionalProperties": false
+  },
+  "ModelState": {
+    "type": "object",
+    "description": "The active planning backend and the active provider's allowlist (GET /api/optimizer/model). The ModelSelector offers `available_models`; `provider` is read-only (an offline change).",
+    "properties": {
+      "provider": {
+        "type": "string",
+        "enum": ["ollama", "anthropic", "openai"],
+        "description": "The active provider — fixed per instance."
+      },
+      "model": {
+        "type": "string",
+        "description": "The active model id (operator-mutable within available_models)."
+      },
+      "prompt_version": { "type": "string", "description": "The pinned prompt-template version." },
+      "role": { "type": "string", "enum": ["primary", "fallback"] },
+      "available_models": {
+        "type": "array",
+        "description": "The active provider's runtime allowlist — the only models the operator may select.",
+        "items": { "type": "string" },
+        "minItems": 1
+      }
+    },
+    "required": ["provider", "model", "prompt_version", "role", "available_models"],
+    "additionalProperties": false
+  },
+  "ModelSelection": {
+    "type": "object",
+    "description": "POST /api/optimizer/model body — switch the active model within the allowlist. Takes effect on the next cycle; a model not in available_models is rejected 400.",
+    "properties": {
+      "model": {
+        "type": "string",
+        "description": "The model id to activate — must be in the active provider's available_models."
+      },
+      "reason": {
+        "type": "string",
+        "description": "Optional operator note, structured-logged with the change."
+      }
+    },
+    "required": ["model"],
+    "additionalProperties": false
+  },
+  "EnableState": {
+    "type": "object",
+    "description": "Whether planning is enabled or the optimizer is in read-only mode (GET /api/optimizer/enabled).",
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "description": "true = scheduled cycles run and setpoints may be written; false = read-only mode (planning paused, reads still served)."
+      }
+    },
+    "required": ["enabled"],
+    "additionalProperties": false
+  },
+  "EnableRequest": {
+    "type": "object",
+    "description": "POST /api/optimizer/enabled and POST /api/optimizer/greenhouses/{id}/enabled body — pause or resume the optimizer at runtime, service-wide or for one greenhouse. In-memory override; resets to the configured default on restart.",
+    "properties": {
+      "enabled": { "type": "boolean", "description": "Target state: false pauses (read-only), true resumes." },
+      "reason": { "type": "string", "description": "Optional operator note, structured-logged with the change." }
+    },
+    "required": ["enabled"],
+    "additionalProperties": false
+  },
+  "GreenhouseEnableState": {
+    "type": "object",
+    "description": "Whether the optimizer is enabled for one greenhouse (GET/POST /api/optimizer/greenhouses/{id}/enabled) — the per-greenhouse analog of EnableState. A runtime, in-memory operator pause scoped to a single greenhouse, independent of the service-wide EnableState. Effective planning for a greenhouse requires both this and the global enable; the global pause takes precedence.",
+    "properties": {
+      "greenhouse_id": { "$ref": "./common.json#/Slug" },
+      "enabled": {
+        "type": "boolean",
+        "description": "true = this greenhouse's scheduled cycles run (subject to the global enable and the usual gates); false = the optimizer skips this greenhouse (no scheduled cycles, no setpoint writes for it), even while the service is globally enabled. In-memory override; resets to the configured default on restart."
+      }
+    },
+    "required": ["greenhouse_id", "enabled"],
+    "additionalProperties": false
+  },
+  "DegradedReason": {
+    "type": "string",
+    "enum": ["platform_unreachable", "llm_unreachable", "cycle_stalled", "cold_start"],
+    "description": "Service-level degradation cause for OptimizerStatus.degraded_reason. platform_unreachable / llm_unreachable = a dependency the optimizer needs is down; cycle_stalled = enabled but no successful cycle within the expected cadence; cold_start = enabled but no successful cycle yet. Distinct from the per-cycle escalation ReasonCode (why one greenhouse's cycle was held)."
+  },
+  "OptimizerStatus": {
+    "type": "object",
+    "description": "Service-level optimizer health for the console overview badge (GET /api/optimizer/status). The Go API's proxy/derivation of the optimizer's internal GET /health (optimizer interfaces §Service API endpoints). Polled. Distinct from per-greenhouse cycle outcomes (FleetOptimizerSummary) — this is the planner service as a whole. The open-escalation backlog is not repeated here; it lives on FleetOptimizerSummary.rollup.backlog.",
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": ["healthy", "degraded", "unavailable"],
+        "description": "healthy = planning normally, or intentionally paused (a read-only pause is a healthy, intentional state, not a stall); degraded = a dependency/cadence problem, see degraded_reason; unavailable = the Go API could not reach the optimizer at all — synthesized by the Go API, not the optimizer, so the console still renders a badge instead of a proxy 5xx."
+      },
+      "degraded_reason": {
+        "oneOf": [{ "$ref": "#/DegradedReason" }, { "type": "null" }],
+        "description": "Machine-readable cause when status = degraded; null otherwise."
+      },
+      "enabled": {
+        "type": "boolean",
+        "description": "false = read-only mode (planning paused). Mirrors GET /api/optimizer/enabled, included so the health badge is self-contained."
+      },
+      "read_only_reason": {
+        "type": ["string", "null"],
+        "description": "Why the service is in read-only mode when enabled = false (the operator's supplied pause note, or a config-default marker); null when enabled."
+      },
+      "last_successful_cycle_at": {
+        "type": ["string", "null"],
+        "format": "date-time",
+        "description": "When the most recent cycle last applied/extended successfully (RFC 3339 UTC, ms); null before the first successful cycle (cold start)."
+      },
+      "cadence_secs": {
+        "type": "integer",
+        "minimum": 1,
+        "description": "The fixed scheduled planning interval in seconds (optimizer config cycle_interval_minutes × 60), so the badge can flag staleness against the expected schedule."
+      }
+    },
+    "required": ["status", "enabled", "last_successful_cycle_at", "cadence_secs"],
+    "additionalProperties": false
+  },
+  "CycleRequest": {
+    "type": "object",
+    "description": "POST /api/optimizer/greenhouses/{id}/cycles body — trigger an on-demand planning cycle. Bypasses state-change suppression but not the input/safety/application gates.",
+    "properties": {
+      "reason": { "type": "string", "description": "Optional operator note, structured-logged with the request." }
+    },
+    "additionalProperties": false
+  },
+  "ResolveRequest": {
+    "type": "object",
+    "description": "POST /api/optimizer/escalations/{id}/resolve body — resolve an open escalation. The optional note is structured-logged with the operator identity.",
+    "properties": {
+      "reason": { "type": "string", "description": "Optional operator note explaining the resolution." }
+    },
+    "additionalProperties": false
+  },
+  "CycleAccepted": {
+    "type": "object",
+    "description": "202 acknowledgement that an on-demand cycle was accepted for dispatch; the resulting plan is fetched from the plan endpoint once the cycle completes.",
+    "properties": {
+      "optimizer_run_id": {
+        "type": "string",
+        "format": "uuid",
+        "description": "The run id assigned to the triggered cycle."
+      },
+      "greenhouse_id": { "$ref": "./common.json#/Slug" }
+    },
+    "required": ["optimizer_run_id", "greenhouse_id"],
+    "additionalProperties": false
+  }
+}

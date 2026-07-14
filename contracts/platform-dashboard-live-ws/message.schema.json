@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://greenhouse.local/contracts/platform-dashboard-live-ws/message.schema.json",
+  "title": "Frontend WebSocket Frame",
+  "description": "Any inbound frame on the platform-to-SPA WebSocket fan-out: one of the four known frame types, or an envelope-carrying frame with an unknown type that the client ignores for forward compatibility. Known branches are strict; the unknown branch only validates the shared envelope and a non-known type discriminator.",
+  "oneOf": [
+    { "$ref": "https://greenhouse.local/contracts/platform-dashboard-live-ws/telemetry.schema.json" },
+    { "$ref": "https://greenhouse.local/contracts/platform-dashboard-live-ws/status.schema.json" },
+    { "$ref": "https://greenhouse.local/contracts/platform-dashboard-live-ws/drift.schema.json" },
+    { "$ref": "https://greenhouse.local/contracts/platform-dashboard-live-ws/event.schema.json" },
+    {
+      "title": "Unknown Forward-Compatible Frame",
+      "description": "A future frame type unknown to this contract version. Consumers validate the common envelope, see that the type is not one they understand, and ignore the frame.",
+      "allOf": [
+        { "$ref": "https://greenhouse.local/contracts/platform-dashboard-live-ws/envelope.schema.json" },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "not": {
+                "enum": ["telemetry", "status", "drift", "event"]
+              }
+            }
+          },
+          "required": ["type"]
+        }
+      ]
+    }
+  ]
+}

@@ -132,6 +132,9 @@ Host tooling:
 - **LangChain provider packages** such as `langchain-anthropic`, `langchain-openai`, and
   `langchain-community`.
 - **Ollama runtime** for the default local backend — the offline, key-free planning path.
+  - **NVIDIA Container Toolkit + GPU driver** (optional) for **GPU acceleration** of the local model.
+    When present the `ollama` container runs on the GPU; without it Ollama falls back to CPU, so this is
+    a speed-up, not a requirement — the default `docker compose up` works either way.
 - **Cloud LLM API key** (optional) for a configured Anthropic/OpenAI backend, supplied through
   environment/secret; not needed for the default Ollama path.
 - **Phase 2 REST API access** through the optimizer telemetry read API once authored; the platform may
@@ -139,5 +142,5 @@ Host tooling:
 
 See [RFC-004](../../decisions/request-for-comments.md#rfc-004-phase-3-llm-integration-interface),
 [`tech-stack-decisions.md`](./tech-stack-decisions.md#phase-3--llm-climate-optimizer-python-only),
-[optimizer tech stack](./optimizer/11-spec-optimizer-tech-stack.md), and
-[optimizer configuration](./optimizer/10-spec-optimizer-configuration.md).
+[optimizer tech stack](./optimizer/12-spec-optimizer-tech-stack.md), and
+[optimizer configuration](./optimizer/11-spec-optimizer-configuration.md).

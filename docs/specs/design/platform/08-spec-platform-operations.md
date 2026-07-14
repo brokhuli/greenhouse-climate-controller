@@ -48,7 +48,7 @@ discovered via a generated file-SD target list since the controller fleet is dyn
 complementary, not redundant: `Per-controller connectivity` above is *platform-observed* ("can the
 platform reach/hear it"), while the controller's own metrics are *self-reported* ("is its control
 loop healthy"). Both feed the one Prometheus/Grafana. The Phase 3 optimizer will join the same way
-once it exposes `/metrics` ([optimizer interfaces](../optimizer/09-spec-optimizer-interfaces.md)).
+once it exposes `/metrics` ([optimizer interfaces](../optimizer/10-spec-optimizer-interfaces.md)).
 
 ### Structured logs & audit
 

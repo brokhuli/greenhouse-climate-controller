@@ -4,7 +4,7 @@
 //! collect them, format them, serialize them, and wrap them into config-loading errors.
 //!
 //! [`FieldViolation`] mirrors the REST contract's `ValidationError`
-//! (`contracts/controller-rest/components/schemas/common.json`), so the same value can be
+//! (`contracts/platform-controller-control-rest/components/schemas/common.json`), so the same value can be
 //! returned by config loading now and by the REST `PATCH` handlers later — one validator,
 //! one rejection shape, no drift with the contract.
 

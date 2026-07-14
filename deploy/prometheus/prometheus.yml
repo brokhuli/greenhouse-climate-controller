@@ -33,7 +33,7 @@ scrape_configs:
       - targets: ["cadvisor:8080"]
 
   # (Phase 3) The optimizer will expose its own /metrics (optimizer-health) and join here as a third
-  # job once it lands — see docs/specs/design/optimizer/09-spec-optimizer-interfaces.md. It is not
+  # job once it lands — see docs/specs/design/optimizer/10-spec-optimizer-interfaces.md. It is not
   # built or containerized yet, so this stays commented (no live target).
   # - job_name: optimizer
   #   metrics_path: /metrics

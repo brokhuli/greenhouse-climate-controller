@@ -4,7 +4,7 @@ import "time"
 
 // ProfileStage is one growth stage of a crop profile and the target bundle it applies, plus
 // an optional crop-safe envelope the stage's targets may be refined within
-// (contracts/frontend-rest ProfileStage).
+// (contracts/platform-dashboard-rest ProfileStage).
 type ProfileStage struct {
 	Stage   string       `json:"stage"`
 	Targets Setpoints    `json:"targets"`
@@ -50,7 +50,7 @@ type ZoneBounds struct {
 
 // CropProfile is a named, stage-aware bundle of climate + irrigation targets for a crop —
 // the reusable library entry an operator assigns to a greenhouse (platform §1,
-// contracts/frontend-rest CropProfile).
+// contracts/platform-dashboard-rest CropProfile).
 type CropProfile struct {
 	ID     string         `json:"id"`
 	Name   string         `json:"name"`
@@ -70,7 +70,7 @@ func (p CropProfile) Stage(name string) (ProfileStage, bool) {
 }
 
 // Assignment is which profile and growth stage are currently assigned to a greenhouse
-// (contracts/frontend-rest Assignment).
+// (contracts/platform-dashboard-rest Assignment).
 type Assignment struct {
 	GreenhouseID string `json:"greenhouse_id"`
 	ProfileID    string `json:"profile_id"`

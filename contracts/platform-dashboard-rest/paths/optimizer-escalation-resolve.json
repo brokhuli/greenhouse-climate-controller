@@ -1,0 +1,31 @@
+{
+  "parameters": [{ "$ref": "../components/parameters.json#/EscalationId" }],
+  "post": {
+    "operationId": "resolveOptimizerEscalation",
+    "summary": "Resolve an open escalation",
+    "description": "Operator resolution of an open escalation (the `operator` resolution — optimizer interfaces). Operator only (slice 3). Returns the escalation with `resolution` set. Open escalations may also close automatically as superseded/expired; a resolve on an already-closed escalation returns 404.",
+    "x-slice": "3",
+    "security": [{ "bearerAuth": [] }],
+    "requestBody": {
+      "required": false,
+      "content": {
+        "application/json": {
+          "schema": { "$ref": "../components/schemas/optimizer.json#/ResolveRequest" }
+        }
+      }
+    },
+    "responses": {
+      "200": {
+        "description": "The resolved escalation.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "../components/schemas/optimizer.json#/Escalation" }
+          }
+        }
+      },
+      "401": { "$ref": "../components/responses.json#/Unauthorized" },
+      "403": { "$ref": "../components/responses.json#/Forbidden" },
+      "404": { "$ref": "../components/responses.json#/NotFound" }
+    }
+  }
+}

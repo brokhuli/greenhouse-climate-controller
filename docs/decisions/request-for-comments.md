@@ -629,7 +629,7 @@ are corrected to match.
 **5. Schema format & versioning**
 
 - **JSON Schema (Draft 2020-12)** is the normative artifact: one schema file per message type under
-  `contracts/mqtt/`. Directly consumable for validation in all three stacks (Rust, Go, Python) with no
+  `contracts/controller-platform-telemetry-mqtt/`. Directly consumable for validation in all three stacks (Rust, Go, Python) with no
   intermediate tooling. AsyncAPI may later wrap these schemas as a documentation layer without
   becoming the source of truth.
 - **Versioning:** `schema_version` is an **integer major**. Additive, backward-compatible changes (a
@@ -672,7 +672,7 @@ is the `greenhouse_id` / `zone_id` kebab-slug pair, shared verbatim across MQTT 
 and DB rows. MQTT uses the hierarchical `gh/{greenhouse_id}/...` taxonomy and is **telemetry-only**
 (setpoints flow over REST per RFC-005). Every message carries the common envelope
 (`schema_version`, `greenhouse_id`, `zone_id`, `ts` in RFC 3339 UTC) and the units convention.
-Schemas are authored as **JSON Schema (Draft 2020-12)** under `contracts/mqtt/`, versioned by an
+Schemas are authored as **JSON Schema (Draft 2020-12)** under `contracts/controller-platform-telemetry-mqtt/`, versioned by an
 integer `schema_version` major (additive changes do not bump). See ADR entry 2026-06-07.
 
 ---
@@ -707,9 +707,9 @@ applies to the wire contract, applied here to the read schema.
 through the Phase 2 API, never around it — so that bounds enforcement and provenance live in one
 place. The optimizer's **read** path does the opposite, and no RFC has examined it:
 
-- [09-spec-optimizer-interfaces.md](../specs/design/optimizer/09-spec-optimizer-interfaces.md)
+- [10-spec-optimizer-interfaces.md](../specs/design/optimizer/10-spec-optimizer-interfaces.md)
   lists "TimescaleDB | Phase 2 store → optimizer | Read-only historical telemetry."
-- [10-spec-optimizer-configuration.md](../specs/design/optimizer/10-spec-optimizer-configuration.md) configures
+- [11-spec-optimizer-configuration.md](../specs/design/optimizer/11-spec-optimizer-configuration.md) configures
   it as a raw DSN: `postgres_dsn = "postgresql://optimizer:***@platform-db:5432/greenhouse"  # read-only`.
 
 So Phase 3 reaches **into Phase 2's database directly** rather than through Phase 2's API. This is the
@@ -848,7 +848,7 @@ The platform's authorization model is specified for **humans** but not for **ser
 - [09-spec-platform-interfaces.md](../specs/design/platform/09-spec-platform-interfaces.md#5-authorization) and
   [authentication](../specs/design/platform/07-spec-platform-security.md): write-path actions
   (assignments, setpoint edits) "require the **operator** role," carried in a Keycloak **OIDC token**.
-- But [05-spec-optimizer-constraints-and-application.md §2](../specs/design/optimizer/05-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application)
+- But [06-spec-optimizer-constraints-and-application.md §2](../specs/design/optimizer/06-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application)
   makes the optimizer a write-path client — `POST /greenhouses/{id}/setpoints` — with **no statement
   of how a headless service obtains an operator token**. Keycloak's interactive login flow assumes a
   human at a browser; the optimizer has neither.
@@ -881,7 +881,7 @@ operators — no second authz mechanism. Provenance is unaffected: the setpoint 
 with source `optimizer` (RFC-005), now backed by a verifiable client identity rather than an
 anonymous call. The client secret is supplied via environment variable / Compose secret
 (`PLANNER_*`-style), never in a committed file, consistent with
-[10-spec-optimizer-configuration.md](../specs/design/optimizer/10-spec-optimizer-configuration.md).
+[11-spec-optimizer-configuration.md](../specs/design/optimizer/11-spec-optimizer-configuration.md).
 
 **2. Platform → controller REST: per-controller bearer token.**
 
@@ -1005,7 +1005,7 @@ this decision. See ADR entry 2026-06-08.
 > cross-cutting [`spec-verification.md`](../specs/design/spec-verification.md) (the verification
 > ladder, the feedback-loop ladder, the tooling matrix, the CI plan) plus per-component verification
 > docs deferring to it (the optimizer's
-> [`07`](../specs/design/optimizer/07-spec-optimizer-evaluation.md) and the controller's
+> [`08`](../specs/design/optimizer/08-spec-optimizer-evaluation.md) and the controller's
 > [`11`](../specs/design/controller/11-spec-controller-verification.md) are the first two). Wire the
 > **contract-validation harness now** — it runs locally and needs no CI. Defer the **CI pipeline**
 > until a platform is adopted. The tooling decision is recorded in
@@ -1015,7 +1015,7 @@ this decision. See ADR entry 2026-06-08.
 
 The system had quality *targets* (the `*-TEST-*` / `*-PERF-*` IDs in the
 [NFR doc](../specs/artifacts/non-functional-requirements.md)) and one component-level verification
-*strategy* (optimizer [`07`](../specs/design/optimizer/07-spec-optimizer-evaluation.md)), but no
+*strategy* (optimizer [`08`](../specs/design/optimizer/08-spec-optimizer-evaluation.md)), but no
 system-wide statement of **how the system is verified**, **what the development feedback loops are**,
 or **what tooling is required** — the open `research/todo.md` item "Identify code verification and
 feedback loops." This RFC settles that strategy and wires the one piece that did not depend on
@@ -1062,7 +1062,7 @@ Verification was scattered and partly aspirational:
 
 - **Fold everything into the NFR doc.** Rejected: the NFR doc owns *targets* (a single source of
   truth for numbers); mixing the *strategy* and tooling into it would blur that boundary and break the
-  symmetry the optimizer set already established with `07`.
+  symmetry the optimizer set already established with `08`.
 - **One monolithic verification doc, no per-component docs.** Rejected: it breaks the per-set
   structure and would force the controller/platform/frontend scenario detail into a doc that also
   carries cross-cutting concerns.
@@ -1162,7 +1162,7 @@ The behavior is selected by a Phase 2 **`SERVICE_AUTH_MODE`** config value:
 The setpoint **contract is unchanged** in both modes — same `POST /greenhouses/{id}/setpoints`, same
 bodies, same `202`/`422`. Only the presence of an `Authorization` header and its enforcement differ. The
 client secret is supplied via environment variable / Compose secret (`PLANNER_*`-style,
-[optimizer config](../specs/design/optimizer/10-spec-optimizer-configuration.md)), never committed.
+[optimizer config](../specs/design/optimizer/11-spec-optimizer-configuration.md)), never committed.
 Provenance is unaffected mechanically but **strengthened**: in `oidc` mode `source = optimizer` is backed
 by a verified client identity instead of being self-asserted.
 
@@ -1236,5 +1236,5 @@ the setpoint contracts and the controller REST surface are identical in both mod
 whether an `Authorization` header is required. Implementation lands with the phases the seams live in
 (Phase 2b for the Keycloak service client + `SERVICE_AUTH_MODE`; the controller token check + registry
 field when managed-mode hardening is exercised); the contract documents
-([`controller-rest`](../../contracts/controller-rest/), [`frontend-rest`](../../contracts/frontend-rest/))
+([`platform-controller-control-rest`](../../contracts/platform-controller-control-rest/), [`platform-dashboard-rest`](../../contracts/platform-dashboard-rest/))
 gain the optional security scheme when those slices are built. See ADR entry 2026-06-21.

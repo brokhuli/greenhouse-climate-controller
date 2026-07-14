@@ -5,7 +5,7 @@ import { z } from "zod";
  *
  * Two layers, per data-model spec §"two layers":
  *  - `Wire*` Zod schemas validate the **snake_case** wire shapes exactly as authored in
- *    `contracts/frontend-rest/` and `contracts/frontend-ws/` (field names, requiredness, bounds).
+ *    `contracts/platform-dashboard-rest/` and `contracts/platform-dashboard-live-ws/` (field names, requiredness, bounds).
  *  - `to*` adapter functions map a parsed wire object into the **camelCase** view-model the
  *    components consume. The casing flip at the adapter is intentional, not a contract drift.
  *
@@ -74,7 +74,7 @@ export type AnalyticsInterval = z.infer<typeof analyticsIntervalSchema>;
 export type ActuatorName = z.infer<typeof actuatorNameSchema>;
 export type Unit = z.infer<typeof unitSchema>;
 
-/** The metric→unit binding the telemetry contract enforces (frontend-ws common.schema.json). */
+/** The metric→unit binding the telemetry contract enforces (platform-dashboard-live-ws common.schema.json). */
 export const METRIC_UNIT: Record<Metric, Unit> = {
   temperature: "°C",
   humidity: "%RH",
@@ -85,7 +85,7 @@ export const METRIC_UNIT: Record<Metric, Unit> = {
 };
 
 // ---------------------------------------------------------------------------
-// REST wire schemas (contracts/frontend-rest)
+// REST wire schemas (contracts/platform-dashboard-rest)
 // ---------------------------------------------------------------------------
 
 export const wireZoneTargets = z.object({
@@ -96,7 +96,7 @@ export const wireZoneTargets = z.object({
   schedule,
 });
 
-/** Live per-zone irrigation state served on the detail snapshot (frontend-rest ZoneStatus). */
+/** Live per-zone irrigation state served on the detail snapshot (platform-dashboard-rest ZoneStatus). */
 export const wireZoneStatus = z.object({
   zone_id: slug,
   soil_moisture_vwc: z.number().min(0).max(1).nullable(),
@@ -268,7 +268,7 @@ export const wireFleet = z.array(wireGreenhouseSummary);
 export const wireEventFeed = z.array(wireEventEntry);
 
 // ---------------------------------------------------------------------------
-// WebSocket wire frames (contracts/frontend-ws) — flat envelope + payload, strictly closed.
+// WebSocket wire frames (contracts/platform-dashboard-live-ws) — flat envelope + payload, strictly closed.
 // ---------------------------------------------------------------------------
 
 const wsEnvelope = {
@@ -689,17 +689,17 @@ export const toWireRegistration = (
 // Crop profiles & assignment (2b) — library entries and their greenhouse binding
 // ---------------------------------------------------------------------------
 
-/** A crop-safe [min, max] envelope for one scalar climate target (frontend-rest Bound). */
+/** A crop-safe [min, max] envelope for one scalar climate target (platform-dashboard-rest Bound). */
 export const wireBound = z.object({ min: z.number(), max: z.number() });
 
-/** A stage's crop-safe envelope for the numeric per-zone irrigation targets (frontend-rest ZoneBounds). */
+/** A stage's crop-safe envelope for the numeric per-zone irrigation targets (platform-dashboard-rest ZoneBounds). */
 export const wireZoneBounds = z.object({
   moisture_low_threshold: wireBound.optional(),
   moisture_high_threshold: wireBound.optional(),
   drain_period_secs: wireBound.optional(),
 });
 
-/** A stage's crop-safe envelope: an optional Bound per scalar climate target (frontend-rest StageBounds). */
+/** A stage's crop-safe envelope: an optional Bound per scalar climate target (platform-dashboard-rest StageBounds). */
 export const wireStageBounds = z.object({
   temperature_day_c: wireBound.optional(),
   temperature_night_c: wireBound.optional(),

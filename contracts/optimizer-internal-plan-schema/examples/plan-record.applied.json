@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "optimizer_run_id": "018f9c2e-6b7a-7c31-9e4d-2a1b5c6d7e8f",
+  "greenhouse_id": "gh-04",
+  "created_at": "2026-07-11T13:30:00.000Z",
+  "horizon": { "start": "2026-07-11T13:30:00.000Z", "end": "2026-07-12T01:30:00.000Z" },
+  "backend": { "provider": "ollama", "model": "llama3", "prompt_version": "v1", "role": "primary" },
+  "plan": {
+    "confidence": 0.91,
+    "explanation": "Pre-cool ahead of the 15:00 solar peak; ease VPD up toward the night band.",
+    "objective_scores": { "anticipation": 0.9, "coupling": 0.7, "efficiency": 0.5 },
+    "immediate_setpoints": { "temperature_day_c": 22.5, "vpd_target_kpa": 1.05 },
+    "trajectory": [
+      { "at": "2026-07-11T13:30:00.000Z", "setpoints": { "temperature_day_c": 22.5, "vpd_target_kpa": 1.05 } },
+      { "at": "2026-07-11T14:30:00.000Z", "setpoints": { "temperature_day_c": 21.8, "vpd_target_kpa": 1.10 } }
+    ]
+  },
+  "outcome": { "status": "applied" }
+}

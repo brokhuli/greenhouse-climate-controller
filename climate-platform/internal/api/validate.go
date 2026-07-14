@@ -92,7 +92,7 @@ func validateRegistration(reg registrationDTO) *valError {
 }
 
 // validateSetpointsPatch checks the bounds and cross-field invariants the schema cannot
-// express, on the fields present in a partial setpoint edit (frontend-rest SetpointsPatch).
+// express, on the fields present in a partial setpoint edit (platform-dashboard-rest SetpointsPatch).
 func validateSetpointsPatch(patch setpointsPatchDTO) *valError {
 	checks := []*valError{
 		rangeF("temperature_day_c", patch.TemperatureDayC, physTempMinC, physTempMaxC),

@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://greenhouse.local/contracts/optimizer-internal-plan-schema/plan-record.schema.json",
+  "title": "PlanRecord",
+  "description": "The optimizer service's envelope around one OptimizerPlan for one cycle - it stamps on the provenance and outcome the model must not be trusted to invent (run id, chosen horizon window, backend identity, gate decision). Layer 2 of the plan contract; returned by GET .../plans/latest and referenced by escalations. See docs/specs/design/optimizer/05-spec-optimizer-plan-contract.md §3.",
+  "type": "object",
+  "$defs": {
+    "ReasonCode": {
+      "type": "string",
+      "description": "Canonical escalation reason code - the single source of truth is the optimizer interfaces spec (Escalation reason codes). Present on outcome only when status is escalated.",
+      "enum": [
+        "input_stale",
+        "input_incomplete",
+        "sensor_fault",
+        "actuator_fault",
+        "clock_mode_unsupported",
+        "contract_drift",
+        "twin_diverged",
+        "twin_fidelity_fault",
+        "constraint_violation",
+        "low_confidence",
+        "bounds_mismatch",
+        "write_unauthorized",
+        "platform_unavailable",
+        "cycle_timeout",
+        "llm_unavailable"
+      ]
+    },
+    "Backend": {
+      "type": "object",
+      "description": "Which model and prompt produced the plan. A fallback is a different model held to its own evaluation baseline, so failover is recorded here, not hidden; prompt_version records the exact prompt template so a stored plan is traceable to its (model, prompt) provenance.",
+      "properties": {
+        "provider": { "type": "string", "enum": ["ollama", "anthropic", "openai"], "description": "The active planning backend provider." },
+        "model": { "type": "string", "minLength": 1, "description": "The pinned model id (e.g. llama3, claude-sonnet-4-6)." },
+        "prompt_version": { "type": "string", "minLength": 1, "description": "The pinned planner prompt-template version that produced this plan (e.g. v1), resolving climate-optimizer/prompts/planner.v{version}.md. Co-located with model because (model, prompt_version, sampling) is the provenance tuple a plan is reproduced from; a change is a deliberate ADR event that re-captures the per-backend evaluation baselines." },
+        "role": { "type": "string", "enum": ["primary", "fallback"], "description": "Whether the primary backend or the configured fallback produced this plan." }
+      },
+      "required": ["provider", "model", "prompt_version", "role"],
+      "additionalProperties": false
+    },
+    "Horizon": {
+      "type": "object",
+      "description": "The adaptive window the service chose for the cycle: 12h by default, 24h near a day boundary. trajectory spans [start, end].",
+      "properties": {
+        "start": { "type": "string", "format": "date-time", "description": "Horizon start (RFC 3339, UTC) - the cycle start." },
+        "end": { "type": "string", "format": "date-time", "description": "Horizon end (RFC 3339, UTC)." }
+      },
+      "required": ["start", "end"],
+      "additionalProperties": false
+    },
+    "Outcome": {
+      "type": "object",
+      "description": "What the gates decided. reason_code is required when status is escalated (enforced by the if/then below); message is the optional operator-facing detail.",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["applied", "escalated", "extended"],
+          "description": "applied = submitted to Phase 2; escalated = surfaced, not applied; extended = no new plan applied and nothing new written - the state-change gate skipped the LLM (or there was nothing to refine), so the last applied bundle stays in force (plan is null; source_plan_id names the held prior plan, absent on a cold-start hold of the Phase 2 baseline)."
+        },
+        "reason_code": { "$ref": "#/$defs/ReasonCode" },
+        "message": { "type": "string", "description": "Operator-facing detail for an escalation." }
+      },
+      "required": ["status"],
+      "additionalProperties": false,
+      "if": { "properties": { "status": { "const": "escalated" } }, "required": ["status"] },
+      "then": { "required": ["reason_code"] }
+    }
+  },
+  "properties": {
+    "schema_version": { "type": "integer", "minimum": 1, "description": "Major version of this plan contract (internal; a bump is an ADR event)." },
+    "optimizer_run_id": { "type": "string", "format": "uuid", "description": "The cycle's trace / provenance id. Phase 2 records it on the applied bundle; every plan and escalation is traced by it (P3-OBS-1)." },
+    "greenhouse_id": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$", "description": "The greenhouse this plan is for." },
+    "created_at": { "type": "string", "format": "date-time", "description": "When the cycle ran (RFC 3339, UTC) - the instant this record was produced, whether it applied, escalated, or extended." },
+    "horizon": { "$ref": "#/$defs/Horizon" },
+    "backend": { "$ref": "#/$defs/Backend" },
+    "plan": {
+      "description": "The layer-1 OptimizerPlan (§2), or null when the cycle produced no new plan: every pre-planner held cycle (an input-gate, clock-mode, contract-drift, twin-divergence, cycle-timeout, or llm-unavailable outcome, where the LLM never ran) and a cold-start `extended` that holds the Phase 2 baseline. An `applied` outcome always carries a non-null plan (enforced by the conditional below). A post-planner escalation (low_confidence, constraint_violation, twin_fidelity_fault, bounds_mismatch, write_unauthorized) still carries the plan it rejected.",
+      "oneOf": [
+        { "$ref": "https://greenhouse.local/contracts/optimizer-internal-plan-schema/optimizer-plan.schema.json" },
+        { "type": "null" }
+      ]
+    },
+    "source_plan_id": { "type": "string", "format": "uuid", "description": "When `plan` is null, the optimizer_run_id of the prior accepted plan whose already-applied bundle stays in force while this cycle is held or extended (the greenhouse holds the last applied setpoints; nothing new is written). Absent on a cold-start hold of the Phase 2 baseline, where no prior plan exists." },
+    "outcome": { "$ref": "#/$defs/Outcome" }
+  },
+  "required": [
+    "schema_version",
+    "optimizer_run_id",
+    "greenhouse_id",
+    "created_at",
+    "horizon",
+    "backend",
+    "plan",
+    "outcome"
+  ],
+  "additionalProperties": false,
+  "if": {
+    "properties": { "outcome": { "properties": { "status": { "const": "applied" } }, "required": ["status"] } },
+    "required": ["outcome"]
+  },
+  "then": {
+    "properties": { "plan": { "$ref": "https://greenhouse.local/contracts/optimizer-internal-plan-schema/optimizer-plan.schema.json" } },
+    "required": ["plan"]
+  }
+}

@@ -6,7 +6,7 @@
 # Faults are published to gh/{id}/fault on the Mosquitto broker exactly as a controller
 # would; the platform ingests them into activity-feed events (fault/interlock, graded
 # info/warning/critical) and fans them out live over the WebSocket. The payloads honor
-# the contracts/mqtt fault-event schema (real fault_type enum + required response).
+# the contracts/controller-platform-telemetry-mqtt fault-event schema (real fault_type enum + required response).
 #
 # The publish goes through `docker exec <broker> mosquitto_pub`, so no host MQTT client
 # is needed. Ingest rejects faults for unregistered greenhouses, so the target must

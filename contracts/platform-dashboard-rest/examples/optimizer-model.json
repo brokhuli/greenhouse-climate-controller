@@ -1,0 +1,7 @@
+{
+  "provider": "anthropic",
+  "model": "claude-sonnet-4-6",
+  "prompt_version": "v1",
+  "role": "primary",
+  "available_models": ["claude-sonnet-4-6", "claude-haiku-4-5-20251001"]
+}

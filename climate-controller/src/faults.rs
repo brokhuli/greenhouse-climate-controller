@@ -2,7 +2,7 @@
 //! problem ([sensing §6], [safety §2/§5], [control-loops saturation]).
 //!
 //! The enums mirror the closed `fault_type` / `severity` enums in the MQTT fault-event contract
-//! (`contracts/mqtt/fault-event.schema.json`) so the controller's internal vocabulary cannot drift
+//! (`contracts/controller-platform-telemetry-mqtt/fault-event.schema.json`) so the controller's internal vocabulary cannot drift
 //! from what it will publish. A [`Fault`] is produced fresh each tick from live state (faults are
 //! "sticky" only in that the *condition* persists, so re-detection re-raises them); the
 //! [`Mode`] summarizes the worst active fault for the `/health` surface.

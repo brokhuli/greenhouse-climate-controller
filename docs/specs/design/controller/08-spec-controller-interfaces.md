@@ -59,7 +59,7 @@ interlock events are published as they occur — including the
 
 Topic taxonomy, the payload envelope (`greenhouse_id` identity, timestamp,
 `schema_version`), QoS, and retained-message policy are owned by
-[`contracts/mqtt/`](../../../../contracts/mqtt/) under
+[`contracts/controller-platform-telemetry-mqtt/`](../../../../contracts/controller-platform-telemetry-mqtt/) under
 [RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)
 and [RFC-001](../../../decisions/request-for-comments.md#rfc-001-mqtt-broker-selection).
 
@@ -89,7 +89,7 @@ Beyond these control surfaces, the controller also serves an unauthenticated ope
 budget (`P1-PERF-3`), MQTT publish + connection (`P1-RESIL-3`), fault/mode state, and the controller's
 own process resource footprint (CPU percent + resident memory, sampled from the OS). Like `/health`
 it is a **read** (the optional write-token leaves it open) and, being operational rather than a
-control contract, it sits **outside** the versioned [`contracts/controller-rest/`](../../../../contracts/)
+control contract, it sits **outside** the versioned [`contracts/platform-controller-control-rest/`](../../../../contracts/)
 surface. Prometheus scrapes it directly over the internal network
 ([platform operations §1](../platform/08-spec-platform-operations.md#1-observability)).
 
@@ -98,14 +98,14 @@ takes effect on the next tick
 ([architecture §3](./02-spec-controller-architecture.md#3-real-time--scheduling-model)).
 In managed mode the platform is the sole REST consumer; the frontend reaches the
 controller *through* the platform, never directly
-([spec-contracts §2.2](../spec-contracts.md#22-controller-rest-api)). The API is
+([spec-contracts §2.2](../spec-contracts.md#22-platform-controller-control-rest-api)). The API is
 **unauthenticated by default** — the Docker network is the trust boundary — with an **optional
 per-controller bearer token** for the hardened multi-host posture: see
 [authentication](#authenticating-the-write-path-optional)
 ([RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009)).
 
 The path shapes, request/response schemas, and status codes are owned by
-[`contracts/controller-rest/`](../../../../contracts/controller-rest/) (OpenAPI
+[`contracts/platform-controller-control-rest/`](../../../../contracts/platform-controller-control-rest/) (OpenAPI
 3.1) under
 [RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain).
 
@@ -160,7 +160,7 @@ dynamics or restarting to retune a disturbance profile.
 - **Not a production path.** In managed mode the platform does **not** call it; it exists for
   standalone diagnostics and the [verification scenarios](./11-spec-controller-verification.md).
   Its path shapes and schemas are owned by
-  [`contracts/controller-rest/`](../../../../contracts/controller-rest/) like the rest of the
+  [`contracts/platform-controller-control-rest/`](../../../../contracts/platform-controller-control-rest/) like the rest of the
   surface, tagged simulation-only.
 
 #### Time-scale (speed) control
@@ -237,8 +237,8 @@ contracts both exist today:
 
 | Contract | Location | Status | Governing decision |
 |---|---|---|---|
-| MQTT telemetry schemas | [`contracts/mqtt/`](../../../../contracts/mqtt/) | Authored | [RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format), [RFC-001](../../../decisions/request-for-comments.md#rfc-001-mqtt-broker-selection) |
-| Controller REST API | [`contracts/controller-rest/`](../../../../contracts/controller-rest/) | Authored | [RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain), [RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009) (supersedes [RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)) |
+| MQTT telemetry schemas | [`contracts/controller-platform-telemetry-mqtt/`](../../../../contracts/controller-platform-telemetry-mqtt/) | Authored | [RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format), [RFC-001](../../../decisions/request-for-comments.md#rfc-001-mqtt-broker-selection) |
+| Controller REST API | [`contracts/platform-controller-control-rest/`](../../../../contracts/platform-controller-control-rest/) | Authored | [RFC-005](../../../decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain), [RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009) (supersedes [RFC-009](../../../decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)) |
 
 A change to either is versioned and accompanied by an ADR, per
 [`contracts/README.md`](../../../../contracts/README.md). The catalog of all system
@@ -268,7 +268,7 @@ regardless of broker state (`P1-RESIL-3`, and the `P1-PERF-*` budgets stay broke
   data gap** (the Phase 2 platform treats the same gap as recoverable, `P2-RESIL-1`).
 - **Reconnect re-primes subscribers.** The client auto-reconnects
   ([tech stack](./09-spec-controller-tech-stack.md#messaging)); on reconnect the **retained**
-  `gh/{id}/state` snapshot ([contracts/mqtt](../../../../contracts/mqtt/)) gives any
+  `gh/{id}/state` snapshot ([contracts/controller-platform-telemetry-mqtt](../../../../contracts/controller-platform-telemetry-mqtt/)) gives any
   (re)connecting subscriber current state immediately, and the per-tick streams resume.
 - **Staleness is observable.** Every message carries the envelope `ts`
   ([RFC-007](../../../decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)),
@@ -277,7 +277,7 @@ regardless of broker state (`P1-RESIL-3`, and the `P1-PERF-*` budgets stay broke
 
 The broker itself (Mosquitto) and the QoS / retained-message policy are owned by
 [RFC-001](../../../decisions/request-for-comments.md#rfc-001-mqtt-broker-selection) and
-[`contracts/mqtt/`](../../../../contracts/mqtt/); this section owns only how the controller
+[`contracts/controller-platform-telemetry-mqtt/`](../../../../contracts/controller-platform-telemetry-mqtt/); this section owns only how the controller
 *behaves* across a broker outage.
 
 ---

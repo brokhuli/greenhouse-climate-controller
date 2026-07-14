@@ -31,7 +31,8 @@ fn example_config_loads_and_validates() {
 
 #[test]
 fn rest_setpoints_fixture_passes_the_same_validator() {
-    let path = manifest_dir().join("../contracts/controller-rest/examples/setpoints.json");
+    let path = manifest_dir()
+        .join("../contracts/platform-controller-control-rest/examples/setpoints.json");
     let json = std::fs::read_to_string(&path).expect("fixture should exist");
     let setpoints: Setpoints = serde_json::from_str(&json).expect("valid fixture deserializes");
     let violations = validate_setpoints(&setpoints);
@@ -43,8 +44,8 @@ fn rest_setpoints_fixture_passes_the_same_validator() {
 
 #[test]
 fn rest_bad_range_fixture_is_rejected_by_the_same_validator() {
-    let path =
-        manifest_dir().join("../contracts/controller-rest/examples/setpoints.bad-range.json");
+    let path = manifest_dir()
+        .join("../contracts/platform-controller-control-rest/examples/setpoints.bad-range.json");
     let json = std::fs::read_to_string(&path).expect("fixture should exist");
     let setpoints: Setpoints =
         serde_json::from_str(&json).expect("fixture is structurally valid JSON");

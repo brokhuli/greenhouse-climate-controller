@@ -1,0 +1,8 @@
+{
+  "status": "degraded",
+  "degraded_reason": "platform_unreachable",
+  "enabled": true,
+  "read_only_reason": null,
+  "last_successful_cycle_at": null,
+  "cadence_secs": 1800
+}

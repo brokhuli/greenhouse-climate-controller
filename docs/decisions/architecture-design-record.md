@@ -8,13 +8,204 @@ alternatives and tradeoffs.
 
 ---
 
+## 2026-07-13 — Phase 3 per-greenhouse optimizer enable/disable (alongside the service-wide pause)
+
+**Decision:** Add a **per-greenhouse** optimizer enable/disable toggle beside the existing service-wide one.
+A new pair of endpoints, `GET`/`POST /api/optimizer/greenhouses/{id}/enabled` (proxied by the Go API to the
+optimizer's own Service API), mirrors `GET`/`POST /api/optimizer/enabled` exactly — same operator-gating,
+same optional structured-logged `reason`, same **in-memory override that resets to the configured default on
+restart** — but scoped to one greenhouse: when it is disabled the scheduler **skips just that greenhouse**
+(no cycle, no setpoint write) and its out-of-band `POST …/cycles` is refused `409`, while the rest of the
+fleet plans on cadence. The two scopes compose as an **AND with the global taking precedence** — a greenhouse
+plans only when the service is globally enabled *and* that greenhouse is enabled, so a service-wide pause
+overrides every per-greenhouse flag. There is **no per-greenhouse config file** (the optimizer is configured
+by env convention, not a per-greenhouse TOML), so the per-greenhouse enable is a runtime-only state defaulting
+to on. The `FleetOptimizerSummary.greenhouses[]` rollup gains a per-greenhouse **`enabled`** field so the SPA
+paints the fleet cards, the console table, and the detail panel from the one rollup poll — no per-greenhouse
+fan-out — and a new `GreenhouseEnableState` schema backs the scoped GET/POST.
+
+Touches the [platform-dashboard-rest contract](../../contracts/platform-dashboard-rest/) (new
+`optimizer-greenhouse-enabled` path, `GreenhouseEnableState` schema, `FleetOptimizerSummary.enabled`, a fixture)
+and the spec set ([optimizer 10/09/02/11](../specs/design/optimizer/10-spec-optimizer-interfaces.md#service-api-endpoints),
+[platform 06/09](../specs/design/platform/09-spec-platform-interfaces.md#3-api-surface-inventory),
+[frontend 02/03/05/06/08/09](../specs/design/frontend/06-spec-frontend-components.md)). This is an **additive,
+backward-compatible** change — new optional endpoints plus one added, always-present response field within the
+current major — so `info.version` does **not** bump the major (per the contract's
+[versioning rules](../../contracts/platform-dashboard-rest/README.md#versioning), RFC-007).
+
+**Why:** The service-wide pause is all-or-nothing — an operator who wants to stop the optimizer perturbing a
+single greenhouse (a sensitive crop stage, an investigation, a misbehaving cycle) previously had to disable
+the whole fleet. A per-greenhouse pause makes that a routine, reversible, audited operator action while the
+rest of the fleet keeps optimizing, mirroring the automatic per-greenhouse input-gate pauses the optimizer
+already applies. Keeping it a runtime, in-memory override (not persisted config) matches the service-wide
+toggle's operational-pause posture. No Phase 3 code exists yet, so this lands as contract + spec ahead of
+implementation.
+
+**RFC:** contract convention [RFC-007](./request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format);
+optimizer operator surface [RFC-004](./request-for-comments.md#rfc-004-phase-3-llm-integration-interface)
+
+---
+
+## 2026-07-13 — Phase 3 SPA-facing optimizer health/status: `GET /api/optimizer/status`
+
+**Decision:** Add a versioned platform-dashboard-rest endpoint `GET /api/optimizer/status` (`OptimizerStatus`
+schema) so the operator console's overview can render a **service-health badge** for the optimizer as a
+whole — overall `status` (`healthy` / `degraded` / `unavailable`), a machine-readable `degraded_reason`
+(`platform_unreachable` / `llm_unreachable` / `cycle_stalled` / `cold_start`), the `enabled` /
+`read_only_reason` pair, and `last_successful_cycle_at` against `cadence_secs`. The Go API **derives** this
+from the optimizer's internal, unversioned `GET /health` (the same proxy/compose role it already plays for
+the `optimizer/*` reads and the setpoint diff); when the optimizer is unreachable the Go API synthesizes
+`status: unavailable` rather than surfacing a proxy `5xx`, so the badge always renders. The internal
+`/health` is unchanged and stays the optimizer's own surface. The open-escalation backlog is **not**
+duplicated here — it stays on `FleetOptimizerSummary.rollup.backlog`; and per-dependency reachability is
+carried only via `degraded_reason`, not as raw booleans. A read-only (paused) optimizer is `healthy`
+(intentional, not a stall). Read is viewer-open and **polled**, like the other `optimizer/*` reads.
+
+Touches the [platform-dashboard-rest contract](../../contracts/platform-dashboard-rest/) (new path, `OptimizerStatus` /
+`DegradedReason` schemas, three fixtures) and the spec set
+([optimizer 10 interfaces](../specs/design/optimizer/10-spec-optimizer-interfaces.md#the-operator-dashboard-reaches-this-surface-through-the-platform-go-api),
+[platform 09 interfaces](../specs/design/platform/09-spec-platform-interfaces.md),
+[frontend 02 views](../specs/design/frontend/02-spec-frontend-purpose-and-views.md),
+[frontend 05 data model](../specs/design/frontend/05-spec-frontend-data-model.md)). This is an **additive,
+backward-compatible** change — a new optional endpoint — so `info.version` does **not** bump the major (per
+the contract's [versioning rules](../../contracts/platform-dashboard-rest/README.md#versioning), RFC-007).
+
+**Why:** The console could already show per-greenhouse cycle outcomes (`fleet`) and a bare `enabled`
+boolean, but had no structured signal for the optimizer service itself being degraded (a dependency down,
+cycles stalling) or unreachable, when it last planned, its cadence, or *why* it is paused — an operator
+would only see the `fleet`/`enabled` polls error out. A single derived status response gives the overview
+badge one poll and keeps the browser talking only to the Go API. No Phase 3 code exists yet, so this lands
+as contract + spec ahead of implementation.
+
+**RFC:** contract convention [RFC-007](./request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format);
+optimizer operator surface [RFC-004](./request-for-comments.md#rfc-004-phase-3-llm-integration-interface)
+
+---
+
+## 2026-07-12 — Phase 3 runtime model changes: operator-mutable model (allowlisted), provider stays offline
+
+**Decision:** Split the single "a model **or** provider change is a reviewed ADR event" rule into two
+governance paths. The **`provider`** (`ollama` default / `anthropic` / `openai`) stays an **offline config
+change** — Compose/env + restart, a reviewed ADR event — as do `prompt_version` and the sampling pins. The
+active **`model`** becomes **operator-mutable at runtime**: an operator switches it via a new
+`POST /api/optimizer/model` endpoint (`GET /api/optimizer/model` inspects), choosing from a **per-provider
+allowlist** — a new `[llm.available_models]` config table (default `ollama = ["llama3.2", "mistral",
+"qwen2.5:7b", "llama3.1:8b"]`; cloud entries fill in when a cloud provider is used). The switch takes effect
+on the **next** planning cycle, is an in-memory override that **resets to the configured `model` on restart**
+(config stays the default and source of truth), and is gated as an **operator write** (untokened under
+`trusted_network`; the Keycloak **operator** role under `oidc` — not the service `setpoints:write` role). The
+default `model` moves `llama3` → `qwen2.5:7b`. Provenance is unchanged — `PlanRecord.backend.model` already
+stamps the model on every plan — so a runtime switch is fully traceable by `optimizer_run_id`.
+
+Reproducibility is preserved because every allowlisted model is **baseline-captured offline before** it can
+be selected: evaluation baselines are keyed by `(provider, model, prompt_version, sampling)`, and a runtime
+switch merely selects the pre-captured baseline for the now-active model. **Expanding a provider's allowlist
+is the offline, baseline-capturing step** (and remains ADR-governed); switching among already-vetted models
+is not a baseline event. This **supersedes the "model or provider" wording** of the
+[2026-07-09 entry](#2026-07-09--phase-3-llm-default-flips-to-local-ollama-cloud-providers-become-opt-in) and
+the model-pin governance of the
+[2026-07-12 prompt-template entry](#2026-07-12--phase-3-planner-prompt-template-location-versioning-and-plan-provenance):
+the provider stays an offline change; the allowlisted model becomes runtime.
+
+Touches the optimizer spec set ([04 planning](../specs/design/optimizer/04-spec-optimizer-planning.md#determinism--reproducibility),
+[05 plan contract](../specs/design/optimizer/05-spec-optimizer-plan-contract.md),
+[08 evaluation](../specs/design/optimizer/08-spec-optimizer-evaluation.md),
+[10 interfaces](../specs/design/optimizer/10-spec-optimizer-interfaces.md#service-api-endpoints),
+[11 configuration](../specs/design/optimizer/11-spec-optimizer-configuration.md),
+[12 tech-stack](../specs/design/optimizer/12-spec-optimizer-tech-stack.md)). **No contract-schema change**:
+`PlanRecord.backend.model` already carries the model, so the plan contract's `schema_version` **stays 1**.
+
+**Why:** Operators need to A/B model variants and step off a regressing model **without a service restart**
+that would halt planning across greenhouses — but an unbounded runtime model field would break the
+pinned-planner reproducibility the evaluation suite depends on. Restricting runtime selection to a
+**pre-vetted, pre-baselined allowlist** keeps both: live operational flexibility and the guarantee that
+every plan is reproducible from `(provider, model, prompt_version, sampling)`. Keeping **provider** offline
+preserves the structural invariants a provider carries — client wrapper, auth/credentials, egress posture,
+cost model — none of which should flip mid-flight. All three providers stay first-class; realistically the
+deployment is Ollama with various models. No Phase 3 code exists yet, so this lands as spec + config ahead of
+implementation.
+
+**RFC:** [RFC-004](./request-for-comments.md#rfc-004-phase-3-llm-integration-interface)
+
+---
+
+## 2026-07-12 — Phase 3 planner prompt template: location, versioning, and plan provenance
+
+**Decision:** Defined how the planner's prompt is managed — which RFC-004 named as a
+`ChatPromptTemplate` but left as unspecified implementation work. The prompt is a **versioned text
+asset checked into the service** at `climate-optimizer/prompts/planner.v{N}.md` (the system-prompt
+template the chain wraps; the per-cycle `PlanContext` stays the runtime-assembled human turn), the
+analog of the controller's checked-in `config/greenhouse.example.toml` and the platform's numbered
+`internal/store/migrations/` — not an inline string or an env var. The active template is pinned by a
+new `prompt_version` in the `[llm]` config block beside `model`; a released `planner.vN.md` is
+**immutable like an applied migration** (a change ships `planner.v{N+1}.md` and bumps the pin). A
+prompt change is therefore a **deliberate, reviewed ADR event — never a silent edit** — the same
+governance as the model pin, because it shifts the plan distribution and re-captures the per-backend
+evaluation baselines, now keyed by `(backend model, prompt_version, sampling)`. For provenance,
+`prompt_version` is stamped into `PlanRecord.backend` (beside `model`, required) so every stored or
+surfaced plan is traceable to the exact `(model, prompt_version)` that produced it.
+
+Touches the optimizer spec set ([04 planning](../specs/design/optimizer/04-spec-optimizer-planning.md#prompt-template--versioning),
+[05 plan contract](../specs/design/optimizer/05-spec-optimizer-plan-contract.md),
+[08 evaluation](../specs/design/optimizer/08-spec-optimizer-evaluation.md),
+[10 interfaces](../specs/design/optimizer/10-spec-optimizer-interfaces.md),
+[11 configuration](../specs/design/optimizer/11-spec-optimizer-configuration.md),
+[12 tech-stack](../specs/design/optimizer/12-spec-optimizer-tech-stack.md)) and the plan contract
+schema + fixtures in [`contracts/optimizer-internal-plan-schema/`](../../contracts/optimizer-internal-plan-schema/). The plan
+contract's `schema_version` **stays 1**: the contract was authored 2026-07-11, nothing consumes it
+yet, so adding the provenance field is a pre-implementation refinement recorded here rather than a
+version bump.
+
+**Why:** "Prompt change re-captures the baselines" was already a rule in [08 §3](../specs/design/optimizer/08-spec-optimizer-evaluation.md)
+with no defined artifact behind "the prompt" — nothing said where it lived, how a change was governed,
+or how a stored plan named the prompt that made it. A checked-in, pinned, immutable-per-version file
+makes the prompt diffable and reviewable, and stamping `prompt_version` into `PlanRecord` makes a plan
+fully reproducible from `(model, prompt_version, sampling)`. Modeling it on the model-pin governance
+and the migrations convention keeps it symmetric with existing decisions rather than inventing a new
+mechanism. No Phase 3 code exists yet, so this lands as spec + contract ahead of implementation.
+
+**RFC:** [RFC-004](./request-for-comments.md#rfc-004-phase-3-llm-integration-interface)
+
+---
+
+## 2026-07-11 — Phase 3 plan contract authored (`OptimizerPlan` + `PlanRecord`)
+
+**Decision:** Authored the Phase 3 optimizer plan contract that RFC-004 named but left unspecified — the
+actual shape of the plan the LLM planner emits — as a **two-layer** structure:
+
+- **`OptimizerPlan`** — the LLM's structured output (`.with_structured_output`): the horizon
+  `trajectory` (hourly points), the `immediate_setpoints` `SetpointsPatch` applied this cadence, a
+  load-bearing `confidence`, an `explanation`, and optional advisory `objective_scores` /
+  `escalation_hint`. Proposed, not authoritative.
+- **`PlanRecord`** — the service envelope stamping the provenance and outcome the model must not invent:
+  `optimizer_run_id`, `greenhouse_id`, `created_at`, the chosen `horizon` window, the `backend`
+  (provider / model / role), and the gate `outcome` (`applied` / `escalated` + canonical `reason_code`
+  / `extended`).
+
+The prose definition is the new [`05-spec-optimizer-plan-contract.md`](../specs/design/optimizer/05-spec-optimizer-plan-contract.md)
+(inserted between the planner and the constraint engine that consumes it, renumbering the former
+`05–12` optimizer docs to `06–13`); the machine-readable JSON Schema (Draft 2020-12) lives in
+[`contracts/optimizer-internal-plan-schema/`](../../contracts/optimizer-internal-plan-schema/) and is wired into the contract harness
+(`npm run validate:contracts`).
+
+**Why:** Without a defined shape the planner, constraint engine, applier, service API, and tests would
+each invent their own, and RFC-004 only committed to "refined setpoints + a reasoning trace." The
+two-layer split keeps `.with_structured_output()` honest — the schema the model fills contains only
+fields it can meaningfully author (never a run id, model name, or apply/escalate decision). The
+contract is **internal** to the optimizer (planner → constraint engine → applier); the only downward
+wire stays the unchanged `optimizer-platform-setpoints-rest/` setpoint path, so this adds no cross-service boundary.
+
+**RFC:** [RFC-004](./request-for-comments.md#rfc-004-phase-3-llm-integration-interface)
+
+---
+
 ## 2026-07-10 — Phase 3 plan model renamed `ActuatorPlan` → `OptimizerPlan`
 
 **Decision:** The optimizer's structured LLM-output model — the Pydantic type parsed via
 `.with_structured_output(...)` and referenced by RFC-004's `generate_plan(context) -> …` signature — is
 renamed from `ActuatorPlan` to **`OptimizerPlan`**. The rename is propagated across the Phase 3 spec set
 ([04 planning](../specs/design/optimizer/04-spec-optimizer-planning.md),
-[11 tech-stack](../specs/design/optimizer/11-spec-optimizer-tech-stack.md)),
+[12 tech-stack](../specs/design/optimizer/12-spec-optimizer-tech-stack.md)),
 [tech-stack-decisions.md](../specs/design/tech-stack-decisions.md), RFC-004, and the
 [2026-06-11 entry](#2026-06-11--phase-3-llm-integration-langchain-replaces-custom-plannerbackend-internals)
 below. It is a **naming change only**: the model is internal (the LLM's structured output, later distilled
@@ -77,7 +268,7 @@ global climate targets already behave, and extended the crop-safe envelope to co
 - **Authority mirrors climate.** The optimizer's zone writes are gated against the stage's `ZoneBounds`
   (a value outside it is `422` naming `zones[i].<field>`); an operator's ad-hoc zone edit is deliberately
   **not** gated (a sticky operator edit wins). The optimizer reads the zone window from the
-  planning-context (`optimizer-read-rest` `CurrentSetpoints.bounds.zones`), exactly as for the climate
+  planning-context (`platform-optimizer-planning-rest` `CurrentSetpoints.bounds.zones`), exactly as for the climate
   envelope.
 - **No DB migration.** `ZoneBounds` rides in the existing JSONB `stages` document; profiles without it
   stay valid, and the write body (`SetpointsPatch`) already carried `zones`.
@@ -103,8 +294,8 @@ deferred a capability the contract already promised.
 **Decision:** Gave each crop-profile growth stage an optional **crop-safe envelope** — a per-target
 `min`/`max` (`StageBounds`, one `Bound` per scalar climate target) alongside its exact `targets` — as
 the canonical definition of how far the Phase 3 optimizer may refine that target. The platform stores
-it, exposes it to the optimizer on the planning-context read (`optimizer-read-rest` `CurrentSetpoints.bounds`),
-and **enforces it on the optimizer setpoint write path** (`optimizer-write-rest`): a submission that
+it, exposes it to the optimizer on the planning-context read (`platform-optimizer-planning-rest` `CurrentSetpoints.bounds`),
+and **enforces it on the optimizer setpoint write path** (`optimizer-platform-setpoints-rest`): a submission that
 moves a target outside its active stage's envelope is rejected `422` naming the field. This is
 **Option C** of the design options — Phase 2 holds the canonical envelope and re-validates on write,
 while the optimizer (Phase 3, not yet built) pre-filters to the same envelope it reads back, so a `202`
@@ -145,13 +336,13 @@ the single-authority claim.
 
 ## 2026-07-07 — Phase 3 telemetry read contract authored (OpenAPI 3.1) as a consolidated planning-context read
 
-**Decision:** Authored the Phase 3 telemetry read path under `contracts/optimizer-read-rest/` as an
+**Decision:** Authored the Phase 3 telemetry read path under `contracts/platform-optimizer-planning-rest/` as an
 **OpenAPI 3.1** document (`openapi.json`) plus a README and example fixtures — filling the §2.7 "Phase 3
 telemetry read API" entry in the [contract catalog](../specs/design/spec-contracts.md) that was
 "to author," and implementing the
 [2026-07-07 read-path revision](#2026-07-07--phase-3-telemetry-read-path-revised-platform-rest-api-backed-by-internal-sql-views)
 as a concrete REST contract. It is the optimizer's read counterpart to its setpoint write path
-(`optimizer-write-rest/`, #3). This is a **contract-authoring** change: the backing Go query handler is
+(`optimizer-platform-setpoints-rest/`, #3). This is a **contract-authoring** change: the backing Go query handler is
 platform-owned and out of scope; the artifact defines the wire shape. Shape choices settled while
 authoring (resolving RFC-008's open questions):
 
@@ -164,21 +355,21 @@ authoring (resolving RFC-008's open questions):
   `PlanContext` build, and keeps the payload bounded via summaries rather than raw readings.
 - **Data-quality fields carried on the read API.** `data_quality` (`controller_mode`, `time_scale`,
   per-metric `freshness[]`, `faults[]`) plus per-actuator `health` give the optimizer's
-  [input gate](../specs/design/optimizer/06-spec-optimizer-input-gating.md) its freshness,
+  [input gate](../specs/design/optimizer/07-spec-optimizer-input-gating.md) its freshness,
   completeness, sensor/actuator-health, and clock-mode checks as plain response fields — resolving the
   open question that spec flagged for "when the REST contract is authored."
-- **`schema_version` in-body — the one read exception.** Unlike the write contracts (`optimizer-write-rest`,
-  `frontend-rest`), the response carries a top-level `schema_version` integer, because the optimizer's
+- **`schema_version` in-body — the one read exception.** Unlike the write contracts (`optimizer-platform-setpoints-rest`,
+  `platform-dashboard-rest`), the response carries a top-level `schema_version` integer, because the optimizer's
   identity-consistency check reads it to detect read-API/contract drift. It tracks `info.version`'s major.
 - **Unauthenticated on the trusted network.** The read carries no authority or safety concern, so the
-  single operation is `security: []` (matching `frontend-rest` slice-2a telemetry reads);
+  single operation is `security: []` (matching `platform-dashboard-rest` slice-2a telemetry reads);
   [RFC-011](./request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009)
   scopes service auth to the write boundaries. No `securitySchemes` are declared, so `redocly.yaml`
   turns `security-defined` off (documented).
-- **Directory named by consumer (`optimizer-read-rest/`).** Named for the optimizer, matching how
-  `frontend-rest/` is named by its consumer (the SPA), and pairing with the setpoint write sibling
-  `optimizer-write-rest/`. A `platform-`prefixed name was rejected as ambiguous, since the platform
-  also serves the operator/fleet reads in `frontend-rest`.
+- **Directory named by data flow (`platform-optimizer-planning-rest/`).** The contract name now follows
+  the direction-oriented contract convention: platform-served planning context flows to the optimizer, and
+  the setpoint write sibling flows back as `optimizer-platform-setpoints-rest/`. This supersedes the earlier
+  consumer-named directory convention.
 
 An unknown `window`/`interval` returns **422** with a `ValidationError` naming the violated `field` and
 `bound`; a missing greenhouse returns **404**. Validation mirrors the other contracts (a 3.1-aware
@@ -190,8 +381,8 @@ negative fixture that must fail) and is wired into the same `scripts/validate-co
 undefined; the optimizer had a catalog entry and a design intent but no normative schema to build its
 Data Access component against. Authoring it as its own OpenAPI 3.1 document gives the optimizer one
 artifact, resolves RFC-008's deferred open questions (consolidated endpoint, which data-quality fields
-the API carries), and keeps one validation discipline across MQTT, controller-rest, frontend-rest,
-optimizer-write-rest, and this contract.
+the API carries), and keeps one validation discipline across MQTT, platform-controller-control-rest, platform-dashboard-rest,
+optimizer-platform-setpoints-rest, and this contract.
 
 **RFC:** [RFC-008](./request-for-comments.md#rfc-008-phase-3-telemetry-read-path),
 [RFC-004](./request-for-comments.md#rfc-004-phase-3-llm-integration-interface),
@@ -200,10 +391,10 @@ optimizer-write-rest, and this contract.
 
 ---
 
-## 2026-07-07 — Setpoint API contract authored (OpenAPI 3.1); optimizer POST relocated out of frontend-rest
+## 2026-07-07 — Setpoint API contract authored (OpenAPI 3.1); optimizer POST relocated out of platform-dashboard-rest
 
 **Decision:** Authored the platform's single-authority setpoint write path under
-`contracts/optimizer-write-rest/` as an **OpenAPI 3.1** document (`openapi.json`) plus a README and example
+`contracts/optimizer-platform-setpoints-rest/` as an **OpenAPI 3.1** document (`openapi.json`) plus a README and example
 fixtures — filling the §2.3 "Phase 2 Setpoint API" entry in the
 [contract catalog](../specs/design/spec-contracts.md) that was previously "to author," and giving the
 optimizer (Phase 3) and the Phase 4 planner one normative artifact to build their setpoint submissions
@@ -214,20 +405,19 @@ intended-state `Setpoints` bundle out at `202 Accepted`, recorded with `source =
 **contract-authoring** change: the backing Go endpoint (`submitSetpoints`) already exists and is
 unchanged; the artifact documents it. Shape choices settled while authoring:
 
-- **A distinct contract, not a `frontend-rest` operation.** The catalog has always listed this as a
+- **A distinct contract, not a `platform-dashboard-rest` operation.** The catalog has always listed this as a
   separate contract (#3) from the operator/fleet REST API (#4): different audience (the optimizer, a
   machine-to-machine caller, vs. the browser SPA), different provenance (`optimizer` vs.
   `operator_edit`), and its own RFC-011 service-auth story. The `POST` had been pragmatically stashed
-  inside `frontend-rest/paths/setpoints.json` even though that contract's README already disclaimed it;
-  it is now **relocated** here so there is one canonical definition, and `frontend-rest` is left with
+  inside `platform-dashboard-rest/paths/setpoints.json` even though that contract's README already disclaimed it;
+  it is now **relocated** here so there is one canonical definition, and `platform-dashboard-rest` is left with
   only the operator's ad-hoc `PATCH` (matching its own README and file-layout comment).
-- **Directory named by consumer (`optimizer-write-rest/`).** Named for its consumer — the optimizer
-  (and later the Phase 4 planner), the machine-to-machine caller — matching how `frontend-rest/` is
-  named by its consumer and pairing with the read sibling `optimizer-read-rest/`. A `platform-`prefixed
-  name was rejected as ambiguous, since `frontend-rest` is also a platform-served write surface
-  (operator edits, profiles, registration, assignments).
+- **Directory named by data flow (`optimizer-platform-setpoints-rest/`).** The contract name now follows the
+  direction-oriented contract convention: refined setpoint submissions flow from optimizer (and later the
+  Phase 4 planner) to platform, pairing with the planning-context read sibling
+  `platform-optimizer-planning-rest/`. This supersedes the earlier consumer-named directory convention.
 - **Self-contained `Setpoints` copy.** The `Setpoints` / `SetpointsPatch` / `ZoneTargets` schemas are a
-  verbatim copy of `frontend-rest`'s (the same Go DTO backs both the operator `PATCH` and this `POST`),
+  verbatim copy of `platform-dashboard-rest`'s (the same Go DTO backs both the operator `PATCH` and this `POST`),
   kept local rather than cross-contract `$ref`'d — the same convention the other contracts use for
   shared definitions, and what the per-directory validation harness expects.
 - **Config-gated auth, contract identical in both modes.** A `bearerAuth` (Keycloak client-credentials
@@ -238,7 +428,7 @@ unchanged; the artifact documents it. Shape choices settled while authoring:
   ([RFC-011](./request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009)).
 
 A rejected submission returns **422** with a `ValidationError` naming the violated `field` and `bound`
-— the same shape the controller-rest and frontend-rest contracts return — and is not recorded as
+— the same shape the platform-controller-control-rest and platform-dashboard-rest contracts return — and is not recorded as
 intended state. Validation mirrors the other contracts (a 3.1-aware Redocly lint of `openapi.json` plus
 an Ajv (Draft 2020-12) run of each fixture against its component schema, with one negative fixture that
 must fail) and is wired into the same `scripts/validate-contracts.mjs` harness (`npm run
@@ -248,8 +438,8 @@ validate:contracts`).
 only cross-phase interface the unbuilt Phase 3 optimizer will hold with the platform — had a catalog
 entry and a live Go endpoint but no normative schema, with its definition awkwardly split into a
 sibling contract that disclaimed owning it. Authoring it as its own document gives the optimizer one
-artifact to build against, removes the `frontend-rest` inconsistency, and keeps one validation
-discipline (OpenAPI 3.1 / JSON Schema 2020-12) across MQTT, controller-rest, frontend-rest, and this
+artifact to build against, removes the `platform-dashboard-rest` inconsistency, and keeps one validation
+discipline (OpenAPI 3.1 / JSON Schema 2020-12) across MQTT, platform-controller-control-rest, platform-dashboard-rest, and this
 contract.
 
 **RFC:** [RFC-005](./request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain),
@@ -302,7 +492,7 @@ into a **whole-system** story rather than platform-only:
    provenance-prune `add_job`).
 2. **Controller `/metrics` (`controller_*`), additive.** Each Rust controller now exposes its **own**
    `/metrics` on its existing axum server (a read, so the optional write-token leaves it open; outside
-   the versioned `controller-rest` contract) as its own source of truth for *controller-health*: tick
+   the versioned `platform-controller-control-rest` contract) as its own source of truth for *controller-health*: tick
    cadence/compute (`P1-PERF-3`), MQTT publish/connection (`P1-RESIL-3`), fault/mode, config applies —
    every series carrying a `greenhouse_id` const label. This complements the platform's *observed*
    connectivity with the controller's *self-reported* health.
@@ -344,8 +534,8 @@ the single-host MVP behaves exactly as before:
    platform's registration API accepts a `bearer_token` (the store + relay already carried it), and the
    `gen-controllers.sh` generator can mint per-controller tokens (`CONTROLLER_AUTH_TOKENS=1`).
 
-**Scope:** implementation + tests + contract (`frontend-rest` gains the `POST /setpoints` op; the
-`controller-rest` optional bearer scheme already existed). No committed interface changed in the default
+**Scope:** implementation + tests + contract (`platform-dashboard-rest` gains the `POST /setpoints` op; the
+`platform-controller-control-rest` optional bearer scheme already existed). No committed interface changed in the default
 posture; no new runtime dependencies (Go reuses go-oidc, Rust reuses axum/tower, plain token compare).
 Reconciled a doc/impl drift: the controller token lives under `[api].auth_token`, not `[rest]`.
 
@@ -387,8 +577,8 @@ scaffolding, so there is no token-validation, config-switch, or client-credentia
 the controller's REST handlers exist but the optional-token check lands when managed-mode hardening is
 exercised. The behavior is specified across the platform security/interfaces/fleet specs, the optimizer
 interfaces/application/configuration specs, and the controller interfaces/config specs. The contract
-documents ([`controller-rest`](../../contracts/controller-rest/),
-[`frontend-rest`](../../contracts/frontend-rest/)) gain the **optional** security scheme when those
+documents ([`platform-controller-control-rest`](../../contracts/platform-controller-control-rest/),
+[`platform-dashboard-rest`](../../contracts/platform-dashboard-rest/)) gain the **optional** security scheme when those
 slices are built — additive, no major version bump, no consumer deployed.
 
 **Why:** RFC-009's economy was correct *for a single laptop*, where the host network is itself the trust
@@ -460,12 +650,12 @@ control-loops, safety §2, interfaces §3, constraints §1, config-and-parameter
 optimizer specs, and the NFR note; the runtime `SimClock` + scheduler + handler land in the controller
 runtime slice.
 
-**Contract changes (additive):** `contracts/controller-rest/` gains a simulation-only `GET`/`PUT
+**Contract changes (additive):** `contracts/platform-controller-control-rest/` gains a simulation-only `GET`/`PUT
 /sim/time-scale` with a `TimeScalePut` / `TimeScale` schema (mirroring the sensor-injection shapes),
-under the existing `simulation` tag and `x-simulation-only`. `contracts/mqtt/system-state` gains an
+under the existing `simulation` tag and `x-simulation-only`. `contracts/controller-platform-telemetry-mqtt/system-state` gains an
 optional `simulation` object (`time_scale`, `tick_index`), and the envelope `ts` description is
-clarified as the controller's (possibly simulated) clock instant. `contracts/frontend-ws` adds an
-optional `time_scale` to the `status` frame (+ a `common` `$def`); `contracts/frontend-rest` adds a
+clarified as the controller's (possibly simulated) clock instant. `contracts/platform-dashboard-live-ws` adds an
+optional `time_scale` to the `status` frame (+ a `common` `$def`); `contracts/platform-dashboard-rest` adds a
 sim-only per-greenhouse `GET`/`PATCH /api/greenhouses/{id}/sim/time-scale` plus a fleet-wide `PATCH
 /api/sim/time-scale` (returning a per-greenhouse `FleetTimeScaleResult`), and a nullable `time_scale`
 on `GreenhouseSummary` / `GreenhouseDetail`. Fixtures are added and registered in each contract's
@@ -562,7 +752,7 @@ Phase 1 control code is not yet implemented, so there is no HAL, REST, or pipeli
 change here; the behavior is specified in the controller specs (HAL §9, interfaces §3, config-
 and-parameters §, constraints §4–5, verification §) and the contract surface is authored.
 
-**Contract changes (additive):** `contracts/controller-rest/` gains a simulation-only resource —
+**Contract changes (additive):** `contracts/platform-controller-control-rest/` gains a simulation-only resource —
 `GET /sim/sensor-injections` and `PUT`/`DELETE /sim/sensor-injections/{metric}` — with a new
 `sim.json` component (`InjectableMetric`, `SensorInjectionPut`, `SensorInjection`) mirroring the
 manual-override shapes, a `Metric` path parameter, a `simulation` tag, and `x-simulation-only`
@@ -619,7 +809,7 @@ sensing §3–5, architecture §2/§4, config-and-parameters §) and the psychro
 `rh_from_vpd`) is **deferred** to the loop slice that will call it — added there alongside its
 consumer as a single shared function so VPD observation and the control inversion cannot drift.
 
-**Contract changes (breaking):** the controller-rest and frontend-rest `Setpoints` / `SetpointsPatch`
+**Contract changes (breaking):** the platform-controller-control-rest and platform-dashboard-rest `Setpoints` / `SetpointsPatch`
 schemas gain a **required** `humidity_deadband_pct` (0–50 %RH) and reword `humidity_low_pct` /
 `humidity_high_pct` (safety clamp bounds) and `vpd_target_kpa` (primary control input). Following the
 [2026-06-16 precedent](#2026-06-16--actuator-health-monitoring-observed-actuator-channel-and-mqtt-connection-resilience-model),
@@ -648,18 +838,18 @@ unused code.
 
 ## 2026-06-17 — Frontend WebSocket fan-out contract authored (JSON Schema 2020-12)
 
-**Decision:** Authored the platform's live-push WebSocket fan-out under `contracts/frontend-ws/` as
+**Decision:** Authored the platform's live-push WebSocket fan-out under `contracts/platform-dashboard-live-ws/` as
 **JSON Schema** (Draft 2020-12) — one file per frame type plus a shared envelope, a `common` of shared
 `$defs`, a `message` union, a README, and example fixtures — filling the §2.5 "Phase 2 WebSocket
 fan-out" entry in the [contract catalog](../specs/design/spec-contracts.md) that was previously "to
 author," and formalizing the live-push half of the *client's working contract* sketched in the
 [frontend data model §5](../specs/design/frontend/05-spec-frontend-data-model.md#5-websocket-message-taxonomy).
-With this and the [REST contract](../../contracts/frontend-rest/), the data model's documented
+With this and the [REST contract](../../contracts/platform-dashboard-rest/), the data model's documented
 "Go-API ↔ SPA REST/WS" gap is now fully closed. The surface is the four frames the platform pushes to
 the SPA (frontend data model §5, platform interfaces §3): `telemetry`, `status`, and `event`
 (slice **2a**), and `drift` (slice **2b**). Shape choices settled while authoring:
 
-- **JSON Schema, modeled on `contracts/mqtt/` (not OpenAPI/AsyncAPI).** The WebSocket fan-out is an
+- **JSON Schema, modeled on `contracts/controller-platform-telemetry-mqtt/` (not OpenAPI/AsyncAPI).** The WebSocket fan-out is an
   envelope-based push channel — the MQTT contract, not the REST ones, is its structural analog. JSON
   Schema is the format RFC-007 §5 fixes for message schemas (AsyncAPI is explicitly only an optional
   later doc layer), so the frames reuse the MQTT idioms directly: a shared `envelope.schema.json`
@@ -676,7 +866,7 @@ the SPA (frontend data model §5, platform interfaces §3): `telemetry`, `status
   (frontend architecture §4) and is deliberately *not* wire-contracted — there are no client→server
   frames. Matches the catalog's stated Platform → SPA direction.
 - **Frames carry the envelope; `schema_version` is an integer.** Unlike the REST bodies (no envelope),
-  every frame carries the RFC-007 envelope, like MQTT — so the `event` frame is the frontend-rest
+  every frame carries the RFC-007 envelope, like MQTT — so the `event` frame is the platform-dashboard-rest
   `EventEntry` with its `greenhouse_id`/`ts` lifted into the envelope, and `schema_version` is an
   **integer** major (the data model §2 `z.string()` sketch is illustrative). `status`/`drift`/`event`
   pin `zone_id` to `null` (greenhouse-scoped); `telemetry` may be zone-scoped.
@@ -702,7 +892,7 @@ shape unique to this surface.
 
 ## 2026-06-17 — Frontend (operator/fleet) REST API contract authored (OpenAPI 3.1)
 
-**Decision:** Authored the platform's operator/fleet REST API under `contracts/frontend-rest/` as an
+**Decision:** Authored the platform's operator/fleet REST API under `contracts/platform-dashboard-rest/` as an
 **OpenAPI 3.1** document (`openapi.json`) plus a README and example fixtures — filling the §2.4
 "Phase 2 operator/fleet REST API" entry in the [contract catalog](../specs/design/spec-contracts.md)
 that was previously "to author," and formalizing the REST half of the *client's working contract*
@@ -712,31 +902,31 @@ list + registration, per-greenhouse detail, ad-hoc setpoint edits, telemetry ran
 activity feed (slice **2a**); crop-profile CRUD and assignments (slice **2b**). Shape choices settled
 while authoring:
 
-- **Directory named by consumer (`frontend-rest/`).** The controller contract is named for its server
-  (`controller-rest/`), but the platform serves *two* REST contracts — this operator/fleet surface and
-  the optimizer-facing single-authority setpoint API (catalog #3) — so a server-based `platform-rest/`
-  name would be ambiguous; named for the consumer instead.
+- **Directory named by data flow (`platform-dashboard-rest/`).** The contract name now follows the
+  direction-oriented contract convention: platform-served operator/fleet REST resources flow to the dashboard.
+  This keeps it distinct from `platform-controller-control-rest/` and
+  `optimizer-platform-setpoints-rest/`, and supersedes the earlier consumer-named directory convention.
 - **REST only.** The live-push **WebSocket** fan-out (catalog #5) stays a separate, still-to-author
   contract; this document is the request/response half. The data model's "Go-API ↔ SPA REST/WS"
   documented gap now narrows to WebSocket-only.
 - **snake_case wire format, no REST envelope.** Field names are snake_case (`greenhouse_id`,
-  `temperature_day_c`) to match the MQTT and controller-rest contracts and
+  `temperature_day_c`) to match the MQTT and platform-controller-control-rest contracts and
   [RFC-007](./request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format);
   the SPA maps them to its camelCase Zod types. Unlike MQTT/WS frames, REST bodies are **not** wrapped
-  in the RFC-007 `schema_version` envelope (matching controller-rest) — identity is embedded directly
+  in the RFC-007 `schema_version` envelope (matching platform-controller-control-rest) — identity is embedded directly
   and the contract version is `info.version`.
 - **Slice-dependent auth.** A `bearerAuth` (Keycloak OIDC/JWT) scheme is declared and applied to 2b
   operations, with writes restricted to the operator role; 2a operations declare `security: []` —
   unauthenticated on the trusted Docker network
   ([RFC-009](./request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries)).
-  This differs from controller-rest (unauthenticated in every mode), so this contract carries
+  This differs from platform-controller-control-rest (unauthenticated in every mode), so this contract carries
   `securitySchemes`.
 - **Target bundle mirrors the controller's runtime config.** The `Setpoints` bundle reuses the
-  controller-rest climate fields and bounds plus per-zone irrigation, so a resolved crop profile maps
+  platform-controller-control-rest climate fields and bounds plus per-zone irrigation, so a resolved crop profile maps
   directly; zone *topology* stays controller-local and out of the write path (platform data model §3).
 
 A rejected write returns **422** with a `ValidationError` naming the violated `field` and `bound` —
-the same shape controller-rest returns and the platform relays under
+the same shape platform-controller-control-rest returns and the platform relays under
 [RFC-005](./request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain). Validation mirrors
 the other contracts — a 3.1-aware Redocly lint of `openapi.json` plus an Ajv (Draft 2020-12) run of
 each fixture against its component schema, with two negative fixtures that must fail — and automating
@@ -746,7 +936,7 @@ it stays the same `contracts/` [backlog](../backlog.md) item.
 the SPA's entire request/response contract with the platform — had a catalog entry and a client-side
 sketch but no normative schema. Authoring it gives the frontend and the Go API one artifact to build
 against and lets the SPA's Zod schemas validate against it. Reusing OpenAPI 3.1 / JSON Schema 2020-12
-keeps one validation discipline across MQTT, controller-rest, and this contract; `/api`-prefixed,
+keeps one validation discipline across MQTT, platform-controller-control-rest, and this contract; `/api`-prefixed,
 greenhouse-scoped paths and the shared slug identity keep the model uniform end to end.
 
 **RFC:** [RFC-007](./request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format),
@@ -894,7 +1084,7 @@ do."
 
 ## 2026-06-09 — Controller REST API contract authored (OpenAPI 3.1, greenhouse-scoped)
 
-**Decision:** Authored the controller's REST contract under `contracts/controller-rest/` as an
+**Decision:** Authored the controller's REST contract under `contracts/platform-controller-control-rest/` as an
 **OpenAPI 3.1** document (`openapi.json`) plus a topic-map-style README and example fixtures —
 filling the §2.2 "Controller REST API" entry in the
 [contract catalog](../specs/design/spec-contracts.md) that was previously "to author." The
@@ -907,7 +1097,7 @@ health (`GET /health`). Two shape choices were settled while authoring:
   already uses (RFC-007), so the two contracts share a validation dialect, while OpenAPI natively
   expresses the paths, methods, and status codes a REST surface needs. Request/response bodies are
   `components.schemas`; the actuator enum, `{ on, level_pct }` output state, and fault summary are
-  **inlined** (not cross-folder `$ref`'d) but documented as kept in sync with `contracts/mqtt/`.
+  **inlined** (not cross-folder `$ref`'d) but documented as kept in sync with `contracts/controller-platform-telemetry-mqtt/`.
   The document is split for navigability — one file per path under `paths/`, shared
   schemas/parameters/responses under `components/`, with `openapi.json` as the `$ref` entry point;
   `redocly bundle` re-emits a single self-contained file for tools that want one.
@@ -939,10 +1129,10 @@ must fail — and automating it stays the same `contracts/` backlog item.
 
 ## 2026-06-09 — MQTT contract schemas authored (implements RFC-007)
 
-**Decision:** Wrote the first `contracts/mqtt/` schemas under the RFC-007 conventions — five
+**Decision:** Wrote the first `contracts/controller-platform-telemetry-mqtt/` schemas under the RFC-007 conventions — five
 message types as JSON Schema (Draft 2020-12), plus a topic-map README and example fixtures. The
 shared envelope lives in `envelope.schema.json` and is composed into every message via `allOf`;
-each schema carries a stable `$id` under base `https://greenhouse.local/contracts/mqtt/` so
+each schema carries a stable `$id` under base `https://greenhouse.local/contracts/controller-platform-telemetry-mqtt/` so
 cross-schema `$ref`s resolve by `$id` in all three stacks. Message types:
 `sensor-reading`, `actuator-state`, `fault-event`, `system-state`.
 
@@ -964,7 +1154,7 @@ This also closes two RFC-007 open questions: `metric`/`actuator` names are **clo
 deferred writing the first schema. Binding units and using closed enums turns the conventions into
 checks that actually bite (proven by two negative fixtures that must fail validation). A single
 envelope source and `$ref`-shared `$defs` keep the contract DRY and drift-free; per-language `$id`
-resolution is documented in `mqtt/README.md`. The scope ambiguity for `par` (RFC-007 examples vs
+resolution is documented in `controller-platform-telemetry-mqtt/README.md`. The scope ambiguity for `par` (RFC-007 examples vs
 the physical/controller specs) is sidestepped: the sensor-reading schema is scope-agnostic — any
 metric is valid on either the greenhouse or zone topic, with scope carried by the topic and
 envelope `zone_id`.
@@ -1055,7 +1245,7 @@ split mirroring the physical model; QoS 1 on all telemetry; retained only on the
 are no command/plan topics. (3) **Payload envelope** — every message carries `schema_version`,
 `greenhouse_id`, `zone_id`, and `ts` (RFC 3339 UTC, ms precision), plus a fixed units convention
 (°C, %RH, ppm, %VWC, µmol·m⁻²·s⁻¹, kPa). (4) **Schema format & versioning** — JSON Schema
-(Draft 2020-12) is the normative artifact, one file per message type under `contracts/mqtt/`;
+(Draft 2020-12) is the normative artifact, one file per message type under `contracts/controller-platform-telemetry-mqtt/`;
 `schema_version` is an integer major, additive/backward-compatible changes do not bump it, breaking
 changes bump and run side-by-side during transition. Each contract change carries an ADR.
 
@@ -1226,7 +1416,7 @@ core comfortably covers a single greenhouse's rollout.
 **Decision:** Expose the optimizer's service surface — trigger planning cycles, inspect proposed
 plans, review escalations, report health — with **FastAPI**
 ([P3 §2](../specs/design/optimizer/02-spec-optimizer-architecture.md),
-[§8](../specs/design/optimizer/09-spec-optimizer-interfaces.md)).
+[§8](../specs/design/optimizer/10-spec-optimizer-interfaces.md)).
 
 **Why:** FastAPI's Pydantic models give declarative request/response validation that lines up
 directly with the JSON-Schema-first contract discipline of

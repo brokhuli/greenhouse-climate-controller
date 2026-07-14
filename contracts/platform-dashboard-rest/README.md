@@ -1,0 +1,266 @@
+# Frontend (Operator/Fleet) REST Contract
+
+The platform Go API's **operator-facing REST surface** — the request/response half of the contract
+the Phase 2 React SPA (and operator tooling) consumes, and the Go API (Echo) serves. This is
+**catalog contract #4** ([`spec-contracts.md §2.4`](../../docs/specs/design/spec-contracts.md));
+the normative artifact is [`openapi.json`](./openapi.json) (OpenAPI 3.1, which uses the JSON Schema
+2020-12 dialect — the same dialect as the [MQTT](../controller-platform-telemetry-mqtt/) and [platform-controller-control-rest](../platform-controller-control-rest/)
+contracts, per
+[RFC-007](../../docs/decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)).
+
+The SPA's whole contract is with the Go API: **REST** for request/response (this document) and
+**WebSockets** for live push. The browser never reaches MQTT or the controllers directly
+([frontend overview §3](../../docs/specs/design/frontend/01-spec-frontend-overview.md#3-system-context)).
+This contract formalizes the REST half of the *client's working contract* previously sketched in
+[`05-spec-frontend-data-model.md`](../../docs/specs/design/frontend/05-spec-frontend-data-model.md);
+the SPA's Zod schemas in `src/api/schemas.ts` validate against it.
+
+**Scope — REST only.** The live-push WebSocket fan-out (telemetry, status, drift, events) is a
+**separate** contract ([`platform-dashboard-live-ws/`](../platform-dashboard-live-ws/), catalog #5) and is **not** described here.
+
+## File layout
+
+[`openapi.json`](./openapi.json) is the entry point and `$ref`s out to the rest:
+
+```
+openapi.json                 # info, servers, securitySchemes, and the paths index (one $ref per path)
+paths/                       # one file per path
+  greenhouses.json           #   /api/greenhouses                            (GET, POST)
+  greenhouse-by-id.json      #   /api/greenhouses/{greenhouse_id}            (GET, DELETE)
+  setpoints.json             #   /api/greenhouses/{greenhouse_id}/setpoints  (PATCH)
+  telemetry.json             #   /api/greenhouses/{greenhouse_id}/telemetry  (GET)
+  analytics.json             #   /api/greenhouses/{greenhouse_id}/analytics  (GET)
+  assignment.json            #   /api/greenhouses/{greenhouse_id}/assignment (GET, PUT)   (2b)
+  sim-time-scale.json        #   /api/greenhouses/{greenhouse_id}/sim/time-scale (GET, PATCH) — sim-only
+  sim-time-scale-all.json    #   /api/sim/time-scale                         (PATCH)  — sim-only, fleet-wide
+  events.json                #   /api/events                                 (GET)
+  profiles.json              #   /api/profiles                               (GET, POST)  (2b)
+  profile-by-id.json         #   /api/profiles/{profile_id}                  (GET, PATCH, DELETE) (2b)
+  optimizer-status.json      #   /api/optimizer/status                       (GET)  (3)
+  optimizer-fleet.json       #   /api/optimizer/fleet                        (GET)  (3)
+  optimizer-plan.json        #   /api/optimizer/greenhouses/{greenhouse_id}/plan   (GET)  (3)
+  optimizer-cycle.json       #   /api/optimizer/greenhouses/{greenhouse_id}/cycles (POST) (3)
+  optimizer-escalations.json #   /api/optimizer/escalations                  (GET)  (3)
+  optimizer-escalation-resolve.json # /api/optimizer/escalations/{escalation_id}/resolve (POST) (3)
+  optimizer-model.json       #   /api/optimizer/model                        (GET, POST) (3)
+  optimizer-enabled.json     #   /api/optimizer/enabled                      (GET, POST) (3)
+  optimizer-greenhouse-enabled.json # /api/optimizer/greenhouses/{greenhouse_id}/enabled (GET, POST) (3)
+components/
+  schemas/                   # request/response body schemas, one file per resource
+    common.json              #   Slug, Connectivity, ActuatorName, Error, ValidationError (shared)
+    greenhouses.json         #   GreenhouseSummary, GreenhouseDetail, GreenhouseRegistration, ControllerEndpoint
+    setpoints.json           #   Setpoints (target bundle), SetpointsPatch, ZoneTargets
+    zones.json               #   ZoneStatus (live per-zone irrigation state on the detail snapshot)
+    telemetry.json           #   TelemetryRange, TelemetrySeries, Reading, ActuatorState
+    analytics.json           #   AnalyticsResponse, AnalyticsSeries, AnalyticsBucket
+    events.json              #   EventEntry
+    sim.json                 #   TimeScale, TimeScalePatch, FleetTimeScaleResult (sim-only)
+    profiles.json            #   CropProfile, CropProfilePatch, ProfileStage, StageBounds, ZoneBounds, Bound, Assignment, AssignmentInput (2b)
+    optimizer.json           #   OptimizerPlanView/Detail, SetpointDiff, Escalation, FleetOptimizerSummary, ModelState/Selection, EnableState/Request, GreenhouseEnableState, OptimizerStatus, DegradedReason, CycleRequest/Accepted, ReasonCode/Class (3)
+  parameters.json            # shared path/query parameters
+  responses.json             # shared error responses (400, 401, 403, 404, 409, 422)
+examples/                    # fixtures used as tests (see below)
+redocly.yaml                 # lint config
+```
+
+References are relative, the same convention as [`platform-controller-control-rest/`](../platform-controller-control-rest/): a path
+file points at `../components/schemas/greenhouses.json#/GreenhouseSummary`, and schema files
+cross-reference siblings (e.g. `greenhouses.json` → `./common.json#/Slug`, `profiles.json` →
+`./setpoints.json#/Setpoints`). Any OpenAPI 3.1 tool that follows `$ref`s reads `openapi.json`
+directly; `redocly bundle` collapses the tree into one self-contained file.
+
+## Endpoint map
+
+Greenhouse-scoped paths use `greenhouse_id`; profile paths use `profile_id`. Base path `/api` is the
+nginx-proxied prefix.
+
+| Method + path | Purpose | Slice | Success | Errors |
+|---|---|---|---|---|
+| `GET /api/greenhouses` | Fleet list | 2a | 200 `GreenhouseSummary[]` | — |
+| `POST /api/greenhouses` | Register a greenhouse | 2a | 201 `GreenhouseSummary` | 422 |
+| `GET /api/greenhouses/{greenhouse_id}` | Detail snapshot incl. current setpoints | 2a | 200 `GreenhouseDetail` | 404 |
+| `DELETE /api/greenhouses/{greenhouse_id}` | Retire a greenhouse | 2a | 204 | 404 |
+| `PATCH /api/greenhouses/{greenhouse_id}/setpoints` | Ad-hoc setpoint edit | 2a | 200 `Setpoints` | 404, 422 |
+| `GET /api/greenhouses/{greenhouse_id}/telemetry?window` | Historical range query | 2a | 200 `TelemetryRange` | 404, 422 |
+| `GET /api/greenhouses/{greenhouse_id}/analytics?window&metric&interval` | Aggregated/derived series | 2a | 200 `AnalyticsResponse` | 404, 422 |
+| `GET /api/greenhouses/{greenhouse_id}/sim/time-scale` | Controller sim-clock speed *(sim-only)* | 2a | 200 `TimeScale` | 404 |
+| `PATCH /api/greenhouses/{greenhouse_id}/sim/time-scale` | Set one controller's sim-clock speed *(sim-only)* | 2a | 200 `TimeScale` | 404, 422 |
+| `PATCH /api/sim/time-scale` | Set the whole fleet's sim-clock speed *(sim-only)* | 2a | 200 `FleetTimeScaleResult` | 422 |
+| `GET /api/events?greenhouse_id&kind&severity` | Activity feed | 2a | 200 `EventEntry[]` | — |
+| `GET /api/profiles` | Crop-profile library | 2b | 200 `CropProfile[]` | — |
+| `POST /api/profiles` | Create a profile | 2b | 201 `CropProfile` | 401, 403, 422 |
+| `GET /api/profiles/{profile_id}` | One profile | 2b | 200 `CropProfile` | 404 |
+| `PATCH /api/profiles/{profile_id}` | Edit a profile | 2b | 200 `CropProfile` | 401, 403, 404, 422 |
+| `DELETE /api/profiles/{profile_id}` | Delete a profile | 2b | 204 | 401, 403, 404, 422 |
+| `GET /api/greenhouses/{greenhouse_id}/assignment` | Current assignment | 2b | 200 `Assignment` | 404 |
+| `PUT /api/greenhouses/{greenhouse_id}/assignment` | Assign profile/stage | 2b | 200 `Assignment` | 401, 403, 404, 422 |
+| `GET /api/optimizer/status` | Optimizer service health | 3 | 200 `OptimizerStatus` | — |
+| `GET /api/optimizer/fleet` | Optimizer fleet queue + rollup | 3 | 200 `FleetOptimizerSummary` | — |
+| `GET /api/optimizer/greenhouses/{greenhouse_id}/plan` | Latest plan + setpoint diff | 3 | 200 `OptimizerPlanDetail` | 404 |
+| `POST /api/optimizer/greenhouses/{greenhouse_id}/cycles` | Trigger an on-demand cycle | 3 | 202 `CycleAccepted` | 401, 403, 404, 409 |
+| `GET /api/optimizer/escalations` | Open escalations | 3 | 200 `Escalation[]` | — |
+| `POST /api/optimizer/escalations/{escalation_id}/resolve` | Resolve an escalation | 3 | 200 `Escalation` | 401, 403, 404 |
+| `GET /api/optimizer/model` | Active model + allowlist | 3 | 200 `ModelState` | — |
+| `POST /api/optimizer/model` | Switch the active model | 3 | 200 `ModelState` | 400, 401, 403 |
+| `GET /api/optimizer/enabled` | Enabled / read-only state | 3 | 200 `EnableState` | — |
+| `POST /api/optimizer/enabled` | Pause / resume planning | 3 | 200 `EnableState` | 401, 403 |
+| `GET /api/optimizer/greenhouses/{greenhouse_id}/enabled` | Per-greenhouse enabled state | 3 | 200 `GreenhouseEnableState` | 404 |
+| `POST /api/optimizer/greenhouses/{greenhouse_id}/enabled` | Pause / resume one greenhouse | 3 | 200 `GreenhouseEnableState` | 401, 403, 404 |
+
+The optimizer's single-authority `POST /greenhouses/{id}/setpoints` (RFC-005 write path) is a
+**different** contract ([`optimizer-platform-setpoints-rest/`](../optimizer-platform-setpoints-rest/), catalog #3) and is not here; the
+ad-hoc edit above is the operator's path.
+
+The `optimizer/*` paths (slice 3) are the **operator console** surface — the Go API's proxy/aggregate over
+the optimizer's own [Service API](../../docs/specs/design/optimizer/10-spec-optimizer-interfaces.md#service-api-endpoints),
+so the SPA reaches the optimizer through the one Go-API origin and never opens a second connection. Reads
+(`status`, `fleet`, `plan`, `escalations`, `model`, `enabled`) are viewer-open and **polled**, not streamed; the
+mutations (`cycles`, `escalations/{id}/resolve`, `model`, `enabled`) are operator writes. Four optimizer
+signals ride the live WebSocket as **activity events** (`source: optimizer`): the applied-plan write
+(`kind: optimizer_plan_applied`) plus the escalation-lifecycle + run-failure audit events
+(`optimizer_plan_escalated`, `optimizer_resolved`, `optimizer_run_failed`). Those three record
+*transitions* in the append-only feed; the *actionable* escalation **queue** stays in the polled path
+here and remains authoritative for operator action — the feed complements the queue, it does not replace it.
+
+The `sim/time-scale` paths are a **simulation-only** surface (marked `x-simulation-only`): they read
+and set the controller's simulated-clock speed (0.25–32×) for one greenhouse or — at `/api/sim/time-scale`
+— the whole fleet, relaying to the controller's own sim-only [`/sim/time-scale`](../platform-controller-control-rest/)
+(controller HAL §7). The fleet form fans out as **N independent per-controller writes** — there is no
+shared/master clock — and returns a per-greenhouse outcome. This is a diagnostic, **not a setpoint**: it
+is the one explicit, narrow exception to the platform's setpoint-only downward control
+([platform constraints §7](../../docs/specs/design/platform/11-spec-platform-constraints.md)). A
+real-hardware controller has no time-scale, so the per-greenhouse paths return **404** there. The current
+speed also rides on `GreenhouseSummary` / `GreenhouseDetail` (`time_scale`) and is patched live by the
+WebSocket `status` frame.
+
+## Delivery slices
+
+Every operation carries an `x-slice` extension (`2a`, `2b`, or `3`), matching the spec set's
+`(2a)`/`(2b)`/`(3)` convention ([ADR 2026-06-11](../../docs/decisions/architecture-design-record.md)).
+**2a** is the monitoring + setpoint-edit MVP (fleet, detail, telemetry, events, registration, edits);
+**2b** adds crop-profile authority and assignments; **3** adds the optimizer operator console. The split
+is a property of the surface, not separate documents — one contract carries all three.
+
+## Identity
+
+The same `greenhouse_id` / `zone_id` lowercase kebab slugs key MQTT topics, controller REST paths,
+DB rows, and this API — one identity, no translation layer
+([RFC-007](../../docs/decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format)).
+`profile_id` is a slug in the same scheme.
+
+## Field naming
+
+Wire field names are **snake_case** (`temperature_day_c`, `greenhouse_id`, `display_name`),
+consistent with the MQTT and platform-controller-control-rest contracts and RFC-007. The SPA's TypeScript/Zod types
+([data model §2](../../docs/specs/design/frontend/05-spec-frontend-data-model.md)) are camelCase and
+map onto these — the data-model doc's snippets are explicitly *illustrative, not final field names*.
+Unlike the MQTT/WS frames, REST resources do **not** wrap bodies in the RFC-007 `schema_version`
+envelope (matching the platform-controller-control-rest contract); identity (`greenhouse_id`) is embedded directly
+where a body is greenhouse-scoped, and the contract version is `info.version`.
+
+## Units
+
+Carried in field names and descriptions, following the RFC-007 units convention: temperature °C,
+humidity %RH, CO₂ ppm, VPD kPa, soil moisture VWC (0–1), DLI mol·m⁻²·day⁻¹. Timestamps are
+RFC 3339 / ISO 8601, UTC, millisecond precision.
+
+## Validation semantics
+
+A write is rejected with **422** and a `ValidationError` body that names the violated `field` and
+`bound` — the same shape the [controller REST contract](../platform-controller-control-rest/) returns and the
+platform relays under [RFC-005](../../docs/decisions/request-for-comments.md#rfc-005-setpoint-authority-and-delivery-chain).
+Two classes of rule:
+
+- **Single-field bounds** are expressed in the schema (e.g. `humidity_low_pct` /
+  `humidity_high_pct` 0–100 safety bounds, `humidity_deadband_pct` 0–50, `moisture_low_threshold`
+  0–1) and are checked by the fixtures below.
+- **Cross-field invariants** JSON Schema cannot express — `humidity_low_pct` below
+  `humidity_high_pct` (the humidity safety clamp the VPD-derived RH target is held within),
+  `moisture_low_threshold` below `moisture_high_threshold`, `day_start` before
+  `day_end`, a telemetry `from` at or before `to`, an assignment `stage` that exists in the profile,
+  a profile still referenced by an assignment — are enforced server-side and surface as the same 422.
+
+A missing greenhouse, profile, or assignment returns **404**.
+
+## Authentication
+
+**Slice-dependent.** In **2a** the API is **unauthenticated** on the trusted local Docker network
+([RFC-009](../../docs/decisions/request-for-comments.md#rfc-009-service-to-service-auth--internal-trust-boundaries));
+2a operations declare `security: []`. In **2b**, **reads stay open to anyone** — the
+anonymous-viewer posture, so read operations also declare `security: []` and never return 401 — while
+**writes** require a Keycloak OIDC bearer token (`bearerAuth`, declared in
+`components.securitySchemes`): the Go API validates the token (signature, issuer, audience, expiry)
+and maps its roles onto the platform's **viewer** (read) and **operator** (read + write) roles. A
+write with a missing/invalid token is **401**; an authenticated non-operator attempting a write is
+**403**. The capability matrix (which role may call what) is owned by
+[platform security §4](../../docs/specs/design/platform/07-spec-platform-security.md) — referenced,
+not restated. This differs from the platform-controller-control-rest contract, which is unauthenticated in every mode.
+
+## Examples
+
+[`examples/`](./examples/) holds request/response fixtures used as tests. Positive fixtures must
+validate against their component schema; the `*.bad-*.json` counter-examples must **fail**:
+
+| Fixture | Schema | Expect |
+|---|---|---|
+| `greenhouse-summary.json` | `GreenhouseSummary` | valid |
+| `greenhouse-detail.json` | `GreenhouseDetail` | valid |
+| `registration.json` | `GreenhouseRegistration` | valid |
+| `setpoints.patch.json` | `SetpointsPatch` | valid |
+| `setpoints.bad-range.json` | `Setpoints` | **fail** (`humidity_high_pct` 150, outside 0–100) |
+| `telemetry-range.json` | `TelemetryRange` | valid |
+| `analytics.json` | `AnalyticsResponse` | valid |
+| `event.json` | `EventEntry` | valid |
+| `event.bad-kind.json` | `EventEntry` | **fail** (`kind` outside the closed enum) |
+| `profile.json` | `CropProfile` | valid (a stage with a crop-safe `bounds` envelope, incl. a per-zone `bounds.zones`) |
+| `profile.bad-bounds.json` | `CropProfile` | **fail** (a `bounds` entry missing the required `max`) |
+| `profile.bad-zone-bounds.json` | `CropProfile` | **fail** (a `bounds.zones` envelope on `schedule`, which carries none) |
+| `assignment.json` | `Assignment` | valid |
+| `sim-time-scale.patch.json` | `TimeScalePatch` | valid |
+| `sim-time-scale.json` | `TimeScale` | valid |
+| `sim-time-scale.bad-range.json` | `TimeScalePatch` | **fail** (`scale` 100, outside 0.25–32) |
+| `sim-time-scale-all.json` | `FleetTimeScaleResult` | valid |
+| `optimizer-fleet.json` | `FleetOptimizerSummary` | valid |
+| `optimizer-plan.json` | `OptimizerPlanDetail` | valid (an applied plan + composed setpoint diff) |
+| `optimizer-plan.held.json` | `OptimizerPlanDetail` | valid (a pre-planner held cycle — `plan` and `diff` null) |
+| `optimizer-escalation.json` | `Escalation` | valid (open — `resolution` null) |
+| `optimizer-escalation.bad-reason.json` | `Escalation` | **fail** (`reason_code` outside the canonical enum) |
+| `optimizer-model.json` | `ModelState` | valid |
+| `optimizer-enabled.json` | `EnableState` | valid |
+| `optimizer-greenhouse-enabled.json` | `GreenhouseEnableState` | valid (one greenhouse paused — `enabled` false) |
+| `optimizer-status.json` | `OptimizerStatus` | valid (healthy, enabled) |
+| `optimizer-status.degraded.json` | `OptimizerStatus` | valid (degraded — `platform_unreachable`, no successful cycle yet) |
+| `optimizer-status.bad-reason.json` | `OptimizerStatus` | **fail** (`degraded_reason` outside the enum) |
+
+## Validation
+
+The document and fixtures are checked the same way as the MQTT and platform-controller-control-rest contracts — a
+3.1-aware lint of `openapi.json` (which resolves and validates every `$ref`'d path and component
+file) plus an Ajv (Draft 2020-12) run of each fixture against its schema under
+[`components/schemas/`](./components/schemas/). Each positive fixture must validate and each
+`*.bad-*.json` must fail. [`redocly.yaml`](./redocly.yaml) carries the lint config: the recommended
+ruleset with two intentional exceptions — `info-license` is off for an internal contract (repo
+LICENSE covers it), and `operation-4xx-response` is off because the fleet list and activity feed are
+collection reads with no 4XX path. `security-defined` stays **on**: 2b operations reference the
+declared `bearerAuth` scheme and 2a operations declare `security: []`.
+
+```
+npx @redocly/cli lint --config contracts/platform-dashboard-rest/redocly.yaml contracts/platform-dashboard-rest/openapi.json
+```
+
+This check is **automated** by the repo's contract harness —
+[`scripts/validate-contracts.mjs`](../../scripts/validate-contracts.mjs) (`npm run validate:contracts`)
+lints `openapi.json` with Redocly and validates each fixture against its component schema per
+[`examples/cases.json`](./examples/cases.json) — and is fired by the pre-commit contracts gate.
+Re-running it in a clean-environment **CI** pipeline is the one piece still deferred
+([`docs/backlog.md`](../../docs/backlog.md)); the overall strategy is
+[`spec-verification.md`](../../docs/specs/design/spec-verification.md).
+
+## Versioning
+
+`info.version` is the contract version. Additive, backward-compatible changes (a new optional field,
+a new endpoint) do **not** bump the major; breaking changes — a removed/renamed field, a tightened
+bound, a new required field, a new enum member older clients can't handle — bump the major, and the
+previous major is retained side-by-side during transition. Every contract change is accompanied by an
+ADR in [`docs/decisions/`](../../docs/decisions/architecture-design-record.md), per
+[RFC-007](../../docs/decisions/request-for-comments.md#rfc-007-contract-conventions-mqtt-topics-identity-payload-envelope-schema-format).

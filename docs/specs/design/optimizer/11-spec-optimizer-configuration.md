@@ -1,0 +1,138 @@
+# Optimizer — Configuration
+
+> **Purpose:** Catalogue the optimizer's service configuration — Phase
+> 2 endpoint and its service-auth mode ([RFC-011](../../../decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009)), LLM provider/sampling, objective weights, local
+> cost schedule, and the data-quality, twin-robustness, application-gate, and service thresholds — and
+> how it is supplied via environment variables / the Compose file rather than a per-greenhouse TOML.
+
+Part of the [optimizer set](./01-spec-optimizer-overview.md); the thresholds here are
+referenced throughout the set (e.g.
+[planning](./04-spec-optimizer-planning.md#1-llm-driven-planning),
+[input gating](./07-spec-optimizer-input-gating.md),
+[twin robustness](./03-spec-optimizer-digital-twin.md#2-robustness--fidelity),
+[resilience](./09-spec-optimizer-resilience.md)).
+
+---
+
+The optimizer's service configuration — Phase 2 API endpoint, LLM provider/endpoint,
+sampling parameters, objective weights, the local time-of-use cost schedule, the input data-quality thresholds, the twin-robustness and
+service-resilience thresholds, and the application-gate thresholds — is supplied via **environment
+variables / the Compose file**, mirroring the Phase 2
+convention rather than a per-greenhouse TOML (contrast the controller's config). Per-greenhouse inputs
+(which house to plan, its crop-safe bounds) are read from Phase 2 at cycle time, not configured here.
+
+**Runtime-mutable vs. offline-only.** Almost all of this is a **deploy-time** choice — set in the Compose
+file / env and changed only by restarting the service. **Two** settings are the exception, both mutable
+**at runtime** with no restart: the active **`model`** — an operator may switch it within the active
+provider's allowlist (the `[llm.available_models]` table below) via `POST /api/optimizer/model`
+([interfaces](./10-spec-optimizer-interfaces.md#service-api-endpoints)) to A/B a variant or step off a
+regressing model between cycles — and the service **`enabled`** flag — an operator may pause or resume the
+optimizer via `POST /api/optimizer/enabled`
+([interfaces](./10-spec-optimizer-interfaces.md#service-api-endpoints)), dropping it into read-only mode
+(no scheduled cycles, no writes) or lifting it back out, without tearing the container down. Everything else
+stays offline: the **`provider`** (still one of
+`ollama` / `anthropic` / `openai`; a provider change is a config/Compose change + restart, a reviewed
+[ADR event](../../../decisions/architecture-design-record.md)), the `endpoint`, `api_key`, `prompt_version`,
+the sampling pins (`temperature` / `top_p`) and the `output_token_budget` (the backend's `max_tokens`), and the `fallback_*` backend. A runtime `model`
+switch takes effect on the **next planning cycle** and is stamped into that cycle's `PlanRecord.backend.model`
+([plan contract §3](./05-spec-optimizer-plan-contract.md#3-planrecord--the-optimizer-service-envelope)). Both
+runtime overrides are **in-memory and reset to their configured values on restart** (the config values stay
+the defaults and source of truth); a runtime `enabled` toggle takes effect immediately — the scheduler stops
+dispatching new cycles and the applier goes inert — rather than on the next cadence tick.
+
+The operator can also pause the optimizer **for a single greenhouse** via
+`POST /api/optimizer/greenhouses/{id}/enabled` ([interfaces](./10-spec-optimizer-interfaces.md#service-api-endpoints)).
+This is a **runtime-only** state with the same in-memory, resets-on-restart treatment as the service `enabled`
+flag — there is **no per-greenhouse config file** (this service is configured by environment convention, not a
+per-greenhouse TOML — see below), so the per-greenhouse enable simply **defaults to on** for every greenhouse
+and is toggled only through the API. A globally disabled service pauses every greenhouse regardless (global
+precedence).
+
+```toml
+[data]
+platform_api_url = "https://platform/api"
+
+[platform_auth]
+# Service-to-service auth for the Phase 2 setpoint write path (RFC-011).
+# "trusted_network" (default): call POST /setpoints untokened — single-host local posture.
+# "oidc": obtain a Keycloak client-credentials token and present it as Bearer — cloud / multi-host.
+mode = "trusted_network"              # must match the platform's SERVICE_AUTH_MODE
+oidc_token_url = ""                   # Keycloak token endpoint; required only when mode = "oidc"
+oidc_client_id = "optimizer"          # confidential client; narrow setpoints:write service role
+oidc_client_secret = ""               # set via PLANNER_OIDC_CLIENT_SECRET env var; never in file
+
+[llm]
+# Planning backend. PROVIDER is an OFFLINE choice (one of "ollama"/"anthropic"/"openai"), fixed at deploy
+# time — changing it is a config/Compose change + restart. MODEL is OPERATOR-MUTABLE at runtime within the
+# active provider's allowlist ([llm.available_models]) via POST /api/optimizer/model — no restart. Defaults
+# to a local Ollama model — offline, no API key, no data leaves the host. Set provider to "anthropic" or
+# "openai" (and supply an API key via PLANNER_API_KEY) to plan with a higher-capability cloud model instead.
+provider = "ollama"                   # OFFLINE: "ollama" (default) | "anthropic" | "openai"
+model = "qwen2.5:7b"                  # OPERATOR-MUTABLE at runtime; must be in available_models[provider]
+prompt_version = "v1"                 # OFFLINE-only. pins the planner prompt template; resolves prompts/planner.v{version}.md. A change is a deliberate ADR event (re-captures eval baselines); see planner prompt template & versioning
+endpoint = "http://ollama:11434"      # Ollama base URL; ignored for cloud providers. Offline-only.
+api_key = ""                          # set via PLANNER_API_KEY env var; required for cloud providers, never in file
+# Optional secondary backend, wired via LangChain .with_fallbacks() and used only if the
+# primary is unreachable mid-cycle. Empty = no fallback: the local Ollama primary is itself
+# the always-available backstop. Typically set only when a *cloud* provider is the primary
+# (e.g. fallback_provider = "ollama") to keep planning continuous through a network outage.
+# Fallback provider/model/endpoint are all offline-only.
+fallback_provider = ""                # "" (none, default) | "ollama" | "anthropic" | "openai"
+fallback_model = ""
+fallback_endpoint = ""
+temperature = 0                       # greedy decoding for reproducible plans; offline-only, see planner determinism
+top_p = 1.0                           # offline-only
+output_token_budget = 640             # the backend's max_tokens (response cap); offline-only; distinct from the 3000-token context input budget
+
+# Runtime model allowlist, per provider — the set an operator may switch the active `model` to at runtime
+# (POST /api/optimizer/model rejects anything not listed for the active provider). Editing a list here
+# (adding/removing a model) is an OFFLINE change: a newly added model must have its evaluation baseline
+# captured before it is offered for runtime selection (see evaluation §3). The default `ollama` provider
+# lists the four local models; the cloud entries fill in when a cloud provider is configured.
+[llm.available_models]
+ollama = ["llama3.2", "mistral", "qwen2.5:7b", "llama3.1:8b"]
+anthropic = []
+openai = []
+
+[planning]
+cycle_interval_minutes = 30
+horizon_hours = 12                    # extended to 24 only near day boundaries
+context_token_budget = 3000           # serializer raises if exceeded; no silent truncation
+state_change_threshold = 0.05         # normalized mean predicted-climate residual (twin fidelity-residual method) below which the LLM call is suppressed → planning state-change gate
+objective_weights = { anticipation = 1.0, coupling = 1.0, efficiency = 0.5 }
+
+[cost]
+# Local static time-of-use schedule for the Phase 3 efficiency objective.
+# Live tariffs / external price feeds are out of scope until a later phase.
+time_of_use = [
+  { start = "00:00", end = "06:00", relative_cost = 0.7 },
+  { start = "06:00", end = "16:00", relative_cost = 1.0 },
+  { start = "16:00", end = "21:00", relative_cost = 1.4 },
+  { start = "21:00", end = "24:00", relative_cost = 0.8 },
+]
+
+[application]
+confidence_threshold = 0.8            # below → escalate to operator
+# crop-safe bounds come from the Phase 2 crop profile, not from here
+
+[data_quality]
+max_telemetry_age_minutes = 35        # latest reading per required metric must be newer; else gate fails → input gating
+required_metrics = ["temperature", "humidity", "co2", "par"]   # VPD / DLI are derived from these
+# per-zone soil_moisture is additionally required when the greenhouse declares irrigation zones
+# (gated on zone presence, not this flat greenhouse-scoped list) → input gating
+min_history_coverage = 0.8            # min fraction of non-empty summary buckets over the window (expected buckets = window ÷ interval); an empty bucket is a gap → input gating
+
+[twin]
+solver_max_step_minutes = 5           # integrator sub-step ceiling; exponential update stays stable above the fastest τ; non-finite / out-of-envelope step = sim divergence → twin robustness
+output_interval_minutes = 60          # spacing of the twin's predicted-trajectory points handed to the planner (planner's hourly granularity); internal sub-steps are finer
+divergence_threshold = 0.15           # one-step predicted-vs-observed residual fraction (mean over required metrics, normalized by plausibility-range) → twin robustness
+fidelity_breach_cycles = 3            # consecutive divergence_threshold breaches before a fidelity fault caps confidence and escalates → twin robustness
+
+[service]
+enabled = true                        # false → read-only mode: starts no scheduled cycles and submits no setpoint writes; health / metrics / latest plans / escalations are still served → resilience. OPERATOR-MUTABLE at runtime via POST /api/optimizer/enabled (interfaces); in-memory, resets to this default on restart
+max_concurrent_cycles = 4             # ceiling on per-greenhouse planning cycles run in parallel each cadence tick; single-flight stays per greenhouse (at most one cycle per greenhouse) → architecture, constraints §3. Conservative default with headroom for the 20–50 greenhouse range
+cycle_timeout_seconds = 90            # a cycle exceeding this is abandoned and the last applied bundle held; aligns with P3-PERF-2
+escalation_dedup_window_minutes = 60  # recurring escalations for one greenhouse collapse into one standing entry → resilience
+escalation_ttl_minutes = 1440         # an OPEN escalation neither acted on by an operator nor re-raised within this window auto-closes as `expired` → resilience; exceeds the dedup window so a genuinely recurring fault stays standing
+escalation_retention_minutes = 1440   # CLOSED escalations (operator / superseded / expired) and their held PlanRecords are pruned past this; the latest plan per greenhouse is always kept → resilience
+```

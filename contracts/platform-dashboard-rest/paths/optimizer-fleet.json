@@ -1,0 +1,23 @@
+{
+  "parameters": [
+    { "$ref": "../components/parameters.json#/EventGreenhouseId" },
+    { "$ref": "../components/parameters.json#/OptimizerStatus" }
+  ],
+  "get": {
+    "operationId": "getOptimizerFleet",
+    "summary": "Optimizer fleet queue + rollup",
+    "description": "The optimizer console overview (frontend data model §Optimizer plans, key [\"optimizer-fleet\"]): each greenhouse's latest cycle outcome plus site aggregates (open-escalation backlog, counts by outcome, oldest-open age). Proxied/aggregated by the Go API from the optimizer's GET /api/optimizer/fleet (optimizer interfaces). Polled, not streamed. Open to anyone — reads need no token (anonymous-viewer posture, platform security §4).",
+    "x-slice": "3",
+    "security": [],
+    "responses": {
+      "200": {
+        "description": "The fleet optimizer summary.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "../components/schemas/optimizer.json#/FleetOptimizerSummary" }
+          }
+        }
+      }
+    }
+  }
+}

@@ -100,6 +100,33 @@ describe("FleetOverview", () => {
     expect(screen.getByRole("radio", { name: "1h" })).toHaveAttribute("aria-checked", "false");
   });
 
+  it("highlights the shared fleet speed even when an offline greenhouse lags behind", () => {
+    const client = makeClient();
+    client.setQueryData(queryKeys.fleet(), [
+      sampleSummary({ id: "gh-a", status: "online", timeScale: 8 }),
+      sampleSummary({ id: "gh-b", status: "online", timeScale: 8 }),
+      // Offline: the fan-out skipped it, so it kept its stale 1× — it must not blank the knob.
+      sampleSummary({ id: "gh-c", status: "offline", timeScale: 1 }),
+    ]);
+    renderWithProviders(<FleetOverview />, { client });
+
+    expect(screen.getByRole("radio", { name: "8×" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("radio", { name: "1×" })).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("highlights no fleet speed when the reachable greenhouses genuinely disagree", () => {
+    const client = makeClient();
+    client.setQueryData(queryKeys.fleet(), [
+      sampleSummary({ id: "gh-a", status: "online", timeScale: 8 }),
+      sampleSummary({ id: "gh-b", status: "online", timeScale: 2 }),
+    ]);
+    renderWithProviders(<FleetOverview />, { client });
+
+    for (const option of ["0.5×", "1×", "2×", "4×", "8×"]) {
+      expect(screen.getByRole("radio", { name: option })).toHaveAttribute("aria-checked", "false");
+    }
+  });
+
   it("renders the fleet summary bar with its labeled rollup tiles", () => {
     const client = makeClient();
     client.setQueryData(queryKeys.fleet(), [

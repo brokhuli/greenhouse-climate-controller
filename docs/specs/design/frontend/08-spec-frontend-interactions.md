@@ -158,8 +158,9 @@ The simulation-speed knob is the one **live** (non-confirmed) write, because it 
 a setpoint:
 
 - **Immediate, no confirmation dialog.** Picking a speed on the `TimeScaleControl`
-  ([components](./06-spec-frontend-components.md)) — a segmented 0.5×/1×/2×/4×/8×/16×/32× control (or
-  a slider across the 0.25–32× range) — fires the `PATCH .../sim/time-scale` straight away; speeding a
+  ([components](./06-spec-frontend-components.md)) — a segmented 0.5×/1×/2×/4×/8× operator control
+  while the API still accepts 16×/32× for direct/headless clients — fires the
+  `PATCH .../sim/time-scale` straight away; speeding a
   simulation up or down is cheap and reversible, so the deliberate edit→confirm gate above does not
   apply.
 - **Optimistic with rollback.** The control shows the new speed in a **pending** style until the API
@@ -247,3 +248,50 @@ the `ws.ts` client. No animation library, no scroll library. Live rendering cost
 bounded by uPlot's canvas redraw and the memoized series-merge
 ([components §5](./06-spec-frontend-components.md#5-performance-notes)), keeping the
 1× / source-cadence target (`P2-USE-1`) on a mid-tier machine at fleet scale.
+
+---
+
+## 13. Optimizer console *(3)*
+
+The Phase 3 optimizer surface is **operator-console, polled, and deliberate** — it reviews and operates
+the optimizer through the Go API ([constraints](./09-spec-frontend-constraints.md#scope--what-the-dashboard-is-not),
+[data-model](./05-spec-frontend-data-model.md#optimizer-plans--escalations-3)).
+
+- **Polled, not streamed.** The queue, rollup, plan panel, and model/enable state refresh on a modest
+  `refetchInterval` ([architecture](./03-spec-frontend-architecture.md#optimizer-console--rest-polling-no-websocket));
+  there is no live socket for optimizer data, and the `ConnectionStatus` indicator (which speaks for the
+  **telemetry** socket) does not represent this surface. A manual **Refresh** is available on the console.
+- **Reading a held cycle.** An escalated or extended cycle reads as *"the cycle ran, and this is why
+  nothing was applied"* — the `PlanOutcomeBadge` + `ReasonCodeChip` (with its transient/persistent class
+  as the triage hint) + the plan's `explanation`. A `null`-plan held cycle shows the outcome with no diff
+  and states that the Phase 2 baseline stays in force.
+- **Operator writes are deliberate.** Like setpoint edits (§7), the mutating actions confirm before firing
+  and settle optimistically with rollback:
+  - **Resolve escalation** — a confirmation dialog summarizing the greenhouse + reason; on success the row
+    leaves the queue and the rollup **backlog** decrements; on failure the row stays with an error toast.
+  - **Trigger cycle** — an immediate confirm (optional `reason`); a `409` (optimizer disabled / cycle
+    already in flight) surfaces as an error toast, not a silent no-op.
+  - **Switch model** — the `ModelSelector` writes immediately (optimistic-pending like the time-scale knob)
+    then reconciles to the echoed active model; a `400` (model not in the allowlist) rolls back. The change
+    takes effect on the **next** cycle — the UI says so rather than implying an instant re-plan.
+  - **Pause / resume (service-wide)** — the global `OptimizerEnableToggle` confirms on **disable** (it drops
+    the optimizer into read-only mode); the read-only banner appears immediately and the console's write
+    affordances disable while paused.
+  - **Pause / resume (one greenhouse)** — the per-greenhouse `OptimizerEnableToggle` (on the greenhouse's
+    `OptimizerPlanPanel` and as a `FleetOptimizerRow` action) confirms on **disable** and toggles only that
+    greenhouse; its row/card flips to a **Disabled** pill and its `TriggerCycleAction` disables, while the
+    rest of the fleet keeps planning. **Global precedence:** while the service is globally paused, the
+    per-greenhouse toggle is shown **disabled with a reason** (a greenhouse plans only when both are on) and
+    its pill reads **Read-only** rather than Disabled.
+- **Fleet-card pill is read-only.** The `OptimizerStatusPill` on each `GreenhouseCard` (§ fleet overview)
+  is a status indicator, not a control — the card is a single link target; operators act from the console
+  table or the greenhouse's detail panel.
+- **Attribution.** An **applied** plan already appears in the `ActivityFeed` as an `optimizer_plan_applied`
+  event ([data-model §4](./05-spec-frontend-data-model.md#4-time-series-shapes-telemetry--events)); the
+  operator actions here are audit-logged by the platform with the operator identity and supplied `reason` —
+  a per-greenhouse pause/resume the same way as the service-wide one.
+- **Role-gating (2b).** Viewers see the full console **read-only** — queue, rollup, plans, diffs, and
+  model/enable state — with every action rendered **disabled + reasoned** ("operator role required"),
+  consistent with the rest of the dashboard (§11).
+- **Reduced motion / a11y.** No streaming animation here; the focus/keyboard rules (§2) apply, and every
+  status travels with a text label, never color alone.

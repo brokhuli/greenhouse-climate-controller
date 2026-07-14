@@ -7,7 +7,7 @@ import (
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/domain"
 )
 
-// zoneTargetFields are the per-zone fields the frontend-rest Setpoints bundle carries. The
+// zoneTargetFields are the per-zone fields the platform-dashboard-rest Setpoints bundle carries. The
 // controller's GET /zones response also includes live status (soil_moisture_vwc, irrigating,
 // faulted, last_cycle_ts); those are projected out so the detail's setpoints match the contract's
 // ZoneTargets (additionalProperties:false).
@@ -20,7 +20,7 @@ var zoneTargetFields = []string{
 }
 
 // mergeSetpointsZones folds the controller's per-zone targets (from GET /zones) into its global
-// setpoints (from GET /setpoints), producing the aggregated Setpoints bundle the frontend-rest
+// setpoints (from GET /setpoints), producing the aggregated Setpoints bundle the platform-dashboard-rest
 // contract requires (global setpoints + a `zones` array). The controller serves the two as separate
 // resources; the platform is the aggregation layer.
 func mergeSetpointsZones(setpoints, zones []byte) (json.RawMessage, error) {

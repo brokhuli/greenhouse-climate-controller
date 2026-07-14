@@ -2,7 +2,7 @@
 #
 # A working single-greenhouse config: identity, MQTT/REST connection, global setpoints,
 # irrigation zones, and the full HAL simulation model. Copy and edit for a real deployment.
-# Setpoint and zone bounds mirror the REST contract (contracts/controller-rest/); the HAL
+# Setpoint and zone bounds mirror the REST contract (contracts/platform-controller-control-rest/); the HAL
 # gains/constants are illustrative defaults tuned during HAL implementation.
 
 # Greenhouse identity — its key in MQTT topics, REST paths, and DB rows (lowercase kebab).

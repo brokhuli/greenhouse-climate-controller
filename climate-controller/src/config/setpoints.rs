@@ -1,6 +1,6 @@
 //! Global climate setpoints (controller spec §4).
 //!
-//! Bounds mirror `contracts/controller-rest/components/schemas/setpoints.json` exactly; the
+//! Bounds mirror `contracts/platform-controller-control-rest/components/schemas/setpoints.json` exactly; the
 //! cross-field invariant `humidity_low_pct < humidity_high_pct` is enforced here (the schema
 //! cannot express it) and surfaces as a 422 on the REST `PATCH` path.
 

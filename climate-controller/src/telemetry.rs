@@ -1,10 +1,10 @@
-//! MQTT telemetry wire types and frame builders ([interfaces §2], `contracts/mqtt/`).
+//! MQTT telemetry wire types and frame builders ([interfaces §2], `contracts/controller-platform-telemetry-mqtt/`).
 //!
 //! Maps a committed [`Snapshot`] to the published frames: per-metric sensor readings, per-actuator
 //! state, fault events, and the retained consolidated system-state snapshot. Each frame carries the
 //! RFC-007 envelope (`schema_version`, `greenhouse_id`, `zone_id`, `ts`); `ts` is the **simulated**
 //! instant (envelope `ts` = epoch + `sim_seconds`), so observers plot on simulated time. The wire
-//! shapes mirror `contracts/mqtt/*.schema.json` exactly so what the controller publishes cannot
+//! shapes mirror `contracts/controller-platform-telemetry-mqtt/*.schema.json` exactly so what the controller publishes cannot
 //! drift from the contract.
 
 use chrono::{DateTime, Duration, TimeZone, Utc};

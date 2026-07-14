@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "optimizer_run_id": "018f9c2e-77b0-7a12-8c55-9f0e1d2c3b4a",
+  "greenhouse_id": "gh-04",
+  "created_at": "2026-07-11T14:00:00.000Z",
+  "horizon": { "start": "2026-07-11T14:00:00.000Z", "end": "2026-07-12T02:00:00.000Z" },
+  "backend": { "provider": "anthropic", "model": "claude-sonnet-4-6", "prompt_version": "v1", "role": "primary" },
+  "plan": {
+    "confidence": 0.62,
+    "explanation": "Sensor gap left the CO₂ trajectory uncertain; low confidence in the enrichment target.",
+    "immediate_setpoints": { "co2_target_ppm": 900 },
+    "trajectory": [
+      { "at": "2026-07-11T14:00:00.000Z", "setpoints": { "co2_target_ppm": 900 } }
+    ]
+  },
+  "outcome": {
+    "status": "escalated",
+    "reason_code": "low_confidence",
+    "message": "confidence 0.62 < threshold 0.80"
+  }
+}

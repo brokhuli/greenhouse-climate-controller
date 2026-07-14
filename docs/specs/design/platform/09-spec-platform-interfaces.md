@@ -69,12 +69,15 @@ does*, not its wire shapes.
 | **REST — assignments** | Assign a profile/stage to a greenhouse; trigger apply/reconcile | 2b |
 | **REST — setpoints (`POST`)** | Single-authority setpoint submission at `POST /api/greenhouses/{id}/setpoints` (the optimizer's RFC-005 write path; `POST /setpoints` for short) + provenance | 2b |
 | **REST — optimizer telemetry read API** | Phase 3 read path: bounded planning-context/history reads for one greenhouse, including telemetry, actuator state, current setpoints, and data-quality/freshness signals. Implemented by the platform over internal SQL views or continuous aggregates so the optimizer consumes REST rather than the database schema. | 2b / 3 |
+| **REST — optimizer operator API** *(proxy/aggregate)* | Phase 3 operator surface for the dashboard: the Go API **proxies** the optimizer's own [Service API](../optimizer/10-spec-optimizer-interfaces.md#service-api-endpoints) operator endpoints (latest plan, open escalations, model + enable state — **service-wide and per-greenhouse**, on-demand cycle, escalation resolve, model/enable mutations) and its `fleet` rollup (per-greenhouse latest outcome **and `enabled` flag** + site aggregates), **derives** the internal `GET /health` into a versioned frontend `GET /api/optimizer/status` (service-health badge — status/degraded-reason, last-successful-cycle vs cadence, read-only reason; `unavailable` synthesized when the optimizer is unreachable), and **composes** the setpoint-diff the plan panel renders (plan-proposed `immediate_setpoints` vs the greenhouse's current setpoints vs its crop-safe bounds — both platform-owned). Re-exposed to the SPA under the versioned [`contracts/platform-dashboard-rest/`](../../../../contracts/platform-dashboard-rest/) surface; the SPA reaches the optimizer **only** here, never a second origin. | 3 |
 
 Each surface maps to a concern documented elsewhere: telemetry queries read what
 [ingestion](./04-spec-platform-ingestion.md) stored; profiles/assignments/setpoints drive
 [crop profiles & reconciliation](./05-spec-platform-crop-profiles.md); the WebSocket
 channel is consumed by the [dashboard](./06-spec-platform-dashboard.md); the optimizer telemetry read
-API is the Phase 3 REST wrapper over the platform-owned read model.
+API is the Phase 3 REST wrapper over the platform-owned read model; the optimizer operator API is the
+Phase 3 proxy/aggregate over the optimizer's own [Service API](../optimizer/10-spec-optimizer-interfaces.md#service-api-endpoints)
+so the dashboard reaches the optimizer through the one hub.
 
 ---
 
@@ -105,6 +108,16 @@ the optimizer presents a Keycloak client-credentials token carrying the narrow `
 rather than a human operator token ([security §3](./07-spec-platform-security.md#two-actor-types-human-and-service)).
 By default (`trusted_network`) the path is open on the local network, as in 2a. No other surface is
 reachable by a service actor.
+
+The **optimizer operator API** (the proxy/aggregate surface above) is gated on **two** planes. *Outward*
+the SPA calls it like any other Go API surface: its **reads** are viewer-open and its **mutations**
+(resolve escalation, trigger cycle, switch model, enable/disable — service-wide or per-greenhouse) require
+the **operator** role once auth lands (2b), exactly as the setpoint-edit surface. *Inward* the Go-API → optimizer FastAPI call is a
+service-to-service hop: untokened on the `trusted_network` default (single-host local), and under
+`SERVICE_AUTH_MODE=oidc` the Go API presents a Keycloak service credential — mirroring the RFC-011 pattern
+the optimizer already uses on its own [Phase 2 write path](../optimizer/10-spec-optimizer-interfaces.md#authenticating-the-phase-2-write-path).
+The optimizer re-checks the operator role on its own mutating endpoints regardless
+([optimizer interfaces](../optimizer/10-spec-optimizer-interfaces.md#authenticating-the-model-change-endpoint)).
 
 ---
 

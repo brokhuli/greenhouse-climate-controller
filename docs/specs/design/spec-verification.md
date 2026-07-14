@@ -12,7 +12,7 @@ the CI plan.
 > [NFR doc](../artifacts/non-functional-requirements.md) — nor the wire formats it checks, which live
 > in [`contracts/`](../../../contracts/). A component's *own* verification detail (its scenario
 > library, its module test plan) lives in that component's set; the optimizer's
-> [`07-spec-optimizer-evaluation.md`](./optimizer/07-spec-optimizer-evaluation.md) and the
+> [`08-spec-optimizer-evaluation.md`](./optimizer/08-spec-optimizer-evaluation.md) and the
 > controller's [`11-spec-controller-verification.md`](./controller/11-spec-controller-verification.md)
 > are the per-component instances of this strategy.
 
@@ -44,14 +44,14 @@ discharges; the targets themselves stay in the [NFR doc](../artifacts/non-functi
 | **Unit tests** — per pipeline stage | Each module (fusion, setpoint resolution, control loops, interlocks, constraints) is correct in isolation behind its interface | `P1-MAINT-1`; coverage `P1-TEST-1`; determinism `P1-TEST-2` |
 | **Contract conformance** — schema + fixtures | Producer serializer **and** consumer parser both honor the shared wire format; positive fixtures validate, `*.bad-*` reject | §5; `contracts/` READMEs; the contract catalog ([`spec-contracts.md`](./spec-contracts.md)) |
 | **Integration** — the up/down path | Stages compose end-to-end: controller HAL → pipeline → MQTT publish / latched REST write; platform MQTT ingest → store → resolve → controller REST | `P2-TEST-1` |
-| **Scenario / simulation** | *Control behavior* is correct against a known trajectory: diurnal ramp, sensor dropout, actuator-stuck, interlock trips within latency | `P1-REL-1/3/4` asserted on the seeded HAL (`P1-TEST-2`); detailed in [`11-spec-controller-verification.md`](./controller/11-spec-controller-verification.md) and (optimizer side) [`07`](./optimizer/07-spec-optimizer-evaluation.md) |
+| **Scenario / simulation** | *Control behavior* is correct against a known trajectory: diurnal ramp, sensor dropout, actuator-stuck, interlock trips within latency | `P1-REL-1/3/4` asserted on the seeded HAL (`P1-TEST-2`); detailed in [`11-spec-controller-verification.md`](./controller/11-spec-controller-verification.md) and (optimizer side) [`08`](./optimizer/08-spec-optimizer-evaluation.md) |
 | **Performance / load** | Targets hold under representative load — N-controller scaling, ingestion rate, fan-out lag | NFR [Performance Testing](../artifacts/non-functional-requirements.md); `P2-SCAL-1`, `P2-PERF-1…4` |
 | **Frontend E2E** | Operator flows, live-update latency, initial-load + accessibility, against the production build | `P2-TEST-2` |
 
 The enabling property for the middle rungs is **determinism**: the seeded HAL (`P1-TEST-2`) and the
 deterministic digital twin make a control scenario a *reproducible assertion* rather than a flaky
 observation. Where the LLM makes exact reproduction impossible, regression becomes **bounded
-comparison** ([optimizer §07](./optimizer/07-spec-optimizer-evaluation.md)).
+comparison** ([optimizer §08](./optimizer/08-spec-optimizer-evaluation.md)).
 
 ---
 
@@ -75,7 +75,7 @@ The development loops, fastest → slowest. A change should fail at the earliest
    structured audit logs (`P2-OBS-1/2`) for the platform; `optimizer_run_id` traceability
    (`P3-OBS-1`) for plans. This is the "is it behaving in situ" loop.
 5. **Regression-baseline loop** *(slowest)* — captured performance baselines (NFR Performance
-   Testing) and per-backend optimizer plan-variance baselines ([§07](./optimizer/07-spec-optimizer-evaluation.md))
+   Testing) and per-backend optimizer plan-variance baselines ([§08](./optimizer/08-spec-optimizer-evaluation.md))
    become the regression reference, re-captured **deliberately** on a model/prompt/config change.
 6. **CI loop** *(outer, clean environment)* — every gate above re-run on push/PR away from the
    developer's machine. **Built** ([`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml),
@@ -99,7 +99,7 @@ here so the strategy is complete, but is wired when that phase is implemented �
 | **Contracts** (all phases) | Ajv (Draft 2020-12) + `ajv-formats` for JSON Schema; `@redocly/cli` lint for OpenAPI; fixtures as pass/`*.bad-*`-fail cases — driven by [`scripts/validate-contracts.mjs`](../../../scripts/validate-contracts.mjs) (`npm run validate:contracts`) | **Present** — §5 |
 | **Go platform** (P2) | `gofmt` · `go vet` · `golangci-lint` · `go test`; testcontainers for the TimescaleDB up/down path (`P2-TEST-1`) | **Present** — CI (`go test` unit gate + a separate testcontainers TimescaleDB integration job); CI-only, not in the pre-commit hook |
 | **React frontend** (P2a) | component/unit (Vitest + Testing Library); **Playwright** (E2E + live-update latency); **Lighthouse CI** (initial-load + a11y) — both against the production build (`P2-TEST-2`) | **Partially wired** — ESLint · `tsc` · Vitest + blocking **Lighthouse CI** (static production build, `.lighthouserc.json`) run in CI; **Playwright** E2E stays local (needs the live deploy stack), not yet in CI |
-| **Python optimizer** (P3) | `ruff` · `mypy` · `pytest`; the constraint-engine + golden-scenario suites of [§07](./optimizer/07-spec-optimizer-evaluation.md) (`P3-TEST-1`) | Lands with Phase 3 |
+| **Python optimizer** (P3) | `ruff` · `mypy` · `pytest`; the constraint-engine + golden-scenario suites of [§08](./optimizer/08-spec-optimizer-evaluation.md) (`P3-TEST-1`) | Lands with Phase 3 |
 | **Load / scale** (P2) | `docker-compose.override.yml` generator (N controllers) + MQTT publisher load; observe ingestion, fan-out lag, DB write rate per NFR Performance Testing | Lands with Phase 2 |
 
 No new **runtime** dependency is introduced for verification; the contract harness reuses `ajv`
@@ -114,11 +114,11 @@ The cross-component oracle, now wired locally ([`scripts/validate-contracts.mjs`
 `npm run validate:contracts`). It automates the check each contract README specified and
 [`docs/backlog.md`](../../backlog.md) previously tracked as "blocked on CI":
 
-- **JSON-Schema contracts** ([`contracts/mqtt/`](../../../contracts/mqtt/),
-  [`contracts/frontend-ws/`](../../../contracts/frontend-ws/)) — every `examples/<frame>.*.json`
+- **JSON-Schema contracts** ([`contracts/controller-platform-telemetry-mqtt/`](../../../contracts/controller-platform-telemetry-mqtt/),
+  [`contracts/platform-dashboard-live-ws/`](../../../contracts/platform-dashboard-live-ws/)) — every `examples/<frame>.*.json`
   validates against `<frame>.schema.json`; every `*.bad-*.json` must **fail**.
-- **OpenAPI contracts** ([`contracts/controller-rest/`](../../../contracts/controller-rest/),
-  [`contracts/frontend-rest/`](../../../contracts/frontend-rest/)) — each example validates against
+- **OpenAPI contracts** ([`contracts/platform-controller-control-rest/`](../../../contracts/platform-controller-control-rest/),
+  [`contracts/platform-dashboard-rest/`](../../../contracts/platform-dashboard-rest/)) — each example validates against
   its named component schema (mapped by the dir's `examples/cases.json`), and `openapi.json` is
   linted with Redocly using the contract's `redocly.yaml`.
 - Cross-schema `$ref`s resolve **offline** — each schema is registered under an `$id` derived from
@@ -157,7 +157,7 @@ the remaining work is the CI item in [`docs/backlog.md`](../../backlog.md).
 | Verification & feedback-loop strategy, tooling matrix, CI topology, contract harness | this file | [NFR doc](../artifacts/non-functional-requirements.md), [`spec-contracts.md`](./spec-contracts.md) |
 | Quality *targets* (coverage, latency, scale, reliability) | [NFR doc](../artifacts/non-functional-requirements.md) | — (single source) |
 | Controller test pyramid + golden control/safety scenarios | [`11-spec-controller-verification.md`](./controller/11-spec-controller-verification.md) | this file, NFR doc |
-| Optimizer evaluation & regression testing | [`07-spec-optimizer-evaluation.md`](./optimizer/07-spec-optimizer-evaluation.md) | this file, NFR doc |
+| Optimizer evaluation & regression testing | [`08-spec-optimizer-evaluation.md`](./optimizer/08-spec-optimizer-evaluation.md) | this file, NFR doc |
 | Wire-format contents the harness checks | [`contracts/`](../../../contracts/) | RFC-007 |
 
 If a verification change can't be traced to this file, a per-component verification doc, or the NFR

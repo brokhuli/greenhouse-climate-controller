@@ -22,7 +22,7 @@ use serde_json::Value;
 
 fn rest_fixture(name: &str) -> String {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../contracts/controller-rest/examples")
+        .join("../contracts/platform-controller-control-rest/examples")
         .join(name);
     std::fs::read_to_string(&path).unwrap_or_else(|_| panic!("fixture {path:?} should exist"))
 }
@@ -54,8 +54,11 @@ fn schema_resources() -> Vec<(String, Resource)> {
     let root = repo_root();
     let mut out = Vec::new();
     for (rel_dir, inject_id) in [
-        ("contracts/mqtt", false),
-        ("contracts/controller-rest/components/schemas", true),
+        ("contracts/controller-platform-telemetry-mqtt", false),
+        (
+            "contracts/platform-controller-control-rest/components/schemas",
+            true,
+        ),
     ] {
         let dir = root.join(rel_dir);
         for entry in std::fs::read_dir(&dir).unwrap_or_else(|e| panic!("read {dir:?}: {e}")) {
@@ -95,13 +98,15 @@ fn validator_for(reference: &str) -> Validator {
 
 /// Validator for one MQTT message schema, by file name.
 fn mqtt_validator(file: &str) -> Validator {
-    validator_for(&format!("{ID_BASE}contracts/mqtt/{file}"))
+    validator_for(&format!(
+        "{ID_BASE}contracts/controller-platform-telemetry-mqtt/{file}"
+    ))
 }
 
-/// Validator for one controller-rest component schema (`file` + `#/Component`).
+/// Validator for one platform-controller-control-rest component schema (`file` + `#/Component`).
 fn rest_validator(file: &str, component: &str) -> Validator {
     validator_for(&format!(
-        "{ID_BASE}contracts/controller-rest/components/schemas/{file}#/{component}"
+        "{ID_BASE}contracts/platform-controller-control-rest/components/schemas/{file}#/{component}"
     ))
 }
 

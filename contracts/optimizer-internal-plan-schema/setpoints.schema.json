@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://greenhouse.local/contracts/optimizer-internal-plan-schema/setpoints.schema.json",
+  "title": "Setpoints (optimizer-internal-plan-schema local copy)",
+  "description": "Local copy of the platform Setpoints / SetpointsPatch shape, carried so the optimizer-internal-plan-schema contract is self-contained (the self-contained-contract convention; mirrors contracts/optimizer-platform-setpoints-rest/components/schemas/setpoints.json). The plan carries a SetpointsPatch as immediate_setpoints and on every trajectory point. Cross-field invariants the schema cannot express (humidity_low_pct < humidity_high_pct, day_end after day_start, moisture_low < moisture_high) are enforced by Phase 2 on the write path and surface as 422.",
+  "$defs": {
+    "Slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "Lowercase kebab slug (e.g. bench-a)."
+    },
+    "ZoneTargets": {
+      "type": "object",
+      "description": "One irrigation zone's runtime-adjustable targets, matched by zone_id.",
+      "properties": {
+        "zone_id": { "$ref": "#/$defs/Slug" },
+        "moisture_low_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Irrigation triggers below this soil moisture (VWC, 0-1). Must be below moisture_high_threshold."
+        },
+        "moisture_high_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Irrigation stops above this soil moisture (VWC, 0-1). Must be above moisture_low_threshold."
+        },
+        "drain_period_secs": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Minimum gap between irrigation cycles (seconds)."
+        },
+        "schedule": {
+          "type": "string",
+          "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9](,([01][0-9]|2[0-3]):[0-5][0-9])*$",
+          "description": "Comma-separated time-of-day triggers, HH:MM (e.g. \"06:00,14:00\")."
+        }
+      },
+      "required": [
+        "zone_id",
+        "moisture_low_threshold",
+        "moisture_high_threshold",
+        "drain_period_secs",
+        "schedule"
+      ],
+      "additionalProperties": false
+    },
+    "Setpoints": {
+      "type": "object",
+      "description": "A greenhouse's full target bundle: the global climate setpoints plus per-zone irrigation targets. Numeric targets only - never a crop. Temperature is a day/night pair resolved against the day window.",
+      "properties": {
+        "temperature_day_c": {
+          "type": "number",
+          "minimum": -20,
+          "maximum": 60,
+          "description": "Daytime air-temperature target (°C)."
+        },
+        "temperature_night_c": {
+          "type": "number",
+          "minimum": -20,
+          "maximum": 60,
+          "description": "Nighttime air-temperature target (°C)."
+        },
+        "day_start": {
+          "type": "string",
+          "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+          "description": "Start of the day window, local time-of-day HH:MM (24h)."
+        },
+        "day_end": {
+          "type": "string",
+          "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+          "description": "End of the day window, local time-of-day HH:MM (24h). Must be after day_start."
+        },
+        "humidity_low_pct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Lower humidity safety bound (%RH). Must be below humidity_high_pct."
+        },
+        "humidity_high_pct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Upper humidity safety bound (%RH). Must be above humidity_low_pct."
+        },
+        "humidity_deadband_pct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 50,
+          "description": "Full hysteresis band width around the VPD-derived RH target (%RH)."
+        },
+        "co2_target_ppm": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5000,
+          "description": "CO₂ enrichment target (ppm)."
+        },
+        "co2_vent_interlock_threshold_pct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Vent position above which the CO₂ injector is hard-interlocked off (% open)."
+        },
+        "vpd_target_kpa": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Vapor-pressure-deficit target (kPa) - the primary humidity control input."
+        },
+        "dli_target_mol": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Daily Light Integral target driving supplemental lighting (mol·m⁻²·day⁻¹)."
+        },
+        "zones": {
+          "type": "array",
+          "description": "Per-zone irrigation targets, one entry per configured zone.",
+          "items": { "$ref": "#/$defs/ZoneTargets" }
+        }
+      },
+      "required": [
+        "temperature_day_c",
+        "temperature_night_c",
+        "day_start",
+        "day_end",
+        "humidity_low_pct",
+        "humidity_high_pct",
+        "humidity_deadband_pct",
+        "co2_target_ppm",
+        "co2_vent_interlock_threshold_pct",
+        "vpd_target_kpa",
+        "dli_target_mol",
+        "zones"
+      ],
+      "additionalProperties": false
+    },
+    "SetpointsPatch": {
+      "type": "object",
+      "description": "Partial (merge) update of a Setpoints bundle - any non-empty subset of the same fields, same bounds. Absent fields are unchanged; a present `zones` array updates the named zones (each must specify its full target set), matched by zone_id. This is the refined-targets shape the optimizer proposes.",
+      "properties": {
+        "temperature_day_c": { "$ref": "#/$defs/Setpoints/properties/temperature_day_c" },
+        "temperature_night_c": { "$ref": "#/$defs/Setpoints/properties/temperature_night_c" },
+        "day_start": { "$ref": "#/$defs/Setpoints/properties/day_start" },
+        "day_end": { "$ref": "#/$defs/Setpoints/properties/day_end" },
+        "humidity_low_pct": { "$ref": "#/$defs/Setpoints/properties/humidity_low_pct" },
+        "humidity_high_pct": { "$ref": "#/$defs/Setpoints/properties/humidity_high_pct" },
+        "humidity_deadband_pct": { "$ref": "#/$defs/Setpoints/properties/humidity_deadband_pct" },
+        "co2_target_ppm": { "$ref": "#/$defs/Setpoints/properties/co2_target_ppm" },
+        "co2_vent_interlock_threshold_pct": { "$ref": "#/$defs/Setpoints/properties/co2_vent_interlock_threshold_pct" },
+        "vpd_target_kpa": { "$ref": "#/$defs/Setpoints/properties/vpd_target_kpa" },
+        "dli_target_mol": { "$ref": "#/$defs/Setpoints/properties/dli_target_mol" },
+        "zones": { "$ref": "#/$defs/Setpoints/properties/zones" }
+      },
+      "minProperties": 1,
+      "additionalProperties": false
+    }
+  }
+}

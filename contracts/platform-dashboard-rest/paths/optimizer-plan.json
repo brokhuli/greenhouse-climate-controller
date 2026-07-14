@@ -1,0 +1,21 @@
+{
+  "parameters": [{ "$ref": "../components/parameters.json#/GreenhouseId" }],
+  "get": {
+    "operationId": "getOptimizerPlan",
+    "summary": "Latest optimizer plan + setpoint diff",
+    "description": "One greenhouse's latest optimizer cycle plus the Go-API-composed proposed-vs-current-vs-bounds setpoint diff (frontend data model §Optimizer plans, key [\"optimizer-plan\", id]) — the data behind the detail view's OptimizerPlanPanel. `plan` is null on a pre-planner held cycle, in which case `diff` is null too. Polled, not streamed. Open to anyone — reads need no token (anonymous-viewer posture, platform security §4).",
+    "x-slice": "3",
+    "security": [],
+    "responses": {
+      "200": {
+        "description": "The latest plan detail for the greenhouse.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "../components/schemas/optimizer.json#/OptimizerPlanDetail" }
+          }
+        }
+      },
+      "404": { "$ref": "../components/responses.json#/NotFound" }
+    }
+  }
+}

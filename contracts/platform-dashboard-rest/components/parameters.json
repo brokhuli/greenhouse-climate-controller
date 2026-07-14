@@ -1,0 +1,92 @@
+{
+  "GreenhouseId": {
+    "name": "greenhouse_id",
+    "in": "path",
+    "required": true,
+    "description": "Site-unique greenhouse identity; the same slug used in MQTT topics, controller REST paths, and DB rows (RFC-007).",
+    "schema": { "$ref": "./schemas/common.json#/Slug" }
+  },
+  "ProfileId": {
+    "name": "profile_id",
+    "in": "path",
+    "required": true,
+    "description": "Crop-profile identity, unique within the site.",
+    "schema": { "$ref": "./schemas/common.json#/Slug" }
+  },
+  "EscalationId": {
+    "name": "escalation_id",
+    "in": "path",
+    "required": true,
+    "description": "Open-escalation identity (optimizer console, slice 3).",
+    "schema": { "type": "string" }
+  },
+  "OptimizerStatus": {
+    "name": "status",
+    "in": "query",
+    "required": false,
+    "description": "Filter the optimizer fleet queue to one latest-cycle outcome.",
+    "schema": {
+      "type": "string",
+      "enum": ["applied", "escalated", "extended"]
+    }
+  },
+  "Window": {
+    "name": "window",
+    "in": "query",
+    "required": false,
+    "description": "Trailing history window. Resolved server-side against each greenhouse's latest stored (simulated) timestamp — `[latest − window, latest]` — not the caller's wall clock, since telemetry is timestamped on the simulated clock. Defaults to 1h when omitted.",
+    "schema": {
+      "type": "string",
+      "enum": ["15m", "30m", "1h", "6h", "24h"],
+      "default": "1h"
+    }
+  },
+  "Metric": {
+    "name": "metric",
+    "in": "query",
+    "required": false,
+    "description": "Restrict the analytics response to one metric; omit for all metrics.",
+    "schema": {
+      "type": "string",
+      "enum": ["temperature", "humidity", "co2", "par", "vpd", "soil_moisture"]
+    }
+  },
+  "Interval": {
+    "name": "interval",
+    "in": "query",
+    "required": false,
+    "description": "Time-bucket size for the aggregation. Defaults to 1h when omitted.",
+    "schema": {
+      "type": "string",
+      "enum": ["5m", "15m", "1h", "6h", "1d"],
+      "default": "1h"
+    }
+  },
+  "EventGreenhouseId": {
+    "name": "greenhouse_id",
+    "in": "query",
+    "required": false,
+    "description": "Scope the activity feed to one greenhouse; omit for the whole fleet.",
+    "schema": { "$ref": "./schemas/common.json#/Slug" }
+  },
+  "EventKind": {
+    "name": "kind",
+    "in": "query",
+    "required": false,
+    "description": "Filter the feed to one event kind.",
+    "schema": {
+      "type": "string",
+      "enum": ["fault", "interlock", "profile_applied", "setpoint_edit", "drift", "optimizer_plan_applied"]
+    }
+  },
+  "EventSeverity": {
+    "name": "severity",
+    "in": "query",
+    "required": false,
+    "description": "Filter the feed to a minimum severity.",
+    "schema": {
+      "type": "string",
+      "enum": ["info", "warning", "critical"]
+    }
+  }
+}

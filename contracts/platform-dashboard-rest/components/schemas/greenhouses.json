@@ -1,0 +1,107 @@
+{
+  "ControllerEndpoint": {
+    "type": "object",
+    "description": "How the platform reaches a greenhouse's controller — registry metadata supplied at registration (platform data model §1). The SPA never speaks these directly; only the platform does.",
+    "properties": {
+      "rest_base_url": {
+        "type": "string",
+        "format": "uri",
+        "description": "Base URL of the controller's REST API on the local Docker network (e.g. http://gh-a:8080)."
+      },
+      "mqtt_topic_root": {
+        "type": "string",
+        "description": "Root of the controller's MQTT topic tree (e.g. gh/gh-a)."
+      },
+      "bearer_token": {
+        "type": ["string", "null"],
+        "description": "Optional per-controller pre-shared bearer token (RFC-011 service-auth hardening, dormant by default). Present only when the controller is hardened to require a token on its REST write endpoints; the platform then presents it on every downward write. Omitted/null when the controller is unauthenticated (the single-host default)."
+      }
+    },
+    "required": ["rest_base_url", "mqtt_topic_root"],
+    "additionalProperties": false
+  },
+  "GreenhouseSummary": {
+    "type": "object",
+    "description": "One greenhouse's identity and live rollup for the fleet view (frontend purpose-and-views §1). A compact live-climate readout backs the fleet card; the target bundle is on the detail endpoint, not here.",
+    "properties": {
+      "id": { "$ref": "./common.json#/Slug" },
+      "display_name": {
+        "type": "string",
+        "description": "Operator-facing name for the greenhouse."
+      },
+      "crop": {
+        "type": ["string", "null"],
+        "description": "Assigned crop label, or null when none is assigned (a label only — the controller is crop-agnostic)."
+      },
+      "status": { "$ref": "./common.json#/Connectivity" },
+      "drift": {
+        "type": "boolean",
+        "default": false,
+        "description": "(2b) True when the controller's reported setpoints differ from the platform's intended state (reconciliation, platform §5)."
+      },
+      "time_scale": {
+        "type": ["number", "null"],
+        "minimum": 0.25,
+        "maximum": 32.0,
+        "description": "Simulation-only: the controller's current simulated-clock speed multiplier (1.0 = real-time), backing the fleet card's per-greenhouse speed indicator. Null on a real-hardware controller or when unknown. Patched live by the WebSocket status frame (platform-dashboard-live-ws). Each controller's clock is independent (controller HAL §7)."
+      },
+      "climate": {
+        "type": "object",
+        "description": "Compact live-climate readout for the fleet card.",
+        "properties": {
+          "temperature": {
+            "type": ["number", "null"],
+            "description": "Latest air-temperature reading (°C), or null when unavailable."
+          },
+          "humidity": {
+            "type": ["number", "null"],
+            "description": "Latest relative-humidity reading (%RH), or null when unavailable."
+          },
+          "co2": {
+            "type": ["number", "null"],
+            "description": "Latest CO₂ reading (ppm), or null when unavailable."
+          },
+          "dli": {
+            "type": ["number", "null"],
+            "description": "Latest accumulated Daily Light Integral (mol·m⁻²·d⁻¹) for the current crop day, or null when unavailable. A derived value; the underlying instantaneous PAR remains available as a sensor metric on the telemetry endpoints."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": ["id", "display_name", "crop", "status", "drift"],
+    "additionalProperties": false
+  },
+  "GreenhouseDetail": {
+    "type": "object",
+    "description": "A single greenhouse's snapshot for the detail view: its summary fields, the full current target bundle, and the live per-zone irrigation status (frontend data model §6, key [\"greenhouse\", id]).",
+    "properties": {
+      "id": { "$ref": "#/GreenhouseSummary/properties/id" },
+      "display_name": { "$ref": "#/GreenhouseSummary/properties/display_name" },
+      "crop": { "$ref": "#/GreenhouseSummary/properties/crop" },
+      "status": { "$ref": "./common.json#/Connectivity" },
+      "drift": { "$ref": "#/GreenhouseSummary/properties/drift" },
+      "time_scale": { "$ref": "#/GreenhouseSummary/properties/time_scale" },
+      "setpoints": { "$ref": "./setpoints.json#/Setpoints" },
+      "zone_status": {
+        "type": "array",
+        "description": "Live per-zone irrigation status, one entry per configured zone, keyed to a Setpoints.zones target by zone_id. The read-only counterpart to the mutable per-zone targets.",
+        "items": { "$ref": "./zones.json#/ZoneStatus" }
+      }
+    },
+    "required": ["id", "display_name", "crop", "status", "drift", "setpoints", "zone_status"],
+    "additionalProperties": false
+  },
+  "GreenhouseRegistration": {
+    "type": "object",
+    "description": "Operator registration of a greenhouse into the fleet (platform §3 — registration is operator tooling, served in 2a). The id is the operator-chosen slug reused everywhere.",
+    "properties": {
+      "id": { "$ref": "./common.json#/Slug" },
+      "display_name": { "$ref": "#/GreenhouseSummary/properties/display_name" },
+      "crop": { "$ref": "#/GreenhouseSummary/properties/crop" },
+      "controller": { "$ref": "#/ControllerEndpoint" }
+    },
+    "required": ["id", "display_name", "controller"],
+    "additionalProperties": false
+  }
+}

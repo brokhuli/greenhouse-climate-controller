@@ -7,7 +7,7 @@ const setpointEpsilon = 1e-6
 
 // ZoneTargets is one irrigation zone's runtime-adjustable targets, mirroring the
 // controller's per-zone config so a resolved profile maps onto it directly
-// (contracts/frontend-rest ZoneTargets, platform data model §3). Zone *topology* (adding
+// (contracts/platform-dashboard-rest ZoneTargets, platform data model §3). Zone *topology* (adding
 // or removing zones) is a controller config + restart change, not part of this write path.
 type ZoneTargets struct {
 	ZoneID                string  `json:"zone_id"`
@@ -19,7 +19,7 @@ type ZoneTargets struct {
 
 // Setpoints is a greenhouse's full target bundle — the global climate setpoints plus
 // per-zone irrigation targets. It deliberately mirrors the controller's runtime-adjustable
-// config (contracts/frontend-rest Setpoints) so resolving a crop profile is a mapping, not
+// config (contracts/platform-dashboard-rest Setpoints) so resolving a crop profile is a mapping, not
 // a translation: the same JSON serializes to the controller's PATCH body, to the
 // WebSocket, and to the JSONB provenance ledger.
 type Setpoints struct {

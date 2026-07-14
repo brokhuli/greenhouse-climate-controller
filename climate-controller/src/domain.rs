@@ -1,7 +1,7 @@
 //! Shared domain types used across configuration, the HAL, and the wire layer.
 //!
 //! The enums mirror the closed enums in the MQTT contract
-//! (`contracts/mqtt/actuator-state.schema.json`, `sensor-reading.schema.json`) so the
+//! (`contracts/controller-platform-telemetry-mqtt/actuator-state.schema.json`, `sensor-reading.schema.json`) so the
 //! controller's internal vocabulary cannot drift from what it publishes. The newtypes
 //! (`Slug`, `TimeOfDay`, `Schedule`) parse-and-validate at the deserialization boundary, so
 //! every value held downstream is already well-formed.

@@ -41,7 +41,7 @@ Before the loops run, **stage ②** resolves which setpoints are active this tic
 The **temperature** setpoint switches between `temperature_day_c` and
 `temperature_night_c` based on the `day_start` / `day_end` window — a simple
 time-of-day lookup, evaluated each tick. This is **not** weather-predictive (that is
-[Phase 3](../optimizer/05-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application)).
+[Phase 3](../optimizer/06-spec-optimizer-constraints-and-application.md#2-setpoint-refinement--application)).
 The **humidity** target is **derived here each tick** — not a stored constant — by
 inverting the VPD setpoint at the fused temperature and clamping to the humidity safety
 bounds (see [the humidity loop](#humidity-hysteresis-band-vpd-feedforward)); because it

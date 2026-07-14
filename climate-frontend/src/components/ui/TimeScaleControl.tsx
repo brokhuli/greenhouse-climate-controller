@@ -3,7 +3,7 @@ import { Pill } from "./Pill";
 
 /**
  * Simulation time-scale UI (components §3, sim-only). `TimeScaleIndicator` is the read-only speed
- * badge; `TimeScaleControl` is the live segmented knob (0.5/1/2/4/8/16/32×) that writes immediately
+ * badge; `TimeScaleControl` is the live segmented knob (0.5/1/2/4/8×) that writes immediately
  * with no confirmation dialog (interactions §7). Both are presentational — the feature wires the
  * mutation and feeds the observed `value` from the `status` frame.
  */
@@ -17,7 +17,7 @@ export function TimeScaleIndicator({ scale }: { scale: number }) {
   );
 }
 
-const OPTIONS = [0.5, 1, 2, 4, 8, 16, 32] as const;
+const OPTIONS = [0.5, 1, 2, 4, 8] as const;
 
 export function TimeScaleControl({
   value,

@@ -1,6 +1,6 @@
 //! Per-zone irrigation configuration (controller spec §4, §6).
 //!
-//! Bounds mirror `contracts/controller-rest/components/schemas/zones.json`; the cross-field
+//! Bounds mirror `contracts/platform-controller-control-rest/components/schemas/zones.json`; the cross-field
 //! invariant `moisture_low_threshold < moisture_high_threshold` is controller-enforced.
 
 use serde::{Deserialize, Serialize};

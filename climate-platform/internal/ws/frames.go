@@ -1,4 +1,4 @@
-// Package ws is the platform→SPA live channel: the frame DTOs (frontend-ws contract)
+// Package ws is the platform→SPA live channel: the frame DTOs (platform-dashboard-live-ws contract)
 // and the fan-out hub that broadcasts them to every connected dashboard client.
 package ws
 
@@ -8,7 +8,7 @@ import (
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/domain"
 )
 
-// SchemaVersion is the frontend-ws frame schema major version (RFC-007 envelope).
+// SchemaVersion is the platform-dashboard-live-ws frame schema major version (RFC-007 envelope).
 const SchemaVersion = 1
 
 // rfc3339ms formats a timestamp as RFC 3339 UTC with millisecond precision, matching
@@ -67,7 +67,7 @@ type EventFrame struct {
 
 // DriftFrame reports whether a greenhouse's controller-reported setpoints still match its
 // intended state (type="drift", greenhouse-scoped): drift=true on divergence, false when
-// reconciled (frontend-ws drift.schema.json, 2b).
+// reconciled (platform-dashboard-live-ws drift.schema.json, 2b).
 type DriftFrame struct {
 	envelope
 	Type  string `json:"type"`

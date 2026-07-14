@@ -1,0 +1,34 @@
+{
+  "EventEntry": {
+    "type": "object",
+    "description": "One entry in the activity feed: a fault, safety-interlock activation, profile application, setpoint edit, or drift detection (frontend data model §4). Severity is the platform's dashboard grading (info/warning/critical) — distinct from the controller's fault severity (warning/alarm).",
+    "properties": {
+      "greenhouse_id": { "$ref": "./common.json#/Slug" },
+      "ts": {
+        "type": "string",
+        "format": "date-time",
+        "description": "When the event occurred (RFC 3339 UTC, ms)."
+      },
+      "kind": {
+        "type": "string",
+        "enum": ["fault", "interlock", "profile_applied", "setpoint_edit", "drift", "optimizer_plan_applied", "optimizer_plan_escalated", "optimizer_resolved", "optimizer_run_failed"],
+        "description": "Closed set of event kinds surfaced to the operator. `optimizer_plan_applied` is an applied optimizer plan — a setpoint write stamped `source: optimizer` (RFC-005). `optimizer_plan_escalated` (a cycle held for review), `optimizer_resolved` (an operator closed an escalation), and `optimizer_run_failed` (a cycle that produced no outcome, e.g. `cycle_timeout`/`llm_unavailable`) are the optimizer's escalation-lifecycle + run-failure audit events, stamped `source: optimizer` with the run id and (when applicable) reason code in `message`. These record *transitions* in the append-only feed; the actionable set of currently-open holds stays in the polled optimizer console queue (`GET /api/optimizer/escalations`). `optimizer_plan_extended` is deliberately not a feed kind — a suppressed cycle writes nothing and recurs on most cadences, so it would be feed noise."
+      },
+      "severity": {
+        "type": "string",
+        "enum": ["info", "warning", "critical"],
+        "description": "info = informational; warning = degraded but operating; critical = raises a toast."
+      },
+      "message": {
+        "type": "string",
+        "description": "Human-readable description of the event."
+      },
+      "source": {
+        "type": "string",
+        "description": "Who or what produced the event (audit attribution, platform §6) — e.g. operator, crop_profile, optimizer."
+      }
+    },
+    "required": ["greenhouse_id", "ts", "kind", "severity", "message"],
+    "additionalProperties": false
+  }
+}

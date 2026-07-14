@@ -1,0 +1,19 @@
+{
+  "get": {
+    "operationId": "getOptimizerStatus",
+    "summary": "Optimizer service health",
+    "description": "Service-level optimizer health for the console overview badge (frontend data model §Optimizer plans, key [\"optimizer-status\"]) — overall status + degraded reason, last-successful-cycle time vs cadence, and the read-only reason. The Go API's proxy/derivation of the optimizer's internal GET /health (optimizer interfaces §Service API endpoints); when the optimizer is unreachable the Go API synthesizes status = unavailable rather than returning a proxy 5xx. Polled, not streamed. Open to anyone — reads need no token (anonymous-viewer posture, platform security §4).",
+    "x-slice": "3",
+    "security": [],
+    "responses": {
+      "200": {
+        "description": "The optimizer service status.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "../components/schemas/optimizer.json#/OptimizerStatus" }
+          }
+        }
+      }
+    }
+  }
+}

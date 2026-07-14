@@ -1,0 +1,31 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Greenhouse Platform — Setpoint API (single-authority write path)",
+    "version": "1.0.0",
+    "description": "The platform Go API's single-authority setpoint write path (catalog contract #3) — the request/response contract the optimizer (Phase 3) and, later, the Phase 4 planner use to submit refined climate targets to the platform, which validates them against crop-safe bounds, records provenance (`source = optimizer`), and delivers them to the controller (RFC-005). One endpoint: `POST /api/greenhouses/{greenhouse_id}/setpoints`. The body is the same partial (merge) `SetpointsPatch` the operator's ad-hoc edit uses — that operator `PATCH` counterpart lives in the separate operator/fleet contract (`platform-dashboard-rest/`, catalog #4) — but a submission here is recorded with optimizer provenance and returned 202 Accepted. Identity, units, and timestamps follow RFC-007: the same `greenhouse_id` slug that keys MQTT topics, controller REST paths, and DB rows; field names are snake_case. Authentication is the config-gated service boundary (RFC-011): with `SERVICE_AUTH_MODE=trusted_network` (the default) the platform accepts the untokened internal call; with `SERVICE_AUTH_MODE=oidc` it requires a Keycloak client-credentials token carrying the narrow `setpoints:write` role (or an operator token) and rejects unauthenticated calls 401 / non-privileged 403. The contract is identical in both modes — only the `Authorization` header's presence differs — so `bearerAuth` is declared as an optional scheme (`security: [{}, { bearerAuth: [] }]`). A rejected write returns 422 naming the violated field and bound, mirroring the controller and operator/fleet contracts. `info.version` is the contract version; its major bumps on a breaking change, recorded in an ADR (RFC-007). This document is split: the single path is a file under `paths/`, and shared schemas, parameters, and responses live under `components/`; run `redocly bundle` to emit a single self-contained file."
+  },
+  "servers": [
+    {
+      "url": "http://{platform_host}:{port}",
+      "description": "The platform's nginx entry point, which reverse-proxies `/api` to the Go API. The optimizer reaches this write path over the internal Docker network; it does not reach the controllers directly.",
+      "variables": {
+        "platform_host": { "default": "localhost" },
+        "port": { "default": "8080" }
+      }
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Config-gated service token (RFC-011). A Keycloak client-credentials access token carrying the narrow `setpoints:write` service role (an operator token is also accepted). Required only when the platform runs with `SERVICE_AUTH_MODE=oidc`; with the default `SERVICE_AUTH_MODE=trusted_network` the call is accepted untokened on the trusted Docker network. Declared as an optional scheme so the contract is identical in both modes — enforcement is gated on config, not on the document."
+      }
+    }
+  },
+  "paths": {
+    "/api/greenhouses/{greenhouse_id}/setpoints": { "$ref": "./paths/setpoints.json" }
+  }
+}
