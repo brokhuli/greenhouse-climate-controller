@@ -19,6 +19,25 @@ if git diff --cached --name-only | grep -q '^climate-controller/'; then
   )
 fi
 
+# Phase 3 (Python) gate: format, lint, typecheck, test — scoped to climate-optimizer.
+# Only run when staged changes touch the package, mirroring the crate-scoped Rust gate above so
+# docs-only / other-service commits are not blocked on uv. Requires uv (skips gracefully if absent).
+if git diff --cached --name-only | grep -q '^climate-optimizer/'; then
+  echo "climate-optimizer changes staged — running Python gate..."
+  if command -v uv >/dev/null 2>&1; then
+    (
+      cd climate-optimizer
+      uv sync --frozen
+      uv run ruff format --check
+      uv run ruff check
+      uv run mypy
+      uv run pytest
+    )
+  else
+    echo "  uv not found — install uv to enable the optimizer gate; skipping." >&2
+  fi
+fi
+
 # Contracts gate: validate the JSON Schema / OpenAPI contracts and their example fixtures when any
 # contract, the harness, or its manifest is staged. Mirrors the crate-scoped Rust gate above so
 # docs-only commits are not blocked on Node. Requires `npm install` (ajv + @redocly/cli).
