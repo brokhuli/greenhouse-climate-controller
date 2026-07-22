@@ -8,25 +8,32 @@ response the setpoint path can return to its canonical outcome + reason code (sp
 so no status is silently unhandled.
 
 Auth is the config-gated service seam (RFC-011): ``trusted_network`` (default) sends the call
-untokened; ``oidc`` attaches a ``Bearer`` service token when one is supplied. Acquiring that token
-(the Keycloak client-credentials exchange) lands with the service slice; the header wiring is here and
-dormant by default.
+untokened; ``oidc`` attaches a ``Bearer`` service token, acquired on demand from the
+:class:`~climate_optimizer.auth.TokenProvider` (or supplied directly as ``bearer_token``).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from types import TracebackType
+from typing import Protocol
 
 import httpx
 from jsonschema import ValidationError as SchemaValidationError
 from pydantic import ValidationError
 
 from . import schema_validation
+from .auth import TokenAcquisitionError
 from .config import Settings
 from .models import PlanningContext, ReasonCode, Setpoints, SetpointsPatch
 
 _DEFAULT_TIMEOUT_SECONDS = 30.0
+
+
+class TokenSource(Protocol):
+    """The async bearer-token source the write path consults in ``oidc`` mode."""
+
+    async def token(self) -> str | None: ...
 
 
 class PlatformError(Exception):
@@ -74,10 +81,12 @@ class PlatformClient:
         *,
         client: httpx.AsyncClient | None = None,
         bearer_token: str | None = None,
+        token_source: TokenSource | None = None,
     ) -> None:
         self._settings = settings
         self._base = settings.data.platform_api_url.rstrip("/")
         self._bearer_token = bearer_token
+        self._token_source = token_source
         self._owns_client = client is None
         self._client = client or httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT_SECONDS)
 
@@ -96,11 +105,44 @@ class PlatformClient:
         if self._owns_client:
             await self._client.aclose()
 
-    def _auth_headers(self) -> dict[str, str]:
+    async def _auth_headers(self) -> dict[str, str]:
         # RFC-011: only oidc mode carries a token; trusted_network sends nothing.
-        if self._settings.platform_auth.mode == "oidc" and self._bearer_token:
-            return {"Authorization": f"Bearer {self._bearer_token}"}
+        if self._settings.platform_auth.mode != "oidc":
+            return {}
+        token = self._bearer_token
+        if token is None and self._token_source is not None:
+            token = await self._token_source.token()
+        if token:
+            return {"Authorization": f"Bearer {token}"}
         return {}
+
+    async def list_greenhouse_ids(self) -> list[str]:
+        """Discover the fleet the scheduler plans for (spec 02 §Scheduling).
+
+        The optimizer stays a pure Phase-2 client: it reads the registry the platform already
+        serves rather than carrying its own fleet list in config.
+        """
+        url = f"{self._base}/greenhouses"
+        try:
+            response = await self._client.get(url)
+        except (httpx.TimeoutException, httpx.TransportError) as err:
+            raise PlatformError(
+                ReasonCode.PLATFORM_UNAVAILABLE, f"fleet list read failed: {err}"
+            ) from err
+
+        if response.status_code != 200:
+            raise PlatformError(
+                ReasonCode.PLATFORM_UNAVAILABLE,
+                f"fleet list read returned {response.status_code}",
+            )
+
+        try:
+            payload = response.json()
+            return [str(entry["id"]) for entry in payload]
+        except (KeyError, TypeError, ValueError) as err:
+            raise PlatformError(
+                ReasonCode.CONTRACT_DRIFT, f"fleet list response invalid: {err}"
+            ) from err
 
     async def get_planning_context(
         self, greenhouse_id: str, *, window: str = "12h", interval: str = "1h"
@@ -138,7 +180,14 @@ class PlatformClient:
         url = f"{self._base}/greenhouses/{greenhouse_id}/setpoints"
         body = patch.model_dump(mode="json", exclude_unset=True)
         try:
-            response = await self._client.post(url, json=body, headers=self._auth_headers())
+            headers = await self._auth_headers()
+        except TokenAcquisitionError as err:
+            # No service credential means the write cannot be authorized (RFC-011).
+            return WriteOutcome.escalated(
+                ReasonCode.WRITE_UNAUTHORIZED, f"could not acquire service token: {err}"
+            )
+        try:
+            response = await self._client.post(url, json=body, headers=headers)
         except (httpx.TimeoutException, httpx.TransportError) as err:
             return WriteOutcome.escalated(
                 ReasonCode.PLATFORM_UNAVAILABLE, f"setpoint write failed to reach platform: {err}"

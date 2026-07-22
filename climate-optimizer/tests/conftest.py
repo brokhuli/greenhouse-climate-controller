@@ -1,20 +1,29 @@
 """Shared test fixtures and builders.
 
 The contract example JSON under ``contracts/`` doubles as test vectors; the builders here construct
-a healthy, gate-passing ``PlanningContext`` (and its parts) that individual tests perturb.
+a healthy, gate-passing ``PlanningContext`` (and its parts) that individual tests perturb, plus the
+service-slice doubles: a stub Phase-2 client and fake planner chains that keep planner tests off a
+live LLM (spec 12 §Testing).
 """
 
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+import httpx
+from langchain_core.runnables import RunnableLambda
+
+from climate_optimizer.config import Settings
+from climate_optimizer.dataaccess import PlatformClient, PlatformError, WriteOutcome
 from climate_optimizer.models import (
     ActuatorHealth,
     ActuatorName,
     ActuatorSnapshot,
+    BackendRole,
     Bound,
     ControllerMode,
     CurrentSetpoints,
@@ -23,15 +32,20 @@ from climate_optimizer.models import (
     Metric,
     MetricFreshness,
     MetricSummarySeries,
+    OptimizerPlan,
     PlanningContext,
+    Provider,
     SensorFault,
     Setpoints,
     SetpointSource,
+    SetpointsPatch,
     StageBounds,
     SummaryBucket,
+    TrajectoryPoint,
     ZoneBounds,
     ZoneTargets,
 )
+from climate_optimizer.planner import BackendOutput, PlannerChain
 
 CONTRACTS_DIR = Path(__file__).resolve().parents[2] / "contracts"
 _TO = datetime(2026, 6, 17, 12, 0, 0, tzinfo=UTC)
@@ -190,3 +204,137 @@ def build_context(
             faults=faults or [],
         ),
     )
+
+
+def context_payload(ctx: PlanningContext) -> dict[str, Any]:
+    """A planning context as the platform would send it on the wire.
+
+    Only ``setpoints.bounds`` needs None-pruning: its members are all optional, so an absent bound
+    must be *omitted*, while every other nullable field in the contract is required-and-nullable and
+    must stay present as ``null``.
+    """
+    payload: dict[str, Any] = ctx.model_dump(mode="json", by_alias=True)
+    setpoints = payload["setpoints"]
+    bounds = setpoints.get("bounds")
+    if bounds is None:
+        setpoints.pop("bounds", None)
+        return payload
+
+    pruned = {key: value for key, value in bounds.items() if value is not None}
+    zones = bounds.get("zones")
+    if zones is not None:
+        pruned["zones"] = {key: value for key, value in zones.items() if value is not None}
+    setpoints["bounds"] = pruned
+    return payload
+
+
+def build_patch(**overrides: Any) -> SetpointsPatch:
+    """An in-bounds refinement patch against :func:`build_bounds`."""
+    fields: dict[str, Any] = {
+        "temperature_day_c": 23.0,
+        "co2_target_ppm": 1000,
+        "vpd_target_kpa": 0.9,
+    }
+    fields.update(overrides)
+    return SetpointsPatch(**fields)
+
+
+def build_plan(
+    *,
+    at: datetime | None = None,
+    confidence: float = 0.95,
+    patch: SetpointsPatch | None = None,
+    hours: int = 3,
+) -> OptimizerPlan:
+    """A well-formed plan whose ``immediate_setpoints`` equals ``trajectory[0].setpoints``."""
+    start = at or _TO
+    bundle = patch or build_patch()
+    return OptimizerPlan(
+        trajectory=[
+            TrajectoryPoint(at=start + timedelta(hours=i), setpoints=bundle) for i in range(hours)
+        ],
+        immediate_setpoints=bundle,
+        confidence=confidence,
+        explanation="test plan",
+    )
+
+
+def build_output(
+    plan: OptimizerPlan | None = None, *, role: BackendRole = BackendRole.PRIMARY
+) -> BackendOutput:
+    """The chain's provenance-stamped output for a canned plan."""
+    return BackendOutput(
+        plan=plan or build_plan(),
+        provider=Provider.OLLAMA,
+        model="qwen2.5:7b",
+        role=role,
+    )
+
+
+def fake_chain(output: BackendOutput | None = None) -> PlannerChain:
+    """A chain that returns a canned plan — keeps planner tests off a live LLM."""
+    resolved = output or build_output()
+    return RunnableLambda(lambda _payload: resolved)
+
+
+def failing_chain(error: Exception | None = None) -> PlannerChain:
+    """A chain that raises, standing in for an unreachable or non-conforming backend."""
+    failure = error or RuntimeError("backend unreachable")
+
+    def boom(_payload: Any) -> BackendOutput:
+        raise failure
+
+    return RunnableLambda(boom)
+
+
+def chain_factory(chain: PlannerChain) -> Callable[[str], PlannerChain]:
+    """Adapt a fixed chain to the ``Planner(chain_factory=...)`` seam."""
+    return lambda _model: chain
+
+
+class StubPlatformClient(PlatformClient):
+    """A :class:`PlatformClient` with the two network calls replaced by canned answers.
+
+    The real response→outcome mapping is covered against actual HTTP in ``test_dataaccess``; these
+    stubs let the cycle, scheduler, and service tests drive each branch directly.
+    """
+
+    def __init__(
+        self,
+        settings: Settings | None = None,
+        *,
+        context: PlanningContext | None = None,
+        read_error: PlatformError | None = None,
+        write: WriteOutcome | None = None,
+        fleet: list[str] | None = None,
+        fleet_error: PlatformError | None = None,
+    ) -> None:
+        super().__init__(settings or Settings(), client=httpx.AsyncClient())
+        # Without an explicit context, answer each greenhouse with its *own* context — a fixed
+        # "gh-a" body would fail every other greenhouse's identity check in the input gate.
+        self.context = context
+        self.read_error = read_error
+        self.write = write or WriteOutcome.applied_ok(setpoints=None, message="accepted (202)")
+        self.fleet = fleet if fleet is not None else ["gh-a"]
+        self.fleet_error = fleet_error
+        self.submitted: list[tuple[str, SetpointsPatch]] = []
+        self.reads: list[str] = []
+
+    async def get_planning_context(
+        self, greenhouse_id: str, *, window: str = "12h", interval: str = "1h"
+    ) -> PlanningContext:
+        self.reads.append(greenhouse_id)
+        if self.read_error is not None:
+            raise self.read_error
+        if self.context is not None:
+            return self.context
+        return build_context(greenhouse_id=greenhouse_id)
+
+    async def submit_setpoints(self, greenhouse_id: str, patch: SetpointsPatch) -> WriteOutcome:
+        self.submitted.append((greenhouse_id, patch))
+        return self.write
+
+    async def list_greenhouse_ids(self) -> list[str]:
+        if self.fleet_error is not None:
+            raise self.fleet_error
+        return list(self.fleet)

@@ -1,12 +1,11 @@
 # Phase 3 climate optimizer — Python project (spec 12: tech stack).
 # uv manages the environment and the committed uv.lock; the format/lint/typecheck/test
 # gate (CLAUDE.md) runs as `uv run ruff format`, `uv run ruff check`, `uv run mypy`,
-# `uv run pytest`. This first slice is the deterministic core: no FastAPI/LangChain yet
-# (those land with the service slice), so those dependencies are deliberately absent.
+# `uv run pytest`.
 [project]
 name = "climate-optimizer"
 version = "0.1.0"
-description = "Phase 3 AI-driven greenhouse climate optimizer — deterministic core (config, models, input gate, digital twin, constraint engine, Phase-2 client)."
+description = "Phase 3 AI-driven greenhouse climate optimizer — deterministic core plus the planner, scheduler, and FastAPI operator service."
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
@@ -17,11 +16,24 @@ dependencies = [
     # scipy is intentionally omitted: the v1 twin is closed-form plain NumPy (spec 03 §1.2);
     # add scipy only if a numerical ODE solver is ever needed (spec 12 trip-wire).
     "numpy>=2.0",
-    # Phase-2 read/write client (spec 12: data access) — async-native, shares the future FastAPI model.
+    # Phase-2 read/write client (spec 12: data access) — async-native, shares the FastAPI model.
     "httpx>=0.27",
     # Offline JSON-Schema validation against contracts/ (spec 12: contract validation).
     "jsonschema>=4.22",
     "referencing>=0.35",
+    # Operator service surface (spec 12: service framework) — FastAPI on Uvicorn.
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    # LLM planning (spec 12: LLM planning) — the chain, prompt template, structured output and
+    # fallback routing, plus one wrapper per allowlisted provider (ollama is the default backend).
+    "langchain-core>=0.3",
+    "langchain-ollama>=0.2",
+    "langchain-anthropic>=0.3",
+    "langchain-openai>=0.2",
+    # Prometheus /metrics exposition on the service (spec 12: observability).
+    "prometheus-client>=0.20",
+    # Inbound operator-token verification in oidc mode (spec 10: operator-gated endpoints).
+    "pyjwt[crypto]>=2.9",
 ]
 
 [dependency-groups]
@@ -33,6 +45,9 @@ dev = [
     "respx>=0.21",          # httpx transport mock for data-access tests
     "types-jsonschema",     # mypy stubs
 ]
+
+[project.scripts]
+climate-optimizer = "climate_optimizer.__main__:main"
 
 [build-system]
 requires = ["hatchling"]

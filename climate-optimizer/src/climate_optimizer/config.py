@@ -7,8 +7,9 @@ bind under the ``OPTIMIZER_`` prefix with a ``__`` group delimiter (e.g.
 (``PLANNER_API_KEY``, ``PLANNER_OIDC_CLIENT_SECRET``) resolve from their fixed env names only, are
 held as ``SecretStr`` so they never land in a log, and are never read from a file (spec 11 / P3-SEC-1).
 
-``model`` and ``enabled`` are the only runtime-mutable settings (spec 11); with no service in this
-slice they are plain fields — the in-memory operator override lands with the API slice.
+``model`` and ``enabled`` are the only runtime-mutable settings (spec 11). The values here are the
+**configured defaults**; the live, operator-mutable values are the in-memory overrides held by
+:class:`~climate_optimizer.runtime.RuntimeState`, which reset to these defaults on restart.
 """
 
 from __future__ import annotations
@@ -37,6 +38,22 @@ class PlatformAuthSettings(_Group):
     mode: str = Field(default="trusted_network", pattern=r"^(trusted_network|oidc)$")
     oidc_token_url: str = ""
     oidc_client_id: str = "optimizer"
+
+
+class OperatorAuthSettings(_Group):
+    """[operator_auth] — inbound verification for the operator-gated endpoints (spec 10).
+
+    The deployment posture switch is ``platform_auth.mode`` (RFC-011), shared with the outbound
+    write path: under ``trusted_network`` the operator endpoints are untokened like the rest of the
+    single-host local surface; under ``oidc`` the caller must present a Keycloak token carrying the
+    operator role. Only the *verification parameters* live here — spec 11 predates the service slice
+    and enumerates no inbound-auth keys.
+    """
+
+    jwks_url: str = ""
+    issuer: str = ""
+    audience: str = "climate-api"
+    role: str = "operator"
 
 
 class LlmSettings(_Group):
@@ -150,6 +167,7 @@ class Settings(BaseSettings):
 
     data: DataSettings = Field(default_factory=DataSettings)
     platform_auth: PlatformAuthSettings = Field(default_factory=PlatformAuthSettings)
+    operator_auth: OperatorAuthSettings = Field(default_factory=OperatorAuthSettings)
     llm: LlmSettings = Field(default_factory=LlmSettings)
     planning: PlanningSettings = Field(default_factory=PlanningSettings)
     cost: CostSettings = Field(default_factory=CostSettings)
