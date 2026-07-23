@@ -21,6 +21,7 @@ import {
   StackedTimeSeriesChart,
   type StackedBand,
 } from "../../components/ui/StackedTimeSeriesChart";
+import { OptimizerPlanPanel } from "../optimizer/OptimizerPlanPanel";
 import { ActuatorStatePanel, type ActuatorReading } from "./ActuatorStatePanel";
 import { ProfileAssignmentPanel } from "./ProfileAssignmentPanel";
 import { ZoneMoisturePanel, type ZoneMoistureRow } from "./ZoneMoisturePanel";
@@ -258,6 +259,7 @@ export default function GreenhouseDetail() {
             <PanelHeader title="Actuator states" sectionLabel titleSize="large" />
             <ActuatorStatePanel actuators={actuatorReadings} />
           </Card>
+          <OptimizerPlanPanel greenhouseId={id} displayName={detail.displayName} />
           <Link
             to={`/activity?greenhouse_id=${encodeURIComponent(id)}`}
             className="border-border bg-surface-1 hover:border-border-strong block rounded-lg border transition-colors duration-[var(--motion-instant)]"

@@ -13,8 +13,10 @@ in `../contracts/`.
 
 The planning cycle runs end-to-end inside this service, and the platform now serves both sides of
 the Phase 2 boundary it needs: the `GET /planning-context` read handler and the `/api/optimizer/*`
-operator proxy/aggregate (Go). Still to land elsewhere: the operator console (React) and the
-`optimizer` + `ollama` Compose services.
+operator proxy/aggregate (Go). The **operator console (React)** has since landed in
+`../climate-frontend` (`src/features/optimizer/` — the `/optimizer` view, the per-greenhouse plan
+panel, and the fleet-card status pill, polled over the Go `/api/optimizer/*` surface). Still to land
+elsewhere: the `optimizer` + `ollama` Compose services.
 
 **The deterministic core** — LLM-free and independently testable:
 

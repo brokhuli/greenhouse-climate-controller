@@ -7,9 +7,15 @@ import { ToastProvider } from "../src/components/ui/ToastProvider";
 import { ThemeProvider } from "../src/hooks/ThemeProvider";
 import { RoleContext, type AuthState, type PlatformRole } from "../src/hooks/useRole";
 import type {
+  Escalation,
   EventEntry,
+  FleetOptimizerGreenhouse,
+  FleetOptimizerSummary,
   GreenhouseDetail,
   GreenhouseSummary,
+  ModelState,
+  OptimizerPlanDetail,
+  OptimizerStatus,
   Setpoints,
   ZoneStatus,
 } from "../src/api/schemas";
@@ -136,5 +142,94 @@ export const sampleEvent = (overrides: Partial<EventEntry> = {}): EventEntry => 
   severity: "info",
   message: "setpoint edit applied",
   source: "operator",
+  ...overrides,
+});
+
+// --- Optimizer console (3) view-model fixtures ----------------------------------------------
+
+export const sampleOptimizerStatus = (
+  overrides: Partial<OptimizerStatus> = {},
+): OptimizerStatus => ({
+  status: "healthy",
+  degradedReason: null,
+  enabled: true,
+  readOnlyReason: null,
+  lastSuccessfulCycleAt: new Date("2026-06-29T13:30:00.000Z"),
+  cadenceSecs: 1800,
+  ...overrides,
+});
+
+export const sampleFleetOptimizerGreenhouse = (
+  overrides: Partial<FleetOptimizerGreenhouse> = {},
+): FleetOptimizerGreenhouse => ({
+  greenhouseId: "gh-a",
+  status: "applied",
+  reasonCode: null,
+  enabled: true,
+  createdAt: new Date("2026-06-29T13:30:00.000Z"),
+  ...overrides,
+});
+
+export const sampleFleetOptimizerSummary = (
+  overrides: Partial<FleetOptimizerSummary> = {},
+): FleetOptimizerSummary => ({
+  greenhouses: [sampleFleetOptimizerGreenhouse()],
+  rollup: {
+    backlog: 0,
+    byOutcome: { applied: 1, escalated: 0, extended: 0 },
+    oldestOpenAgeSecs: null,
+  },
+  ...overrides,
+});
+
+export const sampleEscalation = (overrides: Partial<Escalation> = {}): Escalation => ({
+  id: "esc-1",
+  greenhouseId: "gh-b",
+  optimizerRunId: "run-1",
+  reasonCode: "low_confidence",
+  reasonClass: "transient",
+  createdAt: new Date("2026-06-29T13:28:00.000Z"),
+  message: "confidence 0.62 < threshold 0.80",
+  resolution: null,
+  ...overrides,
+});
+
+export const sampleModelState = (overrides: Partial<ModelState> = {}): ModelState => ({
+  provider: "ollama",
+  model: "qwen2.5:7b",
+  promptVersion: "v1",
+  role: "primary",
+  availableModels: ["llama3.2", "qwen2.5:7b", "mistral"],
+  ...overrides,
+});
+
+export const sampleOptimizerPlanDetail = (
+  overrides: Partial<OptimizerPlanDetail> = {},
+): OptimizerPlanDetail => ({
+  plan: {
+    optimizerRunId: "run-1",
+    greenhouseId: "gh-a",
+    createdAt: new Date("2026-06-29T13:30:00.000Z"),
+    horizon: {
+      start: new Date("2026-06-29T13:30:00.000Z"),
+      end: new Date("2026-06-30T01:30:00.000Z"),
+    },
+    backend: { provider: "ollama", model: "llama3", promptVersion: "v1", role: "primary" },
+    outcome: { status: "applied", reasonCode: null, message: null },
+    plan: {
+      confidence: 0.91,
+      explanation: "Pre-cool ahead of the solar peak.",
+      immediateSetpoints: { temperatureDayC: 22.5, vpdTargetKpa: 1.05 },
+      objectiveScores: { anticipation: 0.9, coupling: 0.7, efficiency: 0.5 },
+    },
+  },
+  diff: {
+    proposed: { temperatureDayC: 22.5, vpdTargetKpa: 1.05 },
+    current: sampleSetpoints({ temperatureDayC: 24, vpdTargetKpa: 1.0 }),
+    bounds: {
+      temperature_day_c: { min: 18, max: 28 },
+      vpd_target_kpa: { min: 0.6, max: 1.4 },
+    },
+  },
   ...overrides,
 });

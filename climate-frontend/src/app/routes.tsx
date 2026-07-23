@@ -8,6 +8,7 @@ const GreenhouseDetail = lazy(() => import("../features/greenhouse/GreenhouseDet
 const SetpointsView = lazy(() => import("../features/greenhouse/SetpointsView"));
 const ActivityFeed = lazy(() => import("../features/activity/ActivityFeed"));
 const ProfileManagement = lazy(() => import("../features/profiles/ProfileManagement"));
+const OptimizerConsole = lazy(() => import("../features/optimizer/OptimizerConsole"));
 const LoginCallback = lazy(() => import("../features/auth/LoginCallback"));
 const NotFound = lazy(() => import("../features/NotFound"));
 
@@ -20,6 +21,7 @@ export function AppRoutes() {
       <Route path="/greenhouses/:id/setpoints" element={<SetpointsView />} />
       <Route path="/profiles" element={<ProfileManagement />} />
       <Route path="/activity" element={<ActivityFeed />} />
+      <Route path="/optimizer" element={<OptimizerConsole />} />
       <Route path="/login/callback" element={<LoginCallback />} />
       <Route path="*" element={<NotFound />} />
     </Routes>

@@ -14,8 +14,8 @@ stack. Specs: [`docs/specs/design/frontend/`](../docs/specs/design/frontend/); w
 The dashboard is complete through the 2b backbone and the auth slice. Built and green:
 
 - App shell + theming: Vite, Tailwind v4 + design tokens (dark default / light), the route tree
-  (`/`, `/greenhouses/:id`, `/greenhouses/:id/setpoints`, `/profiles`, `/activity`, 404) with a
-  themed console shell (`AppFrame`/`SideNav`/`TopBar`).
+  (`/`, `/greenhouses/:id`, `/greenhouses/:id/setpoints`, `/profiles`, `/activity`, `/optimizer`, 404)
+  with a themed console shell (`AppFrame`/`SideNav`/`TopBar`).
 - `src/api/` — the only module that knows the API exists: Zod wire schemas + camelCase adapters
   (`schemas.ts`), the fetch client with typed error mapping (`client.ts`), the WebSocket client with
   backoff reconnect + frame dispatch (`ws.ts`), and TanStack Query hooks (`queries/`).
@@ -29,6 +29,14 @@ The dashboard is complete through the 2b backbone and the auth slice. Built and 
 The 2a feature views (fleet grid, per-greenhouse detail with uPlot charts, setpoint/registration
 forms, activity feed) and the **2b backbone** UI — the crop-profile library (`/profiles`),
 per-greenhouse profile assignment, and drift surfacing on the fleet cards + detail — are built.
+
+The **Phase 3 optimizer console** (`src/features/optimizer/`) is built: the `/optimizer` view (the
+fleet optimizer table + escalation worklist, the service-health badge, the site rollup, model
+selection, and global/per-greenhouse pause-resume + on-demand cycles), the per-greenhouse plan panel
+on the detail view (outcome, reason, confidence, backend provenance, and the proposed-vs-current
+setpoint diff), and the optimizer status pill on the fleet cards. It reads the Go API's versioned
+`/api/optimizer/*` surface by **polling** (no WebSocket) and degrades gracefully when the optimizer
+is unreachable (the health badge synthesizes `unavailable`; cards read `No plan`).
 
 **Verification:** ESLint, `tsc`, and the Vitest suite run in CI, with **Lighthouse CI**
 (`@lhci/cli` — initial-load + accessibility against the static production build) as a blocking gate;
