@@ -1,0 +1,14 @@
+# Keep the build context small and the image clean. The venv is rebuilt by uv inside the image; caches
+# and tests are not needed at runtime. `contracts/` is bind-mounted at runtime, not copied here.
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+tests/
+.git/
+.gitignore
+Dockerfile
+.dockerignore

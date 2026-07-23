@@ -22,7 +22,7 @@ single setpoint authority.
 | Phase 1 controller | Rust                     | Built: simulated HAL, control loops, safety interlocks, MQTT telemetry, REST control API            |
 | Phase 2 platform   | Go, Echo, TimescaleDB    | Built through the 2b backbone: ingest, registry, telemetry, profiles, reconciliation, auth, metrics |
 | Phase 2 dashboard  | React, TypeScript, Vite  | Built through the 2b UI: fleet, greenhouse detail, setpoints, profiles, activity, auth gating       |
-| Phase 3 optimizer  | Python, FastAPI          | Specified; project metadata and implementation arrive with the optimizer phase                      |
+| Phase 3 optimizer  | Python, FastAPI          | Built: deterministic core, LLM planner + scheduler, operator API + console; containerized in the stack (optimizer + local ollama) |
 | Contracts          | JSON Schema, OpenAPI 3.1 | Shared source of truth across controller, platform, dashboard, and optimizer boundaries             |
 
 ## Architecture
@@ -111,7 +111,20 @@ Contracts:
 npm run validate:contracts
 ```
 
-Python optimizer commands will be added when the Phase 3 project metadata lands.
+Optimizer (Python, `uv`-managed):
+
+```sh
+cd climate-optimizer
+uv sync
+uv run ruff format      # format
+uv run ruff check       # lint
+uv run mypy             # typecheck
+uv run pytest           # test
+uv run python -m climate_optimizer   # serve on :8000 (fully env-driven; see climate-optimizer/README.md)
+```
+
+In the local stack the optimizer runs as a container against a local `ollama` LLM — see
+[`deploy/README.md`](deploy/README.md#phase-3-optimizer).
 
 ## Verification
 

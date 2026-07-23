@@ -3,8 +3,8 @@
 Root orchestration for the local stack — **Docker Compose**.
 
 The stack is the full Phase 2 platform — the MQTT broker, TimescaleDB, the Go `api`, Keycloak
-(`auth`), and the nginx `proxy` that fronts everything — plus the generated Phase 1 controllers,
-running with a single command.
+(`auth`), and the nginx `proxy` that fronts everything — plus the generated Phase 1 controllers and
+the Phase 3 `optimizer` (with its local `ollama` LLM backend), running with a single command.
 
 **The `proxy` is the single entry point: everything is reached at `http://localhost:8080`** — it
 serves the built React SPA and reverse-proxies `/api` (REST + WebSocket) and `/auth` (Keycloak). The
@@ -96,6 +96,27 @@ any time — the fast alternative to wiping the volume, since it keeps registrat
 `bash deploy/scripts/reset-sim-data.sh` (add `--if-behind <start>` for the guarded form). Wiping the whole
 `db_data` volume (`docker compose … down -v`) remains the full-reset fallback.
 
+## Phase 3 optimizer
+
+The **`optimizer`** (Python/FastAPI) plans refined setpoints per greenhouse and writes them back through
+the `api`'s single-authority setpoint path. Like the `api`, it has **no host port** — it is reached only
+through the proxy, at the `/api/optimizer/*` routes the Go API aggregates. Open the operator console at
+**`http://localhost:8080/optimizer`** (and the per-greenhouse plan panel on each greenhouse's detail page).
+While the optimizer is down or absent, the console renders it as `unavailable` and the rest of the stack is
+unaffected — the platform keeps serving the Phase 2 crop-profile baseline.
+
+Its planner runs against a local **`ollama`** model by default (offline, no API key). `fresh-run.sh` pulls
+the model into the `ollama_data` volume on bring-up — **the first run downloads several GB** — and it
+persists across restarts, so a plain `docker compose … up -d` needs no re-pull. The model defaults to
+`OLLAMA_MODEL` (`llama3.2`, in `deploy/.env`); an operator can also switch models at runtime from the
+console (within the provider's allowlist). To plan with a cloud model instead, set
+`OPTIMIZER_LLM__PROVIDER=anthropic|openai` on the `optimizer` service and supply `PLANNER_API_KEY`.
+
+Ollama runs on **CPU by default**; a GPU (NVIDIA Container Toolkit) is an optional speed-up, not required.
+The container has no memory ceiling — size Docker Desktop's memory to the chosen model (`llama3.2` ≈ 4 GB;
+`qwen2.5:7b` more). If cycles report an `extended` outcome because CPU inference exceeds the 90 s cycle
+timeout, switch to a smaller model or allocate a GPU.
+
 ## Service-auth hardening (RFC-011, dormant by default)
 
 Beyond the human viewer/operator auth above, two internal **service** write boundaries can be hardened
@@ -124,7 +145,7 @@ for a multi-host posture. Both are **off by default** — the single-host stack 
 
 ## Observability
 
-Prometheus and Grafana ship with the stack (operations §1). Prometheus scrapes two sources over the
+Prometheus and Grafana ship with the stack (operations §1). Prometheus scrapes these sources over the
 internal network — **nothing extra is exposed through the proxy**:
 
 - **`api:8080/metrics`** — platform-health: ingestion rate, API latency/errors, reconciliation
@@ -139,10 +160,12 @@ internal network — **nothing extra is exposed through the proxy**:
   the `platform_*`/`controller_*` app metrics can't give ("is a container starving or leaking?"). The
   `cadvisor` service reads Docker/cgroup stats; its own UI is on the host at
   [http://localhost:8081](http://localhost:8081) for debugging.
+- **`optimizer:8000/metrics`** — optimizer-health: the Phase 3 planning cycles, plan outcomes,
+  escalations, and LLM-backend calls (`optimizer_*`). A single static target, like the `api`.
 
 ```sh
 open http://localhost:3000        # Grafana (admin/admin) → "Platform Health" + "Controller Fleet" + "Container Resources"
-open http://localhost:9090/targets # Prometheus — platform-api + controllers + cadvisor should be UP
+open http://localhost:9090/targets # Prometheus — platform-api + controllers + cadvisor + optimizer should be UP
 ```
 
 Grafana's Prometheus datasource and all three dashboards are auto-provisioned from `deploy/grafana/`

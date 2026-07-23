@@ -37,8 +37,17 @@ bash "$SCRIPT_DIR/gen-controllers.sh" "$N"
 #    a bind-mount content change alone does not make `up` recreate them).
 "${COMPOSE[@]}" down
 
-# 3. Build + start everything; --wait blocks until healthchecked services (incl. db) are healthy.
+# 3. Build + start everything; --wait blocks until healthchecked services (incl. db, ollama) are healthy.
 "${COMPOSE[@]}" up -d --build --wait
+
+# 3b. Pull the optimizer's local LLM into the ollama volume. ollama is healthy after --wait, so this can
+#     run now; the pull is idempotent (a no-op once the model is cached in the named volume). Resolve the
+#     model the way compose does — exported OLLAMA_MODEL, else deploy/.env, else the llama3.2 default — so
+#     the pulled model matches the one the optimizer service will request.
+OLLAMA_MODEL="${OLLAMA_MODEL:-$(sed -n 's/^OLLAMA_MODEL=//p' "$DEPLOY_DIR/.env" 2>/dev/null | tail -n1)}"
+OLLAMA_MODEL="${OLLAMA_MODEL:-llama3.2}"
+echo "==> pulling ollama model '$OLLAMA_MODEL' (first run downloads several GB) ..."
+"${COMPOSE[@]}" exec -T ollama ollama pull "$OLLAMA_MODEL"
 
 # 4. Wait for the API (behind the proxy) to answer before the guarded reset / registration.
 echo "==> waiting for the API at $API ..."

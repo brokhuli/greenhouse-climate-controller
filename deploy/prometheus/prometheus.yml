@@ -1,11 +1,12 @@
 # Prometheus scrape config for the local greenhouse stack (operations §1).
 #
-# Two sources of platform-wide observability:
+# Sources of platform-wide observability:
 #   - platform-api : the Go API's /metrics (platform-health) — a single static target.
 #   - controllers  : every generated Phase 1 controller's own /metrics (controller-health),
 #                    discovered via file-based service discovery. gen-controllers.sh writes
 #                    ./prometheus/targets/controllers.json (git-ignored) each time it regenerates
 #                    the fleet; Prometheus hot-reloads it, so scaling N needs no config change here.
+#   - optimizer    : the Phase 3 optimizer's /metrics (optimizer-health) — a single static target.
 #
 # All scraping is over the internal Docker network; nothing is exposed through the nginx proxy.
 
@@ -32,10 +33,9 @@ scrape_configs:
     static_configs:
       - targets: ["cadvisor:8080"]
 
-  # (Phase 3) The optimizer will expose its own /metrics (optimizer-health) and join here as a third
-  # job once it lands — see docs/specs/design/optimizer/10-spec-optimizer-interfaces.md. It is not
-  # built or containerized yet, so this stays commented (no live target).
-  # - job_name: optimizer
-  #   metrics_path: /metrics
-  #   static_configs:
-  #     - targets: ["optimizer:8000"]
+  # (Phase 3) The optimizer's own /metrics (optimizer-health) — a single static target on the internal
+  # network, like the api. See docs/specs/design/optimizer/10-spec-optimizer-interfaces.md.
+  - job_name: optimizer
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["optimizer:8000"]

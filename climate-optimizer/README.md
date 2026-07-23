@@ -15,8 +15,10 @@ The planning cycle runs end-to-end inside this service, and the platform now ser
 the Phase 2 boundary it needs: the `GET /planning-context` read handler and the `/api/optimizer/*`
 operator proxy/aggregate (Go). The **operator console (React)** has since landed in
 `../climate-frontend` (`src/features/optimizer/` — the `/optimizer` view, the per-greenhouse plan
-panel, and the fleet-card status pill, polled over the Go `/api/optimizer/*` surface). Still to land
-elsewhere: the `optimizer` + `ollama` Compose services.
+panel, and the fleet-card status pill, polled over the Go `/api/optimizer/*` surface). The service is
+now **containerized and wired into the local stack**: the `optimizer` and a local `ollama` backend run
+under Docker Compose, reached through the platform proxy (see [Running in the stack](#running-in-the-stack)
+and [`deploy/README.md`](../deploy/README.md#phase-3-optimizer)).
 
 **The deterministic core** — LLM-free and independently testable:
 
@@ -61,6 +63,15 @@ invalid config blocks startup rather than running on silent defaults.
 ```
 uv run python -m climate_optimizer      # serves on :8000
 ```
+
+## Running in the stack
+
+In the local Docker stack the service runs as the `optimizer` container against a local `ollama` model,
+built from [`Dockerfile`](./Dockerfile). Bring it up with the rest of the stack via
+`bash deploy/scripts/fresh-run.sh` (which also pulls the model), and reach the operator console at
+`http://localhost:8080/optimizer`. The shared `contracts/` are bind-mounted read-only at `/contracts`
+(`CLIMATE_OPTIMIZER_CONTRACTS_DIR`) rather than baked into the image. Full deployment notes — model
+selection, GPU, memory — are in [`deploy/README.md`](../deploy/README.md#phase-3-optimizer).
 
 ## Development
 

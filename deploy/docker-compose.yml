@@ -7,6 +7,10 @@
 # `scripts/gen-controllers.sh N`; `docker compose up -d` reconciles platform + N controllers in one
 # command (operations §2).
 #
+# Phase 3: the `optimizer` (Python/FastAPI intelligence layer) plans refined setpoints against a local
+# `ollama` LLM backend, reached only through the api's /api/optimizer/* proxy; both join the internal
+# network, and the optimizer's /metrics joins Prometheus. Observability: Prometheus, Grafana, cAdvisor.
+#
 # Auth is on: writes require an operator token. Log in at http://localhost:8080 as operator/operator
 # or viewer/viewer; scripts/curl fetch a token via `deploy/scripts/get-token.sh`.
 #
@@ -163,6 +167,73 @@ services:
           cpus: "0.5"
           memory: 128M
 
+  ollama: # (Phase 3) local LLM backend for the optimizer's planner — offline, key-free (spec 11 default
+    # provider). Models are pulled into the named volume on bring-up (fresh-run.sh) and persist across
+    # restarts. Runs on CPU by default; a GPU is an optional speed-up (required-dependencies §Phase 3),
+    # not wired here. No deploy.resources limit: a loaded model's RAM footprint is model-dependent and a
+    # too-low ceiling OOM-kills it — size Docker Desktop's memory to the chosen model instead.
+    image: ollama/ollama:0.5.7
+    container_name: greenhouse-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434" # Ollama API (host) — debug parity with prometheus:9090 / grafana:3000; use is internal
+    volumes:
+      - ollama_data:/root/.ollama # pulled models (survives restarts)
+    healthcheck:
+      # The image ships no curl/wget; `ollama list` returns 0 once the local server is answering.
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  optimizer: # (Phase 3) Python/FastAPI intelligence layer — reads planning context from the api,
+    # simulates + plans with the ollama backend, and writes refined setpoints back through the api's
+    # single-authority write path (RFC-005). No host port: reached only via the api's /api/optimizer/*
+    # proxy behind the nginx `proxy`, exactly like `api`. The api degrades to "unavailable" when this is
+    # down, so it is deliberately NOT a dependency of `api`.
+    build:
+      context: ../climate-optimizer
+    image: greenhouse-optimizer:latest
+    container_name: greenhouse-optimizer
+    restart: unless-stopped
+    depends_on:
+      ollama:
+        condition: service_healthy
+      api:
+        condition: service_started # api has no healthcheck; the optimizer's data-access retries anyway
+    environment:
+      # Phase 2 read/write endpoint (matches the `api` service).
+      OPTIMIZER_DATA__PLATFORM_API_URL: http://api:8080/api
+      # Planning backend — the local ollama default. Model is a Compose-level override of the code
+      # default (config.py); llama3.2 (3B) is snappier on CPU and more apt to finish inside the 90s
+      # cycle timeout than the spec's qwen2.5:7b. Switch models at runtime via POST /api/optimizer/model.
+      OPTIMIZER_LLM__PROVIDER: ollama
+      OPTIMIZER_LLM__ENDPOINT: http://ollama:11434
+      OPTIMIZER_LLM__MODEL: ${OLLAMA_MODEL:-llama3.2}
+      # Service-to-service auth for the setpoint write path (RFC-011); must match the api's
+      # PLATFORM_SERVICE_AUTH_MODE. Dormant `trusted_network` default — untokened on the local network.
+      OPTIMIZER_PLATFORM_AUTH__MODE: trusted_network
+      # The shared JSON-Schema contracts, bind-mounted read-only below (not baked into the image).
+      CLIMATE_OPTIMIZER_CONTRACTS_DIR: /contracts
+    volumes:
+      - ../contracts:/contracts:ro # single source of truth for the wire schemas the optimizer validates
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen("http://localhost:8000/health")
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
   prometheus: # (2b) scrapes the api's /metrics (platform-health) and every controller's /metrics
     # (controller-health) over the internal network — nothing extra is exposed via the proxy
     # (operations §1). The api is a static target; the generated controllers are discovered via the
@@ -172,6 +243,7 @@ services:
     restart: unless-stopped
     depends_on:
       - api
+      - optimizer # (Phase 3) so the optimizer target exists when Prometheus first scrapes
     ports:
       - "9090:9090" # Prometheus UI (host) — handy for /targets debugging; scraping is internal
     volumes:
@@ -253,3 +325,4 @@ volumes:
   db_data: # (2a) TimescaleDB data
   prometheus_data: # (2b) Prometheus TSDB
   grafana_data: # (2b) Grafana state (dashboards are provisioned read-only; this holds its own db)
+  ollama_data: # (Phase 3) pulled Ollama models — keeps the local LLM out of the image + across restarts
