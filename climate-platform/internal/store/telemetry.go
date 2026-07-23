@@ -162,6 +162,79 @@ func (s *Store) Analytics(ctx context.Context, greenhouseID string, from, to tim
 	return aggregates, rows.Err()
 }
 
+// FreshnessRow is one metric/zone series' recency over a window: the newest sample's
+// timestamp and how many raw samples the window holds. It backs the Phase 3 planning-context
+// read's per-metric freshness signals, which the optimizer's input gate checks against its
+// max_telemetry_age_minutes threshold.
+type FreshnessRow struct {
+	Metric      string
+	ZoneID      *string
+	LatestTS    time.Time
+	SampleCount int64
+}
+
+// MetricFreshness returns, per metric/zone pair, the latest sample timestamp and raw sample
+// count for one greenhouse over [from, to]. A pair with no samples in the window is simply
+// absent from the result.
+func (s *Store) MetricFreshness(ctx context.Context, greenhouseID string, from, to time.Time) ([]FreshnessRow, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT metric, zone_id, max(ts) AS latest_ts, count(*) AS sample_count
+		 FROM sensor_readings
+		 WHERE greenhouse_id=$1 AND ts >= $2 AND ts <= $3
+		 GROUP BY metric, zone_id
+		 ORDER BY metric, zone_id NULLS FIRST`,
+		greenhouseID, from, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var freshness []FreshnessRow
+	for rows.Next() {
+		var row FreshnessRow
+		var zone pgtype.Text
+		if err := rows.Scan(&row.Metric, &zone, &row.LatestTS, &row.SampleCount); err != nil {
+			return nil, err
+		}
+		row.ZoneID = textPtr(zone)
+		freshness = append(freshness, row)
+	}
+	return freshness, rows.Err()
+}
+
+// LatestActuators returns the most recent sample per actuator/zone pair for one greenhouse
+// over [from, to] — the "latest actuator states" the Phase 3 planning-context read serves,
+// rather than the full history rangeActuators returns for the dashboard. Readback health is
+// not stored, so samples come back with an empty Health; the caller joins it from the live
+// controller snapshot.
+func (s *Store) LatestActuators(ctx context.Context, greenhouseID string, from, to time.Time) ([]domain.ActuatorSample, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT DISTINCT ON (actuator, zone_id) actuator, zone_id, commanded, observed, ts
+		 FROM actuator_states
+		 WHERE greenhouse_id=$1 AND ts >= $2 AND ts <= $3
+		 ORDER BY actuator, zone_id NULLS FIRST, ts DESC`,
+		greenhouseID, from, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var samples []domain.ActuatorSample
+	for rows.Next() {
+		sample := domain.ActuatorSample{GreenhouseID: greenhouseID}
+		var zone pgtype.Text
+		var observed pgtype.Float8
+		if err := rows.Scan(&sample.Actuator, &zone, &sample.Commanded, &observed, &sample.TS); err != nil {
+			return nil, err
+		}
+		sample.ZoneID = textPtr(zone)
+		if observed.Valid {
+			value := observed.Float64
+			sample.Observed = &value
+		}
+		samples = append(samples, sample)
+	}
+	return samples, rows.Err()
+}
+
 // LatestReadingTS returns the most recent reading timestamp for one greenhouse, anchoring a
 // history window to stored (simulated) time rather than the caller's wall clock. ok is false when
 // the greenhouse has no readings yet.

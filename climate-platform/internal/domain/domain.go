@@ -110,7 +110,30 @@ type ActuatorSample struct {
 	Actuator     string
 	Commanded    float64
 	Observed     *float64
-	TS           time.Time
+	// Health is the reported readback health (ActuatorHealth). It feeds the live controller
+	// snapshot the planning-context read serves and is deliberately not persisted — history
+	// stores positions, and the optimizer's input gate asks only about the current state.
+	Health string
+	TS     time.Time
+}
+
+// ActuatorHealth is the closed set of actuator readback health values the controller reports
+// (contracts/controller-platform-telemetry-mqtt actuator-state), read by the Phase 3 input
+// gate: ok = tracking, stuck = readback not following commands, no_response = no readback.
+var ActuatorHealth = map[string]bool{
+	"ok":          true,
+	"stuck":       true,
+	"no_response": true,
+}
+
+// SensorFaultKinds is the subset of controller fault types that are per-sensor faults, as the
+// planning-context contract's SensorFault.kind enumerates them. Actuator and interlock fault
+// types are excluded — those reach the optimizer as actuator health, not as a sensor fault.
+var SensorFaultKinds = map[string]bool{
+	"stuck":                   true,
+	"out_of_range":            true,
+	"sensor_disagreement":     true,
+	"temperature_unavailable": true,
 }
 
 // Event is one activity-feed entry (fault, interlock, setpoint edit, …).

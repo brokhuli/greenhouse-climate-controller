@@ -11,9 +11,10 @@ in `../contracts/`.
 
 ## Status — deterministic core + service
 
-The planning cycle runs end-to-end inside this service. Still to land elsewhere: the platform's
-`GET /planning-context` read handler and its `/api/optimizer/*` proxy (Go), the operator console
-(React), and the `optimizer` + `ollama` Compose services.
+The planning cycle runs end-to-end inside this service, and the platform now serves both sides of
+the Phase 2 boundary it needs: the `GET /planning-context` read handler and the `/api/optimizer/*`
+operator proxy/aggregate (Go). Still to land elsewhere: the operator console (React) and the
+`optimizer` + `ollama` Compose services.
 
 **The deterministic core** — LLM-free and independently testable:
 

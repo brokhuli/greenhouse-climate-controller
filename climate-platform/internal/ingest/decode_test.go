@@ -1,6 +1,10 @@
 package ingest
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/state"
+)
 
 func TestDecodeReading(t *testing.T) {
 	r, err := decodeReading([]byte(`{"schema_version":1,"greenhouse_id":"gh-a","zone_id":null,"ts":"2026-06-07T14:03:00.000Z","metric":"temperature","value":22.4,"unit":"°C"}`))
@@ -51,6 +55,16 @@ func TestDecodeActuator_OnOffFlatten(t *testing.T) {
 	}
 }
 
+func TestDecodeActuator_CarriesHealth(t *testing.T) {
+	a, err := decodeActuator([]byte(`{"schema_version":1,"greenhouse_id":"gh-a","zone_id":"bench-a","ts":"2026-06-07T14:03:00.000Z","actuator":"irrigation_valve","commanded":{"on":true,"level_pct":null},"observed":{"on":false,"level_pct":null},"health":"no_response","overridden":false}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Health != "no_response" {
+		t.Fatalf("health = %q, want no_response", a.Health)
+	}
+}
+
 func TestDecodeFault_InterlockAndSeverity(t *testing.T) {
 	e, err := decodeFault([]byte(`{"schema_version":1,"greenhouse_id":"gh-a","zone_id":null,"ts":"2026-06-07T14:03:00.000Z","component":"temperature","fault_type":"critical_temperature","severity":"alarm","message":"too hot","response":"opened vents"}`))
 	if err != nil {
@@ -87,5 +101,30 @@ func TestDecodeSystemState(t *testing.T) {
 	}
 	if !p.Controller.Healthy || p.Controller.Mode != "normal" {
 		t.Fatalf("controller not parsed: %+v", p.Controller)
+	}
+}
+
+// The state frame's active fault set is the planning-context read's fault source, so only
+// per-sensor faults on known metrics survive the projection; actuator, interlock, and
+// fusion-only faults reach the optimizer by other routes.
+func TestSensorFaultsFiltersToSensorFaults(t *testing.T) {
+	p, _, err := decodeSystemState([]byte(`{"schema_version":1,"greenhouse_id":"gh-a","zone_id":null,"ts":"2026-06-07T14:03:00.000Z","controller":{"mode":"degraded","healthy":false},"sensors":{"temperature":null,"humidity":null,"co2":null,"par":null,"vpd":null},"dli":{"value":1.0,"unit":"mol·m⁻²·d⁻¹"},"zones":[],"actuators":[],"overrides":[],"faults":[
+		{"component":"temperature","zone_id":null,"fault_type":"stuck","severity":"warning"},
+		{"component":"soil_moisture","zone_id":"bench-a","fault_type":"out_of_range","severity":"warning"},
+		{"component":"temperature","zone_id":null,"fault_type":"critical_temperature","severity":"alarm"},
+		{"component":"irrigation_valve","zone_id":"bench-a","fault_type":"actuator_stuck","severity":"warning"}
+	]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	faults := sensorFaults(p)
+	if len(faults) != 2 {
+		t.Fatalf("expected 2 sensor faults, got %d: %v", len(faults), faults)
+	}
+	if got := faults[state.FaultKey{Component: "temperature"}]; got != "stuck" {
+		t.Fatalf("house sensor fault = %q, want stuck", got)
+	}
+	if got := faults[state.FaultKey{Component: "soil_moisture", ZoneID: "bench-a"}]; got != "out_of_range" {
+		t.Fatalf("zone sensor fault = %q, want out_of_range", got)
 	}
 }

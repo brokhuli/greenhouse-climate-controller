@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/domain"
+	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/state"
 )
 
 // envelopePayload is the RFC-007 envelope every MQTT message carries.
@@ -79,6 +80,7 @@ type actuatorPayload struct {
 	Actuator  string         `json:"actuator"`
 	Commanded actuatorOutput `json:"commanded"`
 	Observed  actuatorOutput `json:"observed"`
+	Health    string         `json:"health"`
 }
 
 func decodeActuator(data []byte) (domain.ActuatorSample, error) {
@@ -100,8 +102,18 @@ func decodeActuator(data []byte) (domain.ActuatorSample, error) {
 		Actuator:     payload.Actuator,
 		Commanded:    payload.Commanded.position(),
 		Observed:     &observed,
+		Health:       payload.Health,
 		TS:           ts,
 	}, nil
+}
+
+// zoneKey flattens an optional zone slug to the "" the live snapshot keys house-level
+// (greenhouse-scoped) entries by.
+func zoneKey(zoneID *string) string {
+	if zoneID == nil {
+		return ""
+	}
+	return *zoneID
 }
 
 // --- fault event (gh/{id}/fault) ---
@@ -175,11 +187,35 @@ type systemStatePayload struct {
 		CO2         *stateReading `json:"co2"`
 	} `json:"sensors"`
 	// DLI is a derived value carried alongside (not inside) sensors; it drives the fleet card.
-	DLI        *stateReading `json:"dli"`
+	DLI *stateReading `json:"dli"`
+	// Faults is the controller's whole active fault set, re-published every tick. It is the
+	// live source for the planning-context data-quality block (the per-topic fault events are
+	// rising-edge only, so they cannot answer "what is active now").
+	Faults []struct {
+		Component string  `json:"component"`
+		ZoneID    *string `json:"zone_id"`
+		FaultType string  `json:"fault_type"`
+		Severity  string  `json:"severity"`
+	} `json:"faults"`
 	Simulation *struct {
 		TimeScale float64 `json:"time_scale"`
 		TickIndex int64   `json:"tick_index"`
 	} `json:"simulation"`
+}
+
+// sensorFaults projects a state frame's active fault set down to the per-sensor faults the
+// planning-context contract carries: the component must name a known metric and the fault
+// type must be a sensor fault. Actuator, interlock, and fusion-only faults are filtered out —
+// those reach the optimizer as actuator health or as the controller mode, not here.
+func sensorFaults(payload systemStatePayload) map[state.FaultKey]string {
+	faults := make(map[state.FaultKey]string, len(payload.Faults))
+	for _, fault := range payload.Faults {
+		if !domain.Metrics[fault.Component] || !domain.SensorFaultKinds[fault.FaultType] {
+			continue
+		}
+		faults[state.FaultKey{Component: fault.Component, ZoneID: zoneKey(fault.ZoneID)}] = fault.FaultType
+	}
+	return faults
 }
 
 func decodeSystemState(data []byte) (systemStatePayload, time.Time, error) {

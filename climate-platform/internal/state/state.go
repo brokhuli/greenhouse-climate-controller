@@ -3,6 +3,11 @@
 // house temperature. Liveness is a product of ingestion (ingestion §4), so the
 // ingester writes here and the REST API / WebSocket hub read from here — cheaply,
 // without a database round-trip per fleet card.
+//
+// It also holds the controller snapshot the Phase 3 planning-context read serves as its
+// data-quality block: operating mode, per-actuator readback health, and the active sensor
+// faults. Those ride the RETAINED gh/{id}/state frame (republished every tick and replayed
+// to any reconnecting subscriber), so memory — not a migration — is their natural home.
 package state
 
 import (
@@ -32,6 +37,12 @@ type entry struct {
 	dli         *float64
 	degraded    bool // a non-critical fault / unhealthy controller is active
 	status      domain.Connectivity
+	// The controller snapshot the planning-context read serves (snapshot.go). Kept out of
+	// Live: that struct is copied by value on every WebSocket status frame and by the
+	// metrics fleet collector, and these maps have no business riding along.
+	controllerMode string
+	actuatorHealth map[ActuatorKey]string
+	sensorFaults   map[FaultKey]SensorFault
 }
 
 // Fleet is the concurrency-safe live view, keyed by greenhouse id.

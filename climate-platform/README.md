@@ -25,10 +25,14 @@ rendered in Grafana alongside each controller's own `/metrics` — so the 2b pla
     telemetry range/analytics + crop profiles, assignments, intended-state/provenance ledger,
     reconciliation state, and the provenance-prune job).
   - `ingest` — MQTT subscribe/route, bounded buffer + shed-oldest writer, liveness.
-  - `state` — in-memory live fleet view (status, time-scale, latest temperature).
+  - `state` — in-memory live fleet view (status, time-scale, latest climate) plus the Phase 3
+    controller snapshot (mode, per-actuator readback health, active sensor faults) the
+    planning-context read serves from the retained state frame.
   - `reconcile` — the control-down engine (2b): resolves profiles, records intended state, delivers
     to the controller, and runs the re-assert/drift loop (staggered, idempotent, rate-limited).
   - `api` — Echo handlers, validation, DTOs.
+  - `optimizer` — typed client for the Phase 3 optimizer's FastAPI Service API, which the API
+    proxies/aggregates into the versioned dashboard optimizer console (3).
   - `relay` — controller REST client (setpoint + zone + sim-time-scale calls).
   - `ws` — WebSocket frame DTOs (incl. `drift`) + fan-out hub.
 - `test/` — DB-backed integration tests (`//go:build integration`).
@@ -49,6 +53,10 @@ rendered in Grafana alongside each controller's own `/metrics` — so the 2b pla
 | `GET /api/stream` | WebSocket live fan-out (telemetry / status / event / drift) | 2a/2b |
 | `GET/POST /api/profiles` · `GET/PATCH/DELETE /api/profiles/{id}` | crop-profile library CRUD | 2b |
 | `GET/PUT /api/greenhouses/{id}/assignment` | current profile/stage · assign + apply | 2b |
+| `POST /api/greenhouses/{id}/setpoints` | optimizer single-authority write (RFC-005/011) | 2b/3 |
+| `GET /api/greenhouses/{id}/planning-context?window?&interval?` | Phase 3 optimizer read path: current setpoints + crop-safe bounds, bucketed telemetry summaries, latest actuator states, data-quality/freshness signals | 3 |
+| `GET /api/optimizer/{status,fleet,model,enabled,escalations}` · `GET /api/optimizer/greenhouses/{id}/{plan,enabled}` | optimizer console reads — proxy/aggregate over the optimizer Service API (status derived, plan diff composed) | 3 |
+| `POST /api/optimizer/{model,enabled}` · `POST /api/optimizer/greenhouses/{id}/{cycles,enabled}` · `POST /api/optimizer/escalations/{id}/resolve` | optimizer console mutations (operator-gated; the caller's token is forwarded to the optimizer) | 3 |
 
 > **Implementation note.** The data-access layer is hand-written SQL on `pgx` rather than
 > `sqlc`: the dynamic analytics query (`time_bucket` with a runtime interval + optional metric
@@ -75,6 +83,13 @@ rendered in Grafana alongside each controller's own `/metrics` — so the 2b pla
 | `PLATFORM_REASSERT_JITTER_SECS` | `3` | max per-greenhouse stagger within a reconcile cycle |
 | `PLATFORM_DRIFT_MAX_RETRIES` | `5` | failed deliveries/corrections before backing off (drift stays surfaced) |
 | `PLATFORM_PROVENANCE_PRUNE_DAYS` | `30` | window past which superseded setpoint revisions are pruned |
+| `PLATFORM_OPTIMIZER_URL` | `http://optimizer:8000` | Phase 3 optimizer Service API the console proxies |
+| `PLATFORM_OPTIMIZER_TIMEOUT_SECS` | `5` | per-call timeout on the optimizer proxy hop |
+| `PLATFORM_OPTIMIZER_CADENCE_SECS` | `1800` | fallback cadence the status badge ages against before the optimizer is first reached |
+
+> The service-auth mode (`PLATFORM_SERVICE_AUTH_MODE`, `trusted_network` default | `oidc`) and the
+> OIDC issuer/discovery/audience vars gate the write boundaries (RFC-011); see
+> [`../docs/decisions/request-for-comments.md`](../docs/decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009).
 
 ## Development Commands
 

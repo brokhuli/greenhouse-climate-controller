@@ -11,6 +11,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -20,6 +21,7 @@ import (
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/config"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/ingest"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/metrics"
+	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/optimizer"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/reconcile"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/relay"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/state"
@@ -39,9 +41,20 @@ type Server struct {
 	// serviceAuthMode gates the optimizer POST /setpoints boundary (RFC-011): trusted_network
 	// (default) accepts it untokened, oidc requires a setpoints:write service token.
 	serviceAuthMode string
-	metrics         *metrics.Metrics
-	log             *slog.Logger
-	router          *echo.Echo
+	// optimizer is the typed client for the Phase 3 optimizer Service API the /api/optimizer/*
+	// console proxies (platform interfaces §3); nil when no optimizer URL is configured, in
+	// which case the status badge synthesizes "unavailable" and the rest 404.
+	optimizer *optimizer.Client
+	// optimizerCadenceSecs is the fallback cadence the status badge uses before the optimizer's
+	// own /health has ever reported one.
+	optimizerCadenceSecs int
+	// lastOptimizerCadence caches the most recent cadence the optimizer's /health reported, so a
+	// synthesized "unavailable" badge still ages the last cycle against the real cadence rather
+	// than the config default. Zero until the first successful health call.
+	lastOptimizerCadence atomic.Int64
+	metrics              *metrics.Metrics
+	log                  *slog.Logger
+	router               *echo.Echo
 }
 
 // New builds the server and its route tree. verifier gates the surface: nil runs
@@ -90,6 +103,10 @@ func (s *Server) routes(router *echo.Echo) {
 	api.POST("/greenhouses/:id/setpoints", s.submitSetpoints, setpointsWriter)
 	api.GET("/greenhouses/:id/telemetry", s.getTelemetry)
 	api.GET("/greenhouses/:id/analytics", s.getAnalytics)
+	// (3) The optimizer's planning-context read path (platform-optimizer-planning-rest). An
+	// unauthenticated read like the rest of the surface: it carries no authority, and RFC-011
+	// scopes service auth to the write boundaries.
+	api.GET("/greenhouses/:id/planning-context", s.getPlanningContext)
 	api.GET("/greenhouses/:id/sim/time-scale", s.getTimeScale)
 	api.PATCH("/greenhouses/:id/sim/time-scale", s.setTimeScale, operator)
 	api.PATCH("/sim/time-scale", s.setFleetTimeScale, operator)
@@ -105,6 +122,35 @@ func (s *Server) routes(router *echo.Echo) {
 
 	api.GET("/events", s.listEvents)
 	api.GET("/stream", s.stream) // WebSocket live fan-out (platform-dashboard-live-ws)
+
+	// (3) Optimizer operator console: the Go API proxies/aggregates the optimizer's own
+	// Service API into the versioned dashboard surface (platform interfaces §3). Reads are
+	// viewer-open; the mutations are operator-gated like the rest of the write surface. The
+	// inward Go-API → optimizer hop forwards the caller's token so the optimizer re-checks the
+	// operator role itself in oidc mode.
+	opt := api.Group("/optimizer")
+	opt.GET("/status", s.getOptimizerStatus)
+	opt.GET("/fleet", s.getOptimizerFleet)
+	opt.GET("/escalations", s.listOptimizerEscalations)
+	opt.POST("/escalations/:escalationID/resolve", s.resolveOptimizerEscalation, operator)
+	opt.GET("/model", s.getOptimizerModel)
+	opt.POST("/model", s.setOptimizerModel, operator)
+	opt.GET("/enabled", s.getOptimizerEnabled)
+	opt.POST("/enabled", s.setOptimizerEnabled, operator)
+	opt.GET("/greenhouses/:id/plan", s.getOptimizerPlan)
+	opt.POST("/greenhouses/:id/cycles", s.triggerOptimizerCycle, operator)
+	opt.GET("/greenhouses/:id/enabled", s.getGreenhouseOptimizerEnabled)
+	opt.POST("/greenhouses/:id/enabled", s.setGreenhouseOptimizerEnabled, operator)
+}
+
+// WithOptimizer wires the Phase 3 optimizer console. It is a post-construction setter rather
+// than a New parameter so the many existing New callers stay untouched and the optimizer is
+// an opt-in surface: without it the /api/optimizer/* routes still register, but the status
+// badge synthesizes "unavailable" and the rest 404. Returns the server for chaining.
+func (s *Server) WithOptimizer(client *optimizer.Client, cadenceSecs int) *Server {
+	s.optimizer = client
+	s.optimizerCadenceSecs = cadenceSecs
+	return s
 }
 
 // Handler exposes the underlying http.Handler (for tests / embedding behind a proxy).

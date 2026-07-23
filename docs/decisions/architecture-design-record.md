@@ -8,6 +8,48 @@ alternatives and tradeoffs.
 
 ---
 
+## 2026-07-22 — Phase 3 platform integration lands: planning-context read + optimizer console proxy (Go)
+
+**Decision:** Implement the Go side of the two already-authored Phase 3 contracts, wiring the optimizer
+into the platform on both sides. Two commits, no new wire shapes.
+
+- **`GET /api/greenhouses/{id}/planning-context`** ([platform-optimizer-planning-rest](../../contracts/platform-optimizer-planning-rest/)) —
+  the optimizer's one bounded read per cycle. Telemetry summaries reuse the existing `Store.Analytics`
+  (`avg → mean`); the window anchors to stored simulated time via the existing `anchorWindow`; the crop-safe
+  `bounds` reuse `resolveStageBounds`, the same envelope resolver that gates optimizer writes, so the read and
+  the write gate can never disagree on the envelope.
+- **`/api/optimizer/*`** (nine `x-slice: 3` paths in [platform-dashboard-rest](../../contracts/platform-dashboard-rest/)) —
+  the operator console. A new `internal/optimizer` typed client speaks the optimizer's Service API; the Go API
+  proxies the reads, **derives** `GET /status` from the optimizer's internal `/health` (synthesizing
+  `unavailable` on a transport failure so the badge always renders, never a proxy 5xx), and **composes** the
+  plan's `SetpointDiff` from platform-owned current setpoints + crop-safe bounds.
+
+**Two implementation choices worth recording:**
+
+1. **The data-quality signals live in memory, not a migration.** `controller_mode`, per-actuator readback
+   `health`, and the active sensor-fault set have no column today. All three ride the **retained**
+   `gh/{id}/state` frame (republished every tick, replayed to any reconnecting subscriber), so they extend the
+   existing in-memory `state.Fleet` snapshot rather than the schema. A restart re-primes instantly from the
+   retained frame. The one approximation: a fault's `since` is *first-observed-by-the-platform*, not
+   first-occurred (the frame carries no per-fault timestamp), so a restart can make an active fault read younger
+   than it is — documented at the setter. No `sensor_readings`/`actuator_states` write path changes; `health` is
+   current-state-only and never persisted.
+
+2. **The inward Go-API → optimizer hop forwards the caller's operator token** rather than presenting a Keycloak
+   *service* credential as [platform interfaces §5](../specs/design/platform/09-spec-platform-interfaces.md#5-authorization)
+   sketched. A service credential carrying the operator role would contradict the narrow-role principle, and no
+   Go-API client exists in [`realm.json`](../../deploy/keycloak/realm.json). On the `trusted_network` default the
+   hop is untokened; under `oidc` the operator's own token rides upstream so the optimizer re-checks the operator
+   role itself. Both planes still gate: the Go API's `operator` middleware on the way in, the optimizer on the way
+   through.
+
+Both are **additive** — new read/console endpoints within the current contract major, no `info.version` bump.
+Deferred to a later pass (unchanged scope): the React operator console and the `optimizer` + `ollama` Compose
+services. With this, the optimizer completes real planning cycles (it can read) and its operator surface is
+reachable over REST.
+
+---
+
 ## 2026-07-13 — Phase 3 per-greenhouse optimizer enable/disable (alongside the service-wide pause)
 
 **Decision:** Add a **per-greenhouse** optimizer enable/disable toggle beside the existing service-wide one.
