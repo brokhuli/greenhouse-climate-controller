@@ -53,7 +53,15 @@ and [`deploy/README.md`](../deploy/README.md#phase-3-optimizer)).
   endpoints (spec 10), with fail-fast configuration validation at startup.
 - `metrics.py` / `logging.py` — the Prometheus collectors and the structured JSON log stream.
 - `tests/` — the pytest suite; the planner is exercised through an injected fake chain, so no test
-  needs a live LLM.
+  needs a live LLM. The spec-08 evaluation strategy is realized here: `test_golden_scenarios.py` is the
+  consolidated **golden-scenario library** (§2) — the named twin trajectory-shaping and robustness
+  scenarios run as one suite — and `plan_variance.py` + `baselines/` are the per-backend
+  **plan-variance baselines** (§3): a bounded tolerance-band regression check keyed by
+  `(provider, model, prompt_version, sampling)`, with baseline *capture* a deliberate offline act
+  ([`tests/baselines/README.md`](tests/baselines/README.md)). `test_live_ollama.py` is the one
+  **opt-in, real-model** exception to the no-live-LLM rule: skipped unless
+  `RUN_LIVE_OLLAMA_TESTS=1`, it drives one cycle through the real chain against a live Ollama server
+  to prove the wiring against actual model output, not just the fakes.
 
 ## Running the service
 
