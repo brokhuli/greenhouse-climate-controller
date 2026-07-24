@@ -105,17 +105,42 @@ through the proxy, at the `/api/optimizer/*` routes the Go API aggregates. Open 
 While the optimizer is down or absent, the console renders it as `unavailable` and the rest of the stack is
 unaffected — the platform keeps serving the Phase 2 crop-profile baseline.
 
-Its planner runs against a local **`ollama`** model by default (offline, no API key). `fresh-run.sh` pulls
-the model into the `ollama_data` volume on bring-up — **the first run downloads several GB** — and it
-persists across restarts, so a plain `docker compose … up -d` needs no re-pull. The model defaults to
-`OLLAMA_MODEL` (`llama3.2`, in `deploy/.env`); an operator can also switch models at runtime from the
+### LLM backend: container vs. host Ollama
+
+Its planner runs against an **Ollama** server (offline, no API key). Which Ollama is a **config switch**
+in `deploy/.env` — pick one:
+
+- **Container (default).** A bundled `ollama` container runs in the stack — self-contained and
+  reproducible. `fresh-run.sh` pulls `OLLAMA_MODEL` into the `ollama_data` volume on bring-up (**the first
+  run downloads several GB**); it persists across restarts, so a plain `docker compose … up -d` needs no
+  re-pull. This is what `cp deploy/.env.example deploy/.env` gives you:
+
+  ```sh
+  COMPOSE_PROFILES=ollama-container
+  OPTIMIZER_LLM__ENDPOINT=http://ollama:11434
+  ```
+
+- **Host.** Reuse the Ollama already running on your machine — your existing models, no second server, no
+  re-download. Comment the two lines above and uncomment these:
+
+  ```sh
+  COMPOSE_PROFILES=
+  OPTIMIZER_LLM__ENDPOINT=http://host.docker.internal:11434
+  ```
+
+  With `COMPOSE_PROFILES` empty the `ollama` container is skipped entirely (it lives behind the
+  `ollama-container` profile), and the optimizer reaches your host via `host.docker.internal`.
+  `fresh-run.sh` detects the absent container and skips the model pull. Make sure the model named by
+  `OLLAMA_MODEL` is present on your host (`ollama list`).
+
+The model defaults to `OLLAMA_MODEL` (`llama3.2`); an operator can switch models at runtime from the
 console (within the provider's allowlist). To plan with a cloud model instead, set
 `OPTIMIZER_LLM__PROVIDER=anthropic|openai` on the `optimizer` service and supply `PLANNER_API_KEY`.
 
 Ollama runs on **CPU by default**; a GPU (NVIDIA Container Toolkit) is an optional speed-up, not required.
-The container has no memory ceiling — size Docker Desktop's memory to the chosen model (`llama3.2` ≈ 4 GB;
-`qwen2.5:7b` more). If cycles report an `extended` outcome because CPU inference exceeds the 90 s cycle
-timeout, switch to a smaller model or allocate a GPU.
+The bundled container has no memory ceiling — size Docker Desktop's memory to the chosen model
+(`llama3.2` ≈ 4 GB; `qwen2.5:7b` more). If cycles report an `extended` outcome because CPU inference
+exceeds the 90 s cycle timeout, switch to a smaller model or allocate a GPU.
 
 ## Service-auth hardening (RFC-011, dormant by default)
 
@@ -164,11 +189,11 @@ internal network — **nothing extra is exposed through the proxy**:
   escalations, and LLM-backend calls (`optimizer_*`). A single static target, like the `api`.
 
 ```sh
-open http://localhost:3000        # Grafana (admin/admin) → "Platform Health" + "Controller Fleet" + "Container Resources"
+open http://localhost:3000        # Grafana (admin/admin) → "Platform Health" + "Controller Fleet" + "Container Resources" + "Optimizer"
 open http://localhost:9090/targets # Prometheus — platform-api + controllers + cadvisor + optimizer should be UP
 ```
 
-Grafana's Prometheus datasource and all three dashboards are auto-provisioned from `deploy/grafana/`
+Grafana's Prometheus datasource and all four dashboards are auto-provisioned from `deploy/grafana/`
 (dropping a JSON into `grafana/dashboards/` is enough — the provider globs the directory); the admin
 login is `GRAFANA_ADMIN` / `GRAFANA_ADMIN_PASSWORD` (default `admin`/`admin`, in `deploy/.env`).
 
@@ -185,6 +210,15 @@ or more controllers. **Container Resources** follows the same layout for the cAd
 metrics — a "right now" row (containers running / total CPU / total memory), per-container CPU and
 memory bar gauges, an uptime table, and CPU / memory / network trend lines — scoped to the stack via
 `{name=~"greenhouse-.+"}`.
+
+**Optimizer** covers Phase 3 (`optimizer_*`) in the same idiom: a "right now" row (planning enabled /
+open escalations / age of the last applied plan / cycles + applied-share + twin failures over the range),
+then the cycle-outcome and escalation-reason bar charts, the planning-enabled state timeline with the
+open-escalation trend, cycle-duration p95 bar gauges + a distribution heatmap against the 90 s bound
+(P3-PERF-2), and a twin/backend-health row (twin failures per greenhouse and by kind, planner fallback +
+state-change suppression). A `$greenhouse` template variable filters the per-greenhouse panels; the
+service-wide gauges (enable, backlog, last-applied) are unfiltered. Because cycles are sparse (30 min
+cadence), counts use `increase(…[$__range])` rather than short rate windows.
 
 ## Inject demo faults
 

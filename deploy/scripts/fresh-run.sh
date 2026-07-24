@@ -40,14 +40,18 @@ bash "$SCRIPT_DIR/gen-controllers.sh" "$N"
 # 3. Build + start everything; --wait blocks until healthchecked services (incl. db, ollama) are healthy.
 "${COMPOSE[@]}" up -d --build --wait
 
-# 3b. Pull the optimizer's local LLM into the ollama volume. ollama is healthy after --wait, so this can
-#     run now; the pull is idempotent (a no-op once the model is cached in the named volume). Resolve the
-#     model the way compose does — exported OLLAMA_MODEL, else deploy/.env, else the llama3.2 default — so
-#     the pulled model matches the one the optimizer service will request.
-OLLAMA_MODEL="${OLLAMA_MODEL:-$(sed -n 's/^OLLAMA_MODEL=//p' "$DEPLOY_DIR/.env" 2>/dev/null | tail -n1)}"
-OLLAMA_MODEL="${OLLAMA_MODEL:-llama3.2}"
-echo "==> pulling ollama model '$OLLAMA_MODEL' (first run downloads several GB) ..."
-"${COMPOSE[@]}" exec -T ollama ollama pull "$OLLAMA_MODEL"
+# 3b. In container-Ollama mode, pull the model into the ollama volume (idempotent — a no-op once cached);
+#     ollama is healthy after --wait. In host-Ollama mode the ollama profile is off, so there is no
+#     container — skip the pull and let the optimizer use the models already on your host. Resolve the
+#     model the way compose does: exported OLLAMA_MODEL, else deploy/.env, else the llama3.2 default.
+if [ -n "$("${COMPOSE[@]}" ps -q ollama 2>/dev/null)" ]; then
+  OLLAMA_MODEL="${OLLAMA_MODEL:-$(sed -n 's/^OLLAMA_MODEL=//p' "$DEPLOY_DIR/.env" 2>/dev/null | tail -n1)}"
+  OLLAMA_MODEL="${OLLAMA_MODEL:-llama3.2}"
+  echo "==> pulling ollama model '$OLLAMA_MODEL' (first run downloads several GB) ..."
+  "${COMPOSE[@]}" exec -T ollama ollama pull "$OLLAMA_MODEL"
+else
+  echo "==> host-Ollama mode (no ollama container) — using your host models; skipping pull."
+fi
 
 # 4. Wait for the API (behind the proxy) to answer before the guarded reset / registration.
 echo "==> waiting for the API at $API ..."

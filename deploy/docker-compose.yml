@@ -7,9 +7,10 @@
 # `scripts/gen-controllers.sh N`; `docker compose up -d` reconciles platform + N controllers in one
 # command (operations §2).
 #
-# Phase 3: the `optimizer` (Python/FastAPI intelligence layer) plans refined setpoints against a local
-# `ollama` LLM backend, reached only through the api's /api/optimizer/* proxy; both join the internal
-# network, and the optimizer's /metrics joins Prometheus. Observability: Prometheus, Grafana, cAdvisor.
+# Phase 3: the `optimizer` (Python/FastAPI intelligence layer) plans refined setpoints against an
+# `ollama` LLM backend, reached only through the api's /api/optimizer/* proxy; its /metrics joins
+# Prometheus. The LLM backend is a config switch in deploy/.env — a bundled `ollama` container
+# (default) or your HOST Ollama. Observability: Prometheus, Grafana, cAdvisor.
 #
 # Auth is on: writes require an operator token. Log in at http://localhost:8080 as operator/operator
 # or viewer/viewer; scripts/curl fetch a token via `deploy/scripts/get-token.sh`.
@@ -172,6 +173,11 @@ services:
     # restarts. Runs on CPU by default; a GPU is an optional speed-up (required-dependencies §Phase 3),
     # not wired here. No deploy.resources limit: a loaded model's RAM footprint is model-dependent and a
     # too-low ceiling OOM-kills it — size Docker Desktop's memory to the chosen model instead.
+    #
+    # Gated behind the `ollama-container` profile: the LLM backend is a config switch (deploy/.env). The
+    # shipped default enables it (container mode); clear COMPOSE_PROFILES to use a HOST Ollama instead —
+    # then this container is skipped and the optimizer targets host.docker.internal (see optimizer below).
+    profiles: ["ollama-container"]
     image: ollama/ollama:0.5.7
     container_name: greenhouse-ollama
     restart: unless-stopped
@@ -198,18 +204,23 @@ services:
     container_name: greenhouse-optimizer
     restart: unless-stopped
     depends_on:
-      ollama:
-        condition: service_healthy
+      # No hard dependency on `ollama`: the LLM backend is a config switch (container vs. host), so the
+      # ollama service may be absent (host mode). The optimizer serves /health and retries the backend on
+      # each cadence regardless — matching how it already tolerates the api being briefly unreachable.
       api:
         condition: service_started # api has no healthcheck; the optimizer's data-access retries anyway
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # so host-Ollama mode resolves the host (Linux; a no-op on Desktop)
     environment:
       # Phase 2 read/write endpoint (matches the `api` service).
       OPTIMIZER_DATA__PLATFORM_API_URL: http://api:8080/api
-      # Planning backend — the local ollama default. Model is a Compose-level override of the code
-      # default (config.py); llama3.2 (3B) is snappier on CPU and more apt to finish inside the 90s
-      # cycle timeout than the spec's qwen2.5:7b. Switch models at runtime via POST /api/optimizer/model.
+      # Planning backend. PROVIDER is offline (spec 11). ENDPOINT is the LLM backend switch, interpolated
+      # from deploy/.env: the default targets the `ollama` container; host mode overrides it to
+      # http://host.docker.internal:11434 (and clears COMPOSE_PROFILES so no container runs). Model is a
+      # Compose-level override of the config.py default; llama3.2 (3B) is snappier on CPU and more apt to
+      # finish inside the 90s cycle timeout. Switch models at runtime via POST /api/optimizer/model.
       OPTIMIZER_LLM__PROVIDER: ollama
-      OPTIMIZER_LLM__ENDPOINT: http://ollama:11434
+      OPTIMIZER_LLM__ENDPOINT: ${OPTIMIZER_LLM__ENDPOINT:-http://ollama:11434}
       OPTIMIZER_LLM__MODEL: ${OLLAMA_MODEL:-llama3.2}
       # Service-to-service auth for the setpoint write path (RFC-011); must match the api's
       # PLATFORM_SERVICE_AUTH_MODE. Dormant `trusted_network` default — untokened on the local network.

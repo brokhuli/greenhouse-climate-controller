@@ -22,8 +22,8 @@ Rust controller exposes its **own** `/metrics` (`controller_*` — tick cadence/
 publish/connection, faults/mode, config applies), scraped as its own source of truth. Prometheus scrapes
 the API (static) and the dynamic controller fleet (file-SD emitted by `gen-controllers.sh`); Grafana
 auto-provisions *Platform Health* + *Controller Fleet*. The Phase 3 optimizer's `/metrics` (`optimizer_*`)
-now joins Prometheus as a static `optimizer` job, wired with the optimizer's Compose service; a dedicated
-Grafana dashboard for it remains a follow-up.
+now joins Prometheus as a static `optimizer` job, wired with the optimizer's Compose service, and Grafana
+auto-provisions a matching *Optimizer* dashboard.
 Outcome recorded in the [2026-07-05 ADR entry](./decisions/architecture-design-record.md) and
 [operations §1](./specs/design/platform/08-spec-platform-operations.md#1-observability).
 
