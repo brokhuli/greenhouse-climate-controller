@@ -67,4 +67,12 @@ class SetpointsPatch(StrictModel):
         # Mirrors the schema's ``minProperties: 1`` — an empty patch is meaningless.
         if not self.model_fields_set:
             raise ValueError("SetpointsPatch must set at least one field")
+        # Absent means "unchanged", so an *explicit* null carries no meaning and, unlike an omitted
+        # field, survives ``exclude_unset`` onto the wire — where it violates the setpoint API's
+        # non-null typed fields. Reject it here so the validated patch equals the submitted one.
+        explicit_nulls = [field for field in self.model_fields_set if getattr(self, field) is None]
+        if explicit_nulls:
+            raise ValueError(
+                f"SetpointsPatch fields must not be explicitly null: {', '.join(explicit_nulls)}"
+            )
         return self

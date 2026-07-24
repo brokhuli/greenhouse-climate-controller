@@ -173,10 +173,22 @@ class Scheduler:
         if not eligible:
             return []
 
-        await asyncio.gather(
+        results = await asyncio.gather(
             *(self._dispatch(greenhouse_id, on_demand=False) for greenhouse_id in eligible),
             return_exceptions=True,
         )
+        # run_cycle records every outcome itself, so a raised result means a fault escaped the
+        # record path entirely (e.g. dispatch/semaphore) — log it rather than let gather swallow it.
+        for greenhouse_id, result in zip(eligible, results, strict=True):
+            if isinstance(result, Exception):
+                logger.error(
+                    "planning cycle raised outside the record path",
+                    extra={
+                        "event": "optimizer_dispatch_error",
+                        "greenhouse_id": greenhouse_id,
+                        "error": repr(result),
+                    },
+                )
         return eligible
 
     async def _planning_loop(self) -> None:

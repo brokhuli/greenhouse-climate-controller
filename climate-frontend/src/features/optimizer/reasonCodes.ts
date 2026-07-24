@@ -59,6 +59,10 @@ export const REASON_CODES: Record<ReasonCode, { class: ReasonClass; description:
     class: "transient",
     description: "The LLM backend was unreachable and no fallback is configured.",
   },
+  internal_error: {
+    class: "transient",
+    description: "An unexpected fault interrupted the cycle; it was surfaced rather than lost.",
+  },
 };
 
 /** The triage class for a reason code, defaulting to "transient" for an unrecognised code. */

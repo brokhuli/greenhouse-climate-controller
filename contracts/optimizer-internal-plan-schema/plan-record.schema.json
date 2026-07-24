@@ -23,7 +23,8 @@
         "write_unauthorized",
         "platform_unavailable",
         "cycle_timeout",
-        "llm_unavailable"
+        "llm_unavailable",
+        "internal_error"
       ]
     },
     "Backend": {

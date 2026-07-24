@@ -13,6 +13,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
 import httpx
 from langchain_core.runnables import RunnableLambda
@@ -318,6 +319,7 @@ class StubPlatformClient(PlatformClient):
         self.fleet = fleet if fleet is not None else ["gh-a"]
         self.fleet_error = fleet_error
         self.submitted: list[tuple[str, SetpointsPatch]] = []
+        self.submitted_run_ids: list[UUID] = []
         self.reads: list[str] = []
 
     async def get_planning_context(
@@ -330,8 +332,11 @@ class StubPlatformClient(PlatformClient):
             return self.context
         return build_context(greenhouse_id=greenhouse_id)
 
-    async def submit_setpoints(self, greenhouse_id: str, patch: SetpointsPatch) -> WriteOutcome:
+    async def submit_setpoints(
+        self, greenhouse_id: str, patch: SetpointsPatch, *, optimizer_run_id: UUID
+    ) -> WriteOutcome:
         self.submitted.append((greenhouse_id, patch))
+        self.submitted_run_ids.append(optimizer_run_id)
         return self.write
 
     async def list_greenhouse_ids(self) -> list[str]:

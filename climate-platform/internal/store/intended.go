@@ -44,11 +44,11 @@ func (s *Store) AppendRevision(ctx context.Context, revision domain.SetpointRevi
 	}
 	var assigned int64
 	err = s.pool.QueryRow(ctx,
-		`INSERT INTO setpoint_revisions (greenhouse_id, revision, source, actor, reason, setpoints)
-		 SELECT $1, COALESCE(MAX(revision), 0) + 1, $2, $3, $4, $5
+		`INSERT INTO setpoint_revisions (greenhouse_id, revision, source, actor, reason, setpoints, optimizer_run_id)
+		 SELECT $1, COALESCE(MAX(revision), 0) + 1, $2, $3, $4, $5, $6
 		 FROM setpoint_revisions WHERE greenhouse_id=$1
 		 RETURNING revision`,
-		revision.GreenhouseID, string(revision.Source), revision.Actor, revision.Reason, string(setpoints)).
+		revision.GreenhouseID, string(revision.Source), revision.Actor, revision.Reason, string(setpoints), revision.OptimizerRunID).
 		Scan(&assigned)
 	if err != nil {
 		return 0, err
@@ -60,7 +60,7 @@ func (s *Store) AppendRevision(ctx context.Context, revision domain.SetpointRevi
 // false when the greenhouse has none yet.
 func (s *Store) CurrentRevision(ctx context.Context, greenhouseID string) (domain.SetpointRevision, bool, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT greenhouse_id, revision, source, actor, reason, setpoints, created_at
+		`SELECT greenhouse_id, revision, source, actor, reason, setpoints, created_at, optimizer_run_id
 		 FROM setpoint_revisions WHERE greenhouse_id=$1 ORDER BY revision DESC LIMIT 1`, greenhouseID)
 	if err != nil {
 		return domain.SetpointRevision{}, false, err
@@ -164,11 +164,15 @@ func scanRevision(rows pgx.Rows) (domain.SetpointRevision, error) {
 	var revision domain.SetpointRevision
 	var source string
 	var setpoints []byte
+	var optimizerRunID pgtype.Text
 	if err := rows.Scan(&revision.GreenhouseID, &revision.Revision, &source,
-		&revision.Actor, &revision.Reason, &setpoints, &revision.CreatedAt); err != nil {
+		&revision.Actor, &revision.Reason, &setpoints, &revision.CreatedAt, &optimizerRunID); err != nil {
 		return domain.SetpointRevision{}, err
 	}
 	revision.Source = domain.SetpointSource(source)
+	if optimizerRunID.Valid {
+		revision.OptimizerRunID = &optimizerRunID.String
+	}
 	if err := json.Unmarshal(setpoints, &revision.Setpoints); err != nil {
 		return domain.SetpointRevision{}, fmt.Errorf("unmarshal setpoints: %w", err)
 	}

@@ -16,7 +16,7 @@
     }
   },
   "ServiceUnavailable": {
-    "description": "The greenhouse exists and the submission validated, but its controller could not be reached to deliver the change. The intended state is recorded and re-asserted once the controller reconnects; retry is not required.",
+    "description": "No intended-state baseline could be established: the greenhouse has no prior intended state (a cold start) and its controller could not be reached to seed one, so the submission was NOT recorded. This is distinct from the offline-but-recorded case, which returns 202 (the change is held and re-asserted on reconnect). Transient — retry on a later cadence once a baseline exists or the controller reconnects.",
     "content": {
       "application/json": {
         "schema": { "$ref": "./schemas/common.json#/Error" }

@@ -110,6 +110,10 @@ func TestProfilesReconciliationState(t *testing.T) {
 	if err != nil || !found || current.Revision != 2 || current.Source != domain.SourceOperatorEdit || !current.Setpoints.Equal(edited) {
 		t.Fatalf("current revision=%+v found=%v err=%v", current, found, err)
 	}
+	// A non-optimizer revision has no run id — the nullable optimizer_run_id column round-trips as nil.
+	if current.OptimizerRunID != nil {
+		t.Fatalf("operator-edit revision must have null optimizer_run_id, got %v", *current.OptimizerRunID)
+	}
 
 	// Reconciliation bookkeeping upserts and reads back.
 	delivered := current.Revision

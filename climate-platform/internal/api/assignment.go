@@ -68,7 +68,7 @@ func (s *Server) setAssignment(c echo.Context) error {
 		return s.fail(c, err)
 	}
 	reason := fmt.Sprintf("profile %s stage %s", input.ProfileID, input.Stage)
-	outcome, err := s.reconcile.Apply(ctx, id, stage.Targets, domain.SourceProfile, "operator", reason)
+	outcome, err := s.reconcile.Apply(ctx, id, stage.Targets, domain.SourceProfile, "operator", reason, nil)
 	if err != nil {
 		if errors.Is(err, reconcile.ErrUnknownGreenhouse) {
 			return respondNotFound(c, "greenhouse not found")

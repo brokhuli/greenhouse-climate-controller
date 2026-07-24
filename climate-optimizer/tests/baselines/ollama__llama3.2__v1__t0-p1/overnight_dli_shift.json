@@ -10,7 +10,7 @@
   },
   "trajectory": [
     {
-      "at": "2026-07-11T12:00:00.000Z",
+      "at": "2026-06-17T12:00:00.000Z",
       "setpoints": {
         "temperature_day_c": 23.0,
         "co2_target_ppm": 1000,
@@ -19,7 +19,7 @@
       }
     },
     {
-      "at": "2026-07-11T13:00:00.000Z",
+      "at": "2026-06-17T13:00:00.000Z",
       "setpoints": {
         "temperature_day_c": 23.0,
         "co2_target_ppm": 1050,

@@ -16,7 +16,8 @@
       "write_unauthorized",
       "platform_unavailable",
       "cycle_timeout",
-      "llm_unavailable"
+      "llm_unavailable",
+      "internal_error"
     ],
     "description": "Canonical held-cycle reason code — a local copy of the optimizer's single-source-of-truth table (optimizer interfaces §Escalation reason codes), kept as a copy per this contract's self-contained convention. Required on an escalated outcome; the SPA renders it plus its class as a ReasonCodeChip."
   },

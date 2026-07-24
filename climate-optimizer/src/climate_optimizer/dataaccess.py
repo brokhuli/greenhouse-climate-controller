@@ -17,6 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from types import TracebackType
 from typing import Protocol
+from uuid import UUID
 
 import httpx
 from jsonschema import ValidationError as SchemaValidationError
@@ -28,6 +29,10 @@ from .config import Settings
 from .models import PlanningContext, ReasonCode, Setpoints, SetpointsPatch
 
 _DEFAULT_TIMEOUT_SECONDS = 30.0
+
+# Trace header carrying the cycle's optimizer_run_id onto the applied bundle's provenance so a Phase 2
+# revision can be traced back to the optimizer run that produced it (spec 06 §2/§3, P3-OBS-1).
+_OPTIMIZER_RUN_ID_HEADER = "X-Optimizer-Run-Id"
 
 
 class TokenSource(Protocol):
@@ -52,20 +57,11 @@ class WriteOutcome:
     applied: bool
     reason_code: ReasonCode | None
     message: str
-    controller_offline: bool = False
     setpoints: Setpoints | None = None
 
     @classmethod
-    def applied_ok(
-        cls, *, setpoints: Setpoints | None, controller_offline: bool = False, message: str
-    ) -> WriteOutcome:
-        return cls(
-            applied=True,
-            reason_code=None,
-            message=message,
-            controller_offline=controller_offline,
-            setpoints=setpoints,
-        )
+    def applied_ok(cls, *, setpoints: Setpoints | None, message: str) -> WriteOutcome:
+        return cls(applied=True, reason_code=None, message=message, setpoints=setpoints)
 
     @classmethod
     def escalated(cls, reason_code: ReasonCode, message: str) -> WriteOutcome:
@@ -175,8 +171,14 @@ class PlatformClient:
                 ReasonCode.CONTRACT_DRIFT, f"planning-context response invalid: {err}"
             ) from err
 
-    async def submit_setpoints(self, greenhouse_id: str, patch: SetpointsPatch) -> WriteOutcome:
-        """Submit refined setpoints; map every Phase-2 response to a canonical outcome."""
+    async def submit_setpoints(
+        self, greenhouse_id: str, patch: SetpointsPatch, *, optimizer_run_id: UUID
+    ) -> WriteOutcome:
+        """Submit refined setpoints; map every Phase-2 response to a canonical outcome.
+
+        ``optimizer_run_id`` rides an ``X-Optimizer-Run-Id`` trace header so Phase 2 can record it on
+        the applied bundle's provenance (spec 06 §2/§3, P3-OBS-1).
+        """
         url = f"{self._base}/greenhouses/{greenhouse_id}/setpoints"
         body = patch.model_dump(mode="json", exclude_unset=True)
         try:
@@ -186,6 +188,7 @@ class PlatformClient:
             return WriteOutcome.escalated(
                 ReasonCode.WRITE_UNAUTHORIZED, f"could not acquire service token: {err}"
             )
+        headers[_OPTIMIZER_RUN_ID_HEADER] = str(optimizer_run_id)
         try:
             response = await self._client.post(url, json=body, headers=headers)
         except (httpx.TimeoutException, httpx.TransportError) as err:
@@ -202,10 +205,13 @@ class PlatformClient:
                 setpoints = None
             return WriteOutcome.applied_ok(setpoints=setpoints, message="setpoints accepted (202)")
         if code == 503:
-            return WriteOutcome.applied_ok(
-                setpoints=None,
-                controller_offline=True,
-                message="recorded; controller offline (503), re-asserted on reconnect",
+            # A 503 is *not* the recorded-but-offline case (Phase 2 returns 202 for that, holding
+            # the bundle for reconnect). It means Phase 2 could not establish a baseline — cold start
+            # with the controller unreachable — so nothing was recorded. Treat it as a transient hold
+            # and never claim ownership of state Phase 2 does not hold (spec 06 Write outcomes).
+            return WriteOutcome.escalated(
+                ReasonCode.PLATFORM_UNAVAILABLE,
+                "platform could not establish a baseline (503); nothing recorded, retry next cadence",
             )
         if code == 422:
             return WriteOutcome.escalated(

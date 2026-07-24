@@ -110,13 +110,14 @@ raising gates reference it rather than re-listing codes.
 | `contract_drift` | input gating — identity / `schema_version` mismatch; write path — Phase 2 `404` (greenhouse not in the platform registry) | persistent |
 | `twin_diverged` | twin — numerical divergence (non-finite / out-of-envelope step) | transient |
 | `twin_fidelity_fault` | twin — sustained parameter drift | persistent |
-| `constraint_violation` | constraint engine — target out of crop-safe range, or an inconsistent setpoint bundle | persistent (for this plan) |
+| `constraint_violation` | constraint engine — target out of crop-safe range, an inconsistent setpoint bundle, or a malformed trajectory (not anchored at `horizon.start`, unordered, or non-hourly) | persistent (for this plan) |
 | `low_confidence` | application gate — plan below the confidence threshold | transient |
 | `bounds_mismatch` | write path — Phase 2 `422` disagreement with local bounds | persistent |
 | `write_unauthorized` | write path — Phase 2 `401` / `403` (missing/invalid token or absent `setpoints:write` role, `SERVICE_AUTH_MODE=oidc`) | persistent |
-| `platform_unavailable` | read / write path — Phase 2 REST unreachable (transport failure / timeout / 5xx gateway) | transient |
+| `platform_unavailable` | read / write path — Phase 2 REST unreachable (transport failure / timeout / 5xx gateway), or a write `503` where Phase 2 could not establish a baseline (nothing recorded) | transient |
 | `cycle_timeout` | resilience — cycle overran `cycle_timeout_seconds` | transient |
 | `llm_unavailable` | planner — backend unreachable and no fallback configured | transient |
+| `internal_error` | resilience — an unexpected fault escaped the pipeline (twin, storage, serialization, client); surfaced so no cycle fails silently ([P3-RESIL-1](../../artifacts/non-functional-requirements.md)) | transient |
 
 **Class** is the operator-triage hint the input gate already draws
 ([input gating](./07-spec-optimizer-input-gating.md)): a **transient** code may clear on the next cycle

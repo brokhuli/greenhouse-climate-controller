@@ -92,3 +92,17 @@ def test_empty_setpoints_patch_rejected() -> None:
 def test_unknown_field_rejected() -> None:
     with pytest.raises(ValidationError):
         SetpointsPatch.model_validate({"nope": 1})
+
+
+def test_explicit_null_field_rejected() -> None:
+    # An explicit null is not "unchanged" — it would survive exclude_unset onto the wire and
+    # violate the setpoint API's non-null field types, so it must be rejected up front.
+    with pytest.raises(ValidationError):
+        SetpointsPatch(temperature_day_c=None)
+    with pytest.raises(ValidationError):
+        SetpointsPatch.model_validate({"temperature_day_c": 22.5, "vpd_target_kpa": None})
+
+
+def test_partial_patch_still_valid() -> None:
+    patch = SetpointsPatch(temperature_day_c=22.5)
+    assert patch.model_dump(exclude_unset=True) == {"temperature_day_c": 22.5}

@@ -11,8 +11,20 @@ interlocks, or reachability: those are controller-owned (spec 06 §1).
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import timedelta
 
-from .models import Bound, OptimizerPlan, OutcomeStatus, ReasonCode, SetpointsPatch, StageBounds
+from .models import (
+    Bound,
+    Horizon,
+    OptimizerPlan,
+    OutcomeStatus,
+    ReasonCode,
+    SetpointsPatch,
+    StageBounds,
+)
+
+# The refined trajectory is documented as one point per hour across the horizon (spec 05 §2).
+_TRAJECTORY_STEP = timedelta(hours=1)
 
 # Scalar climate targets carrying an optional crop-safe Bound (spec 06 §1 / StageBounds).
 _BOUNDED_SCALARS: tuple[str, ...] = (
@@ -78,6 +90,33 @@ def check_immediate_matches_trajectory(plan: OptimizerPlan) -> str | None:
     return None
 
 
+def check_trajectory_timing(plan: OptimizerPlan, horizon: Horizon) -> str | None:
+    """The trajectory must be an ordered, hourly walk anchored at the horizon and staying inside it.
+
+    The documented shape is one point per hour across the horizon (spec 05 §2). The load-bearing
+    invariant is that ``trajectory[0]`` is the bundle applied *this* cadence, so it must sit at
+    ``horizon.start``; the rest must be strictly ordered, hour-spaced, and within the horizon. We do
+    *not* require the tail to reach ``horizon.end`` — beyond the head the trajectory is a surfaced
+    planning artifact, never re-applied (spec 04), so an under-length tail is not a safety concern.
+    """
+    points = plan.trajectory
+    if points[0].at != horizon.start:
+        return f"trajectory[0].at {points[0].at.isoformat()} is not horizon.start {horizon.start.isoformat()}"
+    previous = points[0].at
+    for index, point in enumerate(points[1:], start=1):
+        if point.at <= previous:
+            return f"trajectory[{index}].at {point.at.isoformat()} is not after the previous point"
+        if point.at - previous != _TRAJECTORY_STEP:
+            return f"trajectory[{index}].at {point.at.isoformat()} is not one hour after the previous point"
+        previous = point.at
+    if points[-1].at > horizon.end:
+        return (
+            f"trajectory[{len(points) - 1}].at {points[-1].at.isoformat()} "
+            f"is past horizon.end {horizon.end.isoformat()}"
+        )
+    return None
+
+
 def check_bundle_consistency(patch: SetpointsPatch) -> str | None:
     """Cross-field invariants checkable from the bundle alone (no physical model)."""
     if (
@@ -128,9 +167,12 @@ def check_crop_safe_range(patch: SetpointsPatch, bounds: StageBounds | None) -> 
     return None
 
 
-def check_constraints(plan: OptimizerPlan, bounds: StageBounds | None) -> ConstraintResult:
+def check_constraints(
+    plan: OptimizerPlan, bounds: StageBounds | None, horizon: Horizon
+) -> ConstraintResult:
     """Run the deterministic constraint engine; first violation wins (all → constraint_violation)."""
     for check in (
+        check_trajectory_timing(plan, horizon),
         check_immediate_matches_trajectory(plan),
         check_bundle_consistency(plan.immediate_setpoints),
         check_crop_safe_range(plan.immediate_setpoints, bounds),
@@ -144,6 +186,7 @@ def evaluate_application(
     plan: OptimizerPlan,
     bounds: StageBounds | None,
     confidence_threshold: float,
+    horizon: Horizon,
 ) -> ApplicationDecision:
     """Combine the constraint engine and confidence gate into an apply / escalate / extend decision.
 
@@ -158,7 +201,7 @@ def evaluate_application(
             OutcomeStatus.EXTENDED, message="no crop-safe bounds present; holding baseline"
         )
 
-    result = check_constraints(plan, bounds)
+    result = check_constraints(plan, bounds, horizon)
     if not result.ok:
         return ApplicationDecision(OutcomeStatus.ESCALATED, result.reason_code, result.message)
 

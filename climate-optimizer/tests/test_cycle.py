@@ -116,16 +116,40 @@ async def test_an_applied_record_names_no_source_plan() -> None:
     assert record.source_plan_id is None
 
 
-async def test_a_controller_offline_write_still_counts_as_applied() -> None:
+async def test_a_recorded_write_counts_as_applied() -> None:
+    # A 202 — delivered, or held by Phase 2 for an offline controller and re-asserted on reconnect —
+    # is a successful apply; the optimizer owns the intended state. (A 503, by contrast, records
+    # nothing and escalates — see test_a_rejected_write_escalates_with_the_write_reason.)
     client = StubPlatformClient(
-        write=WriteOutcome.applied_ok(
-            setpoints=None, controller_offline=True, message="recorded; controller offline"
-        )
+        write=WriteOutcome.applied_ok(setpoints=None, message="recorded (202)")
     )
     record = await _run(client=client)
 
-    # Phase 2 recorded the intent and re-asserts on reconnect, so the cycle succeeded.
     assert record.outcome.status is OutcomeStatus.APPLIED
+
+
+# -- the resilience invariant: every cycle emits a record -------------------
+
+
+async def test_an_unexpected_error_escalates_as_internal_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A fault the pipeline never anticipated (here: the twin blowing up) must not vanish — the
+    # cycle still emits a contract-valid, persisted, escalated record so an operator sees it.
+    def boom(*_args: Any, **_kwargs: Any) -> Any:
+        raise RuntimeError("twin exploded")
+
+    monkeypatch.setattr("climate_optimizer.cycle.simulate", boom)
+
+    store = ServiceStore()
+    record = await _run(store=store)
+
+    assert record.outcome.status is OutcomeStatus.ESCALATED
+    assert record.outcome.reason_code is ReasonCode.INTERNAL_ERROR
+    assert record.plan is None
+    schema_validation.validate_plan_record(plan_record_payload(record))
+    assert store.plans.latest("gh-a") is record
+    assert store.escalations.backlog() >= 1
 
 
 # -- pre-planner holds (plan is null) ---------------------------------------
@@ -262,6 +286,26 @@ async def test_a_low_confidence_plan_is_surfaced_not_applied() -> None:
     assert record.outcome.reason_code is ReasonCode.LOW_CONFIDENCE
     assert record.plan is not None  # the rejected plan is kept for review
     assert client.submitted == []
+
+
+async def test_a_post_planner_escalation_does_not_name_a_source_plan() -> None:
+    # A prior cycle applied, so a source_plan_id *is* available; but a post-planner escalation
+    # carries the plan it rejected, so it must not also name a held source (contract §3).
+    client = StubPlatformClient()
+    store = ServiceStore()
+
+    applied = await _run(client=client, store=store)
+    escalated = await _run(
+        client=client,
+        store=store,
+        on_demand=True,  # bypass state-change suppression so the planner actually runs
+        chain=fake_chain(build_output(build_plan(confidence=0.4))),
+    )
+
+    assert applied.source_plan_id is None
+    assert escalated.outcome.reason_code is ReasonCode.LOW_CONFIDENCE
+    assert escalated.plan is not None
+    assert escalated.source_plan_id is None
 
 
 async def test_an_out_of_bounds_target_is_a_constraint_violation() -> None:

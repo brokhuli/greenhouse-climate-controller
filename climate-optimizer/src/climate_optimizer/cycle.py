@@ -192,6 +192,25 @@ async def run_cycle(
             reason_code=held.reason_code,
             message=held.message,
         )
+    except Exception as err:  # noqa: BLE001 — the invariant is that *every* cycle emits a record
+        # An unexpected fault (twin, storage, serialization, client, …) must not vanish silently:
+        # surface it as an escalation so the greenhouse holds its last bundle and an operator sees it
+        # (P3-RESIL-1). The traceback goes to the log; the record carries only a bounded summary.
+        logger.exception(
+            "planning cycle failed unexpectedly",
+            extra={
+                "event": "optimizer_cycle_error",
+                "optimizer_run_id": str(frame.run_id),
+                "greenhouse_id": frame.greenhouse_id,
+            },
+        )
+        record = _build_record(
+            frame,
+            plan=None,
+            status=OutcomeStatus.ESCALATED,
+            reason_code=ReasonCode.INTERNAL_ERROR,
+            message=f"unexpected cycle error: {type(err).__name__}: {err}",
+        )
 
     _settle(record, store=store, settings=settings, now=frame.now)
     metrics.CYCLE_DURATION_SECONDS.labels(greenhouse_id).observe(time.monotonic() - started)
@@ -317,7 +336,7 @@ async def _run_pipeline(
 
     # 8. Validate — the deterministic guardrails, and the confidence gate (spec 06).
     decision_gate = evaluate_application(
-        plan, ctx.setpoints.bounds, settings.application.confidence_threshold
+        plan, ctx.setpoints.bounds, settings.application.confidence_threshold, frame.horizon
     )
     if decision_gate.status is not OutcomeStatus.APPLIED:
         raise _Held(
@@ -338,7 +357,9 @@ async def _run_pipeline(
         )
 
     # 9. Apply — only the immediate next bundle, layered on the crop baseline (spec 06 §2).
-    write = await client.submit_setpoints(frame.greenhouse_id, plan.immediate_setpoints)
+    write = await client.submit_setpoints(
+        frame.greenhouse_id, plan.immediate_setpoints, optimizer_run_id=frame.run_id
+    )
     if not write.applied:
         raise _Held(OutcomeStatus.ESCALATED, write.reason_code, write.message, plan=plan)
 
@@ -408,7 +429,13 @@ def _build_record(
     reason_code: ReasonCode | None,
     message: str | None,
 ) -> PlanRecord:
-    """Assemble the cycle's record; ``source_plan_id`` names the bundle left in force on a hold."""
+    """Assemble the cycle's record.
+
+    ``source_plan_id`` names the prior accepted bundle left in force *only when this cycle produced
+    no plan* (``plan is None`` — a pre-planner hold or a cold-start ``extended``). A post-planner
+    escalation carries the plan it rejected, so it does not also name a source (contract §3: present
+    when ``plan`` is null). Absent on a cold start, where ``frame.source_plan_id`` is itself ``None``.
+    """
     return PlanRecord(
         schema_version=PLAN_RECORD_SCHEMA_VERSION,
         optimizer_run_id=frame.run_id,
@@ -417,7 +444,7 @@ def _build_record(
         horizon=frame.horizon,
         backend=frame.backend,
         plan=plan,
-        source_plan_id=None if status is OutcomeStatus.APPLIED else frame.source_plan_id,
+        source_plan_id=frame.source_plan_id if plan is None else None,
         outcome=Outcome(status=status, reason_code=reason_code, message=message),
     )
 

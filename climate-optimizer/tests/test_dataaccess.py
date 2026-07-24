@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from uuid import UUID
+
 import httpx
 import pytest
 import respx
@@ -14,6 +16,7 @@ from conftest import build_setpoints, load_fixture
 _READ_URL = "http://api:8080/api/greenhouses/gh-a/planning-context"
 _WRITE_URL = "http://api:8080/api/greenhouses/gh-a/setpoints"
 _PATCH = SetpointsPatch(temperature_day_c=22.5)
+_RUN_ID = UUID("018f9c2e-6b7a-7c31-9e4d-2a1b5c6d7e8f")
 
 
 @respx.mock
@@ -50,21 +53,33 @@ async def test_write_202_applied() -> None:
     body = build_setpoints().model_dump(mode="json")
     respx.post(_WRITE_URL).mock(return_value=httpx.Response(202, json=body))
     async with PlatformClient(Settings()) as client:
-        outcome = await client.submit_setpoints("gh-a", _PATCH)
+        outcome = await client.submit_setpoints("gh-a", _PATCH, optimizer_run_id=_RUN_ID)
     assert outcome.applied
     assert outcome.setpoints is not None
-    assert not outcome.controller_offline
 
 
 @respx.mock
-async def test_write_503_applied_controller_offline() -> None:
-    respx.post(_WRITE_URL).mock(
-        return_value=httpx.Response(503, json={"error": "controller offline"})
+async def test_write_sends_optimizer_run_id_header() -> None:
+    # P3-OBS-1: the applied bundle must carry its run id so Phase 2 can record it as provenance.
+    route = respx.post(_WRITE_URL).mock(
+        return_value=httpx.Response(202, json=build_setpoints().model_dump(mode="json"))
     )
     async with PlatformClient(Settings()) as client:
-        outcome = await client.submit_setpoints("gh-a", _PATCH)
-    assert outcome.applied
-    assert outcome.controller_offline
+        await client.submit_setpoints("gh-a", _PATCH, optimizer_run_id=_RUN_ID)
+    assert route.calls.last.request.headers["x-optimizer-run-id"] == str(_RUN_ID)
+
+
+@respx.mock
+async def test_write_503_escalates_platform_unavailable() -> None:
+    # Phase 2's 503 means no baseline could be established and nothing was recorded — the optimizer
+    # must not report it as applied (spec 06 Write outcomes).
+    respx.post(_WRITE_URL).mock(
+        return_value=httpx.Response(503, json={"error": "controller unreachable"})
+    )
+    async with PlatformClient(Settings()) as client:
+        outcome = await client.submit_setpoints("gh-a", _PATCH, optimizer_run_id=_RUN_ID)
+    assert not outcome.applied
+    assert outcome.reason_code is ReasonCode.PLATFORM_UNAVAILABLE
 
 
 @pytest.mark.parametrize(
@@ -81,7 +96,7 @@ async def test_write_503_applied_controller_offline() -> None:
 async def test_write_error_mapping(status: int, reason: ReasonCode) -> None:
     respx.post(_WRITE_URL).mock(return_value=httpx.Response(status, json={"error": "x"}))
     async with PlatformClient(Settings()) as client:
-        outcome = await client.submit_setpoints("gh-a", _PATCH)
+        outcome = await client.submit_setpoints("gh-a", _PATCH, optimizer_run_id=_RUN_ID)
     assert not outcome.applied
     assert outcome.reason_code is reason
 
@@ -90,7 +105,7 @@ async def test_write_error_mapping(status: int, reason: ReasonCode) -> None:
 async def test_write_transport_failure_is_platform_unavailable() -> None:
     respx.post(_WRITE_URL).mock(side_effect=httpx.ConnectError("refused"))
     async with PlatformClient(Settings()) as client:
-        outcome = await client.submit_setpoints("gh-a", _PATCH)
+        outcome = await client.submit_setpoints("gh-a", _PATCH, optimizer_run_id=_RUN_ID)
     assert outcome.reason_code is ReasonCode.PLATFORM_UNAVAILABLE
 
 
@@ -101,7 +116,7 @@ async def test_oidc_mode_attaches_bearer_token() -> None:
     )
     settings = Settings(platform_auth={"mode": "oidc"})
     async with PlatformClient(settings, bearer_token="tok-123") as client:
-        await client.submit_setpoints("gh-a", _PATCH)
+        await client.submit_setpoints("gh-a", _PATCH, optimizer_run_id=_RUN_ID)
     assert route.calls.last.request.headers["authorization"] == "Bearer tok-123"
 
 
@@ -111,5 +126,5 @@ async def test_trusted_network_sends_no_token() -> None:
         return_value=httpx.Response(202, json=build_setpoints().model_dump(mode="json"))
     )
     async with PlatformClient(Settings(), bearer_token="tok-123") as client:
-        await client.submit_setpoints("gh-a", _PATCH)
+        await client.submit_setpoints("gh-a", _PATCH, optimizer_run_id=_RUN_ID)
     assert "authorization" not in route.calls.last.request.headers

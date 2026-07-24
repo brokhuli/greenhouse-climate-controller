@@ -127,6 +127,7 @@ class ReasonCode(StrEnum):
     PLATFORM_UNAVAILABLE = "platform_unavailable"
     CYCLE_TIMEOUT = "cycle_timeout"
     LLM_UNAVAILABLE = "llm_unavailable"
+    INTERNAL_ERROR = "internal_error"
 
 
 # Raise-time class for each reason code (optimizer interfaces spec table). Used by the input
@@ -147,4 +148,7 @@ REASON_CLASS: dict[ReasonCode, ReasonClass] = {
     ReasonCode.PLATFORM_UNAVAILABLE: ReasonClass.TRANSIENT,
     ReasonCode.CYCLE_TIMEOUT: ReasonClass.TRANSIENT,
     ReasonCode.LLM_UNAVAILABLE: ReasonClass.TRANSIENT,
+    # An unexpected fault self-heals on the next cadence if the trigger was momentary; a recurring
+    # one folds into a standing escalation rather than re-firing every cycle.
+    ReasonCode.INTERNAL_ERROR: ReasonClass.TRANSIENT,
 }
