@@ -10,9 +10,17 @@ the relevant ADR / RFC.
 
 | Item | Why | Blocked on / When | Reference |
 |---|---|---|---|
-| Extend CI: coverage + per-phase gates | The CI pipeline now re-runs the Rust gate and the contract harness on push/PR ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)), but coverage is not yet enforced (`P1-TEST-1`, `cargo llvm-cov`), and the Go, Python, frontend, and load gates are not wired. | Coverage is wireable now; the per-phase gates land with the phase they verify (Phase 2 Go, Phase 3 Python, frontend). | [RFC-010](./decisions/request-for-comments.md#rfc-010-verification--continuous-integration-strategy); [`spec-verification.md §4`](./specs/design/spec-verification.md#4-tooling-matrix), [`§6`](./specs/design/spec-verification.md#6-ci-topology) |
+| Extend CI: coverage + load gate | The CI pipeline now re-runs the Rust, Go, Python (Phase 3 optimizer), contracts, and frontend gates on push/PR ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)), but coverage is not yet enforced (`P1-TEST-1`, `cargo llvm-cov`), and the load gate is not wired. | Coverage is wireable now; the load gate lands with the phase it verifies. | [RFC-010](./decisions/request-for-comments.md#rfc-010-verification--continuous-integration-strategy); [`spec-verification.md §4`](./specs/design/spec-verification.md#4-tooling-matrix), [`§6`](./specs/design/spec-verification.md#6-ci-topology) |
 
 ### Notes
+
+**Python CI gate landed (2026-07-24).** The `optimizer` job in
+[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) now runs the Phase 3 climate-optimizer
+gate (`uv sync --frozen`, `ruff format --check`, `ruff check`, `mypy`, `pytest`) on push/PR,
+mirroring the local `.githooks/pre-commit` Python gate. The suite stays deterministic and
+network-free in CI: the live-Ollama test is opt-in only (`RUN_LIVE_OLLAMA_TESTS=1`), and the
+plan-variance regression tests compare against committed baseline fixtures rather than a live
+backend.
 
 **2b observability slice landed (2026-07-05).** Prometheus + Grafana now ship in the Compose stack
 (removing the item formerly listed above). The Go `api` exposes **`/metrics`** (`platform_*` — ingestion

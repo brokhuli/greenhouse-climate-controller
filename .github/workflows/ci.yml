@@ -2,11 +2,10 @@ name: CI
 
 # Clean-environment gate (RFC-010 / spec-verification.md §6). Re-runs, away from a
 # developer's machine, the same gates the local .githooks/pre-commit hook fires —
-# the Rust gate and the contract-validation harness. The frontend gate (lint /
-# typecheck / unit tests + blocking Lighthouse CI against the static production
-# build) also runs here; its Playwright E2E stays local (needs the live stack).
-# Remaining per-phase gates (Python/load) and coverage enforcement land with the
-# phases they verify.
+# the Rust gate, the Python gate (climate-optimizer), and the contract-validation
+# harness. The frontend gate (lint / typecheck / unit tests + blocking Lighthouse CI
+# against the static production build) also runs here; its Playwright E2E stays
+# local (needs the live stack). Remaining: the load gate and coverage enforcement.
 
 on:
   push:
