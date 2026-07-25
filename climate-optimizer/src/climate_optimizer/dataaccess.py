@@ -14,6 +14,7 @@ untokened; ``oidc`` attaches a ``Bearer`` service token, acquired on demand from
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from types import TracebackType
 from typing import Protocol
@@ -52,12 +53,19 @@ class PlatformError(Exception):
 
 @dataclass(frozen=True)
 class WriteOutcome:
-    """The outcome of a setpoint submission, mapped from the Phase-2 response (spec 06 Write outcomes)."""
+    """The outcome of a setpoint submission, mapped from the Phase-2 response (spec 06 Write outcomes).
+
+    Three shapes: ``applied`` (Phase 2 accepted the bundle), ``escalated`` (a failure carrying its
+    reason code), and ``held`` — the write was *withheld before dispatch* because planning was paused
+    after the service token was acquired but before the request left the process. A hold is neither a
+    success nor a fault: the caller extends the baseline, without escalating.
+    """
 
     applied: bool
     reason_code: ReasonCode | None
     message: str
     setpoints: Setpoints | None = None
+    held: bool = False
 
     @classmethod
     def applied_ok(cls, *, setpoints: Setpoints | None, message: str) -> WriteOutcome:
@@ -66,6 +74,11 @@ class WriteOutcome:
     @classmethod
     def escalated(cls, reason_code: ReasonCode, message: str) -> WriteOutcome:
         return cls(applied=False, reason_code=reason_code, message=message)
+
+    @classmethod
+    def withheld(cls, message: str) -> WriteOutcome:
+        """Planning paused between token acquisition and dispatch; nothing was sent."""
+        return cls(applied=False, reason_code=None, message=message, held=True)
 
 
 class PlatformClient:
@@ -172,12 +185,23 @@ class PlatformClient:
             ) from err
 
     async def submit_setpoints(
-        self, greenhouse_id: str, patch: SetpointsPatch, *, optimizer_run_id: UUID
+        self,
+        greenhouse_id: str,
+        patch: SetpointsPatch,
+        *,
+        optimizer_run_id: UUID,
+        still_active: Callable[[], bool] | None = None,
     ) -> WriteOutcome:
         """Submit refined setpoints; map every Phase-2 response to a canonical outcome.
 
         ``optimizer_run_id`` rides an ``X-Optimizer-Run-Id`` trace header so Phase 2 can record it on
         the applied bundle's provenance (spec 06 §2/§3, P3-OBS-1).
+
+        ``still_active`` is the caller's enable predicate, re-evaluated *after* the service token is
+        acquired (in ``oidc`` mode that acquisition can suspend on a network round-trip) and
+        immediately before the request is dispatched. This closes the acquire-then-send race: an
+        operator who pauses while the token is in flight must still see no write (spec 09). A pause
+        caught here returns :meth:`WriteOutcome.withheld` — nothing is sent.
         """
         url = f"{self._base}/greenhouses/{greenhouse_id}/setpoints"
         body = patch.model_dump(mode="json", exclude_unset=True)
@@ -187,6 +211,10 @@ class PlatformClient:
             # No service credential means the write cannot be authorized (RFC-011).
             return WriteOutcome.escalated(
                 ReasonCode.WRITE_UNAUTHORIZED, f"could not acquire service token: {err}"
+            )
+        if still_active is not None and not still_active():
+            return WriteOutcome.withheld(
+                "planning paused after service-token acquisition; setpoint write withheld"
             )
         headers[_OPTIMIZER_RUN_ID_HEADER] = str(optimizer_run_id)
         try:

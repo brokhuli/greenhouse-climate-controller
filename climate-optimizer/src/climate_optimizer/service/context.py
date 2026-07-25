@@ -205,12 +205,14 @@ async def build_health(ctx: ServiceContext, *, now: datetime | None = None) -> H
         degraded_reason = DegradedReason.PLATFORM_UNREACHABLE
     elif not llm_reachable:
         degraded_reason = DegradedReason.LLM_UNREACHABLE
+    elif _planning_paused(ctx):
+        # A read-only pause is a healthy, intentional state: both a never-run cold start and a
+        # growing last-successful-cycle age are *expected* while planning is disabled, so neither
+        # cold_start nor cycle_stalled applies (spec 09; contract: those reasons are enabled-only).
+        degraded_reason = None
     elif last_cycle is None:
         degraded_reason = DegradedReason.COLD_START
-    elif (
-        not _planning_paused(ctx)
-        and (moment - last_cycle).total_seconds() > cadence_secs * _STALL_CADENCE_MULTIPLE
-    ):
+    elif (moment - last_cycle).total_seconds() > cadence_secs * _STALL_CADENCE_MULTIPLE:
         degraded_reason = DegradedReason.CYCLE_STALLED
 
     return HealthResponse(

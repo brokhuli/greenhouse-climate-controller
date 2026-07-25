@@ -133,6 +133,42 @@ def test_a_paused_optimizer_is_healthy_not_stalled(monkeypatch: pytest.MonkeyPat
     assert body["read_only_reason"] == "maintenance"
 
 
+def test_a_paused_optimizer_before_any_cycle_is_healthy_not_cold_start(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ctx = _context(settings=_offline_llm_settings(monkeypatch))
+    # Disabled at startup with no prior apply: a never-run cold start is *expected* while paused,
+    # so it must report a healthy read-only state, not degraded (contract: cold_start is enabled-only).
+    ctx.runtime.set_enabled(False, reason="pre-commissioning")
+    client, _ctx = _client(ctx)
+
+    body = client.get("/health").json()
+
+    assert body["status"] == "healthy"
+    assert body["degraded_reason"] is None
+    assert body["enabled"] is False
+    assert body["read_only_reason"] == "pre-commissioning"
+    assert body["last_successful_cycle_at"] is None
+
+
+def test_an_all_disabled_fleet_before_any_cycle_is_healthy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ctx = _context(settings=_offline_llm_settings(monkeypatch))
+    # Globally enabled but every known greenhouse individually paused, and nothing applied yet: the
+    # absent cold-start cycle is expected, not a degraded state (spec 09 §Per-greenhouse pause).
+    ctx.store.known_greenhouse_ids.update({"gh-a", "gh-b"})
+    ctx.runtime.set_greenhouse_enabled("gh-a", False)
+    ctx.runtime.set_greenhouse_enabled("gh-b", False)
+    client, _ctx = _client(ctx)
+
+    body = client.get("/health").json()
+
+    assert body["status"] == "healthy"
+    assert body["degraded_reason"] is None
+    assert body["last_successful_cycle_at"] is None
+
+
 def test_health_reports_a_stalled_loop(monkeypatch: pytest.MonkeyPatch) -> None:
     ctx = _context(settings=_offline_llm_settings(monkeypatch))
     ctx.store.last_successful_cycle_at = datetime.now(UTC) - timedelta(hours=6)

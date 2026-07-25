@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from uuid import UUID
 
 import pytest
 from langchain_core.runnables import RunnableLambda
@@ -50,6 +52,7 @@ async def _run(
     store: ServiceStore | None = None,
     runtime: RuntimeState | None = None,
     on_demand: bool = False,
+    now: datetime = NOW,
 ) -> PlanRecord:
     resolved = settings or Settings()
     return await run_cycle(
@@ -60,7 +63,7 @@ async def _run(
         runtime=runtime or RuntimeState(resolved),
         store=store or ServiceStore(),
         params=PARAMS,
-        now=NOW,
+        now=now,
         on_demand=on_demand,
     )
 
@@ -222,6 +225,41 @@ async def test_a_cycle_that_overruns_its_timeout_is_held() -> None:
     assert record.plan is None
 
 
+async def test_a_decided_write_is_not_cancelled_by_the_cycle_timeout() -> None:
+    # The cycle timeout bounds *deliberation*, not the commit. A write that outruns the timeout but
+    # completes under its own deadline must still be recorded as applied — otherwise Phase 2 could
+    # commit a revision this cycle reports as a timeout (P3-RESIL-1).
+    class SlowWriteClient(StubPlatformClient):
+        async def submit_setpoints(
+            self,
+            greenhouse_id: str,
+            patch: SetpointsPatch,
+            *,
+            optimizer_run_id: UUID,
+            still_active: Callable[[], bool] | None = None,
+        ) -> WriteOutcome:
+            await asyncio.sleep(1.3)  # outruns the deliberation-only timeout below
+            return await super().submit_setpoints(
+                greenhouse_id,
+                patch,
+                optimizer_run_id=optimizer_run_id,
+                still_active=still_active,
+            )
+
+    client = SlowWriteClient()
+    store = ServiceStore()
+    # The timeout sits above deliberation (~0.4s cold) but well below the write's 1.3s: if the write
+    # were still inside the timeout scope, this would escalate CYCLE_TIMEOUT instead of applying.
+    record = await _run(
+        client=client, store=store, settings=Settings(service={"cycle_timeout_seconds": 1.0})
+    )
+
+    assert record.outcome.status is OutcomeStatus.APPLIED
+    assert len(client.submitted) == 1
+    assert store.fleet.get("gh-a").last_applied_plan_id == record.optimizer_run_id
+    assert store.last_successful_cycle_at == NOW
+
+
 # -- extended (nothing planned, nothing written) ----------------------------
 
 
@@ -250,6 +288,39 @@ async def test_a_settled_greenhouse_extends_on_the_next_cadence() -> None:
     assert second.outcome.status is OutcomeStatus.EXTENDED
     assert second.plan is None
     assert len(client.submitted) == 1
+
+
+async def test_an_extended_cycle_refreshes_the_cadence_watchdog() -> None:
+    # A successful extend is a running cycle, not a stall: the watchdog must advance so a stable
+    # greenhouse never flips to cycle_stalled (contract: "applied/extended successfully").
+    client = StubPlatformClient()
+    store = ServiceStore()
+
+    await _run(client=client, store=store, now=NOW)
+    later = NOW + timedelta(hours=1)
+    extended = await _run(client=client, store=store, now=later)
+
+    assert extended.outcome.status is OutcomeStatus.EXTENDED
+    assert store.last_successful_cycle_at == later
+
+
+async def test_an_escalated_cycle_does_not_refresh_the_watchdog() -> None:
+    # An escalation is not a successful cycle: the last-successful-cycle age must keep growing.
+    client = StubPlatformClient()
+    store = ServiceStore()
+
+    await _run(client=client, store=store, now=NOW)
+    later = NOW + timedelta(hours=1)
+    escalated = await _run(
+        client=StubPlatformClient(
+            read_error=PlatformError(ReasonCode.PLATFORM_UNAVAILABLE, "down")
+        ),
+        store=store,
+        now=later,
+    )
+
+    assert escalated.outcome.status is OutcomeStatus.ESCALATED
+    assert store.last_successful_cycle_at == NOW
 
 
 async def test_an_on_demand_cycle_bypasses_state_change_suppression() -> None:
@@ -316,6 +387,29 @@ async def test_a_per_greenhouse_pause_mid_cycle_holds_the_write() -> None:
     assert record.outcome.status is OutcomeStatus.EXTENDED
     assert record.plan is None
     assert client.submitted == []
+
+
+async def test_a_pause_during_the_write_holds_it() -> None:
+    # The commit-point gate passed, then a pause landed *inside* the write — between service-token
+    # acquisition and dispatch (the TOCTOU the mid-planning tests don't reach). The write path's own
+    # re-check withholds it, so nothing reaches Phase 2 and no cross-cycle state is mutated (spec 09).
+    runtime = RuntimeState(Settings())
+
+    def pause() -> None:
+        runtime.set_enabled(False, reason="paused during token fetch")
+
+    client = StubPlatformClient(pause_before_write=pause)
+    store = ServiceStore()
+
+    record = await _run(client=client, runtime=runtime, store=store)
+
+    assert record.outcome.status is OutcomeStatus.EXTENDED
+    assert record.outcome.reason_code is None
+    assert record.plan is None
+    assert client.submitted == []
+    # No bundle was written, so the applied-plan memory is untouched (the hold is still a valid
+    # extend, so the cadence watchdog does advance — that is asserted separately).
+    assert store.fleet.get("gh-a").last_applied_plan_id is None
 
 
 # -- post-planner escalations (the plan is kept) ----------------------------

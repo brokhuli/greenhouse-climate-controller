@@ -70,6 +70,51 @@ async def test_write_sends_optimizer_run_id_header() -> None:
 
 
 @respx.mock
+async def test_write_withheld_when_paused_during_token_acquisition() -> None:
+    # The commit-point enable check passes, then oidc token acquisition suspends; an operator pauses
+    # in that window. still_active is re-checked after the token is in hand and before dispatch, so
+    # the write is withheld and never reaches Phase 2 (spec 09 — a disabled optimizer writes nothing).
+    route = respx.post(_WRITE_URL).mock(
+        return_value=httpx.Response(202, json=build_setpoints().model_dump(mode="json"))
+    )
+    paused = {"value": False}
+
+    class PausingTokenSource:
+        async def token(self) -> str | None:
+            paused["value"] = True  # the pause lands while the token request is in flight
+            return "service-token"
+
+    settings = Settings(platform_auth={"mode": "oidc", "oidc_token_url": "http://kc/token"})
+    async with PlatformClient(settings, token_source=PausingTokenSource()) as client:
+        outcome = await client.submit_setpoints(
+            "gh-a",
+            _PATCH,
+            optimizer_run_id=_RUN_ID,
+            still_active=lambda: not paused["value"],
+        )
+
+    assert outcome.held is True
+    assert outcome.applied is False
+    assert outcome.reason_code is None
+    assert route.called is False  # nothing left the process
+
+
+@respx.mock
+async def test_write_proceeds_when_still_active_holds() -> None:
+    # The predicate stays true through token acquisition: the write goes out normally.
+    route = respx.post(_WRITE_URL).mock(
+        return_value=httpx.Response(202, json=build_setpoints().model_dump(mode="json"))
+    )
+    async with PlatformClient(Settings()) as client:
+        outcome = await client.submit_setpoints(
+            "gh-a", _PATCH, optimizer_run_id=_RUN_ID, still_active=lambda: True
+        )
+
+    assert outcome.applied is True
+    assert route.called is True
+
+
+@respx.mock
 async def test_write_503_escalates_platform_unavailable() -> None:
     # Phase 2's 503 means no baseline could be established and nothing was recorded — the optimizer
     # must not report it as applied (spec 06 Write outcomes).

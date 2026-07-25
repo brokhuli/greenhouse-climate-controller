@@ -309,6 +309,7 @@ class StubPlatformClient(PlatformClient):
         write: WriteOutcome | None = None,
         fleet: list[str] | None = None,
         fleet_error: PlatformError | None = None,
+        pause_before_write: Callable[[], None] | None = None,
     ) -> None:
         super().__init__(settings or Settings(), client=httpx.AsyncClient())
         # Without an explicit context, answer each greenhouse with its *own* context — a fixed
@@ -318,6 +319,9 @@ class StubPlatformClient(PlatformClient):
         self.write = write or WriteOutcome.applied_ok(setpoints=None, message="accepted (202)")
         self.fleet = fleet if fleet is not None else ["gh-a"]
         self.fleet_error = fleet_error
+        # Stands in for a pause landing *inside* the write, between token acquisition and dispatch —
+        # run just before the enable predicate is re-checked, so a test can drive the TOCTOU path.
+        self.pause_before_write = pause_before_write
         self.submitted: list[tuple[str, SetpointsPatch]] = []
         self.submitted_run_ids: list[UUID] = []
         self.reads: list[str] = []
@@ -333,8 +337,17 @@ class StubPlatformClient(PlatformClient):
         return build_context(greenhouse_id=greenhouse_id)
 
     async def submit_setpoints(
-        self, greenhouse_id: str, patch: SetpointsPatch, *, optimizer_run_id: UUID
+        self,
+        greenhouse_id: str,
+        patch: SetpointsPatch,
+        *,
+        optimizer_run_id: UUID,
+        still_active: Callable[[], bool] | None = None,
     ) -> WriteOutcome:
+        if self.pause_before_write is not None:
+            self.pause_before_write()
+        if still_active is not None and not still_active():
+            return WriteOutcome.withheld("planning paused before dispatch; write withheld")
         self.submitted.append((greenhouse_id, patch))
         self.submitted_run_ids.append(optimizer_run_id)
         return self.write

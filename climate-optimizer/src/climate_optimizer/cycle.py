@@ -58,7 +58,7 @@ from .planner import (
 )
 from .runtime import RuntimeState
 from .store import GreenhouseState, ServiceStore
-from .twin import fidelity_residual, seed_state_from_context, simulate
+from .twin import PredictedPoint, fidelity_residual, seed_state_from_context, simulate
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +112,19 @@ class _CycleFrame:
     source_plan_id: UUID | None
 
 
+@dataclass
+class _CommitDecision:
+    """A cleared plan ready to write — the handoff from deliberation to the commit phase.
+
+    Deliberation runs under the cycle timeout; the commit does not, so everything the commit needs
+    is captured here up front: the plan to apply, and the baseline forecast to retain as the next
+    cycle's state-change reference.
+    """
+
+    plan: OptimizerPlan
+    reference_points: list[PredictedPoint]
+
+
 def _latest_observations(ctx: PlanningContext) -> dict[Metric, float]:
     """Latest non-empty bucket mean per fidelity metric — what the twin's prediction is scored on."""
     observed: dict[Metric, float] = {}
@@ -136,11 +149,14 @@ async def run_cycle(
     now: datetime | None = None,
     on_demand: bool = False,
 ) -> PlanRecord:
-    """Run one planning cycle, bounded by ``service.cycle_timeout_seconds``.
+    """Run one planning cycle: deliberation bounded by ``service.cycle_timeout_seconds``.
 
-    The cadence is a **ceiling, not a best-effort target** (spec 09): a cycle that overruns is timed
-    out, the last applied bundle stays in force, and the loop self-heals on the next tick rather than
-    wedging.
+    The cadence is a **ceiling, not a best-effort target** (spec 09): deliberation (read → gate →
+    simulate → plan → validate) that overruns is timed out, the last applied bundle stays in force,
+    and the loop self-heals on the next tick rather than wedging. The timeout bounds *deliberation
+    only* — once a plan is decided, the commit write runs to completion under its own httpx/token
+    timeouts, so a cancellation can never leave Phase 2 holding a revision this cycle reports as a
+    timeout (P3-RESIL-1).
     """
     started = time.monotonic()
     moment = now or datetime.now(UTC)
@@ -162,8 +178,8 @@ async def run_cycle(
     )
 
     try:
-        record = await asyncio.wait_for(
-            _run_pipeline(
+        decision = await asyncio.wait_for(
+            _deliberate(
                 frame,
                 settings=settings,
                 client=client,
@@ -175,6 +191,10 @@ async def run_cycle(
             ),
             timeout=settings.service.cycle_timeout_seconds,
         )
+        # The commit write runs *outside* the cycle timeout (bounded by its own httpx/token
+        # timeouts): once a plan is decided, the setpoint write must not be abandoned mid-flight, or
+        # Phase 2 could commit a revision this cycle records as a timeout (P3-RESIL-1).
+        record = await _commit(frame, decision, client=client, runtime=runtime, store=store)
     except TimeoutError:
         record = _build_record(
             frame,
@@ -235,7 +255,7 @@ async def run_cycle(
     return record
 
 
-async def _run_pipeline(
+async def _deliberate(
     frame: _CycleFrame,
     *,
     settings: Settings,
@@ -245,8 +265,13 @@ async def _run_pipeline(
     store: ServiceStore,
     params: TwinParams,
     on_demand: bool,
-) -> PlanRecord:
-    """The pipeline proper; every hold raises :class:`_Held` for the caller to record."""
+) -> _CommitDecision:
+    """The deliberative pipeline — read → gate → simulate → plan → validate.
+
+    Runs under the cycle timeout. Every hold raises :class:`_Held` for the caller to record; a plan
+    that clears every gate returns a :class:`_CommitDecision` for :func:`_commit` to write. This
+    phase performs **no** setpoint write, so timing it out — or cancelling it — is always safe.
+    """
     state = store.fleet.get(frame.greenhouse_id)
 
     # 1. Read — the only inbound channel, a Phase-2 REST contract (RFC-008).
@@ -365,10 +390,29 @@ async def _run_pipeline(
             plan=plan,
         )
 
-    # 9. Apply — only the immediate next bundle, layered on the crop baseline (spec 06 §2). The
-    #    enable gate is re-read at this commit point, not just at dispatch: a pause that landed while
-    #    the planner was thinking must still stop this cycle's write (spec 09 — a disabled optimizer
-    #    submits no setpoint writes). This is the last check before the setpoints leave the process.
+    # The plan cleared every gate — hand it to the commit phase, which runs outside the timeout.
+    return _CommitDecision(plan=plan, reference_points=result.points)
+
+
+async def _commit(
+    frame: _CycleFrame,
+    decision: _CommitDecision,
+    *,
+    client: PlatformClient,
+    runtime: RuntimeState,
+    store: ServiceStore,
+) -> PlanRecord:
+    """Apply the decided plan — the only setpoint write, run *outside* the cycle timeout.
+
+    Applies only the immediate next bundle, layered on the crop baseline (spec 06 §2). The enable
+    gate is re-read here at the commit point, not just at dispatch: a pause that landed while the
+    planner was thinking must still stop this cycle's write (spec 09 — a disabled optimizer submits
+    no setpoint writes). The write path re-checks the gate a *second* time, after it has acquired its
+    service token and immediately before the request leaves the process (``still_active``), closing
+    the acquire-then-send race; a pause caught there returns a held :class:`WriteOutcome` and extends
+    the baseline rather than escalating.
+    """
+    state = store.fleet.get(frame.greenhouse_id)
     if not runtime.is_greenhouse_active(frame.greenhouse_id):
         raise _Held(
             OutcomeStatus.EXTENDED,
@@ -376,21 +420,25 @@ async def _run_pipeline(
             "planning paused mid-cycle; the last applied bundle stays in force",
         )
     write = await client.submit_setpoints(
-        frame.greenhouse_id, plan.immediate_setpoints, optimizer_run_id=frame.run_id
+        frame.greenhouse_id,
+        decision.plan.immediate_setpoints,
+        optimizer_run_id=frame.run_id,
+        still_active=lambda: runtime.is_greenhouse_active(frame.greenhouse_id),
     )
+    if write.held:
+        # Paused after token acquisition, before the send: a held write, not an escalation.
+        raise _Held(OutcomeStatus.EXTENDED, None, write.message)
     if not write.applied:
-        raise _Held(OutcomeStatus.ESCALATED, write.reason_code, write.message, plan=plan)
+        raise _Held(OutcomeStatus.ESCALATED, write.reason_code, write.message, plan=decision.plan)
 
     state.last_applied_plan_id = frame.run_id
-    state.last_applied_setpoints = plan.immediate_setpoints
-    state.retained_trajectory = list(plan.trajectory)
-    state.reference_forecast = result.points
-    store.last_successful_cycle_at = frame.now
-    metrics.LAST_SUCCESSFUL_CYCLE_TIMESTAMP.set(frame.now.timestamp())
+    state.last_applied_setpoints = decision.plan.immediate_setpoints
+    state.retained_trajectory = list(decision.plan.trajectory)
+    state.reference_forecast = decision.reference_points
 
     return _build_record(
         frame,
-        plan=plan,
+        plan=decision.plan,
         status=OutcomeStatus.APPLIED,
         reason_code=None,
         message=write.message,
@@ -470,6 +518,14 @@ def _build_record(
 def _settle(record: PlanRecord, *, store: ServiceStore, settings: Settings, now: datetime) -> None:
     """Persist the record and move the escalation lifecycle along (spec 09)."""
     store.plans.record(record)
+
+    # The cadence watchdog counts *any* successful cycle — one that applied a bundle **or** extended
+    # the baseline (the contract's "applied/extended successfully"). A steadily-extending greenhouse
+    # (stable climate, or no crop-safe bounds) is running fine, so its last-successful-cycle age must
+    # not grow into a false cycle_stalled. An escalation (incl. timeout/internal error) never counts.
+    if record.outcome.status in (OutcomeStatus.APPLIED, OutcomeStatus.EXTENDED):
+        store.last_successful_cycle_at = now
+        metrics.LAST_SUCCESSFUL_CYCLE_TIMESTAMP.set(now.timestamp())
 
     service = settings.service
     reason_code = record.outcome.reason_code
