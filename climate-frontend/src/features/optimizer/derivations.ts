@@ -23,7 +23,7 @@ import { reasonClassForCode } from "./reasonCodes";
 /**
  * The resolved optimizer pill state for one greenhouse. Precedence (data-model §8):
  * Read-only (service globally paused) → Disabled (this greenhouse paused) → the cycle outcome →
- * No plan (no entry — a never-planned greenhouse is omitted from the fleet summary).
+ * No plan (no entry, or an entry present but never cycled — a null status).
  */
 export type OptimizerCardState =
   | { kind: "read-only" }
@@ -37,9 +37,12 @@ export function toOptimizerCardState(
 ): OptimizerCardState {
   // Global pause takes precedence over every per-greenhouse state.
   if (!serviceEnabled) return { kind: "read-only" };
-  // The fleet summary omits never-planned greenhouses, so an absent entry reads as "No plan".
+  // An absent entry (unknown to the optimizer) reads as "No plan".
   if (!entry) return { kind: "no-plan" };
+  // Disabled outranks the outcome, so a greenhouse paused before its first cycle reads Disabled.
   if (!entry.enabled) return { kind: "disabled" };
+  // Present but never cycled (a null status) is "No plan" — the entry only carried its enabled flag.
+  if (entry.status === null) return { kind: "no-plan" };
   return { kind: "outcome", status: entry.status, reasonCode: entry.reasonCode };
 }
 
@@ -66,7 +69,9 @@ export function compareFleetTriage(
 ): number {
   const rank = (g: FleetOptimizerGreenhouse): number =>
     g.reasonCode && reasonClassForCode(g.reasonCode) === "persistent" ? 0 : 1;
-  return rank(a) - rank(b) || a.createdAt.getTime() - b.createdAt.getTime();
+  // Escalated rows always carry a createdAt; a never-cycled (null) entry sorts last defensively.
+  const age = (g: FleetOptimizerGreenhouse): number => g.createdAt?.getTime() ?? Infinity;
+  return rank(a) - rank(b) || age(a) - age(b);
 }
 
 // ---------------------------------------------------------------------------

@@ -343,6 +343,10 @@ class ServiceStore:
     plans: PlanStore = field(default_factory=PlanStore)
     escalations: EscalationRegistry = field(default_factory=EscalationRegistry)
     fleet: FleetState = field(default_factory=FleetState)
+    # Every greenhouse the scheduler has ever discovered from Phase 2, so the fleet roster and the
+    # watchdog know a greenhouse exists before its first cycle records a plan (spec 09/10). In-memory
+    # like the rest of the store — a restart clears it and the next tick's discovery rebuilds it.
+    known_greenhouse_ids: set[str] = field(default_factory=set)
     last_successful_cycle_at: datetime | None = None
 
     def rollup(self, now: datetime) -> FleetRollup:

@@ -79,23 +79,25 @@ func (s *Server) getOptimizerFleet(c echo.Context) error {
 
 	greenhouses := make([]fleetGreenhouseDTO, 0, len(fleet.Greenhouses))
 	for _, gh := range fleet.Greenhouses {
-		// A greenhouse with no latest cycle is omitted: the SPA resolves its "No plan" state
-		// from the absence, and status/created_at are required on a present entry.
-		if gh.Status == nil || gh.CreatedAt == nil {
-			continue
-		}
-		if statusFilter != "" && *gh.Status != statusFilter {
+		// A never-cycled greenhouse (null status/created_at) still belongs on the roster so its
+		// Disabled/No-plan state renders; only a *status* filter excludes it, since it has none.
+		if statusFilter != "" && (gh.Status == nil || *gh.Status != statusFilter) {
 			continue
 		}
 		if greenhouseFilter != "" && gh.GreenhouseID != greenhouseFilter {
 			continue
 		}
+		var createdAt *string
+		if gh.CreatedAt != nil {
+			formatted := fmtTS(*gh.CreatedAt)
+			createdAt = &formatted
+		}
 		greenhouses = append(greenhouses, fleetGreenhouseDTO{
 			GreenhouseID: gh.GreenhouseID,
-			Status:       *gh.Status,
+			Status:       gh.Status,
 			ReasonCode:   gh.ReasonCode,
 			Enabled:      gh.Enabled,
-			CreatedAt:    fmtTS(*gh.CreatedAt),
+			CreatedAt:    createdAt,
 		})
 	}
 

@@ -127,6 +127,11 @@ class RuntimeState:
         """Global AND per-greenhouse, with the global pause taking precedence (spec 09)."""
         return self._enabled.enabled and self.greenhouse_enabled(greenhouse_id).enabled
 
+    def overridden_greenhouse_ids(self) -> set[str]:
+        """Greenhouses an operator has explicitly toggled — so one paused before its first cycle
+        still shows on the fleet roster even though it has no plan record yet (spec 09/10)."""
+        return set(self._greenhouses)
+
     # -- active model -------------------------------------------------------
 
     @property

@@ -141,6 +141,34 @@ def test_health_reports_a_stalled_loop(monkeypatch: pytest.MonkeyPatch) -> None:
     assert client.get("/health").json()["degraded_reason"] == "cycle_stalled"
 
 
+def test_an_all_disabled_fleet_is_healthy_not_stalled(monkeypatch: pytest.MonkeyPatch) -> None:
+    ctx = _context(settings=_offline_llm_settings(monkeypatch))
+    # The service is globally enabled, but every known greenhouse is individually paused, so the
+    # growing cycle age is expected — not a stall to alert on (spec 09 §Per-greenhouse pause).
+    ctx.store.known_greenhouse_ids.update({"gh-a", "gh-b"})
+    ctx.runtime.set_greenhouse_enabled("gh-a", False)
+    ctx.runtime.set_greenhouse_enabled("gh-b", False)
+    ctx.store.last_successful_cycle_at = datetime.now(UTC) - timedelta(hours=6)
+    client, _ctx = _client(ctx)
+
+    body = client.get("/health").json()
+
+    assert body["status"] == "healthy"
+    assert body["degraded_reason"] is None
+    assert body["enabled"] is True
+
+
+def test_one_active_greenhouse_still_surfaces_a_stall(monkeypatch: pytest.MonkeyPatch) -> None:
+    ctx = _context(settings=_offline_llm_settings(monkeypatch))
+    # gh-b is still planning, so a stale cycle age is a genuine stall despite gh-a being paused.
+    ctx.store.known_greenhouse_ids.update({"gh-a", "gh-b"})
+    ctx.runtime.set_greenhouse_enabled("gh-a", False)
+    ctx.store.last_successful_cycle_at = datetime.now(UTC) - timedelta(hours=6)
+    client, _ctx = _client(ctx)
+
+    assert client.get("/health").json()["degraded_reason"] == "cycle_stalled"
+
+
 def test_health_reports_an_unreachable_platform(monkeypatch: pytest.MonkeyPatch) -> None:
     from climate_optimizer.dataaccess import PlatformError
 
@@ -212,6 +240,33 @@ def test_fleet_shows_a_paused_greenhouse_as_disabled() -> None:
 
     body = client.get("/api/optimizer/fleet").json()
     assert body["greenhouses"][0]["enabled"] is False
+
+
+def test_fleet_lists_a_greenhouse_paused_before_its_first_cycle() -> None:
+    client, ctx = _client()
+    # Paused before ever planning: no plan record, but the operator toggled it — it must still
+    # appear on the roster with a null outcome so its Disabled state is reported (spec 09/10).
+    ctx.runtime.set_greenhouse_enabled("gh-z", False, reason="pre-commissioning")
+
+    body = client.get("/api/optimizer/fleet").json()
+
+    entry = next(g for g in body["greenhouses"] if g["greenhouse_id"] == "gh-z")
+    assert entry["enabled"] is False
+    assert entry["status"] is None
+    assert entry["created_at"] is None
+    assert entry["reason_code"] is None
+
+
+def test_fleet_lists_a_discovered_greenhouse_without_a_plan() -> None:
+    client, ctx = _client()
+    # Discovered by a scheduler tick but not yet cycled (e.g. right after a restart).
+    ctx.store.known_greenhouse_ids.add("gh-new")
+
+    body = client.get("/api/optimizer/fleet").json()
+
+    entry = next(g for g in body["greenhouses"] if g["greenhouse_id"] == "gh-new")
+    assert entry["enabled"] is True
+    assert entry["status"] is None
 
 
 def test_latest_plan_is_404_before_any_cycle() -> None:
@@ -461,3 +516,35 @@ def test_startup_is_blocked_by_a_cloud_provider_without_a_key(
 def test_startup_is_blocked_by_oidc_without_a_token_url() -> None:
     with pytest.raises(ConfigurationError, match="oidc_token_url"):
         validate_startup(Settings(platform_auth={"mode": "oidc"}))
+
+
+def _oidc_settings(monkeypatch: pytest.MonkeyPatch, *, secret: str = "s3cret") -> Settings:
+    """A fully usable oidc config; individual tests strip one field to prove startup blocks it."""
+    if secret:
+        monkeypatch.setenv("PLANNER_OIDC_CLIENT_SECRET", secret)
+    else:
+        monkeypatch.delenv("PLANNER_OIDC_CLIENT_SECRET", raising=False)
+    return Settings(
+        platform_auth={"mode": "oidc", "oidc_token_url": "https://auth.local/token"},
+        operator_auth={"jwks_url": "https://auth.local/certs"},
+    )
+
+
+def test_startup_accepts_a_complete_oidc_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    validate_startup(_oidc_settings(monkeypatch))
+
+
+def test_startup_is_blocked_by_oidc_without_a_client_secret(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # token_url and jwks_url are present, so the confidential-client secret is the missing piece —
+    # without it every Phase-2 write would post an empty secret and escalate write_unauthorized.
+    with pytest.raises(ConfigurationError, match="PLANNER_OIDC_CLIENT_SECRET"):
+        validate_startup(_oidc_settings(monkeypatch, secret=""))
+
+
+def test_startup_is_blocked_by_oidc_without_a_jwks_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    settings = _oidc_settings(monkeypatch)
+    settings.operator_auth.jwks_url = ""
+    with pytest.raises(ConfigurationError, match="jwks_url"):
+        validate_startup(settings)

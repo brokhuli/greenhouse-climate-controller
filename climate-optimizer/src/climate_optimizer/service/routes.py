@@ -75,22 +75,32 @@ async def prometheus_metrics() -> Response:
 
 @api.get("/fleet", response_model=FleetResponse)
 async def fleet(ctx: Context) -> FleetResponse:
-    """Per-greenhouse latest outcome + enable flag, plus the site rollup — one read, not N."""
+    """Per-greenhouse latest outcome + enable flag, plus the site rollup — one read, not N.
+
+    The roster is every greenhouse the optimizer knows of, not only those with a plan: a greenhouse
+    the scheduler has discovered or an operator has paused before its first cycle still appears (with
+    a null outcome) so its ``enabled`` flag is reported for the whole fleet (spec 09/10).
+    """
     now = datetime.now(UTC)
     latest = ctx.store.plans.all_latest()
     rollup = ctx.store.rollup(now)
 
-    greenhouses = [
-        FleetGreenhouse(
-            greenhouse_id=greenhouse_id,
-            enabled=ctx.runtime.greenhouse_enabled(greenhouse_id).enabled,
-            status=record.outcome.status,
-            reason_code=record.outcome.reason_code,
-            created_at=record.created_at,
-            optimizer_run_id=record.optimizer_run_id,
+    roster = (
+        ctx.store.known_greenhouse_ids | ctx.runtime.overridden_greenhouse_ids() | latest.keys()
+    )
+    greenhouses = []
+    for greenhouse_id in sorted(roster):
+        record = latest.get(greenhouse_id)
+        greenhouses.append(
+            FleetGreenhouse(
+                greenhouse_id=greenhouse_id,
+                enabled=ctx.runtime.greenhouse_enabled(greenhouse_id).enabled,
+                status=record.outcome.status if record else None,
+                reason_code=record.outcome.reason_code if record else None,
+                created_at=record.created_at if record else None,
+                optimizer_run_id=record.optimizer_run_id if record else None,
+            )
         )
-        for greenhouse_id, record in sorted(latest.items())
-    ]
     return FleetResponse(
         greenhouses=greenhouses,
         rollup=FleetRollupResponse(

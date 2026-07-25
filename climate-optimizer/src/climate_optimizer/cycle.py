@@ -11,8 +11,10 @@ three outcomes are:
 * ``escalated`` — surfaced, not applied. Carries a canonical reason code; a *post-planner* escalation
   keeps the plan it rejected, a *pre-planner* hold has ``plan: null``.
 * ``extended`` — nothing new was planned and **nothing was written**: the state-change gate skipped
-  the LLM, or there were no crop-safe bounds to refine within. The last applied bundle stays in force
-  because Phase 2 already holds it — to *extend* is to hold, never to replay the trajectory forward.
+  the LLM, there were no crop-safe bounds to refine within, or an operator paused planning *while the
+  cycle was in flight* (the enable gate is re-read at the commit point, spec 09). The last applied
+  bundle stays in force because Phase 2 already holds it — to *extend* is to hold, never to replay the
+  trajectory forward.
 
 The universal invariant across all three (P3-RESIL-1): a held cycle **writes nothing**, so the
 greenhouse keeps running on the last accepted setpoints or the crop-profile baseline. A cycle of
@@ -303,7 +305,14 @@ async def _run_pipeline(
             metrics.PLANNER_SUPPRESSED_TOTAL.labels(frame.greenhouse_id).inc()
             raise _Held(OutcomeStatus.EXTENDED, None, decision.reason)
 
-    # 7. Plan.
+    # 7. Plan. Re-read the enable gate first: a pause that landed while the earlier steps awaited
+    #    must stop here rather than spend LLM tokens on a plan the commit point will discard (spec 09).
+    if not runtime.is_greenhouse_active(frame.greenhouse_id):
+        raise _Held(
+            OutcomeStatus.EXTENDED,
+            None,
+            "planning paused mid-cycle; the last applied bundle stays in force",
+        )
     try:
         proposal = await planner.propose(
             ctx,
@@ -356,7 +365,16 @@ async def _run_pipeline(
             plan=plan,
         )
 
-    # 9. Apply — only the immediate next bundle, layered on the crop baseline (spec 06 §2).
+    # 9. Apply — only the immediate next bundle, layered on the crop baseline (spec 06 §2). The
+    #    enable gate is re-read at this commit point, not just at dispatch: a pause that landed while
+    #    the planner was thinking must still stop this cycle's write (spec 09 — a disabled optimizer
+    #    submits no setpoint writes). This is the last check before the setpoints leave the process.
+    if not runtime.is_greenhouse_active(frame.greenhouse_id):
+        raise _Held(
+            OutcomeStatus.EXTENDED,
+            None,
+            "planning paused mid-cycle; the last applied bundle stays in force",
+        )
     write = await client.submit_setpoints(
         frame.greenhouse_id, plan.immediate_setpoints, optimizer_run_id=frame.run_id
     )

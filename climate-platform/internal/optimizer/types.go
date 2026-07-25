@@ -24,8 +24,8 @@ type Health struct {
 }
 
 // FleetGreenhouse mirrors one entry of FleetResponse.greenhouses. status/reason_code/
-// created_at are null until the greenhouse has had a cycle; the mapping omits a
-// never-planned greenhouse so the SPA reads its "No plan" state from the absence.
+// created_at are null until the greenhouse has had a cycle; a never-cycled greenhouse still
+// appears on the roster (with a null outcome) so its per-greenhouse enabled flag is reported.
 type FleetGreenhouse struct {
 	GreenhouseID   string     `json:"greenhouse_id"`
 	Enabled        bool       `json:"enabled"`

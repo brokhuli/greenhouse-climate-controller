@@ -13,7 +13,9 @@ P3-PERF-1). Two guards bound that concurrency:
 The loop is gated on the enable flags, composed as an AND with the global taking precedence: a
 greenhouse is dispatched only when the service is globally enabled *and* that greenhouse is enabled.
 While globally disabled the optimizer is **read-only** — no cycles start and the applier is inert —
-though every read surface stays live.
+though every read surface stays live. The dispatch gate is not the last word: because a cycle awaits
+the planner (an LLM call) between dispatch and its write, ``run_cycle`` **re-reads the same gate at
+its commit point**, so a pause that lands mid-cycle still stops that cycle's setpoint write (spec 09).
 
 **The sweep loop** applies escalation TTL expiry and prunes closed escalations and held records. It
 runs *independently of the planning scheduler* precisely so it still fires while the optimizer is
@@ -152,9 +154,10 @@ class Scheduler:
         Returns the greenhouse ids actually dispatched (exposed for tests and for the log).
         """
         metrics.ENABLED.set(1 if self._runtime.enabled.enabled else 0)
-        if not self._runtime.enabled.enabled:
-            return []
 
+        # Fleet discovery is a read, so it runs even while globally paused (read-only mode keeps
+        # reads live, spec 09): the roster it records feeds the /fleet listing and the health
+        # watchdog, both of which must know a greenhouse exists before dispatch resumes.
         try:
             fleet = await self._client.list_greenhouse_ids()
         except PlatformError as err:
@@ -162,6 +165,10 @@ class Scheduler:
                 "fleet discovery failed; skipping this tick",
                 extra={"event": "optimizer_fleet_discovery_failed", "error": err.message},
             )
+            return []
+        self._store.known_greenhouse_ids.update(fleet)
+
+        if not self._runtime.enabled.enabled:
             return []
 
         eligible = [

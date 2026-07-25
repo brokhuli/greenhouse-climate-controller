@@ -41,6 +41,19 @@ describe("toOptimizerCardState — precedence", () => {
     expect(toOptimizerCardState(undefined, true)).toEqual({ kind: "no-plan" });
   });
 
+  it("no-plan when the entry is present but never cycled (null status)", () => {
+    expect(
+      toOptimizerCardState(entry({ status: null, createdAt: null }), true),
+    ).toEqual({ kind: "no-plan" });
+  });
+
+  it("disabled outranks a never-cycled entry", () => {
+    // A greenhouse paused before its first cycle reads Disabled, not No plan (spec 09/10).
+    expect(
+      toOptimizerCardState(entry({ status: null, createdAt: null, enabled: false }), true),
+    ).toEqual({ kind: "disabled" });
+  });
+
   it("read-only still wins over an absent entry", () => {
     expect(toOptimizerCardState(undefined, false)).toEqual({ kind: "read-only" });
   });

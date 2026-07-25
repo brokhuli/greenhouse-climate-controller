@@ -1014,10 +1014,12 @@ export const wireEscalationList = z.array(wireEscalation);
 
 export const wireFleetOptimizerGreenhouse = z.object({
   greenhouse_id: slug,
-  status: optimizerOutcomeStatusSchema,
+  // status/created_at are null when the greenhouse is known to the optimizer but has not yet
+  // completed a cycle (discovered or paused before its first) — its enabled flag still matters.
+  status: optimizerOutcomeStatusSchema.nullable(),
   reason_code: reasonCodeSchema.nullable().optional(),
   enabled: z.boolean(),
-  created_at: isoTimestamp,
+  created_at: isoTimestamp.nullable(),
 });
 
 export const wireFleetOptimizerRollup = z.object({
@@ -1137,10 +1139,11 @@ export type Escalation = {
 
 export type FleetOptimizerGreenhouse = {
   greenhouseId: string;
-  status: OptimizerOutcomeStatus;
+  // null when the greenhouse is known but has not yet completed a cycle (paired: status/createdAt).
+  status: OptimizerOutcomeStatus | null;
   reasonCode: ReasonCode | null;
   enabled: boolean;
-  createdAt: Date;
+  createdAt: Date | null;
 };
 
 export type FleetOptimizerRollup = {
@@ -1260,10 +1263,10 @@ export const toFleetOptimizerSummary = (
 ): FleetOptimizerSummary => ({
   greenhouses: w.greenhouses.map((g) => ({
     greenhouseId: g.greenhouse_id,
-    status: g.status,
+    status: g.status ?? null,
     reasonCode: g.reason_code ?? null,
     enabled: g.enabled,
-    createdAt: new Date(g.created_at),
+    createdAt: g.created_at ? new Date(g.created_at) : null,
   })),
   rollup: {
     backlog: w.rollup.backlog,

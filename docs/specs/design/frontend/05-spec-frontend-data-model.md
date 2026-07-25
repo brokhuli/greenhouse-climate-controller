@@ -307,10 +307,10 @@ export const wireEscalation = z.object({          // one entry of the open (awai
 export const wireFleetOptimizerSummary = z.object({
   greenhouses: z.array(z.object({
     greenhouse_id: greenhouseId,
-    status: wireOptimizerOutcome.shape.status,
+    status: wireOptimizerOutcome.shape.status.nullable(), // null = known but never cycled (No plan)
     reason_code: z.string().nullable().optional(),
     enabled: z.boolean(),                         // per-greenhouse pause; false = Disabled pill (overrides status)
-    created_at: z.coerce.date(),
+    created_at: z.coerce.date().nullable(),       // null paired with a null status
   })),
   rollup: z.object({
     backlog: z.number().int(),                    // open-escalation count (same scalar as /health)
@@ -580,7 +580,7 @@ unit-tested and never embedded in components:
 | **Zone moisture status & band fill** | zone reading + low/high thresholds + `irrigating`/`faulted` | `ZoneMoisturePanel` — headline status pill (Watering/Dry/Saturated/OK/Fault/No data) + the band-tinted gauge fill |
 | **Simulated-time axis** | series `ts` + `timeScale` | the detail chart's x-axis (plots on simulated time) + the speed indicator label |
 | **Optimizer setpoint-diff rows** *(3)* | `SetpointDiff` (proposed patch + current bundle + crop-safe bounds) | `SetpointDiff` — per **changed** field only, old → new, delta direction, and a near-bound flag |
-| **Optimizer card state** *(3)* — `toOptimizerCardState` | a greenhouse's fleet-summary entry (`status`, `enabled`) + the service `EnableState`/`OptimizerStatus` | `OptimizerStatusPill` on `GreenhouseCard` / `FleetOptimizerRow` — resolves the pill: **Read-only** if the service is globally disabled → else **Disabled** if the greenhouse `enabled` is false → else the `status` outcome → else **No plan** (entry absent) |
+| **Optimizer card state** *(3)* — `toOptimizerCardState` | a greenhouse's fleet-summary entry (`status`, `enabled`) + the service `EnableState`/`OptimizerStatus` | `OptimizerStatusPill` on `GreenhouseCard` / `FleetOptimizerRow` — resolves the pill: **Read-only** if the service is globally disabled → else **Disabled** if the greenhouse `enabled` is false → else the `status` outcome → else **No plan** (entry absent, or present with a null `status` — known but never cycled) |
 | **Escalation triage grouping** *(3)* | open escalations + `reasonClass` | `FleetOptimizerTable` `status=escalated` ordering (persistent before transient) + the backlog count/badge |
 
 Keeping these pure means a view never recomputes climate logic inline, and the

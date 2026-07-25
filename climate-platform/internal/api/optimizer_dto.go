@@ -31,14 +31,15 @@ type fleetOptimizerSummaryDTO struct {
 }
 
 // fleetGreenhouseDTO is one greenhouse's latest-cycle summary. reason_code is present only on
-// an escalated outcome; a never-planned greenhouse is omitted from the list entirely, so the
-// SPA reads its "No plan" state from the absence (status/created_at are required here).
+// an escalated outcome; status/created_at are null when the greenhouse is known to the optimizer
+// but has not yet completed a cycle (discovered or paused before its first) — the SPA renders that
+// as "No plan" unless a Disabled/Read-only pill takes precedence. Emitted (not omitted) as null.
 type fleetGreenhouseDTO struct {
 	GreenhouseID string  `json:"greenhouse_id"`
-	Status       string  `json:"status"`
+	Status       *string `json:"status"`
 	ReasonCode   *string `json:"reason_code,omitempty"`
 	Enabled      bool    `json:"enabled"`
-	CreatedAt    string  `json:"created_at"`
+	CreatedAt    *string `json:"created_at"`
 }
 
 type byOutcomeDTO struct {

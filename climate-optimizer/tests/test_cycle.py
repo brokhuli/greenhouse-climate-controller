@@ -274,6 +274,50 @@ async def test_a_held_cycle_names_the_plan_left_in_force() -> None:
     assert extended.source_plan_id == applied.optimizer_run_id
 
 
+def _pausing_chain(runtime: RuntimeState, *, scope: str) -> PlannerChain:
+    """A planner chain that pauses planning *from inside* ``propose`` — standing in for an operator
+    who pauses while the LLM is thinking. The plan still comes back, so the cycle can only hold the
+    write by re-reading the enable gate at its commit point."""
+
+    def pause_then_plan(_payload: Any) -> BackendOutput:
+        if scope == "global":
+            runtime.set_enabled(False, reason="paused mid-cycle")
+        else:
+            runtime.set_greenhouse_enabled("gh-a", False, reason="paused mid-cycle")
+        return build_output()
+
+    return RunnableLambda(pause_then_plan)
+
+
+async def test_a_global_pause_mid_cycle_holds_the_write() -> None:
+    client = StubPlatformClient()
+    runtime = RuntimeState(Settings())
+
+    record = await _run(
+        client=client, runtime=runtime, chain=_pausing_chain(runtime, scope="global")
+    )
+
+    # The pause landed after the planner ran but before the write: the commit-point gate turns it
+    # into an extend, and nothing reaches Phase 2 (spec 09 — a disabled optimizer writes nothing).
+    assert record.outcome.status is OutcomeStatus.EXTENDED
+    assert record.outcome.reason_code is None
+    assert record.plan is None
+    assert client.submitted == []
+
+
+async def test_a_per_greenhouse_pause_mid_cycle_holds_the_write() -> None:
+    client = StubPlatformClient()
+    runtime = RuntimeState(Settings())
+
+    record = await _run(
+        client=client, runtime=runtime, chain=_pausing_chain(runtime, scope="greenhouse")
+    )
+
+    assert record.outcome.status is OutcomeStatus.EXTENDED
+    assert record.plan is None
+    assert client.submitted == []
+
+
 # -- post-planner escalations (the plan is kept) ----------------------------
 
 

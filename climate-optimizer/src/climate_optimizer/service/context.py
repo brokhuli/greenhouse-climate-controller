@@ -43,7 +43,15 @@ class ConfigurationError(Exception):
 
 
 def validate_startup(settings: Settings) -> None:
-    """Cross-field configuration checks that must pass before the service comes up."""
+    """Cross-field configuration checks that must pass before the service comes up.
+
+    The ``oidc`` block encodes the **confidential-client** assumption both auth seams implement: the
+    outbound token exchange (``TokenProvider._fetch``) sends ``PLANNER_OIDC_CLIENT_SECRET``, and the
+    inbound operator verifier (``JwtOperatorVerifier``) resolves signing keys from ``jwks_url`` — so
+    starting oidc mode without either would come up "healthy" while every write / operator call fails
+    at runtime. If a public-client or ``private_key_jwt`` flow is ever added, the secret check moves
+    behind an auth-method switch.
+    """
     if not settings.data.platform_api_url.strip():
         raise ConfigurationError("data.platform_api_url must be set")
 
@@ -68,8 +76,19 @@ def validate_startup(settings: Settings) -> None:
             "baseline) before pinning it"
         )
 
-    if settings.platform_auth.mode == "oidc" and not settings.platform_auth.oidc_token_url:
-        raise ConfigurationError("platform_auth.oidc_token_url is required in oidc mode")
+    if settings.platform_auth.mode == "oidc":
+        if not settings.platform_auth.oidc_token_url:
+            raise ConfigurationError("platform_auth.oidc_token_url is required in oidc mode")
+        if not settings.planner_oidc_client_secret.get_secret_value():
+            raise ConfigurationError(
+                "PLANNER_OIDC_CLIENT_SECRET is required in oidc mode — the Phase-2 write path "
+                "uses the confidential-client credentials flow"
+            )
+        if not settings.operator_auth.jwks_url:
+            raise ConfigurationError(
+                "operator_auth.jwks_url is required in oidc mode — the operator-gated endpoints "
+                "cannot verify a token without it"
+            )
 
 
 @dataclass
@@ -151,11 +170,27 @@ async def probe_llm(settings: Settings) -> bool:
     return response.status_code == 200
 
 
+def _planning_paused(ctx: ServiceContext) -> bool:
+    """Is *no* greenhouse planning right now? Then the growing last-successful-cycle age is expected,
+    not a stall — the same watchdog rule the global pause gets, extended to the case where every
+    greenhouse is individually disabled (spec 09 §Per-greenhouse pause).
+
+    An unknown fleet (nothing discovered or recorded yet) is **not** evidence of a pause: a genuine
+    cold-start stall must still surface, so ``bool(known)`` guards the all-disabled test.
+    """
+    if not ctx.runtime.enabled.enabled:
+        return True
+    known = ctx.store.known_greenhouse_ids | set(ctx.store.plans.all_latest())
+    return bool(known) and not any(ctx.runtime.is_greenhouse_active(g) for g in known)
+
+
 async def build_health(ctx: ServiceContext, *, now: datetime | None = None) -> HealthResponse:
     """Compose the watchdog view (spec 09).
 
     A **paused** optimizer is reported as healthy with its read-only reason: the last-successful-cycle
-    age is *expected* to grow while planning is disabled, so it must not be read as a stall.
+    age is *expected* to grow while planning is disabled, so it must not be read as a stall. This
+    holds whether planning is paused service-wide or because every greenhouse is individually
+    disabled (:func:`_planning_paused`).
     """
     moment = now or datetime.now(UTC)
     cadence_secs = ctx.settings.planning.cycle_interval_minutes * 60
@@ -172,7 +207,10 @@ async def build_health(ctx: ServiceContext, *, now: datetime | None = None) -> H
         degraded_reason = DegradedReason.LLM_UNREACHABLE
     elif last_cycle is None:
         degraded_reason = DegradedReason.COLD_START
-    elif enabled and (moment - last_cycle).total_seconds() > cadence_secs * _STALL_CADENCE_MULTIPLE:
+    elif (
+        not _planning_paused(ctx)
+        and (moment - last_cycle).total_seconds() > cadence_secs * _STALL_CADENCE_MULTIPLE
+    ):
         degraded_reason = DegradedReason.CYCLE_STALLED
 
     return HealthResponse(

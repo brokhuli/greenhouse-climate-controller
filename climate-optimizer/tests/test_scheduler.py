@@ -92,12 +92,26 @@ async def test_a_globally_disabled_service_starts_no_cycles() -> None:
     runtime = RuntimeState(settings)
     runtime.set_enabled(False, reason="maintenance")
     client = StubPlatformClient(settings, fleet=["gh-a", "gh-b"])
+    store = ServiceStore()
 
-    dispatched = await _scheduler(settings=settings, client=client, runtime=runtime).tick()
+    dispatched = await _scheduler(
+        settings=settings, client=client, runtime=runtime, store=store
+    ).tick()
 
-    # Read-only mode: no cycles, no writes, not even a fleet read.
+    # Read-only mode: no cycles start and no planning contexts are read. Fleet discovery is a read,
+    # so it stays live and keeps the roster fresh for /fleet and the watchdog (spec 09).
     assert dispatched == []
     assert client.reads == []
+    assert store.known_greenhouse_ids == {"gh-a", "gh-b"}
+
+
+async def test_discovery_records_the_roster_for_the_fleet_view() -> None:
+    client = StubPlatformClient(fleet=["gh-a", "gh-b", "gh-c"])
+    store = ServiceStore()
+
+    await _scheduler(client=client, store=store).tick()
+
+    assert store.known_greenhouse_ids == {"gh-a", "gh-b", "gh-c"}
 
 
 async def test_a_paused_greenhouse_is_skipped_while_the_fleet_plans() -> None:

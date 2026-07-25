@@ -2,7 +2,8 @@
   "greenhouses": [
     { "greenhouse_id": "gh-a", "status": "applied", "enabled": true, "created_at": "2026-06-29T13:30:00.000Z" },
     { "greenhouse_id": "gh-b", "status": "escalated", "reason_code": "low_confidence", "enabled": true, "created_at": "2026-06-29T13:28:00.000Z" },
-    { "greenhouse_id": "gh-c", "status": "extended", "enabled": false, "created_at": "2026-06-29T13:15:00.000Z" }
+    { "greenhouse_id": "gh-c", "status": "extended", "enabled": false, "created_at": "2026-06-29T13:15:00.000Z" },
+    { "greenhouse_id": "gh-d", "status": null, "enabled": false, "created_at": null }
   ],
   "rollup": {
     "backlog": 1,

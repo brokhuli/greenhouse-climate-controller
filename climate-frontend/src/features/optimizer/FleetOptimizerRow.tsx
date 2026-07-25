@@ -110,6 +110,10 @@ export function FleetOptimizerRow({
   };
 
   const heldAge = escalation ? escalation.createdAt : entry.createdAt;
+  // A greenhouse known but never cycled has no createdAt — its "last cycle" cell reads as a dash.
+  const lastCycleLabel = entry.createdAt
+    ? `${formatDurationSecs(ageSecs(entry.createdAt, nowMs))} ago`
+    : "—";
 
   return (
     <tr className="border-divider border-t align-top">
@@ -128,16 +132,14 @@ export function FleetOptimizerRow({
           {escalated && entry.reasonCode ? (
             <ReasonCodeChip code={entry.reasonCode} reasonClass={escalation?.reasonClass} />
           ) : null}
-          {escalated ? (
+          {escalated && heldAge ? (
             <span className="text-fg-subtle text-xs">
               held {formatDurationSecs(ageSecs(heldAge, nowMs))}
             </span>
           ) : null}
         </div>
       </td>
-      <td className="text-fg-muted py-3 pr-3 text-xs whitespace-nowrap">
-        {formatDurationSecs(ageSecs(entry.createdAt, nowMs))} ago
-      </td>
+      <td className="text-fg-muted py-3 pr-3 text-xs whitespace-nowrap">{lastCycleLabel}</td>
       <td className="py-3">
         <div className="flex flex-wrap items-center justify-end gap-2">
           {escalated ? (
