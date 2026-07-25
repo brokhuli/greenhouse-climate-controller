@@ -20,7 +20,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from ..models import BackendRole, OutcomeStatus, Provider, ReasonClass, ReasonCode
-from ..store import Resolution
+from ..orchestration.store import Resolution
 
 
 class HealthStatus(StrEnum):

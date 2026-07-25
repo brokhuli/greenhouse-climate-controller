@@ -29,7 +29,8 @@ from datetime import datetime, timedelta
 from enum import StrEnum
 from uuid import UUID, uuid4
 
-from .models import (
+from ..domain.twin import PredictedPoint
+from ..models import (
     REASON_CLASS,
     OutcomeStatus,
     PlanRecord,
@@ -38,7 +39,6 @@ from .models import (
     SetpointsPatch,
     TrajectoryPoint,
 )
-from .twin import PredictedPoint
 
 logger = logging.getLogger(__name__)
 

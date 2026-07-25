@@ -24,7 +24,7 @@ from datetime import datetime, timedelta
 import numpy as np
 from numpy.typing import NDArray
 
-from .models import Metric, PlanningContext, Setpoints
+from ...models import Metric, PlanningContext, Setpoints
 from .params import TwinParams
 
 # Closed-loop-stability cap on the integration sub-step. The plant's analytic exponential is stable

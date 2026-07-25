@@ -6,7 +6,8 @@ import httpx
 import pytest
 import respx
 
-from climate_optimizer.auth import (
+from climate_optimizer.config import Settings
+from climate_optimizer.infra.auth import (
     TRUSTED_NETWORK_IDENTITY,
     OperatorAuthError,
     OperatorIdentity,
@@ -14,7 +15,6 @@ from climate_optimizer.auth import (
     TokenProvider,
     authorize_operator,
 )
-from climate_optimizer.config import Settings
 
 TOKEN_URL = "https://auth.local/realms/greenhouse/protocol/openid-connect/token"
 

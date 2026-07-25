@@ -26,8 +26,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from ..params import TwinParams
-from ..twin import PredictedPoint
+from ..domain.twin import PredictedPoint, TwinParams
 
 # The metrics the gate measures, paired with their row index in the twin's envelope vectors.
 # Derived VPD/DLI are excluded — they are functions of these, so including them would double-count.

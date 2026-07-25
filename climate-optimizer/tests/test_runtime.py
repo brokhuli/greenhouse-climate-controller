@@ -6,7 +6,7 @@ import pytest
 
 from climate_optimizer.config import Settings
 from climate_optimizer.models import Provider
-from climate_optimizer.runtime import ModelNotAllowedError, RuntimeState
+from climate_optimizer.orchestration.runtime import ModelNotAllowedError, RuntimeState
 
 
 def test_defaults_come_from_config() -> None:

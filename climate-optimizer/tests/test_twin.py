@@ -6,16 +6,16 @@ from datetime import UTC, datetime, timedelta
 
 import numpy as np
 
-from climate_optimizer.models import Metric
-from climate_optimizer.params import default_twin_params
-from climate_optimizer.twin import (
+from climate_optimizer.domain.twin import (
     PredictedPoint,
     TwinState,
+    default_twin_params,
     fidelity_residual,
     seed_state_from_context,
     simulate,
     vapor_pressure_deficit_kpa,
 )
+from climate_optimizer.models import Metric
 from conftest import build_context, build_setpoints
 
 PARAMS = default_twin_params()

@@ -23,8 +23,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-from .config import Settings
-from .models import (
+from ..config import Settings
+from ..models import (
     REASON_CLASS,
     ActuatorHealth,
     ControllerMode,

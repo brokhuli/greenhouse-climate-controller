@@ -22,15 +22,15 @@ from datetime import UTC, datetime
 import httpx
 import pytest
 
-from climate_optimizer import schema_validation
 from climate_optimizer.config import Settings
-from climate_optimizer.cycle import plan_record_payload, run_cycle
+from climate_optimizer.domain.twin import default_twin_params
+from climate_optimizer.infra import schema_validation
 from climate_optimizer.models import OutcomeStatus, Provider, ReasonCode
-from climate_optimizer.params import default_twin_params
+from climate_optimizer.orchestration.cycle import plan_record_payload, run_cycle
+from climate_optimizer.orchestration.runtime import RuntimeState
+from climate_optimizer.orchestration.store import ServiceStore
 from climate_optimizer.planner import Planner
 from climate_optimizer.planner.chain import build_chain
-from climate_optimizer.runtime import RuntimeState
-from climate_optimizer.store import ServiceStore
 from conftest import StubPlatformClient
 
 ENDPOINT = os.environ.get("OPTIMIZER_TEST_OLLAMA_ENDPOINT", "http://localhost:11434")

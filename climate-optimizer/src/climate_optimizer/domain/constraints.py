@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import timedelta
 
-from .models import (
+from ..models import (
     Bound,
     Horizon,
     OptimizerPlan,

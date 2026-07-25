@@ -20,8 +20,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from ..config import Settings
+from ..domain.twin import PredictedPoint
 from ..models import Horizon, PlanningContext, Setpoints
-from ..twin import PredictedPoint
 from .chain import BackendOutput, PlannerChain, build_chain
 from .serializer import PlanContextPayload, build_plan_context
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from climate_optimizer.constraints import check_constraints, evaluate_application
+from climate_optimizer.domain.constraints import check_constraints, evaluate_application
 from climate_optimizer.models import (
     Horizon,
     OptimizerPlan,

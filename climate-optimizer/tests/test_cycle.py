@@ -11,10 +11,10 @@ from uuid import UUID
 import pytest
 from langchain_core.runnables import RunnableLambda
 
-from climate_optimizer import schema_validation
 from climate_optimizer.config import Settings
-from climate_optimizer.cycle import plan_record_payload, run_cycle
-from climate_optimizer.dataaccess import PlatformError, WriteOutcome
+from climate_optimizer.domain.twin import PredictedPoint, default_twin_params
+from climate_optimizer.infra import schema_validation
+from climate_optimizer.infra.dataaccess import PlatformError, WriteOutcome
 from climate_optimizer.models import (
     Metric,
     OutcomeStatus,
@@ -23,12 +23,11 @@ from climate_optimizer.models import (
     SetpointsPatch,
     TrajectoryPoint,
 )
-from climate_optimizer.params import default_twin_params
+from climate_optimizer.orchestration.cycle import plan_record_payload, run_cycle
+from climate_optimizer.orchestration.runtime import RuntimeState
+from climate_optimizer.orchestration.store import ServiceStore
 from climate_optimizer.planner import Planner, PlannerChain
 from climate_optimizer.planner.chain import BackendOutput
-from climate_optimizer.runtime import RuntimeState
-from climate_optimizer.store import ServiceStore
-from climate_optimizer.twin import PredictedPoint
 from conftest import (
     StubPlatformClient,
     build_context,
@@ -142,7 +141,7 @@ async def test_an_unexpected_error_escalates_as_internal_error(
     def boom(*_args: Any, **_kwargs: Any) -> Any:
         raise RuntimeError("twin exploded")
 
-    monkeypatch.setattr("climate_optimizer.cycle.simulate", boom)
+    monkeypatch.setattr("climate_optimizer.orchestration.cycle.simulate", boom)
 
     store = ServiceStore()
     record = await _run(store=store)

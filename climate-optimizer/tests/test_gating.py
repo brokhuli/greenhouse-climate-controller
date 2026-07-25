@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from climate_optimizer.config import Settings
-from climate_optimizer.gating import GateOutcome, evaluate_input_gate
+from climate_optimizer.domain.gating import GateOutcome, evaluate_input_gate
 from climate_optimizer.models import (
     ActuatorHealth,
     ControllerMode,

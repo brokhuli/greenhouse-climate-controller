@@ -25,8 +25,8 @@ from datetime import datetime
 from typing import Any
 
 from ..config import Settings
+from ..domain.twin import PredictedPoint
 from ..models import Horizon, PlanningContext
-from ..twin import PredictedPoint
 
 # Average characters per token for compact JSON — the estimator's single tuning constant.
 _CHARS_PER_TOKEN = 4.0

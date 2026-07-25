@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from jsonschema import ValidationError
 
-from climate_optimizer import schema_validation as sv
+from climate_optimizer.infra import schema_validation as sv
 from conftest import load_fixture
 
 

@@ -18,7 +18,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from ..config import Settings, load_settings
-from ..logging import configure_logging
+from ..infra.logging import configure_logging
 from .context import ServiceContext, build_context, validate_startup
 from .routes import router
 

@@ -20,15 +20,15 @@ from datetime import UTC, datetime
 
 import httpx
 
-from ..auth import JwtOperatorVerifier, OperatorVerifier, TokenProvider
 from ..config import Settings
-from ..dataaccess import PlatformClient, PlatformError
+from ..domain.twin import TwinParams, default_twin_params
+from ..infra.auth import JwtOperatorVerifier, OperatorVerifier, TokenProvider
+from ..infra.dataaccess import PlatformClient, PlatformError
 from ..models import Provider
-from ..params import TwinParams, default_twin_params
+from ..orchestration.runtime import RuntimeState
+from ..orchestration.scheduler import Scheduler
+from ..orchestration.store import ServiceStore
 from ..planner import Planner, PromptNotFoundError, load_prompt_template
-from ..runtime import RuntimeState
-from ..scheduler import Scheduler
-from ..store import ServiceStore
 from .schemas import DegradedReason, HealthResponse, HealthStatus
 
 logger = logging.getLogger(__name__)

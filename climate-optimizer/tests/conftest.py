@@ -19,7 +19,7 @@ import httpx
 from langchain_core.runnables import RunnableLambda
 
 from climate_optimizer.config import Settings
-from climate_optimizer.dataaccess import PlatformClient, PlatformError, WriteOutcome
+from climate_optimizer.infra.dataaccess import PlatformClient, PlatformError, WriteOutcome
 from climate_optimizer.models import (
     ActuatorHealth,
     ActuatorName,

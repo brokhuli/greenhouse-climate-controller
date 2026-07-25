@@ -17,7 +17,7 @@ from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, Request
 
-from ..auth import OperatorAuthError, OperatorIdentity, authorize_operator
+from ..infra.auth import OperatorAuthError, OperatorIdentity, authorize_operator
 from .context import ServiceContext
 
 

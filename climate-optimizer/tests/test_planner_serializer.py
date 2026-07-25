@@ -8,6 +8,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from climate_optimizer.config import Settings
+from climate_optimizer.domain.twin import PredictedPoint
 from climate_optimizer.models import Horizon, PlanningContext
 from climate_optimizer.planner import (
     ContextBudgetExceededError,
@@ -15,7 +16,6 @@ from climate_optimizer.planner import (
     build_plan_context,
     estimate_tokens,
 )
-from climate_optimizer.twin import PredictedPoint
 from conftest import build_context
 
 NOW = datetime(2026, 6, 17, 12, 0, tzinfo=UTC)

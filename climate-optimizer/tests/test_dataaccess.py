@@ -9,7 +9,7 @@ import pytest
 import respx
 
 from climate_optimizer.config import Settings
-from climate_optimizer.dataaccess import PlatformClient, PlatformError
+from climate_optimizer.infra.dataaccess import PlatformClient, PlatformError
 from climate_optimizer.models import ReasonCode, SetpointsPatch
 from conftest import build_setpoints, load_fixture
 

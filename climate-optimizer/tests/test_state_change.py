@@ -6,9 +6,8 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from climate_optimizer.params import default_twin_params
+from climate_optimizer.domain.twin import PredictedPoint, default_twin_params
 from climate_optimizer.planner import evaluate_state_change, forecast_distance, hourly_samples
-from climate_optimizer.twin import PredictedPoint
 
 NOW = datetime(2026, 6, 17, 12, 0, tzinfo=UTC)
 PARAMS = default_twin_params()

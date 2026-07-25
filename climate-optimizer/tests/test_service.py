@@ -13,19 +13,19 @@ from fastapi.testclient import TestClient
 from langchain_core.runnables import RunnableLambda
 
 from climate_optimizer.config import Settings
+from climate_optimizer.domain.twin import default_twin_params
 from climate_optimizer.models import ReasonCode
-from climate_optimizer.params import default_twin_params
+from climate_optimizer.orchestration.runtime import RuntimeState
+from climate_optimizer.orchestration.scheduler import Scheduler
+from climate_optimizer.orchestration.store import Escalation, ServiceStore
 from climate_optimizer.planner import Planner, PlannerChain
 from climate_optimizer.planner.chain import BackendOutput
-from climate_optimizer.runtime import RuntimeState
-from climate_optimizer.scheduler import Scheduler
 from climate_optimizer.service import (
     ConfigurationError,
     ServiceContext,
     create_app,
     validate_startup,
 )
-from climate_optimizer.store import Escalation, ServiceStore
 from conftest import StubPlatformClient, build_output, chain_factory, fake_chain
 
 NOW = datetime(2026, 6, 17, 12, 0, tzinfo=UTC)
@@ -206,7 +206,7 @@ def test_one_active_greenhouse_still_surfaces_a_stall(monkeypatch: pytest.Monkey
 
 
 def test_health_reports_an_unreachable_platform(monkeypatch: pytest.MonkeyPatch) -> None:
-    from climate_optimizer.dataaccess import PlatformError
+    from climate_optimizer.infra.dataaccess import PlatformError
 
     settings = _offline_llm_settings(monkeypatch)
     stub = StubPlatformClient(

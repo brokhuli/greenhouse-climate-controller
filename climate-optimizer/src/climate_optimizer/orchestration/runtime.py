@@ -20,8 +20,8 @@ import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from .config import Settings
-from .models import Provider
+from ..config import Settings
+from ..models import Provider
 
 logger = logging.getLogger(__name__)
 

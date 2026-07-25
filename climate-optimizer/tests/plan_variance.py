@@ -20,8 +20,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from climate_optimizer import schema_validation
 from climate_optimizer.config import Settings
+from climate_optimizer.infra import schema_validation
 from climate_optimizer.models import OptimizerPlan, Provider
 
 BASELINES_DIR = Path(__file__).resolve().parent / "baselines"

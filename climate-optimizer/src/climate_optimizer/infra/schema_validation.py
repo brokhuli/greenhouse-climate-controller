@@ -40,8 +40,8 @@ def _contracts_dir() -> Path:
     override = os.environ.get("CLIMATE_OPTIMIZER_CONTRACTS_DIR")
     if override:
         return Path(override)
-    # src/climate_optimizer/schema_validation.py -> climate_optimizer -> src -> climate-optimizer -> root
-    return Path(__file__).resolve().parents[3] / "contracts"
+    # src/climate_optimizer/infra/schema_validation.py -> infra -> climate_optimizer -> src -> climate-optimizer -> root
+    return Path(__file__).resolve().parents[4] / "contracts"
 
 
 def _load(path: Path) -> Any:

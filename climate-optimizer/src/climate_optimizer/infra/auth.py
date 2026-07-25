@@ -27,7 +27,7 @@ import httpx
 import jwt
 from jwt import PyJWKClient
 
-from .config import Settings
+from ..config import Settings
 
 logger = logging.getLogger(__name__)
 
