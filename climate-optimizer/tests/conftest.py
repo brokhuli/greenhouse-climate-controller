@@ -19,7 +19,12 @@ import httpx
 from langchain_core.runnables import RunnableLambda
 
 from climate_optimizer.config import Settings
-from climate_optimizer.infra.dataaccess import PlatformClient, PlatformError, WriteOutcome
+from climate_optimizer.infra.dataaccess import (
+    FleetMember,
+    PlatformClient,
+    PlatformError,
+    WriteOutcome,
+)
 from climate_optimizer.models import (
     ActuatorHealth,
     ActuatorName,
@@ -115,22 +120,35 @@ def build_context(
     freshness_age: float = 60.0,
     drop_metric: Metric | None = None,
     gap_metric: Metric | None = None,
+    partial_gap_metric: Metric | None = None,
     zone_id: str = "bench-a",
     hours: int = 2,
+    history_hours: int | None = None,
 ) -> PlanningContext:
-    """A healthy, gate-passing planning context that tests perturb via kwargs."""
-    frm = _TO - timedelta(hours=hours)
+    """A healthy, gate-passing planning context that tests perturb via kwargs.
 
-    def buckets(mean: float, gap: bool = False) -> list[SummaryBucket]:
+    ``hours`` is the requested window; ``history_hours`` (when set, ``< hours``) restricts the
+    telemetry to only the last N buckets, leaving earlier ones absent — how the platform serves a
+    cold-starting greenhouse whose data has not yet filled the window. ``partial_gap_metric`` zeroes
+    one metric's earliest covered bucket (a gap *within* the available span, distinct from
+    ``gap_metric`` which empties the whole series).
+    """
+    frm = _TO - timedelta(hours=hours)
+    covered = hours if history_hours is None else history_hours
+    data_from = _TO - timedelta(hours=covered)
+
+    def buckets(
+        mean: float, *, gap: bool = False, leading_gap: bool = False
+    ) -> list[SummaryBucket]:
         return [
             SummaryBucket(
-                bucket_start=frm + timedelta(hours=i),
+                bucket_start=data_from + timedelta(hours=i),
                 min=mean - 1.0,
                 mean=mean,
                 max=mean + 1.0,
-                count=0 if gap else 60,
+                count=0 if gap or (leading_gap and i == 0) else 60,
             )
-            for i in range(hours)
+            for i in range(covered)
         ]
 
     telemetry: list[MetricSummarySeries] = []
@@ -140,7 +158,11 @@ def build_context(
             continue
         telemetry.append(
             MetricSummarySeries(
-                metric=metric, zone_id=None, buckets=buckets(mean, metric is gap_metric)
+                metric=metric,
+                zone_id=None,
+                buckets=buckets(
+                    mean, gap=metric is gap_metric, leading_gap=metric is partial_gap_metric
+                ),
             )
         )
         freshness.append(
@@ -308,6 +330,7 @@ class StubPlatformClient(PlatformClient):
         read_error: PlatformError | None = None,
         write: WriteOutcome | None = None,
         fleet: list[str] | None = None,
+        offline: set[str] | None = None,
         fleet_error: PlatformError | None = None,
         pause_before_write: Callable[[], None] | None = None,
     ) -> None:
@@ -318,6 +341,7 @@ class StubPlatformClient(PlatformClient):
         self.read_error = read_error
         self.write = write or WriteOutcome.applied_ok(setpoints=None, message="accepted (202)")
         self.fleet = fleet if fleet is not None else ["gh-a"]
+        self.offline = offline or set()
         self.fleet_error = fleet_error
         # Stands in for a pause landing *inside* the write, between token acquisition and dispatch —
         # run just before the enable predicate is re-checked, so a test can drive the TOCTOU path.
@@ -352,7 +376,9 @@ class StubPlatformClient(PlatformClient):
         self.submitted_run_ids.append(optimizer_run_id)
         return self.write
 
-    async def list_greenhouse_ids(self) -> list[str]:
+    async def list_fleet(self) -> list[FleetMember]:
         if self.fleet_error is not None:
             raise self.fleet_error
-        return list(self.fleet)
+        return [
+            FleetMember(greenhouse_id=gid, online=gid not in self.offline) for gid in self.fleet
+        ]

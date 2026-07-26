@@ -42,9 +42,9 @@ describe("toOptimizerCardState — precedence", () => {
   });
 
   it("no-plan when the entry is present but never cycled (null status)", () => {
-    expect(
-      toOptimizerCardState(entry({ status: null, createdAt: null }), true),
-    ).toEqual({ kind: "no-plan" });
+    expect(toOptimizerCardState(entry({ status: null, createdAt: null }), true)).toEqual({
+      kind: "no-plan",
+    });
   });
 
   it("disabled outranks a never-cycled entry", () => {

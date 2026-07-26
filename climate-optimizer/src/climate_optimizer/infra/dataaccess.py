@@ -42,6 +42,14 @@ class TokenSource(Protocol):
     async def token(self) -> str | None: ...
 
 
+@dataclass(frozen=True)
+class FleetMember:
+    """One greenhouse in the registry, with the connectivity the scheduler gates dispatch on."""
+
+    greenhouse_id: str
+    online: bool
+
+
 class PlatformError(Exception):
     """A read-path failure carrying the canonical escalation reason code (spec 06 / interfaces)."""
 
@@ -125,11 +133,14 @@ class PlatformClient:
             return {"Authorization": f"Bearer {token}"}
         return {}
 
-    async def list_greenhouse_ids(self) -> list[str]:
-        """Discover the fleet the scheduler plans for (spec 02 §Scheduling).
+    async def list_fleet(self) -> list[FleetMember]:
+        """Discover the fleet the scheduler plans for, with each greenhouse's connectivity.
 
         The optimizer stays a pure Phase-2 client: it reads the registry the platform already
-        serves rather than carrying its own fleet list in config.
+        serves rather than carrying its own fleet list in config. A greenhouse the platform
+        reports ``offline`` (no telemetry ever seen — e.g. registered but no controller running)
+        stays in the roster but is not actively planned: with no data it can only ever hold at the
+        input gate, so the scheduler skips it rather than escalating every cycle.
         """
         url = f"{self._base}/greenhouses"
         try:
@@ -147,11 +158,20 @@ class PlatformClient:
 
         try:
             payload = response.json()
-            return [str(entry["id"]) for entry in payload]
+            # A ``degraded`` greenhouse is still planned — it has telemetry, and the input gate
+            # handles its staleness/faults; only a truly ``offline`` (never-reported) one is skipped.
+            return [
+                FleetMember(greenhouse_id=str(entry["id"]), online=entry.get("status") != "offline")
+                for entry in payload
+            ]
         except (KeyError, TypeError, ValueError) as err:
             raise PlatformError(
                 ReasonCode.CONTRACT_DRIFT, f"fleet list response invalid: {err}"
             ) from err
+
+    async def list_greenhouse_ids(self) -> list[str]:
+        """Every greenhouse id in the registry, connectivity aside (spec 02 §Scheduling)."""
+        return [member.greenhouse_id for member in await self.list_fleet()]
 
     async def get_planning_context(
         self, greenhouse_id: str, *, window: str = "12h", interval: str = "1h"

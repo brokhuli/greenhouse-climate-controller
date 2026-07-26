@@ -9,12 +9,13 @@ import pytest
 import respx
 
 from climate_optimizer.config import Settings
-from climate_optimizer.infra.dataaccess import PlatformClient, PlatformError
+from climate_optimizer.infra.dataaccess import FleetMember, PlatformClient, PlatformError
 from climate_optimizer.models import ReasonCode, SetpointsPatch
 from conftest import build_setpoints, load_fixture
 
 _READ_URL = "http://api:8080/api/greenhouses/gh-a/planning-context"
 _WRITE_URL = "http://api:8080/api/greenhouses/gh-a/setpoints"
+_FLEET_URL = "http://api:8080/api/greenhouses"
 _PATCH = SetpointsPatch(temperature_day_c=22.5)
 _RUN_ID = UUID("018f9c2e-6b7a-7c31-9e4d-2a1b5c6d7e8f")
 
@@ -45,6 +46,40 @@ async def test_read_transport_failure_is_platform_unavailable() -> None:
     async with PlatformClient(Settings()) as client:
         with pytest.raises(PlatformError) as err:
             await client.get_planning_context("gh-a")
+    assert err.value.reason_code is ReasonCode.PLATFORM_UNAVAILABLE
+
+
+@respx.mock
+async def test_list_fleet_maps_connectivity() -> None:
+    # Only an explicit "offline" status is skipped; "online" and "degraded" stay plannable.
+    respx.get(_FLEET_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"id": "gh-a", "status": "online"},
+                {"id": "gh-b", "status": "degraded"},
+                {"id": "gh-c", "status": "offline"},
+            ],
+        )
+    )
+    async with PlatformClient(Settings()) as client:
+        fleet = await client.list_fleet()
+        ids = await client.list_greenhouse_ids()
+    assert fleet == [
+        FleetMember("gh-a", online=True),
+        FleetMember("gh-b", online=True),
+        FleetMember("gh-c", online=False),
+    ]
+    # list_greenhouse_ids keeps the whole roster, connectivity aside.
+    assert ids == ["gh-a", "gh-b", "gh-c"]
+
+
+@respx.mock
+async def test_list_fleet_transport_failure_is_platform_unavailable() -> None:
+    respx.get(_FLEET_URL).mock(side_effect=httpx.ConnectError("refused"))
+    async with PlatformClient(Settings()) as client:
+        with pytest.raises(PlatformError) as err:
+            await client.list_fleet()
     assert err.value.reason_code is ReasonCode.PLATFORM_UNAVAILABLE
 
 

@@ -159,23 +159,28 @@ class Scheduler:
         # reads live, spec 09): the roster it records feeds the /fleet listing and the health
         # watchdog, both of which must know a greenhouse exists before dispatch resumes.
         try:
-            fleet = await self._client.list_greenhouse_ids()
+            fleet = await self._client.list_fleet()
         except PlatformError as err:
             logger.warning(
                 "fleet discovery failed; skipping this tick",
                 extra={"event": "optimizer_fleet_discovery_failed", "error": err.message},
             )
             return []
-        self._store.known_greenhouse_ids.update(fleet)
+        # The roster keeps *every* discovered greenhouse (incl. offline) so the /fleet view and the
+        # watchdog know it exists; dispatch, below, is what excludes the offline ones.
+        self._store.known_greenhouse_ids.update(member.greenhouse_id for member in fleet)
 
         if not self._runtime.enabled.enabled:
             return []
 
+        # An offline greenhouse (no telemetry ever seen) can only hold at the input gate, so
+        # planning it just escalates every cycle — skip it here rather than surface a doomed hold.
         eligible = [
-            greenhouse_id
-            for greenhouse_id in fleet
-            if self._runtime.is_greenhouse_active(greenhouse_id)
-            and not self.is_in_flight(greenhouse_id)
+            member.greenhouse_id
+            for member in fleet
+            if member.online
+            and self._runtime.is_greenhouse_active(member.greenhouse_id)
+            and not self.is_in_flight(member.greenhouse_id)
         ]
         if not eligible:
             return []

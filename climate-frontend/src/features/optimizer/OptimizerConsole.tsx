@@ -74,6 +74,14 @@ export default function OptimizerConsole() {
     return map;
   }, [fleet.data]);
 
+  // A greenhouse the platform reports offline (no telemetry) is not actively planned by the
+  // optimizer — the row labels it "Offline — not planning" rather than a doomed input-gate hold.
+  const offlineById = useMemo(() => {
+    const map = new Map<string, boolean>();
+    for (const g of fleet.data ?? []) map.set(g.id, g.status === "offline");
+    return map;
+  }, [fleet.data]);
+
   // One open escalation per greenhouse (the standing entry after dedup) — the row's Resolve target.
   const escalationByGreenhouse = useMemo(() => {
     const map = new Map<string, Escalation>();
@@ -258,6 +266,7 @@ export default function OptimizerConsole() {
                     entry={entry}
                     displayName={nameById.get(entry.greenhouseId) ?? entry.greenhouseId}
                     serviceEnabled={serviceEnabled}
+                    offline={offlineById.get(entry.greenhouseId) ?? false}
                     escalation={escalationByGreenhouse.get(entry.greenhouseId)}
                     nowMs={nowMs}
                   />

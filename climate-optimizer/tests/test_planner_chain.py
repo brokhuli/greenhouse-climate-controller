@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
+from langchain_core.exceptions import OutputParserException
 from langchain_core.runnables import RunnableLambda
 from langchain_ollama import ChatOllama
 
@@ -161,6 +162,23 @@ async def test_an_unparseable_response_also_holds_the_cycle() -> None:
     planner = _planner(failing_chain(ValueError("could not parse structured output")))
     with pytest.raises(PlannerUnavailableError):
         await _propose(planner)
+
+
+async def test_a_parse_failure_message_is_bounded_and_drops_the_echoed_completion() -> None:
+    # LangChain's structured-output parser embeds the *entire* model completion in its error; the
+    # operator-facing hold message must be a concise headline, not that flood (P3-OBS-1).
+    completion = '{"trajectory": [' + "{...}, " * 300 + "]}"
+    err = OutputParserException(
+        f"Failed to parse OptimizerPlan from completion {completion}. "
+        "Got: 3 validation errors for OptimizerPlan immediate_setpoints Field required"
+    )
+    with pytest.raises(PlannerUnavailableError) as raised:
+        await _propose(_planner(failing_chain(err)))
+
+    message = str(raised.value)
+    assert message.startswith("planner produced no plan:")
+    assert "trajectory" not in message  # the echoed completion is stripped
+    assert len(message) <= 240
 
 
 async def test_an_over_budget_context_propagates_as_a_config_fault() -> None:

@@ -5,6 +5,7 @@ import type { ActuatorName, ActuatorState, Metric, Setpoints } from "../../api/s
 import { useFleet, useGreenhouse } from "../../api/queries/greenhouses";
 import { useEvents } from "../../api/queries/events";
 import { useAnalytics, useTelemetry } from "../../api/queries/telemetry";
+import { useOptimizerStatus } from "../../api/queries/optimizer";
 import { liveSeriesKey, useLiveSeries } from "../../hooks/useLiveSeries";
 import { useLiveActuators, type LiveActuators } from "../../hooks/useLiveActuators";
 import { activeFaultCount, mergeReadings, rangeTierSelection } from "../../lib/derivations";
@@ -119,6 +120,9 @@ export default function GreenhouseDetail() {
   const live = useLiveSeries(id);
   const liveActuators = useLiveActuators(id);
   const fleet = useFleet();
+  // Mirrors OptimizerPlanPanel's own visibility rule: it renders null when the service is undeployed.
+  // Knowing that up front lets soil moisture keep the full row instead of an empty optimizer half.
+  const optimizerStatus = useOptimizerStatus();
 
   const detail = greenhouse.data;
   const actuatorReadings = useMemo(
@@ -206,6 +210,19 @@ export default function GreenhouseDetail() {
     };
   });
 
+  // When the optimizer renders, it splits this row with soil moisture (its right edge aligning with
+  // the climate overview above); when it's absent, soil moisture keeps the full width on its own.
+  // Halving the soil card is tight for its 5-column table, so let it scroll within the card.
+  const optimizerPresent = optimizerStatus.data?.status !== "unavailable";
+  const soilMoistureCard = (
+    <Card>
+      <PanelHeader title="Soil moisture" sectionLabel titleSize="large" />
+      <div className="overflow-x-auto">
+        <ZoneMoisturePanel rows={zoneRows} />
+      </div>
+    </Card>
+  );
+
   return (
     <div className="flex flex-col" style={SECTION_STYLE}>
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -248,10 +265,14 @@ export default function GreenhouseDetail() {
             <PanelHeader title="Climate overview" sectionLabel titleSize="large" />
             <StackedTimeSeriesChart bands={climateBands} />
           </Card>
-          <Card>
-            <PanelHeader title="Soil moisture" sectionLabel titleSize="large" />
-            <ZoneMoisturePanel rows={zoneRows} />
-          </Card>
+          {optimizerPresent ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2" style={CARD_GRID_STYLE}>
+              {soilMoistureCard}
+              <OptimizerPlanPanel greenhouseId={id} displayName={detail.displayName} />
+            </div>
+          ) : (
+            soilMoistureCard
+          )}
         </div>
         <div className="flex flex-col" style={CARD_GRID_STYLE}>
           <ProfileAssignmentPanel greenhouseId={id} />
@@ -259,7 +280,6 @@ export default function GreenhouseDetail() {
             <PanelHeader title="Actuator states" sectionLabel titleSize="large" />
             <ActuatorStatePanel actuators={actuatorReadings} />
           </Card>
-          <OptimizerPlanPanel greenhouseId={id} displayName={detail.displayName} />
           <Link
             to={`/activity?greenhouse_id=${encodeURIComponent(id)}`}
             className="border-border bg-surface-1 hover:border-border-strong block rounded-lg border transition-colors duration-[var(--motion-instant)]"

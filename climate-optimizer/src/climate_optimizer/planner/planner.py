@@ -31,6 +31,23 @@ logger = logging.getLogger(__name__)
 _DAY_BOUNDARY_PROXIMITY_SECONDS = 4 * 3600
 _SECONDS_PER_DAY = 86400
 
+# The planner-hold message is shown on the operator surface, so it must stay a concise single line.
+# LangChain's structured-output parser echoes the *entire* model completion into its
+# OutputParserException; surfacing that raw floods the escalation row (P3-OBS-1). The full error is
+# logged; the operator gets the bounded headline.
+_MAX_PLANNER_ERROR_CHARS = 200
+
+
+def _summarize_planner_error(err: Exception) -> str:
+    """A concise, single-line hold message for a planner failure — no echoed model completion."""
+    text = " ".join(str(err).split())
+    # Drop the completion body LangChain embeds after "from completion {…}", keeping the headline.
+    if "from completion" in text:
+        text = text.split(" from completion", 1)[0]
+    if len(text) > _MAX_PLANNER_ERROR_CHARS:
+        text = text[: _MAX_PLANNER_ERROR_CHARS - 1].rstrip() + "…"
+    return f"planner produced no plan: {text}"
+
 
 class PlannerUnavailableError(Exception):
     """The planner produced no usable plan — the cycle is held with ``llm_unavailable``.
@@ -114,7 +131,19 @@ class Planner:
         try:
             output = await self.chain_for(model).ainvoke({"plan_context": payload.text})
         except Exception as err:  # noqa: BLE001 — any backend/parse failure holds the cycle
-            raise PlannerUnavailableError(f"planner produced no plan: {err}") from err
+            # The full error (incl. the echoed completion) goes to the log for debugging; the hold
+            # message the operator sees is the bounded summary.
+            logger.warning(
+                "planner produced no usable plan",
+                extra={
+                    "event": "optimizer_planner_unavailable",
+                    "greenhouse_id": ctx.greenhouse_id,
+                    "model": model,
+                    "error_type": type(err).__name__,
+                    "error": str(err),
+                },
+            )
+            raise PlannerUnavailableError(_summarize_planner_error(err)) from err
 
         if output.role.value != "primary":
             logger.warning(

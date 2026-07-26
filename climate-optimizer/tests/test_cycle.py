@@ -203,6 +203,17 @@ async def test_an_unreachable_planner_holds_the_cycle() -> None:
     assert record.plan is None
 
 
+async def test_a_verbose_planner_error_is_bounded_on_the_record() -> None:
+    # A backend that echoes a huge body must not flood the operator surface — the recorded outcome
+    # message is capped for the escalation row (the full detail is logged).
+    flood = RuntimeError("x" * 5000)
+    record = await _run(chain=failing_chain(flood))
+
+    assert record.outcome.reason_code is ReasonCode.LLM_UNAVAILABLE
+    assert record.outcome.message is not None
+    assert len(record.outcome.message) <= 300
+
+
 async def test_an_over_budget_context_holds_the_cycle() -> None:
     record = await _run(settings=Settings(planning={"context_token_budget": 5}))
     assert record.outcome.reason_code is ReasonCode.LLM_UNAVAILABLE

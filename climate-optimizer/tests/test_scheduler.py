@@ -118,6 +118,19 @@ async def test_discovery_records_the_roster_for_the_fleet_view() -> None:
     assert store.known_greenhouse_ids == {"gh-a", "gh-b", "gh-c"}
 
 
+async def test_an_offline_greenhouse_is_rostered_but_not_planned() -> None:
+    # gh-c is registered but has no telemetry (offline) — it stays in the roster for the /fleet
+    # view, but planning it would only ever hold at the input gate, so it is not dispatched.
+    client = StubPlatformClient(fleet=["gh-a", "gh-b", "gh-c"], offline={"gh-c"})
+    store = ServiceStore()
+
+    dispatched = await _scheduler(client=client, store=store).tick()
+
+    assert sorted(dispatched) == ["gh-a", "gh-b"]
+    assert "gh-c" not in client.reads
+    assert store.known_greenhouse_ids == {"gh-a", "gh-b", "gh-c"}
+
+
 async def test_a_paused_greenhouse_is_skipped_while_the_fleet_plans() -> None:
     settings = Settings()
     runtime = RuntimeState(settings)

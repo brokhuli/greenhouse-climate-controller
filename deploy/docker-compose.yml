@@ -217,11 +217,15 @@ services:
       # Planning backend. PROVIDER is offline (spec 11). ENDPOINT is the LLM backend switch, interpolated
       # from deploy/.env: the default targets the `ollama` container; host mode overrides it to
       # http://host.docker.internal:11434 (and clears COMPOSE_PROFILES so no container runs). Model is a
-      # Compose-level override of the config.py default; llama3.2 (3B) is snappier on CPU and more apt to
-      # finish inside the 90s cycle timeout. Switch models at runtime via POST /api/optimizer/model.
+      # Compose-level override of the config.py default; llama3.2 (3B) is snappier on CPU. Switch models
+      # at runtime via POST /api/optimizer/model.
       OPTIMIZER_LLM__PROVIDER: ollama
       OPTIMIZER_LLM__ENDPOINT: ${OPTIMIZER_LLM__ENDPOINT:-http://ollama:11434}
       OPTIMIZER_LLM__MODEL: ${OLLAMA_MODEL:-llama3.2}
+      # Deliberation ceiling per cycle (spec 09). The config.py default is 90s, tuned for a hosted LLM;
+      # a local CPU-bound Ollama — especially with several greenhouses' cycles contending for one
+      # backend — needs more headroom, so the local stack raises it (override in deploy/.env).
+      OPTIMIZER_SERVICE__CYCLE_TIMEOUT_SECONDS: ${OPTIMIZER_SERVICE__CYCLE_TIMEOUT_SECONDS:-240}
       # Service-to-service auth for the setpoint write path (RFC-011); must match the api's
       # PLATFORM_SERVICE_AUTH_MODE. Dormant `trusted_network` default — untokened on the local network.
       OPTIMIZER_PLATFORM_AUTH__MODE: trusted_network

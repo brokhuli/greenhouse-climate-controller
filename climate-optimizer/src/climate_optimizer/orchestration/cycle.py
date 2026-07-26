@@ -70,6 +70,19 @@ logger = logging.getLogger(__name__)
 # Major version of the internal plan contract (bumping it is an ADR event).
 PLAN_RECORD_SCHEMA_VERSION = 1
 
+# The outcome message is an operator-facing summary shown on the escalation surface, not a log line.
+# Cap it as a backstop so no hold path (a planner backend echoing its whole completion, a platform
+# error body, …) can flood the fleet console — the full detail always goes to the structured log.
+_MAX_MESSAGE_CHARS = 300
+
+
+def _bounded(message: str | None) -> str | None:
+    """Trim an operator-facing outcome message to a single, surface-appropriate length."""
+    if message is None or len(message) <= _MAX_MESSAGE_CHARS:
+        return message
+    return message[: _MAX_MESSAGE_CHARS - 1].rstrip() + "…"
+
+
 # Metrics the twin's one-step-ahead fidelity residual is measured over (derived VPD/DLI excluded).
 _FIDELITY_METRICS = (Metric.TEMPERATURE, Metric.HUMIDITY, Metric.CO2, Metric.PAR)
 
@@ -516,7 +529,7 @@ def _build_record(
         backend=frame.backend,
         plan=plan,
         source_plan_id=frame.source_plan_id if plan is None else None,
-        outcome=Outcome(status=status, reason_code=reason_code, message=message),
+        outcome=Outcome(status=status, reason_code=reason_code, message=_bounded(message)),
     )
 
 

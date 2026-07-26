@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, CloudOff } from "lucide-react";
 import type { Escalation, FleetOptimizerGreenhouse } from "../../api/schemas";
 import {
   useResolveEscalation,
@@ -8,6 +8,7 @@ import {
 } from "../../api/queries/optimizer";
 import { useRole } from "../../hooks/useRole";
 import { Button } from "../../components/ui/Button";
+import { Pill } from "../../components/ui/Pill";
 import { useToast } from "../../components/ui/toast-context";
 import { OptimizerStatusPill, ReasonCodeChip } from "./badges";
 import { OptimizerEnableToggle, TriggerCycleAction } from "./controls";
@@ -24,16 +25,20 @@ const ageSecs = (date: Date, nowMs: number): number =>
  * stay viewer-open. The plan detail (diff/confidence/backend) lives on the greenhouse detail view,
  * linked from here (hybrid split).
  */
+const MUTED = "var(--color-status-offline)";
+
 export function FleetOptimizerRow({
   entry,
   displayName,
   serviceEnabled,
+  offline,
   escalation,
   nowMs,
 }: {
   entry: FleetOptimizerGreenhouse;
   displayName: string;
   serviceEnabled: boolean;
+  offline: boolean;
   escalation?: Escalation;
   nowMs: number;
 }) {
@@ -127,17 +132,33 @@ export function FleetOptimizerRow({
         </Link>
       </td>
       <td className="py-3 pr-3">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <OptimizerStatusPill state={state} />
-          {escalated && entry.reasonCode ? (
-            <ReasonCodeChip code={entry.reasonCode} reasonClass={escalation?.reasonClass} />
-          ) : null}
-          {escalated && heldAge ? (
-            <span className="text-fg-subtle text-xs">
-              held {formatDurationSecs(ageSecs(heldAge, nowMs))}
-            </span>
-          ) : null}
-        </div>
+        {offline ? (
+          <Pill color={MUTED} icon={<CloudOff size={12} aria-hidden />}>
+            Offline — not planning
+          </Pill>
+        ) : (
+          <div className="flex flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <OptimizerStatusPill state={state} />
+              {escalated && entry.reasonCode ? (
+                <ReasonCodeChip code={entry.reasonCode} reasonClass={escalation?.reasonClass} />
+              ) : null}
+              {escalated && heldAge ? (
+                <span className="text-fg-subtle text-xs">
+                  held {formatDurationSecs(ageSecs(heldAge, nowMs))}
+                </span>
+              ) : null}
+            </div>
+            {/* The specific gate message — which metric, what coverage — not just the code.
+                Clamped to a few lines with the full text on hover, so a verbose backend message
+                never dominates the row. */}
+            {escalated && escalation?.message ? (
+              <p className="text-fg-subtle line-clamp-3 text-xs" title={escalation.message}>
+                {escalation.message}
+              </p>
+            ) : null}
+          </div>
+        )}
       </td>
       <td className="text-fg-muted py-3 pr-3 text-xs whitespace-nowrap">{lastCycleLabel}</td>
       <td className="py-3">
@@ -155,13 +176,15 @@ export function FleetOptimizerRow({
           <TriggerCycleAction
             onTrigger={runCycle}
             pending={trigger.isPending}
-            disabled={!isOperator || globallyPaused || !entry.enabled}
+            disabled={!isOperator || globallyPaused || offline || !entry.enabled}
             disabledReason={
               !isOperator
                 ? operatorReason
-                : globallyPaused
-                  ? "Service is globally paused"
-                  : "Greenhouse is paused"
+                : offline
+                  ? "Greenhouse is offline"
+                  : globallyPaused
+                    ? "Service is globally paused"
+                    : "Greenhouse is paused"
             }
           />
           <OptimizerEnableToggle

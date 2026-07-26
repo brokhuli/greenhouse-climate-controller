@@ -63,6 +63,47 @@ describe("OptimizerConsole", () => {
     expect(screen.getByText(/low confidence · transient/i)).toBeInTheDocument();
   });
 
+  it("surfaces the specific gate message on an escalated row", () => {
+    // The precise cause (which metric / what coverage) reaches the browser on the escalation;
+    // the fleet row must render it, not just the generic reason-code chip.
+    renderWithProviders(<OptimizerConsole />, { client: seededClient(), route: "/optimizer" });
+    expect(screen.getByText(/confidence 0\.62 < threshold 0\.80/i)).toBeInTheDocument();
+  });
+
+  it("labels an offline greenhouse 'not planning' instead of an escalation", () => {
+    const client = makeClient();
+    client.setQueryData(queryKeys.optimizerStatus(), sampleOptimizerStatus());
+    client.setQueryData(
+      queryKeys.optimizerFleet(),
+      sampleFleetOptimizerSummary({
+        greenhouses: [
+          sampleFleetOptimizerGreenhouse({
+            greenhouseId: "gh-c",
+            status: "escalated",
+            reasonCode: "input_incomplete",
+          }),
+        ],
+        rollup: {
+          backlog: 0,
+          byOutcome: { applied: 0, escalated: 1, extended: 0 },
+          oldestOpenAgeSecs: null,
+        },
+      }),
+    );
+    client.setQueryData(queryKeys.optimizerEscalations(), []);
+    client.setQueryData(queryKeys.optimizerModel(), sampleModelState());
+    client.setQueryData(queryKeys.optimizerEnabled(), { enabled: true });
+    client.setQueryData(queryKeys.fleet(), [
+      sampleSummary({ id: "gh-c", displayName: "Greenhouse C", status: "offline" }),
+    ]);
+
+    renderWithProviders(<OptimizerConsole />, { client, route: "/optimizer" });
+
+    expect(screen.getByText(/offline.*not planning/i)).toBeInTheDocument();
+    // The misleading transient reason chip is suppressed for an offline greenhouse.
+    expect(screen.queryByText(/input incomplete/i)).not.toBeInTheDocument();
+  });
+
   it("filters to the escalation worklist under ?status=escalated", () => {
     renderWithProviders(<OptimizerConsole />, {
       client: seededClient(),

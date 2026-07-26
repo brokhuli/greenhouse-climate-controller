@@ -46,6 +46,21 @@ def test_incomplete_low_coverage() -> None:
     assert _gate(gap_metric=Metric.CO2).reason_code is ReasonCode.INPUT_INCOMPLETE
 
 
+def test_cold_start_short_history_is_trusted() -> None:
+    # A 12h window but only the last hour of data (a freshly-started greenhouse): coverage is
+    # measured from the data origin, so 1/1 buckets passes rather than 1/12 holding for ~10h.
+    outcome = _gate(hours=12, history_hours=1)
+    assert outcome.trusted
+    assert outcome.reason_code is None
+
+
+def test_gap_within_available_span_still_held() -> None:
+    # Anchoring only relaxes the leading edge — a gap *inside* the available span still counts
+    # (co2 covers 4h with its earliest bucket empty → 3/4 = 0.75 < 0.80).
+    outcome = _gate(hours=12, history_hours=4, partial_gap_metric=Metric.CO2)
+    assert outcome.reason_code is ReasonCode.INPUT_INCOMPLETE
+
+
 def test_sensor_fault_on_depended_metric() -> None:
     fault = SensorFault(
         metric=Metric.TEMPERATURE,

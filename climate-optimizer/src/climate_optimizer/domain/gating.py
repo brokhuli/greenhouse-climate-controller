@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
+from datetime import datetime
 
 from ..config import Settings
 from ..models import (
@@ -153,6 +154,24 @@ def _check_freshness(
     return None
 
 
+def _data_origin(ctx: PlanningContext) -> datetime | None:
+    """The earliest non-empty bucket across the telemetry — when this greenhouse's data begins.
+
+    A freshly-started (or freshly-registered) greenhouse has less history than the requested
+    window; expecting the full window's worth of buckets would penalize it for history it could
+    not have produced. Anchoring the coverage denominator here relaxes only the *leading* edge —
+    freshness (checked first) still catches a window whose data stopped recently, and gaps *within*
+    the available span still count.
+    """
+    starts = [
+        bucket.bucket_start
+        for series in ctx.telemetry
+        for bucket in series.buckets
+        if bucket.count > 0
+    ]
+    return min(starts) if starts else None
+
+
 def _check_completeness(
     ctx: PlanningContext,
     depended_on: Iterable[tuple[Metric, str | None]],
@@ -160,7 +179,12 @@ def _check_completeness(
 ) -> GateOutcome | None:
     series_by_key = {(s.metric, s.zone_id): s for s in ctx.telemetry}
     interval_seconds = _INTERVAL_SECONDS[ctx.interval.value]
-    window_seconds = (ctx.to - ctx.from_).total_seconds()
+    # Measure coverage from the greenhouse's data origin, not the full requested window, so a
+    # cold-starting greenhouse isn't held for history it could not yet have. When there is no data
+    # at all, fall back to the full window (the series checks below then hold as they would today).
+    origin = _data_origin(ctx)
+    effective_from = max(ctx.from_, origin) if origin is not None else ctx.from_
+    window_seconds = (ctx.to - effective_from).total_seconds()
     expected_buckets = max(1, round(window_seconds / interval_seconds))
 
     for metric, zone_id in depended_on:

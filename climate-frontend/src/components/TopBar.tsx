@@ -17,6 +17,8 @@ export function TopBar() {
   const detailMatch = useMatch("/greenhouses/:id");
   const setpointsMatch = useMatch("/greenhouses/:id/setpoints");
   const activityMatch = useMatch("/activity");
+  const profilesMatch = useMatch("/profiles");
+  const optimizerMatch = useMatch("/optimizer");
   const greenhouseId = detailMatch?.params.id ?? setpointsMatch?.params.id ?? "";
   const greenhouse = useGreenhouse(greenhouseId);
   const assignment = useAssignment(detailMatch?.params.id ?? "");
@@ -32,6 +34,12 @@ export function TopBar() {
   } else if (activityMatch) {
     title = "Activity";
     subtitle = "Faults, interlocks & operator writes";
+  } else if (profilesMatch) {
+    title = "Crop Profiles";
+    subtitle = "Setpoint templates for greenhouse assignments";
+  } else if (optimizerMatch) {
+    title = "Optimizer";
+    subtitle = "Autonomous setpoint tuning across the fleet";
   }
 
   const profileLabel = assignment.data
