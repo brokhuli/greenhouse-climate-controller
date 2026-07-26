@@ -142,6 +142,18 @@ class CycleRequest(BaseModel):
     reason: str | None = None
 
 
+class CycleAccepted(BaseModel):
+    """``202`` ack for an on-demand cycle: the run reserved for dispatch, to poll the plan with.
+
+    The cycle runs in the background after this response is sent, so the operator (and the Go proxy
+    hop) never waits out the LLM call — the resulting plan surfaces on the plan/fleet endpoints once
+    it completes.
+    """
+
+    optimizer_run_id: UUID
+    greenhouse_id: str
+
+
 class ResolveRequest(BaseModel):
     """``POST /api/optimizer/escalations/{id}/resolve``."""
 

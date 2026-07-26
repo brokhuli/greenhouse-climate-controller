@@ -214,12 +214,15 @@ async def test_a_greenhouse_already_planning_refuses_a_second_cycle() -> None:
     gate = _Gate()
     scheduler = _scheduler(chain=gate.chain)
 
-    task = asyncio.create_task(scheduler.trigger("gh-a"))
+    # reserve claims the single-flight slot synchronously; run_reserved carries the cycle in the
+    # background — the guard is held across both, so a second reserve is refused mid-cycle.
+    run_id = scheduler.reserve("gh-a")
+    task = asyncio.create_task(scheduler.run_reserved("gh-a", run_id))
     assert await gate.wait_for_live(1)
     assert scheduler.is_in_flight("gh-a")
 
     with pytest.raises(CycleInFlightError):
-        await scheduler.trigger("gh-a")
+        scheduler.reserve("gh-a")
 
     gate.release.set()
     await task
@@ -231,7 +234,8 @@ async def test_a_tick_skips_a_greenhouse_that_is_already_planning() -> None:
     client = StubPlatformClient(fleet=["gh-a", "gh-b"])
     scheduler = _scheduler(client=client, chain=gate.chain)
 
-    triggered = asyncio.create_task(scheduler.trigger("gh-a"))
+    run_id = scheduler.reserve("gh-a")
+    triggered = asyncio.create_task(scheduler.run_reserved("gh-a", run_id))
     assert await gate.wait_for_live(1)
 
     tick = asyncio.create_task(scheduler.tick())
@@ -247,27 +251,39 @@ async def test_a_tick_skips_a_greenhouse_that_is_already_planning() -> None:
 # -- on-demand trigger ------------------------------------------------------
 
 
-async def test_trigger_runs_a_cycle_and_returns_its_record() -> None:
-    record = await _scheduler().trigger("gh-a", reason="operator check")
+async def test_reserve_then_run_reserved_records_the_cycle() -> None:
+    store = ServiceStore()
+    scheduler = _scheduler(store=store)
+
+    run_id = scheduler.reserve("gh-a", reason="operator check")
+    assert scheduler.is_in_flight("gh-a")
+
+    await scheduler.run_reserved("gh-a", run_id)
+
+    assert not scheduler.is_in_flight("gh-a")
+    record = store.plans.latest("gh-a")
+    assert record is not None
     assert record.greenhouse_id == "gh-a"
+    # The run id the ack named is the one the recorded cycle carries.
+    assert record.optimizer_run_id == run_id
 
 
-async def test_trigger_is_refused_while_the_service_is_paused() -> None:
+def test_reserve_is_refused_while_the_service_is_paused() -> None:
     settings = Settings()
     runtime = RuntimeState(settings)
     runtime.set_enabled(False)
 
     with pytest.raises(OptimizerDisabledError):
-        await _scheduler(settings=settings, runtime=runtime).trigger("gh-a")
+        _scheduler(settings=settings, runtime=runtime).reserve("gh-a")
 
 
-async def test_trigger_is_refused_while_that_greenhouse_is_paused() -> None:
+def test_reserve_is_refused_while_that_greenhouse_is_paused() -> None:
     settings = Settings()
     runtime = RuntimeState(settings)
     runtime.set_greenhouse_enabled("gh-a", False)
 
     with pytest.raises(OptimizerDisabledError):
-        await _scheduler(settings=settings, runtime=runtime).trigger("gh-a")
+        _scheduler(settings=settings, runtime=runtime).reserve("gh-a")
 
 
 # -- the sweep --------------------------------------------------------------

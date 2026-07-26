@@ -123,12 +123,14 @@ func (c *Client) LatestPlan(ctx context.Context, greenhouseID string) (PlanRecor
 	return record, err
 }
 
-// TriggerCycle asks the optimizer to plan one greenhouse now. The optimizer returns the
-// resulting PlanRecord (202); a 409 (disabled or already planning) surfaces as a StatusError.
-func (c *Client) TriggerCycle(ctx context.Context, greenhouseID, token string, req CycleRequest) (PlanRecord, error) {
-	var record PlanRecord
-	err := c.do(ctx, http.MethodPost, "/api/optimizer/greenhouses/"+greenhouseID+"/cycles", token, req, &record)
-	return record, err
+// TriggerCycle asks the optimizer to plan one greenhouse now. The optimizer accepts the cycle for
+// background dispatch and returns the reserved run id (202); a 409 (disabled or already planning)
+// surfaces as a StatusError. The call returns as soon as the cycle is reserved — it does not block
+// on the cycle running — so the resulting plan is read back from LatestPlan once it completes.
+func (c *Client) TriggerCycle(ctx context.Context, greenhouseID, token string, req CycleRequest) (CycleAccepted, error) {
+	var accepted CycleAccepted
+	err := c.do(ctx, http.MethodPost, "/api/optimizer/greenhouses/"+greenhouseID+"/cycles", token, req, &accepted)
+	return accepted, err
 }
 
 // Escalations lists the open (awaiting-review) escalation set, triage-ordered upstream.

@@ -153,3 +153,12 @@ type PlanRecord struct {
 	Plan           *Plan     `json:"plan"`
 	Outcome        Outcome   `json:"outcome"`
 }
+
+// CycleAccepted mirrors the optimizer's 202 ack for an on-demand cycle (schemas.py CycleAccepted):
+// the run reserved for dispatch, to poll the plan endpoint with. The cycle runs on the optimizer in
+// the background after the ack, so this proxy hop returns immediately rather than blocking on the
+// LLM call — the resulting plan surfaces on the plan/fleet reads once it completes.
+type CycleAccepted struct {
+	OptimizerRunID string `json:"optimizer_run_id"`
+	GreenhouseID   string `json:"greenhouse_id"`
+}

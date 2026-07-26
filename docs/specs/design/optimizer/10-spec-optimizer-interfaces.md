@@ -37,7 +37,7 @@ versioned wire contract.
 |---|---|
 | `GET /health` | Liveness/readiness — Phase 2 reachability, LLM backend reachability, last-successful-cycle time, escalation backlog, and whether planning is **enabled** or the service is in read-only mode ([resilience — watchdog](./09-spec-optimizer-resilience.md)) |
 | `GET /metrics` | Prometheus optimizer-health scrape (the `/metrics` row above) |
-| `POST /api/optimizer/greenhouses/{id}/cycles` | Operator-gated: trigger an **on-demand** planning cycle for one greenhouse, out of band from the fixed cadence (body `{ reason? }`). The request asks for a fresh plan, so it bypasses state-change suppression but not input/safety/application gates; `409` while the optimizer is **disabled** — service-wide *or* for this greenhouse (read-only — [resilience](./09-spec-optimizer-resilience.md)) — or that greenhouse already has a cycle in flight |
+| `POST /api/optimizer/greenhouses/{id}/cycles` | Operator-gated: trigger an **on-demand** planning cycle for one greenhouse, out of band from the fixed cadence (body `{ reason? }`). Returns **`202`** immediately with the reserved `{ optimizer_run_id, greenhouse_id }` and runs the cycle **in the background** — the caller (and the Go proxy hop) never waits out the LLM call; the resulting plan is read back from `plans/latest` / `fleet`. The request asks for a fresh plan, so it bypasses state-change suppression but not input/safety/application gates; `409` while the optimizer is **disabled** — service-wide *or* for this greenhouse (read-only — [resilience](./09-spec-optimizer-resilience.md)) — or that greenhouse already has a cycle in flight |
 | `GET /api/optimizer/greenhouses/{id}/plans/latest` | Inspect the latest proposed / applied plan for one greenhouse |
 | `GET /api/optimizer/fleet` | Fleet-wide optimizer rollup for the operator overview: for **each** greenhouse its latest cycle outcome (`status`, `reason_code?`, `created_at`) and its per-greenhouse **`enabled`** flag, plus site aggregates — the open-escalation **backlog** count, counts **by outcome** (`applied` / `escalated` / `extended`), and the **oldest open escalation age**. Computed server-side from the plan store (the optimizer already owns it), so the operator surface reads **one** endpoint rather than fanning out `plans/latest` per greenhouse. The scalar backlog it reports is the same one `GET /health` surfaces |
 | `GET /api/optimizer/escalations` | List **open** escalations (held cycles awaiting operator review); see the escalation-lifecycle note below |
@@ -147,9 +147,13 @@ dormant in the single-host local deployment, enabled by configuration alone.
 above. In `oidc` mode the caller must present a Keycloak token carrying the **operator role**; by default
 (`trusted_network`) the call is untokened like the rest of the single-host local surface. The request is
 structured-logged with the operator identity, greenhouse id, supplied `reason`, and resulting
-`optimizer_run_id`. Manual cycles use the same single-flight and safety gates as scheduled cycles: a request
-is refused if the optimizer is disabled or that greenhouse is already planning, and a plan can still be held
-or escalated rather than applied.
+`optimizer_run_id`. The gates are checked and the single-flight slot claimed **synchronously**, then the
+endpoint returns `202 { optimizer_run_id, greenhouse_id }` and the cycle — the LLM call and setpoint
+write — runs in the **background** after the response is sent, so a slow cycle never blocks the caller or
+times out the platform's proxy hop; the plan surfaces on `plans/latest` / `fleet` once it completes. Manual
+cycles use the same single-flight and safety gates as scheduled cycles: a request is refused `409` if the
+optimizer is disabled or that greenhouse is already planning, and a plan can still be held or escalated
+rather than applied.
 
 ### Authenticating the model-change endpoint
 

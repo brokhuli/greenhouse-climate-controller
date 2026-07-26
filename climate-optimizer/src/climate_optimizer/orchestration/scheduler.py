@@ -28,6 +28,7 @@ import asyncio
 import contextlib
 import logging
 from datetime import UTC, datetime, timedelta
+from uuid import UUID, uuid4
 
 from ..config import Settings
 from ..domain.twin import TwinParams
@@ -102,12 +103,19 @@ class Scheduler:
     def is_in_flight(self, greenhouse_id: str) -> bool:
         return greenhouse_id in self._in_flight
 
-    # -- dispatch -----------------------------------------------------------
+    # -- on-demand dispatch -------------------------------------------------
 
-    async def trigger(self, greenhouse_id: str, *, reason: str | None = None) -> PlanRecord:
-        """Run an out-of-band cycle for one greenhouse (``POST …/cycles``).
+    def reserve(self, greenhouse_id: str, *, reason: str | None = None) -> UUID:
+        """Reserve an out-of-band cycle and return the run id it will carry (``POST …/cycles``).
 
-        The operator is asking for a fresh decision, so it bypasses **only** state-change
+        Synchronous on purpose: the gates are checked and the single-flight guard is claimed **before**
+        the request returns, so the ``202`` names a run that is already committed to dispatch and a
+        concurrent second trigger is refused rather than racing. The caller then schedules
+        :meth:`run_reserved` to execute the cycle *after* the response is sent — the operator is not
+        made to wait out an LLM call, and the proxy hop never times out on a slow cycle. Raising leaves
+        no reservation behind.
+
+        The operator is asking for a fresh decision, so the cycle bypasses **only** state-change
         suppression; the enable gate, input gate, twin checks, crop-safe bounds, confidence gate, and
         Phase-2 write validation all still run (spec 02). Refused while paused or already planning.
         """
@@ -118,33 +126,66 @@ class Scheduler:
         if self.is_in_flight(greenhouse_id):
             raise CycleInFlightError(f"{greenhouse_id} already has a cycle in flight")
 
+        run_id = uuid4()
+        self._in_flight.add(greenhouse_id)
         logger.info(
-            "on-demand cycle requested",
+            "on-demand cycle reserved",
             extra={
                 "event": "optimizer_cycle_triggered",
                 "greenhouse_id": greenhouse_id,
+                "optimizer_run_id": str(run_id),
                 "reason": reason,
             },
         )
-        return await self._dispatch(greenhouse_id, on_demand=True)
+        return run_id
+
+    async def run_reserved(self, greenhouse_id: str, run_id: UUID) -> None:
+        """Execute a cycle already reserved by :meth:`reserve` — the deferred body of a trigger.
+
+        Runs under the concurrency ceiling and always releases the single-flight guard :meth:`reserve`
+        claimed. ``run_cycle`` records every outcome itself, so a raised exception here means a fault
+        escaped the record path entirely (dispatch/semaphore) — logged, never swallowed, since there is
+        no request left to surface it to.
+        """
+        try:
+            async with self._semaphore:
+                await self._run_cycle(greenhouse_id, run_id=run_id, on_demand=True)
+        except Exception:
+            logger.exception(
+                "on-demand cycle raised outside the record path",
+                extra={
+                    "event": "optimizer_dispatch_error",
+                    "greenhouse_id": greenhouse_id,
+                    "optimizer_run_id": str(run_id),
+                },
+            )
+        finally:
+            self._in_flight.discard(greenhouse_id)
 
     async def _dispatch(self, greenhouse_id: str, *, on_demand: bool) -> PlanRecord:
-        """Run one cycle under the concurrency ceiling and the single-flight guard."""
+        """Run one scheduled cycle under the concurrency ceiling and the single-flight guard."""
         self._in_flight.add(greenhouse_id)
         try:
             async with self._semaphore:
-                return await run_cycle(
-                    greenhouse_id,
-                    settings=self._settings,
-                    client=self._client,
-                    planner=self._planner,
-                    runtime=self._runtime,
-                    store=self._store,
-                    params=self._params,
-                    on_demand=on_demand,
-                )
+                return await self._run_cycle(greenhouse_id, on_demand=on_demand)
         finally:
             self._in_flight.discard(greenhouse_id)
+
+    async def _run_cycle(
+        self, greenhouse_id: str, *, run_id: UUID | None = None, on_demand: bool
+    ) -> PlanRecord:
+        """Invoke ``run_cycle`` with the scheduler's injected dependencies (the shared cycle body)."""
+        return await run_cycle(
+            greenhouse_id,
+            settings=self._settings,
+            client=self._client,
+            planner=self._planner,
+            runtime=self._runtime,
+            store=self._store,
+            params=self._params,
+            run_id=run_id,
+            on_demand=on_demand,
+        )
 
     # -- loops --------------------------------------------------------------
 

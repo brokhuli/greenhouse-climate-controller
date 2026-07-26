@@ -55,6 +55,24 @@ func TestNon2xxIsStatusError(t *testing.T) {
 	}
 }
 
+func TestTriggerCycleReturnsTheReservedRunID(t *testing.T) {
+	// The optimizer acks the on-demand cycle with the reserved run id (202) and runs it in the
+	// background; the client decodes that ack rather than blocking on the resulting plan.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(`{"optimizer_run_id":"run-42","greenhouse_id":"gh-a"}`))
+	}))
+	defer srv.Close()
+
+	accepted, err := New(srv.URL, time.Second).TriggerCycle(context.Background(), "gh-a", "", CycleRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if accepted.OptimizerRunID != "run-42" || accepted.GreenhouseID != "gh-a" {
+		t.Fatalf("decoded %+v, want the reserved run id and greenhouse", accepted)
+	}
+}
+
 func TestTransportFailureIsNotStatusError(t *testing.T) {
 	// An unroutable base URL fails at transport, not with an HTTP status — StatusCode reports 0
 	// so the handler layer distinguishes "unreachable" from "responded with an error".

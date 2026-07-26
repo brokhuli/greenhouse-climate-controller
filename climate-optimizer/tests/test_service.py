@@ -325,14 +325,25 @@ def test_latest_plan_returns_the_recorded_envelope() -> None:
 # -- on-demand cycles -------------------------------------------------------
 
 
-def test_triggering_a_cycle_returns_202_and_the_record() -> None:
-    client, _ctx = _client()
+def test_triggering_a_cycle_returns_202_with_the_reserved_run_id() -> None:
+    client, ctx = _client()
     response = client.post(
         "/api/optimizer/greenhouses/gh-a/cycles", json={"reason": "operator check"}
     )
 
+    # The ack is immediate — the run reserved for dispatch, not the (still-running) plan.
     assert response.status_code == 202
-    assert response.json()["outcome"]["status"] == "applied"
+    body = response.json()
+    assert body["greenhouse_id"] == "gh-a"
+    run_id = body["optimizer_run_id"]
+    assert run_id
+
+    # The cycle runs in the background after the response; the TestClient drains it before the call
+    # returns, so the recorded plan carries the run id the ack named.
+    record = ctx.store.plans.latest("gh-a")
+    assert record is not None
+    assert str(record.optimizer_run_id) == run_id
+    assert record.outcome.status.value == "applied"
 
 
 def test_triggering_while_globally_paused_is_409() -> None:

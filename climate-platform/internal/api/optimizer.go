@@ -257,13 +257,13 @@ func (s *Server) triggerOptimizerCycle(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return respondError(c, http.StatusBadRequest, "invalid JSON body")
 	}
-	record, err := s.optimizer.TriggerCycle(c.Request().Context(), c.Param("id"), bearerToken(c), req)
+	accepted, err := s.optimizer.TriggerCycle(c.Request().Context(), c.Param("id"), bearerToken(c), req)
 	if err != nil {
 		return s.optimizerFail(c, err)
 	}
 	return c.JSON(http.StatusAccepted, cycleAcceptedDTO{
-		OptimizerRunID: record.OptimizerRunID,
-		GreenhouseID:   record.GreenhouseID,
+		OptimizerRunID: accepted.OptimizerRunID,
+		GreenhouseID:   accepted.GreenhouseID,
 	})
 }
 

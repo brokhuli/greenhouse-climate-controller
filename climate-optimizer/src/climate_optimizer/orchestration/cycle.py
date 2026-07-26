@@ -165,9 +165,14 @@ async def run_cycle(
     store: ServiceStore,
     params: TwinParams,
     now: datetime | None = None,
+    run_id: UUID | None = None,
     on_demand: bool = False,
 ) -> PlanRecord:
     """Run one planning cycle: deliberation bounded by ``service.cycle_timeout_seconds``.
+
+    ``run_id`` is the cycle's trace id. An on-demand trigger reserves it up front so the ``202``
+    acknowledgement can name the run before the cycle runs; a scheduled tick passes ``None`` and one
+    is minted here. Either way it flows onto the emitted record and the setpoint write's provenance.
 
     The cadence is a **ceiling, not a best-effort target** (spec 09): deliberation (read → gate →
     simulate → plan → validate) that overruns is timed out, the last applied bundle stays in force,
@@ -181,7 +186,7 @@ async def run_cycle(
     state = store.fleet.get(greenhouse_id)
     frame = _CycleFrame(
         greenhouse_id=greenhouse_id,
-        run_id=uuid4(),
+        run_id=run_id or uuid4(),
         now=moment,
         backend=Backend(
             provider=runtime.provider,

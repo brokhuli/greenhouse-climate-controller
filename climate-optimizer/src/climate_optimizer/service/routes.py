@@ -15,7 +15,7 @@ import logging
 from datetime import UTC, datetime
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Response, status
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from ..models import BackendRole, PlanRecord
@@ -25,6 +25,7 @@ from ..orchestration.store import Escalation
 from .context import build_health
 from .deps import Context, Operator
 from .schemas import (
+    CycleAccepted,
     CycleRequest,
     EnableRequest,
     EnableStateResponse,
@@ -124,13 +125,23 @@ async def latest_plan(greenhouse_id: str, ctx: Context) -> PlanRecord:
 
 @api.post(
     "/greenhouses/{greenhouse_id}/cycles",
-    response_model=PlanRecord,
+    response_model=CycleAccepted,
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def trigger_cycle(
-    greenhouse_id: str, body: CycleRequest, ctx: Context, operator: Operator
-) -> PlanRecord:
-    """Run an on-demand cycle. Refused with 409 while paused or already planning (spec 02)."""
+    greenhouse_id: str,
+    body: CycleRequest,
+    ctx: Context,
+    operator: Operator,
+    background: BackgroundTasks,
+) -> CycleAccepted:
+    """Accept an on-demand cycle for dispatch and return its run id (202).
+
+    The gates are checked and the single-flight slot claimed **synchronously** (refused 409 while
+    paused or already planning, spec 02); the cycle itself — the LLM call and setpoint write — runs in
+    the background *after* this response is sent, so neither the operator nor the platform proxy hop
+    waits it out. The resulting plan is fetched from the plan/fleet endpoints once it completes.
+    """
     logger.info(
         "operator triggered a cycle",
         extra={
@@ -141,9 +152,11 @@ async def trigger_cycle(
         },
     )
     try:
-        return await ctx.scheduler.trigger(greenhouse_id, reason=body.reason)
+        run_id = ctx.scheduler.reserve(greenhouse_id, reason=body.reason)
     except (OptimizerDisabledError, CycleInFlightError) as err:
         raise HTTPException(status_code=409, detail=str(err)) from err
+    background.add_task(ctx.scheduler.run_reserved, greenhouse_id, run_id)
+    return CycleAccepted(optimizer_run_id=run_id, greenhouse_id=greenhouse_id)
 
 
 @api.get("/escalations", response_model=list[EscalationResponse])
