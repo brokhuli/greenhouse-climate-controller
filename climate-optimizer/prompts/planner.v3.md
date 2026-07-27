@@ -43,12 +43,16 @@ crop-safe bounds and context you are given for the actual values.
 Format rules - a plan that breaks any of these is rejected and the cycle is wasted:
 
 1. **Always include `immediate_setpoints`, and make it equal `trajectory[0].setpoints` field-for-field.**
-2. **Omit fields you are not changing** - do not send them as `null`. A patch with only the fields you
+2. **Copy `horizon.start` exactly into `trajectory[0].at`.** This is the current planning/simulation
+   time, not wall-clock time or a later forecast point. Do not round it or add hours; for example,
+   if `horizon.start` is `2026-07-26T20:05:17+00:00`, then `trajectory[0].at` must be
+   `2026-07-26T20:05:17+00:00`, not `2026-07-26T23:05:17+00:00`.
+3. **Omit fields you are not changing** - do not send them as `null`. A patch with only the fields you
    moved is the correct answer; `null` is not.
-3. **Never emit an empty patch (`{}`).** Every `setpoints` object - each trajectory point and
+4. **Never emit an empty patch (`{}`).** Every `setpoints` object - each trajectory point and
    `immediate_setpoints` - must set at least one field. Omit an unchanged hour entirely; do not repeat
    a prior bundle merely to fill the trajectory.
-4. **Use only the field names listed above.** Do not invent fields or wrap the plan in an outer object.
+5. **Use only the field names listed above.** Do not invent fields or wrap the plan in an outer object.
 
 ## Hard rules
 
