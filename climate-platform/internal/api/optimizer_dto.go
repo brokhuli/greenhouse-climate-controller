@@ -38,6 +38,7 @@ type fleetGreenhouseDTO struct {
 	GreenhouseID string  `json:"greenhouse_id"`
 	Status       *string `json:"status"`
 	ReasonCode   *string `json:"reason_code,omitempty"`
+	Message      *string `json:"message,omitempty"`
 	Enabled      bool    `json:"enabled"`
 	CreatedAt    *string `json:"created_at"`
 	// Live pipeline progress: whether a cycle is running now, and the stage its current-or-most-recent

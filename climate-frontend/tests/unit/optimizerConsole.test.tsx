@@ -70,6 +70,67 @@ describe("OptimizerConsole", () => {
     expect(screen.getByText(/confidence 0\.62 < threshold 0\.80/i)).toBeInTheDocument();
   });
 
+  it("explains a benign Forecast hold directly in the fleet row", () => {
+    renderWithProviders(
+      <OptimizerConsole />,
+      {
+        client: seededClient({
+          fleet: sampleFleetOptimizerSummary({
+            greenhouses: [
+              sampleFleetOptimizerGreenhouse({
+                status: "extended",
+                message: "no crop-safe bounds present; holding the baseline",
+                currentStage: "forecast",
+              }),
+            ],
+            rollup: {
+              backlog: 0,
+              byOutcome: { applied: 0, escalated: 0, extended: 1 },
+              oldestOpenAgeSecs: null,
+            },
+          }),
+        }),
+        route: "/optimizer",
+      },
+    );
+
+    expect(
+      screen.getByText(/forecast held: no crop-safe bounds present; holding the baseline/i),
+    ).toBeInTheDocument();
+  });
+
+  it.each([
+    ["ingest", "platform_unavailable", "platform request timed out", "Ingest failed"],
+    ["quality_gate", "input_incomplete", "humidity coverage 0.50 < 0.95", "Quality Gate failed"],
+    ["constrain", "low_confidence", "confidence 0.62 < threshold 0.80", "Constrain failed"],
+  ] as const)("labels the %s failure with its actionable reason", (stage, reasonCode, message, label) => {
+    renderWithProviders(
+      <OptimizerConsole />,
+      {
+        client: seededClient({
+          fleet: sampleFleetOptimizerSummary({
+            greenhouses: [
+              sampleFleetOptimizerGreenhouse({
+                status: "escalated",
+                reasonCode,
+                message,
+                currentStage: stage,
+              }),
+            ],
+            rollup: {
+              backlog: 1,
+              byOutcome: { applied: 0, escalated: 1, extended: 0 },
+              oldestOpenAgeSecs: 30,
+            },
+          }),
+        }),
+        route: "/optimizer",
+      },
+    );
+
+    expect(screen.getByText(`${label}: ${message}`)).toBeInTheDocument();
+  });
+
   it("labels an offline greenhouse 'not planning' instead of an escalation", () => {
     const client = makeClient();
     client.setQueryData(queryKeys.optimizerStatus(), sampleOptimizerStatus());

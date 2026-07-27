@@ -104,7 +104,7 @@ func TestGetOptimizerFleetMapsFiltersAndKeepsUnplanned(t *testing.T) {
 		_, _ = w.Write([]byte(`{
 			"greenhouses":[
 				{"greenhouse_id":"gh-a","enabled":true,"status":"applied","reason_code":null,"created_at":"2026-07-22T13:30:00.000Z","optimizer_run_id":"11111111-1111-1111-1111-111111111111"},
-				{"greenhouse_id":"gh-b","enabled":true,"status":"escalated","reason_code":"low_confidence","created_at":"2026-07-22T13:28:00.000Z","optimizer_run_id":"22222222-2222-2222-2222-222222222222"},
+				{"greenhouse_id":"gh-b","enabled":true,"status":"escalated","reason_code":"low_confidence","message":"confidence 0.62 < threshold 0.80","created_at":"2026-07-22T13:28:00.000Z","optimizer_run_id":"22222222-2222-2222-2222-222222222222"},
 				{"greenhouse_id":"gh-z","enabled":false,"status":null,"reason_code":null,"created_at":null,"optimizer_run_id":null}
 			],
 			"rollup":{"backlog":1,"applied":1,"escalated":1,"extended":0,"oldest_open_escalation_age_seconds":120.7}
@@ -127,6 +127,9 @@ func TestGetOptimizerFleetMapsFiltersAndKeepsUnplanned(t *testing.T) {
 	}
 	if got.Greenhouses[1].ReasonCode == nil || *got.Greenhouses[1].ReasonCode != "low_confidence" {
 		t.Fatalf("escalated reason_code lost: %+v", got.Greenhouses[1])
+	}
+	if got.Greenhouses[1].Message == nil || *got.Greenhouses[1].Message != "confidence 0.62 < threshold 0.80" {
+		t.Fatalf("outcome message lost: %+v", got.Greenhouses[1])
 	}
 	// The float age is rounded down to the contract's integer seconds.
 	if got.Rollup.OldestOpenAgeSec == nil || *got.Rollup.OldestOpenAgeSec != 120 {

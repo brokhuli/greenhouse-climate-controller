@@ -142,6 +142,10 @@ values), which the planner rejects as `plan_unparseable`. An operator can switch
 the console (within the provider's allowlist). To plan with a cloud model instead, set
 `OPTIMIZER_LLM__PROVIDER=anthropic|openai` on the `optimizer` service and supply `PLANNER_API_KEY`.
 
+The local stack sets `OPTIMIZER_SERVICE__MAX_CONCURRENT_CYCLES=1`: one Ollama backend serves one
+greenhouse plan at a time, avoiding queued concurrent generations. Increase it in `deploy/.env` only
+after the configured backend has demonstrated reliable parallel inference.
+
 Ollama runs on **CPU by default**; a GPU (NVIDIA Container Toolkit) is an optional speed-up, not required.
 The bundled container has no memory ceiling — size Docker Desktop's memory to the chosen model
 (`llama3.2` ≈ 4 GB; `qwen2.5:7b` more). If cycles report an `extended` outcome because CPU inference

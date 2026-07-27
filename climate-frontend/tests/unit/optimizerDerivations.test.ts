@@ -17,6 +17,7 @@ const entry = (overrides: Partial<FleetOptimizerGreenhouse> = {}): FleetOptimize
   greenhouseId: "gh-a",
   status: "applied",
   reasonCode: null,
+  message: null,
   enabled: true,
   createdAt: new Date("2026-06-29T13:30:00.000Z"),
   inFlight: false,

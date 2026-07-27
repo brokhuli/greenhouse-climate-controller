@@ -627,7 +627,7 @@ async def test_the_record_stamps_the_active_backend() -> None:
 
     # A held cycle still records which backend would have run it (P3-OBS-1).
     assert record.backend.model == "mistral"
-    assert record.backend.prompt_version == "v2"
+    assert record.backend.prompt_version == "v3"
 
 
 # -- live stage progress ----------------------------------------------------

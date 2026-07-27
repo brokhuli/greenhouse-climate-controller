@@ -31,6 +31,7 @@ type FleetGreenhouse struct {
 	Enabled        bool       `json:"enabled"`
 	Status         *string    `json:"status"`
 	ReasonCode     *string    `json:"reason_code"`
+	Message        *string    `json:"message"`
 	CreatedAt      *time.Time `json:"created_at"`
 	OptimizerRunID *string    `json:"optimizer_run_id"`
 	// Live pipeline progress: whether a cycle is running now, and the stage its current-or-most-recent

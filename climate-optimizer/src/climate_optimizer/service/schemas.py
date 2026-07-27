@@ -60,6 +60,8 @@ class FleetGreenhouse(BaseModel):
     enabled: bool
     status: OutcomeStatus | None = None
     reason_code: ReasonCode | None = None
+    # Human-readable outcome detail for both escalations and benign extended holds.
+    message: str | None = None
     created_at: datetime | None = None
     optimizer_run_id: UUID | None = None
     # Live pipeline progress (spec 02 §Pipeline): whether a cycle is running right now, and the stage

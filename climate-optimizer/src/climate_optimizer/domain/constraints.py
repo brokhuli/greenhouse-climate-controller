@@ -23,7 +23,7 @@ from ..models import (
     StageBounds,
 )
 
-# The refined trajectory is documented as one point per hour across the horizon (spec 05 §2).
+# Future refined-trajectory change points are aligned to the hourly planning grid (spec 05 §2).
 _TRAJECTORY_STEP = timedelta(hours=1)
 
 # Scalar climate targets carrying an optional crop-safe Bound (spec 06 §1 / StageBounds).
@@ -91,13 +91,12 @@ def check_immediate_matches_trajectory(plan: OptimizerPlan) -> str | None:
 
 
 def check_trajectory_timing(plan: OptimizerPlan, horizon: Horizon) -> str | None:
-    """The trajectory must be an ordered, hourly walk anchored at the horizon and staying inside it.
+    """Validate sparse, hour-aligned change points anchored at the planning horizon.
 
-    The documented shape is one point per hour across the horizon (spec 05 §2). The load-bearing
-    invariant is that ``trajectory[0]`` is the bundle applied *this* cadence, so it must sit at
-    ``horizon.start``; the rest must be strictly ordered, hour-spaced, and within the horizon. We do
-    *not* require the tail to reach ``horizon.end`` — beyond the head the trajectory is a surfaced
-    planning artifact, never re-applied (spec 04), so an under-length tail is not a safety concern.
+    The load-bearing invariant is that ``trajectory[0]`` is the bundle applied *this* cadence, so it
+    must sit at ``horizon.start``. Later points are optional future changes: they must be strictly
+    ordered, on whole-hour offsets from that start, and within the horizon. We do *not* require the
+    tail to reach ``horizon.end`` — beyond the head the trajectory is surfaced only, never replayed.
     """
     points = plan.trajectory
     if points[0].at != horizon.start:
@@ -106,8 +105,11 @@ def check_trajectory_timing(plan: OptimizerPlan, horizon: Horizon) -> str | None
     for index, point in enumerate(points[1:], start=1):
         if point.at <= previous:
             return f"trajectory[{index}].at {point.at.isoformat()} is not after the previous point"
-        if point.at - previous != _TRAJECTORY_STEP:
-            return f"trajectory[{index}].at {point.at.isoformat()} is not one hour after the previous point"
+        if (point.at - horizon.start) % _TRAJECTORY_STEP:
+            return (
+                f"trajectory[{index}].at {point.at.isoformat()} is not on a whole-hour offset "
+                f"from horizon.start {horizon.start.isoformat()}"
+            )
         previous = point.at
     if points[-1].at > horizon.end:
         return (

@@ -13,7 +13,7 @@ baselines/<backend-slug>/<scenario-id>.json
 ```
 
 - `<backend-slug>` is `BackendKey.slug` — `provider__model__prompt_version__sampling`, e.g.
-  `ollama__llama3.2__v1__t0-p1` (`:` and `/` in a model name become `-`). A baseline is **per backend**:
+  `ollama__llama3.2__v3__t0-p1` (`:` and `/` in a model name become `-`). A baseline is **per backend**:
   every allowlisted local model, cloud model, and fallback keeps its own, because each produces its own
   plan distribution.
 - `<scenario-id>.json` is one contract-valid `OptimizerPlan` (validated on load against

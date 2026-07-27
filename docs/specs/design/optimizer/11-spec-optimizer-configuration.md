@@ -69,7 +69,7 @@ oidc_client_secret = ""               # set via PLANNER_OIDC_CLIENT_SECRET env v
 # "openai" (and supply an API key via PLANNER_API_KEY) to plan with a higher-capability cloud model instead.
 provider = "ollama"                   # OFFLINE: "ollama" (default) | "anthropic" | "openai"
 model = "qwen2.5:7b"                  # OPERATOR-MUTABLE at runtime; must be in available_models[provider]
-prompt_version = "v1"                 # OFFLINE-only. pins the planner prompt template; resolves prompts/planner.v{version}.md. A change is a deliberate ADR event (re-captures eval baselines); see planner prompt template & versioning
+prompt_version = "v3"                 # OFFLINE-only. pins the planner prompt template; resolves prompts/planner.v{version}.md. A change is a deliberate ADR event (re-captures eval baselines); see planner prompt template & versioning
 endpoint = "http://ollama:11434"      # Ollama base URL; ignored for cloud providers. Offline-only.
 api_key = ""                          # set via PLANNER_API_KEY env var; required for cloud providers, never in file
 # Optional secondary backend, wired via LangChain .with_fallbacks() and used only if the
@@ -124,7 +124,7 @@ min_history_coverage = 0.8            # min fraction of non-empty summary bucket
 
 [twin]
 solver_max_step_minutes = 5           # integrator sub-step ceiling; exponential update stays stable above the fastest τ; non-finite / out-of-envelope step = sim divergence → twin robustness
-output_interval_minutes = 60          # spacing of the twin's predicted-trajectory points handed to the planner (planner's hourly granularity); internal sub-steps are finer
+output_interval_minutes = 60          # spacing of the twin's predicted-trajectory points handed to the planner (the grid for optional future setpoint changes); internal sub-steps are finer
 divergence_threshold = 0.15           # one-step predicted-vs-observed residual fraction (mean over required metrics, normalized by plausibility-range) → twin robustness
 fidelity_breach_cycles = 3            # consecutive divergence_threshold breaches before a fidelity fault caps confidence and escalates → twin robustness
 

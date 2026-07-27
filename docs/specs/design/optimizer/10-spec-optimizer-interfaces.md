@@ -110,7 +110,7 @@ raising gates reference it rather than re-listing codes.
 | `contract_drift` | input gating — identity / `schema_version` mismatch; write path — Phase 2 `404` (greenhouse not in the platform registry) | persistent |
 | `twin_diverged` | twin — numerical divergence (non-finite / out-of-envelope step) | transient |
 | `twin_fidelity_fault` | twin — sustained parameter drift | persistent |
-| `constraint_violation` | constraint engine — target out of crop-safe range, an inconsistent setpoint bundle, or a malformed trajectory (not anchored at `horizon.start`, unordered, or non-hourly) | persistent (for this plan) |
+| `constraint_violation` | constraint engine — target out of crop-safe range, an inconsistent setpoint bundle, or a malformed trajectory (not anchored at `horizon.start`, unordered, off the hourly grid, or past its horizon) | persistent (for this plan) |
 | `low_confidence` | application gate — plan below the confidence threshold | transient |
 | `bounds_mismatch` | write path — Phase 2 `422` disagreement with local bounds | persistent |
 | `write_unauthorized` | write path — Phase 2 `401` / `403` (missing/invalid token or absent `setpoints:write` role, `SERVICE_AUTH_MODE=oidc`) | persistent |

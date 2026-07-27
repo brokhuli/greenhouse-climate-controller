@@ -52,6 +52,9 @@ export function FleetOptimizerRow({
 
   const state = toOptimizerCardState(entry, serviceEnabled);
   const escalated = entry.status === "escalated";
+  // Prefer the latest-cycle detail from the fleet response. Retain the escalation detail as a
+  // fallback for older optimizer responses that omit the fleet-level message.
+  const outcomeMessage = entry.message ?? (escalated ? escalation?.message ?? null : null);
   const operatorReason = isOperator ? undefined : "Operator role required";
   // Global precedence: while the service is globally paused, per-greenhouse controls can't act.
   const globallyPaused = !serviceEnabled;
@@ -124,7 +127,12 @@ export function FleetOptimizerRow({
 
   // The live pipeline tracker sits in a full-width sub-row beneath the summary, where the six stages
   // have horizontal room. Offline greenhouses are not planning, so they show no pipeline.
-  const pipeline = pipelineStages(entry, state);
+  const pipeline = pipelineStages(entry, state, outcomeMessage);
+  const terminalNode = pipeline.find((node) => node.state === "failed" || node.state === "held");
+  const outcomeFeedback =
+    terminalNode && outcomeMessage
+      ? `${terminalNode.label} ${terminalNode.state}: ${outcomeMessage}`
+      : null;
 
   return (
     <>
@@ -156,15 +164,10 @@ export function FleetOptimizerRow({
                   </span>
                 ) : null}
               </div>
-              {/* The specific gate message — which metric, what coverage — not just the code.
-                Clamped to a few lines with the full text on hover, so a verbose backend message
-                never dominates the row. */}
-              {escalated && escalation?.message ? (
-                <p
-                  className="text-fg-subtle line-clamp-3 text-xs break-words"
-                  title={escalation.message}
-                >
-                  {escalation.message}
+              {/* State the pipeline stage and outcome alongside the backend's actionable detail. */}
+              {outcomeFeedback ? (
+                <p className="text-fg-subtle line-clamp-3 text-xs break-words" title={outcomeFeedback}>
+                  {outcomeFeedback}
                 </p>
               ) : null}
             </div>

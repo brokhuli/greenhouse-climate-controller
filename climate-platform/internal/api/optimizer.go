@@ -98,6 +98,7 @@ func (s *Server) getOptimizerFleet(c echo.Context) error {
 			GreenhouseID: gh.GreenhouseID,
 			Status:       gh.Status,
 			ReasonCode:   gh.ReasonCode,
+			Message:      gh.Message,
 			Enabled:      gh.Enabled,
 			CreatedAt:    createdAt,
 			InFlight:     gh.InFlight,

@@ -59,7 +59,7 @@ async def _propose(
 # -- prompt asset -----------------------------------------------------------
 
 
-@pytest.mark.parametrize("version", ["v1", "v2"])
+@pytest.mark.parametrize("version", ["v1", "v2", "v3"])
 def test_the_pinned_prompt_version_resolves_to_a_checked_in_asset(version: str) -> None:
     template = load_prompt_template(version)
     assert "immediate_setpoints" in template

@@ -227,6 +227,9 @@ services:
       # a local CPU-bound Ollama — especially with several greenhouses' cycles contending for one
       # backend — needs more headroom, so the local stack raises it (override in deploy/.env).
       OPTIMIZER_SERVICE__CYCLE_TIMEOUT_SECONDS: ${OPTIMIZER_SERVICE__CYCLE_TIMEOUT_SECONDS:-240}
+      # A single local Ollama backend queues competing generations; serialize greenhouse cycles by
+      # default. Hardware-backed or hosted deployments can override this in deploy/.env.
+      OPTIMIZER_SERVICE__MAX_CONCURRENT_CYCLES: ${OPTIMIZER_SERVICE__MAX_CONCURRENT_CYCLES:-1}
       # Service-to-service auth for the setpoint write path (RFC-011); must match the api's
       # PLATFORM_SERVICE_AUTH_MODE. Dormant `trusted_network` default — untokened on the local network.
       OPTIMIZER_PLATFORM_AUTH__MODE: trusted_network

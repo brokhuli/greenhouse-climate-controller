@@ -61,7 +61,7 @@ class LlmSettings(_Group):
 
     provider: Provider = Provider.OLLAMA
     model: str = "qwen2.5:7b"
-    prompt_version: str = Field(default="v2", min_length=1)
+    prompt_version: str = Field(default="v3", min_length=1)
     endpoint: str = "http://ollama:11434"
     fallback_provider: str = ""
     fallback_model: str = ""

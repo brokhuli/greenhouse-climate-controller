@@ -58,7 +58,11 @@ export function PipelineTracker({ nodes }: { nodes: PipelineNode[] }) {
             <li
               className="inline-flex items-center gap-1 text-xs font-medium whitespace-nowrap"
               style={{ color: meta.color }}
-              title={`${node.label} — ${meta.word}`}
+              title={
+                node.message
+                  ? `${node.label} — ${meta.word}: ${node.message}`
+                  : `${node.label} — ${meta.word}`
+              }
             >
               <Icon size={13} aria-hidden className={meta.spin ? "animate-spin" : undefined} />
               {node.label}

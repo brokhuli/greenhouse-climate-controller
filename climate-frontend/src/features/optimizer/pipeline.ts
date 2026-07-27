@@ -11,7 +11,13 @@ import type { OptimizerCardState } from "./derivations";
  */
 
 export type PipelineNodeState = "done" | "active" | "failed" | "held" | "pending" | "idle";
-export type PipelineNode = { stage: CycleStage; label: string; state: PipelineNodeState };
+export type PipelineNode = {
+  stage: CycleStage;
+  label: string;
+  state: PipelineNodeState;
+  /** Detailed outcome text, present only on the settled failed/held terminal stage. */
+  message?: string;
+};
 
 /** The pipeline stages in execution order, with their operator-facing labels. */
 export const CYCLE_STAGES: ReadonlyArray<{ stage: CycleStage; label: string }> = [
@@ -71,6 +77,7 @@ const idleTrack = (): PipelineNode[] => CYCLE_STAGES.map((s) => ({ ...s, state: 
 export function pipelineStages(
   entry: FleetOptimizerGreenhouse | undefined,
   cardState: OptimizerCardState,
+  outcomeMessage?: string | null,
 ): PipelineNode[] {
   const inFlight = entry?.inFlight ?? false;
 
@@ -103,6 +110,13 @@ export function pipelineStages(
     if (i < activeIndex) state = "done";
     else if (i > activeIndex) state = "pending";
     else state = appliedComplete ? "done" : marker;
-    return { ...s, state };
+    return {
+      ...s,
+      state,
+      message:
+        i === activeIndex && (state === "failed" || state === "held")
+          ? outcomeMessage ?? undefined
+          : undefined,
+    };
   });
 }

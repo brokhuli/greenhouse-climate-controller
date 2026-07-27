@@ -1,0 +1,32 @@
+{
+  "trajectory": [
+    {
+      "at": "2026-06-17T12:00:00Z",
+      "setpoints": {
+        "temperature_day_c": 23.5,
+        "co2_target_ppm": 1050,
+        "vpd_target_kpa": 0.98
+      }
+    },
+    {
+      "at": "2026-06-17T16:00:00Z",
+      "setpoints": {
+        "temperature_day_c": 22.0,
+        "co2_target_ppm": 1150,
+        "vpd_target_kpa": 0.95
+      }
+    }
+  ],
+  "immediate_setpoints": {
+    "temperature_day_c": 23.5,
+    "co2_target_ppm": 1050,
+    "vpd_target_kpa": 0.98
+  },
+  "confidence": 0.9,
+  "explanation": "Pre-cool and adjust CO2 levels to prepare for the afternoon heat while maintaining VPD within bounds.",
+  "objective_scores": {
+    "anticipation": 0.9,
+    "coupling": 0.7,
+    "efficiency": 0.6
+  }
+}

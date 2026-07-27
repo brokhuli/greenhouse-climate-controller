@@ -366,7 +366,7 @@ def test_latest_plan_returns_the_recorded_envelope() -> None:
 
     assert body["greenhouse_id"] == "gh-a"
     assert body["outcome"]["status"] == "applied"
-    assert body["backend"]["prompt_version"] == "v2"
+    assert body["backend"]["prompt_version"] == "v3"
     assert body["plan"]["confidence"] == 0.95
 
 
@@ -479,7 +479,7 @@ def test_model_reports_the_active_backend_and_allowlist() -> None:
 
     assert body["provider"] == "ollama"
     assert body["model"] == "qwen2.5:7b"
-    assert body["prompt_version"] == "v2"
+    assert body["prompt_version"] == "v3"
     assert "mistral" in body["available_models"]
 
 

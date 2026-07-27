@@ -1028,6 +1028,7 @@ export const wireFleetOptimizerGreenhouse = z.object({
   // completed a cycle (discovered or paused before its first) — its enabled flag still matters.
   status: optimizerOutcomeStatusSchema.nullable(),
   reason_code: reasonCodeSchema.nullable().optional(),
+  message: z.string().nullable().optional(),
   enabled: z.boolean(),
   created_at: isoTimestamp.nullable(),
   // Live pipeline progress: whether a cycle is running now, and the stage its current-or-most-recent
@@ -1157,6 +1158,8 @@ export type FleetOptimizerGreenhouse = {
   // null when the greenhouse is known but has not yet completed a cycle (paired: status/createdAt).
   status: OptimizerOutcomeStatus | null;
   reasonCode: ReasonCode | null;
+  /** Human-readable reason for the most recent escalation or benign held cycle. */
+  message: string | null;
   enabled: boolean;
   createdAt: Date | null;
   // Live pipeline progress: whether a cycle is running now, and the stage its current-or-most-recent
@@ -1284,6 +1287,7 @@ export const toFleetOptimizerSummary = (
     greenhouseId: g.greenhouse_id,
     status: g.status ?? null,
     reasonCode: g.reason_code ?? null,
+    message: g.message ?? null,
     enabled: g.enabled,
     createdAt: g.created_at ? new Date(g.created_at) : null,
     inFlight: g.in_flight,

@@ -118,6 +118,7 @@ async def fleet(ctx: Context) -> FleetResponse:
                 enabled=ctx.runtime.greenhouse_enabled(greenhouse_id).enabled,
                 status=record.outcome.status if record else None,
                 reason_code=record.outcome.reason_code if record else None,
+                message=record.outcome.message if record else None,
                 created_at=record.created_at if record else None,
                 optimizer_run_id=record.optimizer_run_id if record else None,
                 # Live progress: the scheduler owns the in-flight guard; the store holds the stage.

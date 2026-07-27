@@ -21,7 +21,7 @@ from .setpoints import SetpointsPatch
 
 
 class TrajectoryPoint(StrictModel):
-    """One hour of the refined setpoint trajectory across the horizon."""
+    """One sparse, hour-aligned refined-setpoint change across the horizon."""
 
     at: datetime
     setpoints: SetpointsPatch

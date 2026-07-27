@@ -248,6 +248,10 @@
               "oneOf": [{ "$ref": "#/ReasonCode" }, { "type": "null" }],
               "description": "The reason code when the latest cycle escalated, else null."
             },
+            "message": {
+              "type": ["string", "null"],
+              "description": "Operator-facing detail for the latest cycle outcome, including benign extended holds (for example, why planning stopped at Forecast)."
+            },
             "enabled": {
               "type": "boolean",
               "description": "Whether the optimizer is enabled for this greenhouse — the per-greenhouse operator pause (POST /api/optimizer/greenhouses/{id}/enabled). false = this greenhouse's scheduled cycles are skipped even while the service is globally enabled; the SPA shows a Disabled pill (overriding `status`). Independent of the global EnableState — effective planning requires both, and the global pause takes precedence."

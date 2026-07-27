@@ -86,8 +86,13 @@ def test_unbounded_field_is_not_rejected() -> None:
 # -- trajectory timing (spec 05 §2) -----------------------------------------
 
 
-def test_well_formed_hourly_trajectory_passes() -> None:
+def test_well_formed_dense_hourly_trajectory_passes() -> None:
     plan = _trajectory_plan(_AT, _AT + timedelta(hours=1), _AT + timedelta(hours=2))
+    assert check_constraints(plan, BOUNDS, HORIZON).ok
+
+
+def test_sparse_hourly_change_points_pass() -> None:
+    plan = _trajectory_plan(_AT, _AT + timedelta(hours=3), _AT + timedelta(hours=8))
     assert check_constraints(plan, BOUNDS, HORIZON).ok
 
 
@@ -101,8 +106,8 @@ def test_unordered_trajectory_escalates() -> None:
     assert check_constraints(plan, BOUNDS, HORIZON).reason_code is ReasonCode.CONSTRAINT_VIOLATION
 
 
-def test_non_hourly_trajectory_escalates() -> None:
-    plan = _trajectory_plan(_AT, _AT + timedelta(hours=2))
+def test_off_grid_trajectory_escalates() -> None:
+    plan = _trajectory_plan(_AT, _AT + timedelta(hours=1, minutes=30))
     assert check_constraints(plan, BOUNDS, HORIZON).reason_code is ReasonCode.CONSTRAINT_VIOLATION
 
 
