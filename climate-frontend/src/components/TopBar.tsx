@@ -39,7 +39,7 @@ export function TopBar() {
     title = "Crop Profiles";
     subtitle = "Setpoint templates for greenhouse assignments";
   } else if (optimizerMatch) {
-    title = "Optimizer";
+    title = "Verdant Force | Optimizer";
     subtitle = "Autonomous setpoint tuning across the fleet";
   }
 
