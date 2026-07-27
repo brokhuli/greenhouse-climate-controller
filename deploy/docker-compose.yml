@@ -216,12 +216,13 @@ services:
       OPTIMIZER_DATA__PLATFORM_API_URL: http://api:8080/api
       # Planning backend. PROVIDER is offline (spec 11). ENDPOINT is the LLM backend switch, interpolated
       # from deploy/.env: the default targets the `ollama` container; host mode overrides it to
-      # http://host.docker.internal:11434 (and clears COMPOSE_PROFILES so no container runs). Model is a
-      # Compose-level override of the config.py default; llama3.2 (3B) is snappier on CPU. Switch models
-      # at runtime via POST /api/optimizer/model.
+      # http://host.docker.internal:11434 (and clears COMPOSE_PROFILES so no container runs). Model matches
+      # the config.py default qwen2.5:7b — reliable at the planner's structured output. llama3.2 (3B) is
+      # snappier on CPU but its output is often off-schema (plan_unparseable holds); switch models at
+      # runtime via POST /api/optimizer/model.
       OPTIMIZER_LLM__PROVIDER: ollama
       OPTIMIZER_LLM__ENDPOINT: ${OPTIMIZER_LLM__ENDPOINT:-http://ollama:11434}
-      OPTIMIZER_LLM__MODEL: ${OLLAMA_MODEL:-llama3.2}
+      OPTIMIZER_LLM__MODEL: ${OLLAMA_MODEL:-qwen2.5:7b}
       # Deliberation ceiling per cycle (spec 09). The config.py default is 90s, tuned for a hosted LLM;
       # a local CPU-bound Ollama — especially with several greenhouses' cycles contending for one
       # backend — needs more headroom, so the local stack raises it (override in deploy/.env).
@@ -253,6 +254,8 @@ services:
     # (controller-health) over the internal network — nothing extra is exposed via the proxy
     # (operations §1). The api is a static target; the generated controllers are discovered via the
     # file-SD targets file that gen-controllers.sh writes into ./prometheus/targets/.
+    # Opt-in for fast local feedback loops; enable with `--profile observability`.
+    profiles: ["observability"]
     image: prom/prometheus:v3.1.0
     container_name: greenhouse-prometheus
     restart: unless-stopped
@@ -279,6 +282,7 @@ services:
 
   grafana: # (2b) platform + controller dashboards over Prometheus (operations §1). Dashboards and the
     # Prometheus datasource are auto-provisioned from ./grafana/; the admin login is GRAFANA_ADMIN[_PASSWORD].
+    profiles: ["observability"]
     image: grafana/grafana:11.4.0
     container_name: greenhouse-grafana
     restart: unless-stopped
@@ -313,6 +317,7 @@ services:
   cadvisor: # (2b) container-resource metrics for every service in the stack — per-container CPU,
     # memory, network, and uptime (container_*), scraped by Prometheus alongside the app metrics
     # (operations §1). Fills the infra gap the platform_*/controller_* app metrics can't cover.
+    profiles: ["observability"]
     image: gcr.io/cadvisor/cadvisor:v0.49.1
     container_name: greenhouse-cadvisor
     restart: unless-stopped

@@ -61,14 +61,14 @@ class LlmSettings(_Group):
 
     provider: Provider = Provider.OLLAMA
     model: str = "qwen2.5:7b"
-    prompt_version: str = Field(default="v1", min_length=1)
+    prompt_version: str = Field(default="v2", min_length=1)
     endpoint: str = "http://ollama:11434"
     fallback_provider: str = ""
     fallback_model: str = ""
     fallback_endpoint: str = ""
     temperature: float = Field(default=0.0, ge=0)
     top_p: float = Field(default=1.0, ge=0, le=1)
-    output_token_budget: int = Field(default=640, gt=0)
+    output_token_budget: int = Field(default=2048, gt=0)
     available_models: dict[str, list[str]] = Field(
         default_factory=lambda: {
             "ollama": ["llama3.2", "mistral", "qwen2.5:7b", "llama3.1:8b"],

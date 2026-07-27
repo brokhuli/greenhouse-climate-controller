@@ -8,7 +8,7 @@ import (
 const runID = "018f9c2e-6b7a-7c31-9e4d-2a1b5c6d7e8f"
 
 func TestOptimizerOutcomeEventMapsRunFailureReasons(t *testing.T) {
-	for _, reason := range []string{"cycle_timeout", "llm_unavailable", "internal_error"} {
+	for _, reason := range []string{"cycle_timeout", "llm_unavailable", "plan_unparseable", "internal_error"} {
 		ev := optimizerOutcomeEvent("gh-a", optimizerOutcomeReportDTO{
 			OptimizerRunID: runID,
 			Status:         "escalated",

@@ -28,7 +28,7 @@
     "schemas": {
       "OptimizerOutcomeReport": {
         "type": "object",
-        "description": "One cycle's outcome, reported for the activity feed. The platform maps an escalation whose `reason_code` is a run-failure code (`cycle_timeout` / `llm_unavailable` / `internal_error`) to an `optimizer_run_failed` event, and any other escalation reason to `optimizer_plan_escalated`; both warnings, sourced to the optimizer, with the reason + run id + `message` composed into the event message for troubleshooting.",
+        "description": "One cycle's outcome, reported for the activity feed. The platform maps an escalation whose `reason_code` is a run-failure code (`cycle_timeout` / `llm_unavailable` / `plan_unparseable` / `internal_error`) to an `optimizer_run_failed` event, and any other escalation reason to `optimizer_plan_escalated`; both warnings, sourced to the optimizer, with the reason + run id + `message` composed into the event message for troubleshooting.",
         "properties": {
           "optimizer_run_id": {
             "type": "string",

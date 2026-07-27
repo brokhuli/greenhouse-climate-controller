@@ -929,6 +929,7 @@ export const reasonCodeSchema = z.enum([
   "platform_unavailable",
   "cycle_timeout",
   "llm_unavailable",
+  "plan_unparseable",
   "internal_error",
 ]);
 /** Operator-triage hint travelling with a reason code. */

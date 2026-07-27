@@ -250,13 +250,13 @@ export default function OptimizerConsole() {
       ) : (
         <Card>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full table-fixed text-sm">
               <thead>
                 <tr className="text-fg-subtle text-left">
-                  <th className="section-label py-1 font-normal">Greenhouse</th>
+                  <th className="section-label w-[18%] py-1 font-normal">Greenhouse</th>
                   <th className="section-label py-1 font-normal">Status</th>
-                  <th className="section-label py-1 font-normal">Last cycle</th>
-                  <th className="section-label py-1 text-right font-normal">Actions</th>
+                  <th className="section-label w-[12%] py-1 font-normal">Last cycle</th>
+                  <th className="section-label w-[24%] py-1 text-right font-normal">Actions</th>
                 </tr>
               </thead>
               <tbody>

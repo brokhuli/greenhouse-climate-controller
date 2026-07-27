@@ -5,6 +5,8 @@ Root orchestration for the local stack — **Docker Compose**.
 The stack is the full Phase 2 platform — the MQTT broker, TimescaleDB, the Go `api`, Keycloak
 (`auth`), and the nginx `proxy` that fronts everything — plus the generated Phase 1 controllers and
 the Phase 3 `optimizer` (with its local `ollama` LLM backend), running with a single command.
+Prometheus, Grafana, and cAdvisor are an opt-in `observability` profile, so the default loop stays
+lightweight.
 
 **The `proxy` is the single entry point: everything is reached at `http://localhost:8080`** — it
 serves the built React SPA and reverse-proxies `/api` (REST + WebSocket) and `/auth` (Keycloak). The
@@ -33,7 +35,8 @@ cp deploy/.env.example deploy/.env
 # 2. Generate N controller services (per-greenhouse TOML + override + register.sh).
 bash deploy/scripts/gen-controllers.sh 2
 
-# 3. Build + start broker, DB, API, Keycloak, proxy, and the N controllers.
+# 3. Build + start the lightweight development stack: broker, DB, API, Keycloak,
+# proxy, optimizer, and the N controllers.
 docker compose --env-file deploy/.env \
     -f deploy/docker-compose.yml -f deploy/docker-compose.override.yml up -d --build
 
@@ -133,8 +136,10 @@ in `deploy/.env` — pick one:
   `fresh-run.sh` detects the absent container and skips the model pull. Make sure the model named by
   `OLLAMA_MODEL` is present on your host (`ollama list`).
 
-The model defaults to `OLLAMA_MODEL` (`llama3.2`); an operator can switch models at runtime from the
-console (within the provider's allowlist). To plan with a cloud model instead, set
+The model defaults to `OLLAMA_MODEL` (`qwen2.5:7b`) — reliable at the structured output the planner
+needs; `llama3.2` (3B) is snappier on CPU but its output is often off-schema (empty patches, out-of-range
+values), which the planner rejects as `plan_unparseable`. An operator can switch models at runtime from
+the console (within the provider's allowlist). To plan with a cloud model instead, set
 `OPTIMIZER_LLM__PROVIDER=anthropic|openai` on the `optimizer` service and supply `PLANNER_API_KEY`.
 
 Ollama runs on **CPU by default**; a GPU (NVIDIA Container Toolkit) is an optional speed-up, not required.
@@ -170,8 +175,16 @@ for a multi-host posture. Both are **off by default** — the single-host stack 
 
 ## Observability
 
-Prometheus and Grafana ship with the stack (operations §1). Prometheus scrapes these sources over the
-internal network — **nothing extra is exposed through the proxy**:
+Prometheus, Grafana, and cAdvisor are opt-in so normal development starts faster and uses less memory.
+Start the full stack with observability by adding the profile:
+
+```sh
+docker compose --profile observability --env-file deploy/.env \
+    -f deploy/docker-compose.yml -f deploy/docker-compose.override.yml up -d --build
+```
+
+The normal command above leaves all three services out. Prometheus scrapes these sources over the internal
+network — **nothing extra is exposed through the proxy**:
 
 - **`api:8080/metrics`** — platform-health: ingestion rate, API latency/errors, reconciliation
   actions, per-controller connectivity, and datastore/background-job health (`platform_*`).

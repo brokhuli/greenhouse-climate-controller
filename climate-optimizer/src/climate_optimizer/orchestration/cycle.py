@@ -59,6 +59,7 @@ from ..models import (
 from ..planner import (
     ContextBudgetExceededError,
     Planner,
+    PlannerParseError,
     PlannerUnavailableError,
     choose_horizon,
     evaluate_state_change,
@@ -375,6 +376,8 @@ async def _deliberate(
             model=runtime.model,
             now=frame.now,
         )
+    except PlannerParseError as err:
+        raise _Held(OutcomeStatus.ESCALATED, ReasonCode.PLAN_UNPARSEABLE, str(err)) from err
     except (PlannerUnavailableError, ContextBudgetExceededError) as err:
         raise _Held(OutcomeStatus.ESCALATED, ReasonCode.LLM_UNAVAILABLE, str(err)) from err
 
@@ -393,7 +396,7 @@ async def _deliberate(
     except Exception as err:  # noqa: BLE001 — a plan off-contract is a plan we cannot use
         raise _Held(
             OutcomeStatus.ESCALATED,
-            ReasonCode.LLM_UNAVAILABLE,
+            ReasonCode.PLAN_UNPARSEABLE,
             f"plan failed contract validation: {err}",
         ) from err
 

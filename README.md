@@ -40,8 +40,9 @@ single setpoint authority.
 
 ## Quick Start
 
-Bring up the full local stack with the MQTT broker, TimescaleDB, Go API, Keycloak, nginx proxy,
-React dashboard, and generated simulated controllers:
+Bring up the lightweight local stack with the MQTT broker, TimescaleDB, Go API, Keycloak, nginx proxy,
+React dashboard, and generated simulated controllers. Add `--profile observability` to also run
+Prometheus, Grafana, and cAdvisor:
 
 ```sh
 # 1. Create local environment settings.

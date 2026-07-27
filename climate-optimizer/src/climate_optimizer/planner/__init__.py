@@ -13,6 +13,7 @@ from .chain import (
 )
 from .planner import (
     Planner,
+    PlannerParseError,
     PlannerUnavailableError,
     PlanProposal,
     choose_horizon,
@@ -37,6 +38,7 @@ __all__ = [
     "PlanProposal",
     "Planner",
     "PlannerChain",
+    "PlannerParseError",
     "PlannerUnavailableError",
     "PromptNotFoundError",
     "ProviderNotConfiguredError",

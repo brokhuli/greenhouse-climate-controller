@@ -23,9 +23,10 @@ import (
 // held for operator review (optimizer_plan_escalated). Mirrors the frontend emission table
 // (spec 05 §Events) and the optimizer's ReasonCode set.
 var runFailureReasons = map[string]bool{
-	"cycle_timeout":   true,
-	"llm_unavailable": true,
-	"internal_error":  true,
+	"cycle_timeout":    true,
+	"llm_unavailable":  true,
+	"plan_unparseable": true,
+	"internal_error":   true,
 }
 
 // optimizerOutcomeReportDTO is the optimizer's outcome-report body (dataaccess.report_outcome).

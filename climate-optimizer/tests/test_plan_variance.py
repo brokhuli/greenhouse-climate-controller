@@ -27,7 +27,7 @@ from plan_variance import (
 )
 
 SCENARIO = "overnight_dli_shift"
-KEY = BackendKey(Provider.OLLAMA, "llama3.2", "v1", "t0-p1")
+KEY = BackendKey(Provider.OLLAMA, "llama3.2", "v2", "t0-p1")
 NOW = datetime(2026, 6, 17, 12, 0, tzinfo=UTC)
 
 
@@ -99,9 +99,9 @@ def test_missing_field_is_a_structural_mismatch() -> None:
 
 
 def test_backend_key_slug_and_distinct_paths() -> None:
-    assert KEY.slug == "ollama__llama3.2__v1__t0-p1"
-    other = BackendKey(Provider.OLLAMA, "qwen2.5:7b", "v1", "t0-p1")
-    assert other.slug == "ollama__qwen2.5-7b__v1__t0-p1"  # ':' is sanitized for the filesystem
+    assert KEY.slug == "ollama__llama3.2__v2__t0-p1"
+    other = BackendKey(Provider.OLLAMA, "qwen2.5:7b", "v2", "t0-p1")
+    assert other.slug == "ollama__qwen2.5-7b__v2__t0-p1"  # ':' is sanitized for the filesystem
     assert baseline_path(KEY, SCENARIO) != baseline_path(other, SCENARIO)
 
 

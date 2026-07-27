@@ -129,7 +129,7 @@ export function FleetOptimizerRow({
   return (
     <>
       <tr className="border-divider border-t align-top">
-        <td className="py-3 pr-3">
+        <td className="py-3 pr-3 whitespace-nowrap">
           <Link
             to={`/greenhouses/${entry.greenhouseId}`}
             className="text-fg-default hover:text-accent inline-flex items-center gap-1 font-medium"
@@ -160,7 +160,10 @@ export function FleetOptimizerRow({
                 Clamped to a few lines with the full text on hover, so a verbose backend message
                 never dominates the row. */}
               {escalated && escalation?.message ? (
-                <p className="text-fg-subtle line-clamp-3 text-xs" title={escalation.message}>
+                <p
+                  className="text-fg-subtle line-clamp-3 text-xs break-words"
+                  title={escalation.message}
+                >
                   {escalation.message}
                 </p>
               ) : null}
@@ -169,7 +172,7 @@ export function FleetOptimizerRow({
         </td>
         <td className="text-fg-muted py-3 pr-3 text-xs whitespace-nowrap">{lastCycleLabel}</td>
         <td className="py-3">
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="flex flex-nowrap items-center justify-end gap-2">
             {escalated ? (
               <Button
                 variant="secondary"

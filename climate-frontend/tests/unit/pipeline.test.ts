@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CycleStage, FleetOptimizerGreenhouse } from "../../src/api/schemas";
+import { reasonCodeSchema } from "../../src/api/schemas";
 import { toOptimizerCardState } from "../../src/features/optimizer/derivations";
 import {
   CYCLE_STAGES,
@@ -131,10 +132,16 @@ describe("pipelineStages — nothing to show", () => {
 });
 
 describe("STAGE_FOR_REASON_CODE", () => {
-  it("maps every reason code to a real pipeline stage", () => {
+  it("maps every canonical reason code to a real pipeline stage", () => {
     const stages = new Set(CYCLE_STAGES.map((s) => s.stage));
-    for (const stage of Object.values(STAGE_FOR_REASON_CODE)) {
+    for (const code of reasonCodeSchema.options) {
+      const stage = STAGE_FOR_REASON_CODE[code];
+      expect(stage, `no stage for ${code}`).toBeDefined();
       expect(stages.has(stage)).toBe(true);
     }
+  });
+
+  it("attributes a plan parse failure to the plan stage", () => {
+    expect(STAGE_FOR_REASON_CODE.plan_unparseable).toBe("plan");
   });
 });

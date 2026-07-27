@@ -106,3 +106,40 @@ def test_explicit_null_field_rejected() -> None:
 def test_partial_patch_still_valid() -> None:
     patch = SetpointsPatch(temperature_day_c=22.5)
     assert patch.model_dump(exclude_unset=True) == {"temperature_day_c": 22.5}
+
+
+def _plan_payload(**overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "trajectory": [
+            {
+                "at": "2026-07-11T13:30:00Z",
+                "setpoints": {"temperature_day_c": 22.5, "co2_target_ppm": 900},
+            },
+            {"at": "2026-07-11T14:30:00Z", "setpoints": {"co2_target_ppm": 950}},
+        ],
+        "immediate_setpoints": {"temperature_day_c": 22.5, "co2_target_ppm": 900},
+        "confidence": 0.9,
+        "explanation": "test",
+    }
+    payload.update(overrides)
+    return payload
+
+
+def test_immediate_setpoints_backfilled_when_omitted() -> None:
+    # A small model routinely omits this redundant field; the plan is backfilled from trajectory[0]
+    # rather than rejected (immediate_setpoints ≡ trajectory[0].setpoints, spec 06 §1).
+    payload = _plan_payload()
+    del payload["immediate_setpoints"]
+    plan = OptimizerPlan.model_validate(payload)
+    assert plan.immediate_setpoints == plan.trajectory[0].setpoints
+
+
+def test_immediate_setpoints_backfilled_when_explicitly_null() -> None:
+    plan = OptimizerPlan.model_validate(_plan_payload(immediate_setpoints=None))
+    assert plan.immediate_setpoints == plan.trajectory[0].setpoints
+
+
+def test_immediate_setpoints_left_untouched_when_present() -> None:
+    plan = OptimizerPlan.model_validate(_plan_payload(immediate_setpoints={"vpd_target_kpa": 0.8}))
+    assert plan.immediate_setpoints.model_dump(exclude_unset=True) == {"vpd_target_kpa": 0.8}
+    assert plan.immediate_setpoints != plan.trajectory[0].setpoints

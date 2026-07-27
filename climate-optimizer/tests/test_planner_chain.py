@@ -16,6 +16,7 @@ from climate_optimizer.planner import (
     ContextBudgetExceededError,
     Planner,
     PlannerChain,
+    PlannerParseError,
     PlannerUnavailableError,
     PlanProposal,
     PromptNotFoundError,
@@ -58,8 +59,9 @@ async def _propose(
 # -- prompt asset -----------------------------------------------------------
 
 
-def test_the_pinned_prompt_version_resolves_to_a_checked_in_asset() -> None:
-    template = load_prompt_template("v1")
+@pytest.mark.parametrize("version", ["v1", "v2"])
+def test_the_pinned_prompt_version_resolves_to_a_checked_in_asset(version: str) -> None:
+    template = load_prompt_template(version)
     assert "immediate_setpoints" in template
     assert "crop-safe" in template
 
@@ -158,26 +160,30 @@ async def test_an_unreachable_backend_holds_the_cycle() -> None:
         await _propose(_planner(failing_chain()))
 
 
-async def test_an_unparseable_response_also_holds_the_cycle() -> None:
-    planner = _planner(failing_chain(ValueError("could not parse structured output")))
-    with pytest.raises(PlannerUnavailableError):
-        await _propose(planner)
+async def test_an_unparseable_response_holds_the_cycle_as_a_parse_failure() -> None:
+    # A response that arrived but would not parse is distinct from an unreachable backend: it raises
+    # PlannerParseError (→ plan_unparseable), so an operator can tell an outage from a malformed plan.
+    err = OutputParserException("Failed to parse OptimizerPlan from completion {…}. Got: bad")
+    with pytest.raises(PlannerParseError):
+        await _propose(_planner(failing_chain(err)))
 
 
-async def test_a_parse_failure_message_is_bounded_and_drops_the_echoed_completion() -> None:
+async def test_a_parse_failure_message_drops_the_completion_but_keeps_the_field_detail() -> None:
     # LangChain's structured-output parser embeds the *entire* model completion in its error; the
-    # operator-facing hold message must be a concise headline, not that flood (P3-OBS-1).
+    # operator-facing hold message must be a concise headline (P3-OBS-1) — but it must keep the
+    # trailing "Got: …" detail that names the offending field, the actionable part.
     completion = '{"trajectory": [' + "{...}, " * 300 + "]}"
     err = OutputParserException(
         f"Failed to parse OptimizerPlan from completion {completion}. "
         "Got: 3 validation errors for OptimizerPlan immediate_setpoints Field required"
     )
-    with pytest.raises(PlannerUnavailableError) as raised:
+    with pytest.raises(PlannerParseError) as raised:
         await _propose(_planner(failing_chain(err)))
 
     message = str(raised.value)
     assert message.startswith("planner produced no plan:")
-    assert "trajectory" not in message  # the echoed completion is stripped
+    assert "{...}" not in message  # the echoed completion body is stripped
+    assert "immediate_setpoints" in message and "Field required" in message  # the detail is kept
     assert len(message) <= 240
 
 

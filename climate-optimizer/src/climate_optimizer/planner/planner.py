@@ -19,6 +19,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+from langchain_core.exceptions import OutputParserException
+from pydantic import ValidationError
+
 from ..config import Settings
 from ..domain.twin import PredictedPoint
 from ..models import Horizon, PlanningContext, Setpoints
@@ -39,22 +42,56 @@ _MAX_PLANNER_ERROR_CHARS = 200
 
 
 def _summarize_planner_error(err: Exception) -> str:
-    """A concise, single-line hold message for a planner failure — no echoed model completion."""
+    """A concise, single-line hold message for a planner failure — no echoed model completion.
+
+    LangChain's parse error reads ``Failed to parse OptimizerPlan from completion {…}. Got: {detail}``.
+    The ``{…}`` is the entire echoed model output (floods the escalation row), but the trailing
+    ``Got: {detail}`` names the offending field — the actionable part. Drop only the completion body,
+    keep the detail.
+    """
     text = " ".join(str(err).split())
-    # Drop the completion body LangChain embeds after "from completion {…}", keeping the headline.
-    if "from completion" in text:
-        text = text.split(" from completion", 1)[0]
+    head_marker = " from completion "
+    detail_marker = ". Got:"
+    if head_marker in text and detail_marker in text:
+        head = text.split(head_marker, 1)[0]
+        detail = text.split(detail_marker, 1)[1].strip()
+        text = f"{head}: {detail}"
+    elif head_marker in text:
+        text = text.split(head_marker, 1)[0]
     if len(text) > _MAX_PLANNER_ERROR_CHARS:
         text = text[: _MAX_PLANNER_ERROR_CHARS - 1].rstrip() + "…"
     return f"planner produced no plan: {text}"
 
 
-class PlannerUnavailableError(Exception):
-    """The planner produced no usable plan — the cycle is held with ``llm_unavailable``.
+def _log_no_plan(greenhouse_id: str, model: str, err: Exception) -> None:
+    """Log the full failure (incl. the echoed completion) for debugging; the operator sees the summary."""
+    logger.warning(
+        "planner produced no usable plan",
+        extra={
+            "event": "optimizer_planner_unavailable",
+            "greenhouse_id": greenhouse_id,
+            "model": model,
+            "error_type": type(err).__name__,
+            "error": str(err),
+        },
+    )
 
-    Covers both a backend that could not be reached (with no fallback, or the fallback also failing)
-    and a response that could not be parsed into an ``OptimizerPlan``: either way this cycle has no
-    plan, and ``llm_unavailable`` is the canonical planner-raised code (spec 10).
+
+class PlannerUnavailableError(Exception):
+    """The backend could not be reached, or produced no response — held with ``llm_unavailable``.
+
+    The backend was unreachable (with no fallback, or the fallback also failing) or otherwise returned
+    no usable response. A response that *was* returned but could not be parsed into an ``OptimizerPlan``
+    is a distinct case — see :class:`PlannerParseError` — so an operator can tell an outage apart from a
+    malformed completion (spec 10).
+    """
+
+
+class PlannerParseError(Exception):
+    """The backend responded, but the completion would not parse into a valid ``OptimizerPlan``.
+
+    Held with ``plan_unparseable`` — distinct from an unreachable backend (:class:`PlannerUnavailableError`):
+    the LLM is up, its output is just off-schema (a missing field, an empty patch, a hallucinated key).
     """
 
 
@@ -130,19 +167,13 @@ class Planner:
 
         try:
             output = await self.chain_for(model).ainvoke({"plan_context": payload.text})
-        except Exception as err:  # noqa: BLE001 — any backend/parse failure holds the cycle
-            # The full error (incl. the echoed completion) goes to the log for debugging; the hold
-            # message the operator sees is the bounded summary.
-            logger.warning(
-                "planner produced no usable plan",
-                extra={
-                    "event": "optimizer_planner_unavailable",
-                    "greenhouse_id": ctx.greenhouse_id,
-                    "model": model,
-                    "error_type": type(err).__name__,
-                    "error": str(err),
-                },
-            )
+        except (OutputParserException, ValidationError) as err:
+            # The backend responded; the completion is just off-schema. Distinct from an outage so the
+            # operator sees `plan_unparseable`, not a false "backend unreachable".
+            _log_no_plan(ctx.greenhouse_id, model, err)
+            raise PlannerParseError(_summarize_planner_error(err)) from err
+        except Exception as err:  # noqa: BLE001 — any other backend failure holds the cycle
+            _log_no_plan(ctx.greenhouse_id, model, err)
             raise PlannerUnavailableError(_summarize_planner_error(err)) from err
 
         if output.role.value != "primary":

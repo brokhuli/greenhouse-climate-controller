@@ -143,6 +143,7 @@ class ReasonCode(StrEnum):
     PLATFORM_UNAVAILABLE = "platform_unavailable"
     CYCLE_TIMEOUT = "cycle_timeout"
     LLM_UNAVAILABLE = "llm_unavailable"
+    PLAN_UNPARSEABLE = "plan_unparseable"
     INTERNAL_ERROR = "internal_error"
 
 
@@ -164,6 +165,9 @@ REASON_CLASS: dict[ReasonCode, ReasonClass] = {
     ReasonCode.PLATFORM_UNAVAILABLE: ReasonClass.TRANSIENT,
     ReasonCode.CYCLE_TIMEOUT: ReasonClass.TRANSIENT,
     ReasonCode.LLM_UNAVAILABLE: ReasonClass.TRANSIENT,
+    # A backend response that would not parse into a valid plan; the next cycle's fresh context may
+    # yield a conforming one, so it is transient like the unreachable-backend case above.
+    ReasonCode.PLAN_UNPARSEABLE: ReasonClass.TRANSIENT,
     # An unexpected fault self-heals on the next cadence if the trigger was momentary; a recurring
     # one folds into a standing escalation rather than re-firing every cycle.
     ReasonCode.INTERNAL_ERROR: ReasonClass.TRANSIENT,

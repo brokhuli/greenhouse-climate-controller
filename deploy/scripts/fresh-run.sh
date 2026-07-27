@@ -43,10 +43,10 @@ bash "$SCRIPT_DIR/gen-controllers.sh" "$N"
 # 3b. In container-Ollama mode, pull the model into the ollama volume (idempotent — a no-op once cached);
 #     ollama is healthy after --wait. In host-Ollama mode the ollama profile is off, so there is no
 #     container — skip the pull and let the optimizer use the models already on your host. Resolve the
-#     model the way compose does: exported OLLAMA_MODEL, else deploy/.env, else the llama3.2 default.
+#     model the way compose does: exported OLLAMA_MODEL, else deploy/.env, else the qwen2.5:7b default.
 if [ -n "$("${COMPOSE[@]}" ps -q ollama 2>/dev/null)" ]; then
   OLLAMA_MODEL="${OLLAMA_MODEL:-$(sed -n 's/^OLLAMA_MODEL=//p' "$DEPLOY_DIR/.env" 2>/dev/null | tail -n1)}"
-  OLLAMA_MODEL="${OLLAMA_MODEL:-llama3.2}"
+  OLLAMA_MODEL="${OLLAMA_MODEL:-qwen2.5:7b}"
   echo "==> pulling ollama model '$OLLAMA_MODEL' (first run downloads several GB) ..."
   "${COMPOSE[@]}" exec -T ollama ollama pull "$OLLAMA_MODEL"
 else

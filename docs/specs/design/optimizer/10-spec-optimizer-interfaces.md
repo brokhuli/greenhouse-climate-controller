@@ -116,7 +116,8 @@ raising gates reference it rather than re-listing codes.
 | `write_unauthorized` | write path — Phase 2 `401` / `403` (missing/invalid token or absent `setpoints:write` role, `SERVICE_AUTH_MODE=oidc`) | persistent |
 | `platform_unavailable` | read / write path — Phase 2 REST unreachable (transport failure / timeout / 5xx gateway), or a write `503` where Phase 2 could not establish a baseline (nothing recorded) | transient |
 | `cycle_timeout` | resilience — cycle overran `cycle_timeout_seconds` | transient |
-| `llm_unavailable` | planner — backend unreachable and no fallback configured | transient |
+| `llm_unavailable` | planner — backend unreachable (no response) and no fallback configured | transient |
+| `plan_unparseable` | planner — backend responded, but the completion could not be parsed into a valid `OptimizerPlan` (missing/extra field, empty patch, off-contract) | transient |
 | `internal_error` | resilience — an unexpected fault escaped the pipeline (twin, storage, serialization, client); surfaced so no cycle fails silently ([P3-RESIL-1](../../artifacts/non-functional-requirements.md)) | transient |
 
 **Class** is the operator-triage hint the input gate already draws
@@ -221,7 +222,7 @@ Most cycle outcomes surface to the platform's [activity feed](../frontend/05-spe
 their own: an **applied** plan *is* a setpoint write, stamped `source: optimizer` — the platform relabels it
 `optimizer_plan_applied`. An **extended** cycle writes nothing and is deliberately not a feed kind. The two
 outcomes that reach the platform through **no** other channel — an **escalation** held for review, and a
-**run failure** (a cycle that produced no usable plan: `cycle_timeout` / `llm_unavailable` / `internal_error`)
+**run failure** (a cycle that produced no usable plan: `cycle_timeout` / `llm_unavailable` / `plan_unparseable` / `internal_error`)
 — are reported over a dedicated ingest, `POST /api/greenhouses/{id}/optimizer-outcomes`
 ([contract](../../../../contracts/optimizer-platform-outcomes-rest/openapi.json)), the **audit twin of the
 setpoint write** and gated by the same config-gated `setpoints:write` service seam (RFC-011). The platform maps

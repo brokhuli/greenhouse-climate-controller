@@ -57,7 +57,11 @@ export const REASON_CODES: Record<ReasonCode, { class: ReasonClass; description:
   },
   llm_unavailable: {
     class: "transient",
-    description: "The LLM backend was unreachable and no fallback is configured.",
+    description: "The LLM backend was unreachable (no response) and no fallback is configured.",
+  },
+  plan_unparseable: {
+    class: "transient",
+    description: "The LLM backend responded, but its output could not be parsed into a valid plan.",
   },
   internal_error: {
     class: "transient",

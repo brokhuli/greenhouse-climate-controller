@@ -49,6 +49,7 @@ export const STAGE_FOR_REASON_CODE: Record<ReasonCode, CycleStage> = {
   twin_fidelity_fault: "forecast",
   // Plan (LLM).
   llm_unavailable: "plan",
+  plan_unparseable: "plan",
   cycle_timeout: "plan",
   internal_error: "plan",
   // Constraint / confidence gate.

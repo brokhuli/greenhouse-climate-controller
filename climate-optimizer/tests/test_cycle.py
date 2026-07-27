@@ -9,6 +9,7 @@ from typing import Any
 from uuid import UUID
 
 import pytest
+from langchain_core.exceptions import OutputParserException
 from langchain_core.runnables import RunnableLambda
 
 from climate_optimizer.config import Settings
@@ -201,6 +202,16 @@ async def test_an_unreachable_planner_holds_the_cycle() -> None:
     record = await _run(chain=failing_chain())
 
     assert record.outcome.reason_code is ReasonCode.LLM_UNAVAILABLE
+    assert record.plan is None
+
+
+async def test_an_unparseable_plan_holds_the_cycle_as_plan_unparseable() -> None:
+    # The backend responded but its completion is off-schema: a distinct reason from an outage, so the
+    # operator sees plan_unparseable (not the false "backend unreachable" of llm_unavailable).
+    err = OutputParserException("Failed to parse OptimizerPlan from completion {…}. Got: bad field")
+    record = await _run(chain=failing_chain(err))
+
+    assert record.outcome.reason_code is ReasonCode.PLAN_UNPARSEABLE
     assert record.plan is None
 
 
@@ -616,7 +627,7 @@ async def test_the_record_stamps_the_active_backend() -> None:
 
     # A held cycle still records which backend would have run it (P3-OBS-1).
     assert record.backend.model == "mistral"
-    assert record.backend.prompt_version == "v1"
+    assert record.backend.prompt_version == "v2"
 
 
 # -- live stage progress ----------------------------------------------------
