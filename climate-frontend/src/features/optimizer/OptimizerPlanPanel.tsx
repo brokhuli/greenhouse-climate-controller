@@ -145,20 +145,34 @@ export function OptimizerPlanPanel({
         sectionLabel
         titleSize="large"
         actions={
-          <OptimizerEnableToggle
-            enabled={greenhouseEnabled}
-            scope="greenhouse"
-            onChange={toggle}
-            pending={setEnabled.isPending}
-            disabled={!isOperator || globallyPaused}
-            disabledReason={
-              !isOperator
-                ? operatorReason
-                : globallyPaused
-                  ? "Service is globally paused"
-                  : undefined
-            }
-          />
+          <div className="flex flex-col items-end gap-2">
+            <OptimizerEnableToggle
+              enabled={greenhouseEnabled}
+              scope="greenhouse"
+              onChange={toggle}
+              pending={setEnabled.isPending}
+              disabled={!isOperator || globallyPaused}
+              disabledReason={
+                !isOperator
+                  ? operatorReason
+                  : globallyPaused
+                    ? "Service is globally paused"
+                    : undefined
+              }
+            />
+            <TriggerCycleAction
+              onTrigger={runCycle}
+              pending={trigger.isPending}
+              disabled={!isOperator || globallyPaused || !greenhouseEnabled}
+              disabledReason={
+                !isOperator
+                  ? operatorReason
+                  : globallyPaused
+                    ? "Service is globally paused"
+                    : "Greenhouse is paused"
+              }
+            />
+          </div>
         }
       />
 
@@ -207,18 +221,6 @@ export function OptimizerPlanPanel({
           )}
 
           <div className="flex flex-wrap items-center gap-2">
-            <TriggerCycleAction
-              onTrigger={runCycle}
-              pending={trigger.isPending}
-              disabled={!isOperator || globallyPaused || !greenhouseEnabled}
-              disabledReason={
-                !isOperator
-                  ? operatorReason
-                  : globallyPaused
-                    ? "Service is globally paused"
-                    : "Greenhouse is paused"
-              }
-            />
             {escalated ? (
               <Button
                 variant="secondary"
