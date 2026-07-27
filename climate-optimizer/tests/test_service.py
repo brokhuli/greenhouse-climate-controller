@@ -241,7 +241,7 @@ def test_metrics_exposes_the_prometheus_surface() -> None:
 
 
 def test_fleet_is_empty_before_any_cycle() -> None:
-    client, _ctx = _client()
+    client, _ctx = _client(_context(client=StubPlatformClient(fleet=[])))
     body = client.get("/api/optimizer/fleet").json()
 
     assert body["greenhouses"] == []
@@ -337,6 +337,18 @@ def test_fleet_lists_a_discovered_greenhouse_without_a_plan() -> None:
     body = client.get("/api/optimizer/fleet").json()
 
     entry = next(g for g in body["greenhouses"] if g["greenhouse_id"] == "gh-new")
+    assert entry["enabled"] is True
+    assert entry["status"] is None
+
+
+def test_fleet_refreshes_a_greenhouse_registered_after_optimizer_start() -> None:
+    """The console roster must not wait for the next planning cadence to discover a registration."""
+    ctx = _context(client=StubPlatformClient(fleet=["gh-just-registered"]))
+    client, _ = _client(ctx)
+
+    body = client.get("/api/optimizer/fleet").json()
+
+    entry = next(g for g in body["greenhouses"] if g["greenhouse_id"] == "gh-just-registered")
     assert entry["enabled"] is True
     assert entry["status"] is None
 

@@ -1,3 +1,4 @@
+import type { ZodError } from "zod";
 import {
   driftFrame,
   eventFrame,
@@ -5,6 +6,7 @@ import {
   telemetryFrame,
   type DriftFrame,
   type EventFrame,
+  type FrameType,
   type StatusFrame,
   type TelemetryFrame,
 } from "./schemas";
@@ -14,8 +16,12 @@ import { getAccessToken } from "./authToken";
  * The single live-push channel: a thin wrapper over the browser `WebSocket` to the platform's
  * `/api/stream` fan-out. It connects, Zod-parses each frame, dispatches it to the registered
  * handler, reconnects with exponential backoff, and reports its connection state (which drives
- * `ConnectionStatus`). Per the contract, an envelope-valid frame whose `type` is unknown — or a
- * known frame that fails validation — is ignored rather than crashing the app (degrade, not blank).
+ * `ConnectionStatus`). Per the contract, an envelope-valid frame whose `type` is unknown is ignored
+ * (forward compatibility); a *known* frame that fails validation is also dropped rather than crashing
+ * the app (degrade, not blank) — but, unlike an unknown type, that means the platform's wire shape has
+ * drifted from this client's schema, so it is surfaced loudly via `onFrameRejected` (and a
+ * `console.error`) instead of vanishing silently. A silent drop here is what freezes every chart and
+ * stat card while actuators (a separate frame) keep flowing.
  *
  * No dependency (socket.io etc.): the Go API speaks plain WebSockets and the message taxonomy is
  * small (frontend tech-stack §"Native WebSocket client").
@@ -30,6 +36,12 @@ export type FrameHandlers = {
   onEvent?: (frame: EventFrame) => void;
   /** Called for envelope-valid-but-unknown frame types (forward compatibility). */
   onUnknown?: (raw: unknown) => void;
+  /**
+   * Called when a frame of a *known* `type` fails schema validation and is dropped. Signals wire
+   * drift between the platform and this client's Zod schemas (a new metric/unit, a metric↔unit
+   * mismatch, an added field) — the failure mode that silently freezes charts and stat cards.
+   */
+  onFrameRejected?: (type: FrameType, error: ZodError) => void;
 };
 
 /** Minimal surface of the browser `WebSocket` this client uses (so it can be faked in tests). */
@@ -160,26 +172,41 @@ export class StreamClient {
       case "telemetry": {
         const parsed = telemetryFrame.safeParse(raw);
         if (parsed.success) this.handlers.onTelemetry?.(parsed.data);
+        else this.reject("telemetry", parsed.error);
         return;
       }
       case "status": {
         const parsed = statusFrame.safeParse(raw);
         if (parsed.success) this.handlers.onStatus?.(parsed.data);
+        else this.reject("status", parsed.error);
         return;
       }
       case "drift": {
         const parsed = driftFrame.safeParse(raw);
         if (parsed.success) this.handlers.onDrift?.(parsed.data);
+        else this.reject("drift", parsed.error);
         return;
       }
       case "event": {
         const parsed = eventFrame.safeParse(raw);
         if (parsed.success) this.handlers.onEvent?.(parsed.data);
+        else this.reject("event", parsed.error);
         return;
       }
       default:
         this.handlers.onUnknown?.(raw);
     }
+  }
+
+  /**
+   * A known frame type whose payload no longer validates: drop it (degrade, not crash), but surface
+   * it loudly. An unknown `type` is forward-compatible and stays quiet; a *known* type that fails is
+   * schema drift between platform and client, and swallowing it silently is exactly what freezes the
+   * charts/stat-cards. The contract-parity tests are the build-time guard; this is the runtime one.
+   */
+  private reject(type: FrameType, error: ZodError): void {
+    console.error(`[stream] dropped "${type}" frame — schema mismatch`, error.issues);
+    this.handlers.onFrameRejected?.(type, error);
   }
 
   private setState(state: WsConnectionState): void {

@@ -6,6 +6,7 @@ import { useStream } from "../app/stream-context";
 import { UserMenu } from "../features/auth/UserMenu";
 import { ConnectionStatus } from "./ConnectionStatus";
 import { connectionStateFromWs } from "./connection";
+import { SchemaDriftBadge } from "./SchemaDriftBadge";
 import { ThemeToggle } from "./ThemeToggle";
 
 /**
@@ -13,7 +14,7 @@ import { ThemeToggle } from "./ThemeToggle";
  * route; the status reflects the single stream.
  */
 export function TopBar() {
-  const { connectionState } = useStream();
+  const { connectionState, schemaDrift } = useStream();
   const detailMatch = useMatch("/greenhouses/:id");
   const setpointsMatch = useMatch("/greenhouses/:id/setpoints");
   const activityMatch = useMatch("/activity");
@@ -66,6 +67,7 @@ export function TopBar() {
         <p className="text-fg-muted truncate text-sm">{subtitle}</p>
       </div>
       <div className="flex items-center gap-3">
+        <SchemaDriftBadge drift={schemaDrift} />
         <ConnectionStatus state={connectionStateFromWs(connectionState)} />
         <ThemeToggle />
         <UserMenu />

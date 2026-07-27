@@ -18,6 +18,7 @@ from uuid import UUID
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Response, status
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
+from ..infra.dataaccess import PlatformError
 from ..models import BackendRole, PlanRecord
 from ..orchestration.runtime import ModelNotAllowedError
 from ..orchestration.scheduler import CycleInFlightError, OptimizerDisabledError
@@ -82,6 +83,20 @@ async def fleet(ctx: Context) -> FleetResponse:
     the scheduler has discovered or an operator has paused before its first cycle still appears (with
     a null outcome) so its ``enabled`` flag is reported for the whole fleet (spec 09/10).
     """
+    # The planning scheduler discovers the registry only once per planning cadence (30 minutes in
+    # the local stack). Refresh on this dashboard read as well, so a greenhouse registered after
+    # the optimizer starts appears on the console immediately instead of waiting for that cadence.
+    # Retain the last known roster if the platform is briefly unavailable: inspection must not
+    # erase existing optimizer state merely because one discovery read fails.
+    try:
+        discovered = await ctx.client.list_fleet()
+        ctx.store.known_greenhouse_ids.update(member.greenhouse_id for member in discovered)
+    except PlatformError as err:
+        logger.warning(
+            "fleet discovery failed while serving optimizer roster",
+            extra={"event": "optimizer_fleet_read_discovery_failed", "error": err.message},
+        )
+
     now = datetime.now(UTC)
     latest = ctx.store.plans.all_latest()
     rollup = ctx.store.rollup(now)
