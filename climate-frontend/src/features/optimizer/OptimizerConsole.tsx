@@ -191,10 +191,13 @@ export default function OptimizerConsole() {
         </div>
       ) : null}
 
-      {/* Service-health header + site rollup. */}
-      <div className="flex flex-col" style={{ gap: "var(--layout-card-gap)" }}>
+      {/* Service health is a compact first tile in the site rollup. */}
+      <div
+        className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_5fr]"
+        style={{ gap: "var(--layout-card-gap)" }}
+      >
         <Card>
-          <PanelHeader title="Service health" sectionLabel titleSize="large" />
+          <PanelHeader title="Service health" sectionLabel />
           {status.isLoading ? (
             <Skeleton height={64} />
           ) : status.data ? (
