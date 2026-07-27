@@ -16,6 +16,7 @@ from climate_optimizer.domain.twin import PredictedPoint, default_twin_params
 from climate_optimizer.infra import schema_validation
 from climate_optimizer.infra.dataaccess import PlatformError, WriteOutcome
 from climate_optimizer.models import (
+    CycleStage,
     Metric,
     OutcomeStatus,
     PlanRecord,
@@ -616,3 +617,94 @@ async def test_the_record_stamps_the_active_backend() -> None:
     # A held cycle still records which backend would have run it (P3-OBS-1).
     assert record.backend.model == "mistral"
     assert record.backend.prompt_version == "v1"
+
+
+# -- live stage progress ----------------------------------------------------
+
+
+async def test_a_clean_cycle_advances_to_the_publish_stage() -> None:
+    store = ServiceStore()
+    await _run(store=store)
+    # The stage is retained after the cycle so an idle greenhouse shows where it ended.
+    assert store.current_stage("gh-a") is CycleStage.PUBLISH
+
+
+async def test_an_unreachable_platform_stops_at_the_ingest_stage() -> None:
+    store = ServiceStore()
+    client = StubPlatformClient(
+        read_error=PlatformError(ReasonCode.PLATFORM_UNAVAILABLE, "connection refused")
+    )
+    await _run(client=client, store=store)
+    assert store.current_stage("gh-a") is CycleStage.INGEST
+
+
+async def test_a_failed_input_gate_stops_at_the_quality_gate_stage() -> None:
+    store = ServiceStore()
+    await _run(
+        client=StubPlatformClient(context=build_context(freshness_age=10_000.0)), store=store
+    )
+    assert store.current_stage("gh-a") is CycleStage.QUALITY_GATE
+
+
+async def test_a_diverging_twin_stops_at_the_forecast_stage() -> None:
+    ctx = build_context()
+    series = next(s for s in ctx.telemetry if s.metric is Metric.TEMPERATURE)
+    for bucket in series.buckets:
+        bucket.mean = 500.0
+
+    store = ServiceStore()
+    await _run(client=StubPlatformClient(context=ctx), store=store)
+    assert store.current_stage("gh-a") is CycleStage.FORECAST
+
+
+async def test_an_unreachable_planner_stops_at_the_plan_stage() -> None:
+    store = ServiceStore()
+    await _run(store=store, chain=failing_chain())
+    assert store.current_stage("gh-a") is CycleStage.PLAN
+
+
+async def test_a_low_confidence_plan_stops_at_the_constrain_stage() -> None:
+    store = ServiceStore()
+    await _run(store=store, chain=fake_chain(build_output(build_plan(confidence=0.4))))
+    assert store.current_stage("gh-a") is CycleStage.CONSTRAIN
+
+
+# -- outcome reporting (the activity-feed audit channel) --------------------
+
+
+async def test_an_escalated_cycle_is_reported_to_the_platform() -> None:
+    client = StubPlatformClient()
+    record = await _run(client=client, chain=failing_chain())
+
+    assert record.outcome.status is OutcomeStatus.ESCALATED
+    assert [r.optimizer_run_id for r in client.reported] == [record.optimizer_run_id]
+
+
+async def test_an_applied_cycle_is_not_reported() -> None:
+    # An applied plan already surfaces via its setpoint write; it must not double-report.
+    client = StubPlatformClient()
+    await _run(client=client)
+    assert client.reported == []
+
+
+async def test_an_extended_cycle_is_not_reported() -> None:
+    # An extend writes nothing and is deliberately not a feed kind, so it must not report.
+    runtime = RuntimeState(Settings())
+
+    def pause() -> None:
+        runtime.set_enabled(False, reason="paused during token fetch")
+
+    client = StubPlatformClient(pause_before_write=pause)
+    record = await _run(client=client, runtime=runtime)
+    assert record.outcome.status is OutcomeStatus.EXTENDED
+    assert client.reported == []
+
+
+async def test_a_failing_outcome_report_does_not_break_the_cycle() -> None:
+    # Reporting is best-effort telemetry: a failure is swallowed, and the cycle still records.
+    client = StubPlatformClient(report_error=RuntimeError("platform down"))
+    store = ServiceStore()
+    record = await _run(client=client, store=store, chain=failing_chain())
+
+    assert record.outcome.status is OutcomeStatus.ESCALATED
+    assert store.plans.latest("gh-a") is record

@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -290,6 +291,31 @@ func TestApplyRecordsOptimizerRunID(t *testing.T) {
 	recorded := fs.revisions["gh-a"]
 	if len(recorded) != 1 || recorded[0].OptimizerRunID == nil || *recorded[0].OptimizerRunID != runID {
 		t.Fatalf("optimizer_run_id not recorded on the revision: %+v", recorded)
+	}
+}
+
+func TestOptimizerApplyEmitsOptimizerPlanAppliedEvent(t *testing.T) {
+	fs := newFakeStore()
+	fs.endpoints["gh-a"] = store.Endpoint{RESTBaseURL: "http://gh-a"}
+	setpoints := domain.Setpoints{TemperatureDayC: 24}
+	fr := &fakeRelay{responder: okController("gh-a", setpoints)}
+	r := newTestReconciler(fs, fr, onlineFleet("gh-a"), &fakeHub{})
+
+	runID := "018f9c2e-6b7a-7c31-9e4d-2a1b5c6d7e8f"
+	if _, err := r.Apply(context.Background(), "gh-a", setpoints, domain.SourceOptimizer, "optimizer", "refine", &runID); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+
+	if len(fs.events) != 1 {
+		t.Fatalf("want one audit event, got %d", len(fs.events))
+	}
+	ev := fs.events[0]
+	// An applied optimizer plan is its own audit kind (not setpoint_edit) and names the short run id.
+	if ev.Kind != "optimizer_plan_applied" {
+		t.Fatalf("kind = %q, want optimizer_plan_applied", ev.Kind)
+	}
+	if ev.Source != "optimizer" || !strings.Contains(ev.Message, "018f9c2e") {
+		t.Fatalf("event does not carry optimizer provenance + run id: %+v", ev)
 	}
 }
 

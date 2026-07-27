@@ -19,7 +19,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from ..models import BackendRole, OutcomeStatus, Provider, ReasonClass, ReasonCode
+from ..models import BackendRole, CycleStage, OutcomeStatus, Provider, ReasonClass, ReasonCode
 from ..orchestration.store import Resolution
 
 
@@ -54,7 +54,7 @@ class HealthResponse(BaseModel):
 
 
 class FleetGreenhouse(BaseModel):
-    """One greenhouse's latest cycle outcome plus its per-greenhouse enable flag."""
+    """One greenhouse's latest cycle outcome, its enable flag, and live cycle progress."""
 
     greenhouse_id: str
     enabled: bool
@@ -62,6 +62,12 @@ class FleetGreenhouse(BaseModel):
     reason_code: ReasonCode | None = None
     created_at: datetime | None = None
     optimizer_run_id: UUID | None = None
+    # Live pipeline progress (spec 02 §Pipeline): whether a cycle is running right now, and the stage
+    # its current-or-most-recent cycle reached. Together they drive the console's pipeline tracker —
+    # ``in_flight`` distinguishes an advancing stage from a settled terminal one. Both are absent
+    # (false / null) for a greenhouse that has never cycled since the service started.
+    in_flight: bool = False
+    current_stage: CycleStage | None = None
 
 
 class FleetRollupResponse(BaseModel):

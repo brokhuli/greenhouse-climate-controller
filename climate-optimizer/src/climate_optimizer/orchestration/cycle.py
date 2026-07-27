@@ -46,6 +46,7 @@ from ..infra.dataaccess import PlatformClient, PlatformError
 from ..models import (
     Backend,
     BackendRole,
+    CycleStage,
     Horizon,
     Metric,
     OptimizerPlan,
@@ -258,6 +259,7 @@ async def run_cycle(
         )
 
     _settle(record, store=store, settings=settings, now=frame.now)
+    await _report_escalation(client, record)
     metrics.CYCLE_DURATION_SECONDS.labels(greenhouse_id).observe(time.monotonic() - started)
     metrics.CYCLES_TOTAL.labels(greenhouse_id, record.outcome.status.value).inc()
     logger.info(
@@ -298,12 +300,14 @@ async def _deliberate(
     state = store.fleet.get(frame.greenhouse_id)
 
     # 1. Read — the only inbound channel, a Phase-2 REST contract (RFC-008).
+    store.advance_stage(frame.greenhouse_id, CycleStage.INGEST)
     try:
         ctx = await client.get_planning_context(frame.greenhouse_id)
     except PlatformError as err:
         raise _Held(OutcomeStatus.ESCALATED, err.reason_code, err.message) from err
 
     # 2. Input-quality gate — never plan over stale, incomplete, or faulted inputs (spec 07).
+    store.advance_stage(frame.greenhouse_id, CycleStage.QUALITY_GATE)
     gate = evaluate_input_gate(ctx, settings, expected_greenhouse_id=frame.greenhouse_id)
     if not gate.trusted:
         assert gate.reason_code is not None  # noqa: S101 — GateOutcome.hold always sets one
@@ -312,6 +316,7 @@ async def _deliberate(
     frame.horizon = choose_horizon(ctx.to, ctx.setpoints.targets, settings)
 
     # 3. Twin fidelity — score the *previous* cycle's prediction against what actually happened.
+    store.advance_stage(frame.greenhouse_id, CycleStage.FORECAST)
     fidelity_fault = _update_fidelity(frame, ctx, state, settings=settings, params=params)
 
     # 4. Simulate the baseline forward: the current Phase-2 setpoints under the twin (spec 02).
@@ -342,6 +347,7 @@ async def _deliberate(
         )
 
     # 6. State-change gate — an on-demand cycle deliberately bypasses only this (spec 04).
+    store.advance_stage(frame.greenhouse_id, CycleStage.PLAN)
     if not on_demand:
         decision = evaluate_state_change(
             result.points,
@@ -392,6 +398,7 @@ async def _deliberate(
         ) from err
 
     # 8. Validate — the deterministic guardrails, and the confidence gate (spec 06).
+    store.advance_stage(frame.greenhouse_id, CycleStage.CONSTRAIN)
     decision_gate = evaluate_application(
         plan, ctx.setpoints.bounds, settings.application.confidence_threshold, frame.horizon
     )
@@ -436,6 +443,7 @@ async def _commit(
     the baseline rather than escalating.
     """
     state = store.fleet.get(frame.greenhouse_id)
+    store.advance_stage(frame.greenhouse_id, CycleStage.PUBLISH)
     if not runtime.is_greenhouse_active(frame.greenhouse_id):
         raise _Held(
             OutcomeStatus.EXTENDED,
@@ -567,3 +575,26 @@ def _settle(record: PlanRecord, *, store: ServiceStore, settings: Settings, now:
     # folds into its standing entry instead of superseding itself (spec 09).
     store.escalations.supersede(record.greenhouse_id, now=now, except_reason=reason_code)
     metrics.OPEN_ESCALATIONS.set(store.escalations.backlog())
+
+
+async def _report_escalation(client: PlatformClient, record: PlanRecord) -> None:
+    """Report an escalated cycle to the platform's activity feed (spec 10 §Outcome reporting).
+
+    Best-effort observability: an applied cycle already surfaces via its setpoint write and an
+    extended one writes nothing, so only escalations are reported here — the platform maps them to
+    ``optimizer_run_failed`` / ``optimizer_plan_escalated`` audit events. A report failure must never
+    break planning, so it is logged and swallowed; the escalation is already recorded locally.
+    """
+    if record.outcome.status is not OutcomeStatus.ESCALATED:
+        return
+    try:
+        await client.report_outcome(record)
+    except Exception:  # noqa: BLE001 — reporting is telemetry; a failure must not fail the cycle
+        logger.warning(
+            "optimizer outcome report failed",
+            extra={
+                "event": "optimizer_outcome_report_failed",
+                "optimizer_run_id": str(record.optimizer_run_id),
+                "greenhouse_id": record.greenhouse_id,
+            },
+        )

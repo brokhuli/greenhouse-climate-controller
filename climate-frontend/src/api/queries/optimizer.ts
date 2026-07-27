@@ -32,6 +32,8 @@ import { queryKeys } from "./keys";
  * forwards the caller's token so the optimizer re-checks the role in oidc mode).
  */
 export const OPTIMIZER_POLL_MS = 15 * 1000;
+/** Faster fleet poll while a cycle is in flight, so the pipeline tracker advances near-live. */
+export const OPTIMIZER_ACTIVE_POLL_MS = 2500;
 
 /** Service-health badge — the Go API's derivation of the optimizer's internal /health. Always renders
  *  (the Go API synthesizes `unavailable` rather than a proxy 5xx), so this read is not gated on an id. */
@@ -53,7 +55,12 @@ export function useOptimizerFleet() {
     queryKey: queryKeys.optimizerFleet(),
     queryFn: async () =>
       toFleetOptimizerSummary(await apiClient.get("/optimizer/fleet", wireFleetOptimizerSummary)),
-    refetchInterval: OPTIMIZER_POLL_MS,
+    // While any greenhouse has a cycle in flight, poll faster so the pipeline tracker advances
+    // near-live; otherwise fall back to the shared cadence. Plans move on the optimizer's own cadence.
+    refetchInterval: (query) =>
+      query.state.data?.greenhouses.some((g) => g.inFlight)
+        ? OPTIMIZER_ACTIVE_POLL_MS
+        : OPTIMIZER_POLL_MS,
     retry: false,
   });
 }

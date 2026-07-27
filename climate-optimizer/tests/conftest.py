@@ -40,6 +40,7 @@ from climate_optimizer.models import (
     MetricSummarySeries,
     OptimizerPlan,
     PlanningContext,
+    PlanRecord,
     Provider,
     SensorFault,
     Setpoints,
@@ -333,6 +334,7 @@ class StubPlatformClient(PlatformClient):
         offline: set[str] | None = None,
         fleet_error: PlatformError | None = None,
         pause_before_write: Callable[[], None] | None = None,
+        report_error: Exception | None = None,
     ) -> None:
         super().__init__(settings or Settings(), client=httpx.AsyncClient())
         # Without an explicit context, answer each greenhouse with its *own* context — a fixed
@@ -346,9 +348,12 @@ class StubPlatformClient(PlatformClient):
         # Stands in for a pause landing *inside* the write, between token acquisition and dispatch —
         # run just before the enable predicate is re-checked, so a test can drive the TOCTOU path.
         self.pause_before_write = pause_before_write
+        # Set to raise from report_outcome so a test can drive the best-effort report-failure path.
+        self.report_error = report_error
         self.submitted: list[tuple[str, SetpointsPatch]] = []
         self.submitted_run_ids: list[UUID] = []
         self.reads: list[str] = []
+        self.reported: list[PlanRecord] = []
 
     async def get_planning_context(
         self, greenhouse_id: str, *, window: str = "12h", interval: str = "1h"
@@ -375,6 +380,11 @@ class StubPlatformClient(PlatformClient):
         self.submitted.append((greenhouse_id, patch))
         self.submitted_run_ids.append(optimizer_run_id)
         return self.write
+
+    async def report_outcome(self, record: PlanRecord) -> None:
+        self.reported.append(record)
+        if self.report_error is not None:
+            raise self.report_error
 
     async def list_fleet(self) -> list[FleetMember]:
         if self.fleet_error is not None:

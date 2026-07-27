@@ -3,7 +3,9 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/labstack/echo/v4"
 
@@ -98,6 +100,8 @@ func (s *Server) getOptimizerFleet(c echo.Context) error {
 			ReasonCode:   gh.ReasonCode,
 			Enabled:      gh.Enabled,
 			CreatedAt:    createdAt,
+			InFlight:     gh.InFlight,
+			CurrentStage: gh.CurrentStage,
 		})
 	}
 
@@ -149,6 +153,16 @@ func (s *Server) resolveOptimizerEscalation(c echo.Context) error {
 	if err != nil {
 		return s.optimizerFail(c, err)
 	}
+	// The platform owns the resolve, so it emits the audit event directly (no optimizer report path):
+	// an operator closed a standing escalation (optimizer_resolved, spec 05 §Events).
+	s.emitEvent(c.Request().Context(), domain.Event{
+		GreenhouseID: escalation.GreenhouseID,
+		TS:           time.Now().UTC(),
+		Kind:         "optimizer_resolved",
+		Severity:     "info",
+		Message:      fmt.Sprintf("optimizer escalation resolved (run %s; reason %s)", shortRunID(escalation.OptimizerRunID), escalation.ReasonCode),
+		Source:       "optimizer",
+	})
 	return c.JSON(http.StatusOK, mapEscalation(escalation))
 }
 

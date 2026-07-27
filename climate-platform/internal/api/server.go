@@ -101,6 +101,9 @@ func (s *Server) routes(router *echo.Echo) {
 	api.DELETE("/greenhouses/:id", s.retireGreenhouse, operator)
 	api.PATCH("/greenhouses/:id/setpoints", s.editSetpoints, operator)
 	api.POST("/greenhouses/:id/setpoints", s.submitSetpoints, setpointsWriter)
+	// The optimizer→platform outcome-report ingest (optimizer_outcomes.go): the audit twin of the
+	// setpoint write, gated by the same service seam. Escalations/run failures reach the feed here.
+	api.POST("/greenhouses/:id/optimizer-outcomes", s.submitOptimizerOutcome, setpointsWriter)
 	api.GET("/greenhouses/:id/telemetry", s.getTelemetry)
 	api.GET("/greenhouses/:id/analytics", s.getAnalytics)
 	// (3) The optimizer's planning-context read path (platform-optimizer-planning-rest). An

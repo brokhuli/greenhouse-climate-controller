@@ -14,6 +14,8 @@ import { OptimizerStatusPill, ReasonCodeChip } from "./badges";
 import { OptimizerEnableToggle, TriggerCycleAction } from "./controls";
 import { formatDurationSecs, toOptimizerCardState } from "./derivations";
 import { optimizerActionError } from "./errors";
+import { pipelineStages } from "./pipeline";
+import { PipelineTracker } from "./PipelineTracker";
 
 /** Seconds between an event and `nowMs`, floored at 0. */
 const ageSecs = (date: Date, nowMs: number): number =>
@@ -120,83 +122,98 @@ export function FleetOptimizerRow({
     ? `${formatDurationSecs(ageSecs(entry.createdAt, nowMs))} ago`
     : "—";
 
+  // The live pipeline tracker sits in a full-width sub-row beneath the summary, where the six stages
+  // have horizontal room. Offline greenhouses are not planning, so they show no pipeline.
+  const pipeline = pipelineStages(entry, state);
+
   return (
-    <tr className="border-divider border-t align-top">
-      <td className="py-3 pr-3">
-        <Link
-          to={`/greenhouses/${entry.greenhouseId}`}
-          className="text-fg-default hover:text-accent inline-flex items-center gap-1 font-medium"
-        >
-          {displayName}
-          <ChevronRight size={14} className="text-fg-subtle" aria-hidden />
-        </Link>
-      </td>
-      <td className="py-3 pr-3">
-        {offline ? (
-          <Pill color={MUTED} icon={<CloudOff size={12} aria-hidden />}>
-            Offline — not planning
-          </Pill>
-        ) : (
-          <div className="flex flex-col gap-1">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <OptimizerStatusPill state={state} />
-              {escalated && entry.reasonCode ? (
-                <ReasonCodeChip code={entry.reasonCode} reasonClass={escalation?.reasonClass} />
-              ) : null}
-              {escalated && heldAge ? (
-                <span className="text-fg-subtle text-xs">
-                  held {formatDurationSecs(ageSecs(heldAge, nowMs))}
-                </span>
-              ) : null}
-            </div>
-            {/* The specific gate message — which metric, what coverage — not just the code.
+    <>
+      <tr className="border-divider border-t align-top">
+        <td className="py-3 pr-3">
+          <Link
+            to={`/greenhouses/${entry.greenhouseId}`}
+            className="text-fg-default hover:text-accent inline-flex items-center gap-1 font-medium"
+          >
+            {displayName}
+            <ChevronRight size={14} className="text-fg-subtle" aria-hidden />
+          </Link>
+        </td>
+        <td className="py-3 pr-3">
+          {offline ? (
+            <Pill color={MUTED} icon={<CloudOff size={12} aria-hidden />}>
+              Offline — not planning
+            </Pill>
+          ) : (
+            <div className="flex flex-col gap-1">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <OptimizerStatusPill state={state} />
+                {escalated && entry.reasonCode ? (
+                  <ReasonCodeChip code={entry.reasonCode} reasonClass={escalation?.reasonClass} />
+                ) : null}
+                {escalated && heldAge ? (
+                  <span className="text-fg-subtle text-xs">
+                    held {formatDurationSecs(ageSecs(heldAge, nowMs))}
+                  </span>
+                ) : null}
+              </div>
+              {/* The specific gate message — which metric, what coverage — not just the code.
                 Clamped to a few lines with the full text on hover, so a verbose backend message
                 never dominates the row. */}
-            {escalated && escalation?.message ? (
-              <p className="text-fg-subtle line-clamp-3 text-xs" title={escalation.message}>
-                {escalation.message}
-              </p>
+              {escalated && escalation?.message ? (
+                <p className="text-fg-subtle line-clamp-3 text-xs" title={escalation.message}>
+                  {escalation.message}
+                </p>
+              ) : null}
+            </div>
+          )}
+        </td>
+        <td className="text-fg-muted py-3 pr-3 text-xs whitespace-nowrap">{lastCycleLabel}</td>
+        <td className="py-3">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {escalated ? (
+              <Button
+                variant="secondary"
+                onClick={resolveEscalation}
+                disabled={!isOperator || resolve.isPending || !escalation}
+                title={
+                  !isOperator ? operatorReason : !escalation ? "No open escalation" : undefined
+                }
+              >
+                {resolve.isPending ? "Resolving…" : "Resolve"}
+              </Button>
             ) : null}
+            <TriggerCycleAction
+              onTrigger={runCycle}
+              pending={trigger.isPending}
+              disabled={!isOperator || globallyPaused || offline || !entry.enabled}
+              disabledReason={
+                !isOperator
+                  ? operatorReason
+                  : offline
+                    ? "Greenhouse is offline"
+                    : globallyPaused
+                      ? "Service is globally paused"
+                      : "Greenhouse is paused"
+              }
+            />
+            <OptimizerEnableToggle
+              enabled={entry.enabled}
+              scope="greenhouse"
+              onChange={toggle}
+              pending={setEnabled.isPending}
+              disabled={!isOperator || globallyPaused}
+              disabledReason={toggleReason}
+            />
           </div>
-        )}
-      </td>
-      <td className="text-fg-muted py-3 pr-3 text-xs whitespace-nowrap">{lastCycleLabel}</td>
-      <td className="py-3">
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          {escalated ? (
-            <Button
-              variant="secondary"
-              onClick={resolveEscalation}
-              disabled={!isOperator || resolve.isPending || !escalation}
-              title={!isOperator ? operatorReason : !escalation ? "No open escalation" : undefined}
-            >
-              {resolve.isPending ? "Resolving…" : "Resolve"}
-            </Button>
-          ) : null}
-          <TriggerCycleAction
-            onTrigger={runCycle}
-            pending={trigger.isPending}
-            disabled={!isOperator || globallyPaused || offline || !entry.enabled}
-            disabledReason={
-              !isOperator
-                ? operatorReason
-                : offline
-                  ? "Greenhouse is offline"
-                  : globallyPaused
-                    ? "Service is globally paused"
-                    : "Greenhouse is paused"
-            }
-          />
-          <OptimizerEnableToggle
-            enabled={entry.enabled}
-            scope="greenhouse"
-            onChange={toggle}
-            pending={setEnabled.isPending}
-            disabled={!isOperator || globallyPaused}
-            disabledReason={toggleReason}
-          />
-        </div>
-      </td>
-    </tr>
+        </td>
+      </tr>
+      {!offline ? (
+        <tr>
+          <td colSpan={4} className="pb-3">
+            <PipelineTracker nodes={pipeline} />
+          </td>
+        </tr>
+      ) : null}
+    </>
   );
 }

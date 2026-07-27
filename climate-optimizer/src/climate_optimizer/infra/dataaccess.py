@@ -25,7 +25,7 @@ from jsonschema import ValidationError as SchemaValidationError
 from pydantic import ValidationError
 
 from ..config import Settings
-from ..models import PlanningContext, ReasonCode, Setpoints, SetpointsPatch
+from ..models import PlanningContext, PlanRecord, ReasonCode, Setpoints, SetpointsPatch
 from . import schema_validation
 from .auth import TokenAcquisitionError
 
@@ -276,3 +276,24 @@ class PlatformClient:
         return WriteOutcome.escalated(
             ReasonCode.PLATFORM_UNAVAILABLE, f"unexpected setpoint-write status {code}"
         )
+
+    async def report_outcome(self, record: PlanRecord) -> None:
+        """Report a cycle's outcome to the platform's activity feed (interfaces §Outcome reporting).
+
+        A second, audit-only channel alongside the setpoint write: it carries the outcomes that are
+        *not* setpoint writes — an escalation or a run failure — so the platform can emit the matching
+        ``optimizer_plan_escalated`` / ``optimizer_run_failed`` event. Authed by the same service seam
+        as the write (RFC-011). Raises on transport failure or a non-2xx status; the caller treats
+        reporting as best-effort and never lets a failure here break the cycle.
+        """
+        url = f"{self._base}/greenhouses/{record.greenhouse_id}/optimizer-outcomes"
+        outcome = record.outcome
+        body = {
+            "optimizer_run_id": str(record.optimizer_run_id),
+            "status": outcome.status.value,
+            "reason_code": outcome.reason_code.value if outcome.reason_code else None,
+            "message": outcome.message,
+        }
+        headers = await self._auth_headers()
+        response = await self._client.post(url, json=body, headers=headers)
+        response.raise_for_status()

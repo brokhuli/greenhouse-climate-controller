@@ -31,6 +31,11 @@ Shared message and data contracts — the single source of truth that all three 
   Config-gated service auth ([RFC-011](../docs/decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009)).
   See [`optimizer-platform-setpoints-rest/README.md`](./optimizer-platform-setpoints-rest/README.md). The operator's ad-hoc `PATCH` on the
   same path is a different contract, in `platform-dashboard-rest/` above.
+- `optimizer-platform-outcomes-rest/` — the Phase 3 **outcome-report ingest** (OpenAPI 3.1, single self-contained
+  file): the audit twin of the setpoint write. One endpoint — `POST /api/greenhouses/{id}/optimizer-outcomes` —
+  by which the optimizer reports an escalation or a run failure (the outcomes that are *not* setpoint writes) so
+  the platform emits the matching `optimizer_plan_escalated` / `optimizer_run_failed` activity event. Same
+  config-gated `setpoints:write` service seam ([RFC-011](../docs/decisions/request-for-comments.md#rfc-011-service-to-service-auth-as-a-config-gated-hardening-mode-supersedes-rfc-009)).
 - `platform-optimizer-planning-rest/` — the Phase 3 **telemetry read path** (OpenAPI 3.1, same JSON Schema 2020-12
   dialect): the read counterpart to `optimizer-platform-setpoints-rest/`. One consolidated
   `GET /api/greenhouses/{id}/planning-context` returns the optimizer's planning context — current

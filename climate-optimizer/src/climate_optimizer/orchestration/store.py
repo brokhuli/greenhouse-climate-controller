@@ -32,6 +32,7 @@ from uuid import UUID, uuid4
 from ..domain.twin import PredictedPoint
 from ..models import (
     REASON_CLASS,
+    CycleStage,
     OutcomeStatus,
     PlanRecord,
     ReasonClass,
@@ -348,6 +349,19 @@ class ServiceStore:
     # like the rest of the store — a restart clears it and the next tick's discovery rebuilds it.
     known_greenhouse_ids: set[str] = field(default_factory=set)
     last_successful_cycle_at: datetime | None = None
+    # The pipeline stage each greenhouse's current-or-most-recent cycle is executing (spec 02
+    # §Pipeline). Written as the cycle advances and *retained* after it ends, so an idle greenhouse
+    # still shows where its last cycle stopped; paired with the scheduler's in-flight flag on the
+    # ``/fleet`` surface to drive the console's live pipeline tracker. In-memory like the rest.
+    progress: dict[str, CycleStage] = field(default_factory=dict)
+
+    def advance_stage(self, greenhouse_id: str, stage: CycleStage) -> None:
+        """Record the stage a cycle has just entered (the live progress surface)."""
+        self.progress[greenhouse_id] = stage
+
+    def current_stage(self, greenhouse_id: str) -> CycleStage | None:
+        """The stage this greenhouse's current-or-most-recent cycle reached, if any."""
+        return self.progress.get(greenhouse_id)
 
     def rollup(self, now: datetime) -> FleetRollup:
         """Site aggregates for ``GET /api/optimizer/fleet``."""

@@ -933,6 +933,15 @@ export const reasonCodeSchema = z.enum([
 ]);
 /** Operator-triage hint travelling with a reason code. */
 export const reasonClassSchema = z.enum(["transient", "persistent"]);
+/** The ordered pipeline stage a planning cycle is executing (the live pipeline tracker). */
+export const cycleStageSchema = z.enum([
+  "ingest",
+  "quality_gate",
+  "forecast",
+  "plan",
+  "constrain",
+  "publish",
+]);
 /** Service-level degradation cause for `OptimizerStatus.degraded_reason`. */
 export const degradedReasonSchema = z.enum([
   "platform_unreachable",
@@ -1020,6 +1029,10 @@ export const wireFleetOptimizerGreenhouse = z.object({
   reason_code: reasonCodeSchema.nullable().optional(),
   enabled: z.boolean(),
   created_at: isoTimestamp.nullable(),
+  // Live pipeline progress: whether a cycle is running now, and the stage its current-or-most-recent
+  // cycle reached (null before its first cycle). Drives the row's pipeline tracker.
+  in_flight: z.boolean(),
+  current_stage: cycleStageSchema.nullable(),
 });
 
 export const wireFleetOptimizerRollup = z.object({
@@ -1072,6 +1085,7 @@ export type OptimizerOutcomeStatus = z.infer<typeof optimizerOutcomeStatusSchema
 export type OptimizerProvider = z.infer<typeof optimizerProviderSchema>;
 export type ReasonCode = z.infer<typeof reasonCodeSchema>;
 export type ReasonClass = z.infer<typeof reasonClassSchema>;
+export type CycleStage = z.infer<typeof cycleStageSchema>;
 export type DegradedReason = z.infer<typeof degradedReasonSchema>;
 export type OptimizerServiceStatus = z.infer<typeof optimizerServiceStatusSchema>;
 export type BackendRole = z.infer<typeof backendRoleSchema>;
@@ -1144,6 +1158,10 @@ export type FleetOptimizerGreenhouse = {
   reasonCode: ReasonCode | null;
   enabled: boolean;
   createdAt: Date | null;
+  // Live pipeline progress: whether a cycle is running now, and the stage its current-or-most-recent
+  // cycle reached (null before its first cycle). Drives the row's pipeline tracker.
+  inFlight: boolean;
+  currentStage: CycleStage | null;
 };
 
 export type FleetOptimizerRollup = {
@@ -1267,6 +1285,8 @@ export const toFleetOptimizerSummary = (
     reasonCode: g.reason_code ?? null,
     enabled: g.enabled,
     createdAt: g.created_at ? new Date(g.created_at) : null,
+    inFlight: g.in_flight,
+    currentStage: g.current_stage ?? null,
   })),
   rollup: {
     backlog: w.rollup.backlog,

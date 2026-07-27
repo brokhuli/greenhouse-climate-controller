@@ -278,6 +278,42 @@ def test_fleet_shows_a_paused_greenhouse_as_disabled() -> None:
     assert body["greenhouses"][0]["enabled"] is False
 
 
+def test_fleet_reports_the_settled_stage_of_a_completed_cycle() -> None:
+    client, _ctx = _client()
+    client.post("/api/optimizer/greenhouses/gh-a/cycles", json={})
+
+    entry = client.get("/api/optimizer/fleet").json()["greenhouses"][0]
+    # A clean cycle reaches publish; it is settled, not in flight.
+    assert entry["in_flight"] is False
+    assert entry["current_stage"] == "publish"
+
+
+async def test_fleet_reports_the_live_stage_of_an_in_flight_cycle() -> None:
+    release = asyncio.Event()
+
+    async def gated(_payload: dict[str, Any]) -> BackendOutput:
+        await release.wait()
+        return build_output()
+
+    gated_chain: PlannerChain = RunnableLambda(gated)
+    ctx = _context(chain=gated_chain)
+    app = create_app(context=ctx, start_scheduler=False)
+    transport = httpx.ASGITransport(app=app)
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        cycle = asyncio.create_task(client.post("/api/optimizer/greenhouses/gh-a/cycles", json={}))
+        while not ctx.scheduler.is_in_flight("gh-a"):
+            await asyncio.sleep(0.01)
+
+        # Mid-cycle: the planner is blocked, so the cycle sits at the plan stage, in flight.
+        entry = (await client.get("/api/optimizer/fleet")).json()["greenhouses"][0]
+        assert entry["in_flight"] is True
+        assert entry["current_stage"] == "plan"
+
+        release.set()
+        await cycle
+
+
 def test_fleet_lists_a_greenhouse_paused_before_its_first_cycle() -> None:
     client, ctx = _client()
     # Paused before ever planning: no plan record, but the operator toggled it — it must still

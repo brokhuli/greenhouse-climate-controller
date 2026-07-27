@@ -22,6 +22,10 @@ const KIND_OPTIONS: EventKind[] = [
   "profile_applied",
   "setpoint_edit",
   "drift",
+  "optimizer_plan_applied",
+  "optimizer_plan_escalated",
+  "optimizer_resolved",
+  "optimizer_run_failed",
 ];
 const SEVERITY_OPTIONS: EventSeverity[] = ["info", "warning", "critical"];
 

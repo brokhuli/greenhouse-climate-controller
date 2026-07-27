@@ -33,6 +33,10 @@ type FleetGreenhouse struct {
 	ReasonCode     *string    `json:"reason_code"`
 	CreatedAt      *time.Time `json:"created_at"`
 	OptimizerRunID *string    `json:"optimizer_run_id"`
+	// Live pipeline progress: whether a cycle is running now, and the stage its current-or-most-recent
+	// cycle reached (CycleStage). Drives the console's per-greenhouse pipeline tracker.
+	InFlight     bool    `json:"in_flight"`
+	CurrentStage *string `json:"current_stage"`
 }
 
 // FleetRollup mirrors FleetRollupResponse.

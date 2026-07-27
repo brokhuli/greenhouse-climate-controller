@@ -40,6 +40,11 @@ type fleetGreenhouseDTO struct {
 	ReasonCode   *string `json:"reason_code,omitempty"`
 	Enabled      bool    `json:"enabled"`
 	CreatedAt    *string `json:"created_at"`
+	// Live pipeline progress: whether a cycle is running now, and the stage its current-or-most-recent
+	// cycle reached (CycleStage). Drives the console's per-greenhouse pipeline tracker; current_stage
+	// is null for a greenhouse that has not cycled since the optimizer started.
+	InFlight     bool    `json:"in_flight"`
+	CurrentStage *string `json:"current_stage"`
 }
 
 type byOutcomeDTO struct {

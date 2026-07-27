@@ -90,6 +90,22 @@ class BackendRole(StrEnum):
     FALLBACK = "fallback"
 
 
+class CycleStage(StrEnum):
+    """The step a planning cycle is executing — the live progress surface (spec 02 §Pipeline).
+
+    Ordered: a cycle advances through these in sequence, holding or completing at one of them. The
+    ``/fleet`` endpoint reports the current stage per greenhouse so the console can render live
+    pipeline progress; the value is retained after a cycle ends to show where it stopped.
+    """
+
+    INGEST = "ingest"
+    QUALITY_GATE = "quality_gate"
+    FORECAST = "forecast"
+    PLAN = "plan"
+    CONSTRAIN = "constrain"
+    PUBLISH = "publish"
+
+
 class OutcomeStatus(StrEnum):
     """What the gates decided for a cycle (PlanRecord.outcome.status)."""
 

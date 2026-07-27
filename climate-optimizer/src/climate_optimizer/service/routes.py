@@ -86,8 +86,13 @@ async def fleet(ctx: Context) -> FleetResponse:
     latest = ctx.store.plans.all_latest()
     rollup = ctx.store.rollup(now)
 
+    # A greenhouse mid-cycle before its first record (progress set, no plan yet) still belongs on the
+    # roster so the console can show its live pipeline stage — hence the progress keys in the union.
     roster = (
-        ctx.store.known_greenhouse_ids | ctx.runtime.overridden_greenhouse_ids() | latest.keys()
+        ctx.store.known_greenhouse_ids
+        | ctx.runtime.overridden_greenhouse_ids()
+        | latest.keys()
+        | ctx.store.progress.keys()
     )
     greenhouses = []
     for greenhouse_id in sorted(roster):
@@ -100,6 +105,9 @@ async def fleet(ctx: Context) -> FleetResponse:
                 reason_code=record.outcome.reason_code if record else None,
                 created_at=record.created_at if record else None,
                 optimizer_run_id=record.optimizer_run_id if record else None,
+                # Live progress: the scheduler owns the in-flight guard; the store holds the stage.
+                in_flight=ctx.scheduler.is_in_flight(greenhouse_id),
+                current_stage=ctx.store.current_stage(greenhouse_id),
             )
         )
     return FleetResponse(

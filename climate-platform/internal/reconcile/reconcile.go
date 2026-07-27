@@ -173,7 +173,7 @@ func (r *Reconciler) record(ctx context.Context, greenhouseID string, intended d
 	if err := r.store.UpsertReconState(ctx, recon); err != nil {
 		return ApplyOutcome{}, err
 	}
-	r.emitApplyEvent(ctx, greenhouseID, source, delivery)
+	r.emitApplyEvent(ctx, greenhouseID, source, delivery, optimizerRunID)
 	switch delivery {
 	case store.DeliveryDelivered:
 		r.metrics.ReconcileAction("apply")
@@ -450,13 +450,19 @@ func (r *Reconciler) stagger(ctx context.Context) {
 	}
 }
 
-func (r *Reconciler) emitApplyEvent(ctx context.Context, greenhouseID string, source domain.SetpointSource, delivery string) {
+func (r *Reconciler) emitApplyEvent(ctx context.Context, greenhouseID string, source domain.SetpointSource, delivery string, optimizerRunID *string) {
 	kind, message, actorSource := "setpoint_edit", "setpoint edit applied", "operator"
 	switch source {
 	case domain.SourceProfile:
 		kind, message = "profile_applied", "crop profile applied"
 	case domain.SourceOptimizer:
-		message, actorSource = "optimizer setpoints applied", "optimizer"
+		// An applied optimizer plan is its own audit kind (not a plain setpoint_edit); it names the
+		// run so the feed correlates with the optimizer console and the escalation queue (P3-OBS-1).
+		kind, actorSource = "optimizer_plan_applied", "optimizer"
+		message = "optimizer plan applied"
+		if optimizerRunID != nil && *optimizerRunID != "" {
+			message = fmt.Sprintf("optimizer plan applied (run %s)", shortRunID(*optimizerRunID))
+		}
 	}
 	if delivery == store.DeliveryDeferred {
 		message += " (held until the controller reconnects)"
@@ -464,6 +470,15 @@ func (r *Reconciler) emitApplyEvent(ctx context.Context, greenhouseID string, so
 	r.emitEvent(ctx, domain.Event{
 		GreenhouseID: greenhouseID, TS: r.now(), Kind: kind, Severity: "info", Message: message, Source: actorSource,
 	})
+}
+
+// shortRunID abbreviates an optimizer run id for an operator-facing event message — the leading
+// UUID segment is enough to correlate an applied plan with the optimizer console.
+func shortRunID(runID string) string {
+	if len(runID) > 8 {
+		return runID[:8]
+	}
+	return runID
 }
 
 func (r *Reconciler) emitDriftEvent(ctx context.Context, greenhouseID string) {

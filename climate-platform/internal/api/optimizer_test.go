@@ -140,6 +140,30 @@ func TestGetOptimizerFleetMapsFiltersAndKeepsUnplanned(t *testing.T) {
 	}
 }
 
+func TestGetOptimizerFleetPassesThroughPipelineProgress(t *testing.T) {
+	s, _, _, cleanup := optimizerServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{
+			"greenhouses":[
+				{"greenhouse_id":"gh-a","enabled":true,"status":null,"reason_code":null,"created_at":null,"optimizer_run_id":null,"in_flight":true,"current_stage":"forecast"},
+				{"greenhouse_id":"gh-b","enabled":true,"status":"applied","reason_code":null,"created_at":"2026-07-22T13:30:00.000Z","optimizer_run_id":"22222222-2222-2222-2222-222222222222","in_flight":false,"current_stage":"publish"}
+			],
+			"rollup":{"backlog":0,"applied":1,"escalated":0,"extended":0,"oldest_open_escalation_age_seconds":null}
+		}`))
+	})
+	defer cleanup()
+
+	got := fleetVia(t, s, "")
+	// A greenhouse mid-cycle before its first record still carries its live in-flight stage.
+	live := got.Greenhouses[0]
+	if !live.InFlight || live.CurrentStage == nil || *live.CurrentStage != "forecast" {
+		t.Fatalf("live pipeline progress not passed through: %+v", live)
+	}
+	settled := got.Greenhouses[1]
+	if settled.InFlight || settled.CurrentStage == nil || *settled.CurrentStage != "publish" {
+		t.Fatalf("settled stage not passed through: %+v", settled)
+	}
+}
+
 // fleetVia drives getOptimizerFleet with an optional query string and decodes the response.
 func fleetVia(t *testing.T, s *Server, query string) fleetOptimizerSummaryDTO {
 	t.Helper()

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import httpx
@@ -10,14 +12,48 @@ import respx
 
 from climate_optimizer.config import Settings
 from climate_optimizer.infra.dataaccess import FleetMember, PlatformClient, PlatformError
-from climate_optimizer.models import ReasonCode, SetpointsPatch
+from climate_optimizer.models import (
+    Backend,
+    BackendRole,
+    Horizon,
+    Outcome,
+    OutcomeStatus,
+    PlanRecord,
+    Provider,
+    ReasonCode,
+    SetpointsPatch,
+)
 from conftest import build_setpoints, load_fixture
 
 _READ_URL = "http://api:8080/api/greenhouses/gh-a/planning-context"
 _WRITE_URL = "http://api:8080/api/greenhouses/gh-a/setpoints"
+_OUTCOME_URL = "http://api:8080/api/greenhouses/gh-a/optimizer-outcomes"
 _FLEET_URL = "http://api:8080/api/greenhouses"
 _PATCH = SetpointsPatch(temperature_day_c=22.5)
 _RUN_ID = UUID("018f9c2e-6b7a-7c31-9e4d-2a1b5c6d7e8f")
+
+
+def _escalated_record() -> PlanRecord:
+    now = datetime(2026, 6, 17, 12, 0, tzinfo=UTC)
+    return PlanRecord(
+        schema_version=1,
+        optimizer_run_id=_RUN_ID,
+        greenhouse_id="gh-a",
+        created_at=now,
+        horizon=Horizon(start=now, end=now + timedelta(hours=12)),
+        backend=Backend(
+            provider=Provider.OLLAMA,
+            model="llama3.2",
+            prompt_version="v1",
+            role=BackendRole.PRIMARY,
+        ),
+        plan=None,
+        outcome=Outcome(
+            status=OutcomeStatus.ESCALATED,
+            reason_code=ReasonCode.LLM_UNAVAILABLE,
+            message="planner unreachable",
+        ),
+    )
 
 
 @respx.mock
@@ -208,3 +244,30 @@ async def test_trusted_network_sends_no_token() -> None:
     async with PlatformClient(Settings(), bearer_token="tok-123") as client:
         await client.submit_setpoints("gh-a", _PATCH, optimizer_run_id=_RUN_ID)
     assert "authorization" not in route.calls.last.request.headers
+
+
+# -- outcome reporting (activity-feed audit channel) ------------------------
+
+
+@respx.mock
+async def test_report_outcome_posts_the_escalation() -> None:
+    route = respx.post(_OUTCOME_URL).mock(return_value=httpx.Response(202))
+    async with PlatformClient(Settings()) as client:
+        await client.report_outcome(_escalated_record())
+    assert route.called
+    body = json.loads(route.calls.last.request.content)
+    assert body == {
+        "optimizer_run_id": str(_RUN_ID),
+        "status": "escalated",
+        "reason_code": "llm_unavailable",
+        "message": "planner unreachable",
+    }
+
+
+@respx.mock
+async def test_report_outcome_raises_on_non_2xx() -> None:
+    # Reporting surfaces a non-2xx as an error; the cycle treats it as best-effort and swallows it.
+    respx.post(_OUTCOME_URL).mock(return_value=httpx.Response(500, json={"error": "boom"}))
+    async with PlatformClient(Settings()) as client:
+        with pytest.raises(httpx.HTTPStatusError):
+            await client.report_outcome(_escalated_record())
