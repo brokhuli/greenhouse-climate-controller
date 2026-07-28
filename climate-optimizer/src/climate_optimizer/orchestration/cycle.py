@@ -493,9 +493,10 @@ async def _commit(
         # Paused after token acquisition, before the send: a held write, not an escalation.
         raise _Held(OutcomeStatus.UNCHANGED, None, write.message)
     if not write.applied:
+        reason_code = write.reason_code or ReasonCode.INTERNAL_ERROR
         raise _Held(
-            outcome_status_for_reason(write.reason_code),
-            write.reason_code,
+            outcome_status_for_reason(reason_code),
+            reason_code,
             write.message,
             plan=decision.plan,
         )

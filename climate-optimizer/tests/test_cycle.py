@@ -629,11 +629,15 @@ async def test_a_repeated_failure_remains_history_without_creating_a_queue() -> 
 async def test_a_recovered_cycle_supersedes_the_failed_latest_outcome() -> None:
     store = ServiceStore()
     await _run(store=store, chain=failing_chain())
-    assert store.plans.latest("gh-a").outcome.status is OutcomeStatus.FAILED
+    failed = store.plans.latest("gh-a")
+    assert failed is not None
+    assert failed.outcome.status is OutcomeStatus.FAILED
 
     await _run(store=store)
 
-    assert store.plans.latest("gh-a").outcome.status is OutcomeStatus.APPLIED
+    applied = store.plans.latest("gh-a")
+    assert applied is not None
+    assert applied.outcome.status is OutcomeStatus.APPLIED
     assert store.escalations.backlog() == 0
 
 
