@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 from climate_optimizer.domain.constraints import (
+    apply_adjustments,
     check_constraints,
     clamp_to_bounds,
     evaluate_application,
@@ -18,7 +19,7 @@ from climate_optimizer.models import (
     TrajectoryPoint,
     ZoneTargets,
 )
-from conftest import build_bounds
+from conftest import build_bounds, build_setpoints
 
 _AT = datetime(2026, 6, 17, 12, tzinfo=UTC)
 HORIZON = Horizon(start=_AT, end=_AT + timedelta(hours=12))
@@ -193,3 +194,22 @@ def test_clamp_reports_every_field_it_moved() -> None:
     )
     assert set(result.clamped_fields) == {"temperature_day_c", "co2_target_ppm"}
     assert result.patch.vpd_target_kpa == 0.9  # in-bounds, untouched
+
+
+# -- resolving deltas into absolute setpoints (spec 04, lever/Rec 1) ---------
+
+
+def test_apply_adjustments_adds_delta_to_current() -> None:
+    # build_setpoints(): temperature_day_c 24.0, co2_target_ppm 1000.
+    patch = apply_adjustments(build_setpoints(), {"temperature_day_c": -1.5, "co2_target_ppm": 50})
+    assert patch.temperature_day_c == 22.5
+    assert patch.co2_target_ppm == 1050
+    assert isinstance(patch.co2_target_ppm, int)  # an int target stays an int
+
+
+def test_apply_adjustments_clamps_to_the_physical_range() -> None:
+    # An unbounded field nudged past its hard physical limit is held so the rebuilt patch validates
+    # (humidity_high_pct physical max is 100).
+    current = build_setpoints().model_copy(update={"humidity_high_pct": 98.0})
+    patch = apply_adjustments(current, {"humidity_high_pct": 10.0})
+    assert patch.humidity_high_pct == 100.0

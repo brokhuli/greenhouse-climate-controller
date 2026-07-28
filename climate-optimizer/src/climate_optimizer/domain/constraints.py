@@ -10,8 +10,11 @@ interlocks, or reachability: those are controller-owned (spec 06 §1).
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import timedelta
+
+from annotated_types import Ge, Le
 
 from ..models import (
     Bound,
@@ -19,6 +22,7 @@ from ..models import (
     OptimizerPlan,
     OutcomeStatus,
     ReasonCode,
+    Setpoints,
     SetpointsPatch,
     StageBounds,
 )
@@ -134,6 +138,46 @@ def clamp_to_bounds(patch: SetpointsPatch, bounds: StageBounds | None) -> ClampR
     if not clamped:
         return ClampResult(patch, ())
     return ClampResult(SetpointsPatch(**data), tuple(clamped))
+
+
+def _physical_range(field: str) -> tuple[float | None, float | None]:
+    """The hard physical ``[ge, le]`` for a setpoint field, read from its ``SetpointsPatch`` metadata.
+
+    Reused so the delta path never duplicates the physical limits already declared on the model (a
+    field may have only a lower bound, e.g. ``vpd_target_kpa`` ge=0, so either edge can be ``None``).
+    """
+    lo: float | None = None
+    hi: float | None = None
+    for meta in SetpointsPatch.model_fields[field].metadata:
+        # annotated-types types ``ge``/``le`` as SupportsGe/SupportsLe; our fields declare numeric
+        # literals, so the float() is safe at runtime.
+        if isinstance(meta, Ge):
+            lo = float(meta.ge)  # type: ignore[arg-type]
+        elif isinstance(meta, Le):
+            hi = float(meta.le)  # type: ignore[arg-type]
+    return lo, hi
+
+
+def apply_adjustments(current: Setpoints, deltas: Mapping[str, float]) -> SetpointsPatch:
+    """Turn per-field *deltas* into an absolute patch: ``current + delta``, held to each field's range.
+
+    Rec 1 (delta action space): the model proposes how much to *change* each target, and the absolute
+    setpoint is ``current + delta``. Clamping the result into the field's **physical** range (from the
+    ``SetpointsPatch`` constraints) guarantees the rebuilt patch always validates — even an unbounded
+    field nudged past a hard limit (e.g. ``humidity_high_pct`` + delta > 100). Crop-safe clamping is a
+    separate, operator-visible step (:func:`clamp_to_bounds`); this one only keeps the value constructible.
+    ``deltas`` is expected pre-filtered to the fields actually moved (non-null, non-zero).
+    """
+    values: dict[str, float | int] = {}
+    for field, delta in deltas.items():
+        target = float(getattr(current, field)) + float(delta)
+        lo, hi = _physical_range(field)
+        if lo is not None:
+            target = max(target, lo)
+        if hi is not None:
+            target = min(target, hi)
+        values[field] = int(round(target)) if field in _INT_SCALARS else target
+    return SetpointsPatch(**values)
 
 
 def _patch_signature(patch: SetpointsPatch) -> tuple[tuple[tuple[str, object], ...], object]:

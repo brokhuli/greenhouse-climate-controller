@@ -18,7 +18,7 @@ def test_defaults_match_spec() -> None:
     assert settings.service.max_concurrent_cycles == 4
     assert settings.llm.provider is Provider.OLLAMA
     assert settings.llm.model == "qwen2.5:7b"
-    assert settings.llm.prompt_version == "v4"
+    assert settings.llm.prompt_version == "v5"
     assert settings.data_quality.required_metrics == [
         Metric.TEMPERATURE,
         Metric.HUMIDITY,

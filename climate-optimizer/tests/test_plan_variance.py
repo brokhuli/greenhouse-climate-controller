@@ -18,7 +18,7 @@ from climate_optimizer.orchestration.cycle import run_cycle
 from climate_optimizer.orchestration.runtime import RuntimeState
 from climate_optimizer.orchestration.store import ServiceStore
 from climate_optimizer.planner import Planner
-from conftest import StubPlatformClient, build_draft, chain_factory, fake_chain
+from conftest import StubPlatformClient, build_draft, build_setpoints, chain_factory, fake_chain
 from plan_variance import (
     BackendKey,
     baseline_path,
@@ -27,7 +27,7 @@ from plan_variance import (
 )
 
 SCENARIO = "overnight_dli_shift"
-KEY = BackendKey(Provider.OLLAMA, "llama3.2", "v4", "t0-p1")
+KEY = BackendKey(Provider.OLLAMA, "llama3.2", "v5", "t0-p1")
 NOW = datetime(2026, 6, 17, 12, 0, tzinfo=UTC)
 
 
@@ -99,7 +99,7 @@ def test_missing_field_is_a_structural_mismatch() -> None:
 
 
 def test_backend_key_slug_and_distinct_paths() -> None:
-    assert KEY.slug == "ollama__llama3.2__v4__t0-p1"
+    assert KEY.slug == "ollama__llama3.2__v5__t0-p1"
     other = BackendKey(Provider.OLLAMA, "qwen2.5:7b", "v3", "t0-p1")
     assert other.slug == "ollama__qwen2.5-7b__v3__t0-p1"  # ':' is sanitized for the filesystem
     assert baseline_path(KEY, SCENARIO) != baseline_path(other, SCENARIO)
@@ -118,12 +118,12 @@ async def test_pipeline_plan_lands_within_band_of_its_baseline() -> None:
     key = BackendKey.from_settings(settings, model="llama3.2")
     baseline = load_baseline(key, SCENARIO)
 
-    # Drive the baseline decision through the full cycle; the applied plan must match its baseline.
-    draft = build_draft(
-        patch=baseline.immediate_setpoints,
-        confidence=baseline.confidence,
-        explanation=baseline.explanation,
-    )
+    # The model emits adjustments, not absolutes; the stub context serves build_setpoints() as the
+    # current targets, so feed the deltas that reach the baseline's bundle from there.
+    current = build_setpoints()
+    base_immediate = baseline.immediate_setpoints.model_dump(exclude_none=True)
+    deltas = {field: base_immediate[field] - getattr(current, field) for field in base_immediate}
+    draft = build_draft(adjustments=deltas, confidence=baseline.confidence)
     record = await run_cycle(
         "gh-a",
         settings=settings,

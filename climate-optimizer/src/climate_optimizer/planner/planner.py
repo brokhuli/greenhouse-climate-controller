@@ -24,16 +24,9 @@ from langchain_core.exceptions import OutputParserException
 from pydantic import ValidationError
 
 from ..config import Settings
-from ..domain.constraints import clamp_to_bounds
+from ..domain.constraints import apply_adjustments, clamp_to_bounds
 from ..domain.twin import PredictedPoint
-from ..models import (
-    Horizon,
-    OptimizerPlan,
-    PlanningContext,
-    Setpoints,
-    SetpointsPatch,
-    TrajectoryPoint,
-)
+from ..models import Horizon, OptimizerPlan, PlanningContext, Setpoints, TrajectoryPoint
 from .chain import BackendDraft, BackendOutput, PlannerChain, build_chain
 from .serializer import PlanContextPayload, build_plan_context
 
@@ -107,7 +100,7 @@ class PlannerParseError(Exception):
 class PlannerNoChange(Exception):
     """The model deliberately proposed *no* setpoint change — a valid hold, not an error.
 
-    An empty ``SetpointDecision.setpoints`` means "no change earns its cost this cycle" (spec 06 §1).
+    Empty (or all-zero) ``SetpointDecision.adjustments`` means "no change earns its cost this cycle".
     The cycle reads this as an :class:`~climate_optimizer.models.OutcomeStatus.EXTENDED` outcome — the
     last applied bundle stays in force and nothing is written — rather than an escalation. It falls
     out of the shrunk output naturally: a constrained-decoding backend can return ``{}``, and we treat
@@ -227,27 +220,38 @@ class Planner:
     def _assemble(
         self, draft: BackendDraft, *, ctx: PlanningContext, horizon: Horizon
     ) -> tuple[BackendOutput, tuple[str, ...]]:
-        """Turn the model's shrunk decision into a full, guardrail-safe ``OptimizerPlan``.
+        """Turn the model's grounded, delta-based decision into a full, guardrail-safe ``OptimizerPlan``.
 
-        The model owns only the *semantic* choice — which targets to move; the code owns everything
-        mechanical. Dropping absent/null fields, clamping to the crop-safe envelope, stamping
-        ``horizon.start``, and building the single-point trajectory here means the timestamp-echo,
-        ``immediate_setpoints ≡ trajectory[0]``, and empty-patch failure modes can never reach the
-        model. An empty decision is a deliberate hold (:class:`PlannerNoChange`).
+        The model owns only the semantic choice — *how much* to nudge each target; the code owns the
+        rest. Deltas are resolved against the *current* setpoints (``target = current + delta``), so an
+        empty or all-zero set is a deliberate hold (:class:`PlannerNoChange`). ``apply_adjustments``
+        keeps the result constructible (physical range); ``clamp_to_bounds`` pulls it inside the
+        crop-safe envelope and flags what moved. The ``horizon.start`` timestamp, the single-point
+        trajectory, and ``immediate_setpoints ≡ trajectory[0]`` are stamped here, so the timestamp-echo
+        and equality failure modes never reach the model.
         """
-        candidate = draft.decision.setpoints.model_dump(exclude_none=True)
-        if not candidate:
+        decision = draft.decision
+        deltas = {
+            field: delta
+            for field, delta in decision.adjustments.model_dump(exclude_none=True).items()
+            if delta != 0
+        }
+        if not deltas:
             raise PlannerNoChange("model proposed no setpoint change")
 
-        clamp = clamp_to_bounds(SetpointsPatch(**candidate), ctx.setpoints.bounds)
-        explanation = draft.decision.explanation
+        clamp = clamp_to_bounds(
+            apply_adjustments(ctx.setpoints.targets, deltas), ctx.setpoints.bounds
+        )
+
+        rationale = f"{decision.situation} {decision.reasoning}".strip()
+        explanation = rationale or "planner gave no rationale"
         if clamp.clamped_fields:
             explanation = f"{explanation} [clamped to crop-safe: {', '.join(clamp.clamped_fields)}]"
 
         plan = OptimizerPlan(
             trajectory=[TrajectoryPoint(at=horizon.start, setpoints=clamp.patch)],
             immediate_setpoints=clamp.patch,
-            confidence=draft.decision.confidence,
+            confidence=decision.confidence,
             explanation=explanation,
         )
         output = BackendOutput(

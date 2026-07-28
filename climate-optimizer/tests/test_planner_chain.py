@@ -12,7 +12,7 @@ from langchain_core.runnables import RunnableLambda
 from langchain_ollama import ChatOllama
 
 from climate_optimizer.config import Settings
-from climate_optimizer.models import BackendRole, PlanningContext, Provider, SetpointsDraft
+from climate_optimizer.models import BackendRole, PlanningContext, Provider
 from climate_optimizer.planner import (
     ContextBudgetExceededError,
     Planner,
@@ -31,7 +31,6 @@ from climate_optimizer.planner.chain import BackendDraft, ProviderNotConfiguredE
 from conftest import (
     build_context,
     build_draft,
-    build_patch,
     build_setpoints,
     chain_factory,
     failing_chain,
@@ -76,6 +75,15 @@ def test_the_v4_prompt_asks_for_the_shrunk_decision() -> None:
     assert "confidence" in template
     assert '"setpoints"' in template
     assert "assembled for you" in template
+
+
+def test_the_v5_prompt_asks_for_grounded_deltas() -> None:
+    # v5 (the default) asks for bounded *adjustments* (deltas) and a quote-first `situation` field.
+    template = load_prompt_template("v5")
+    assert "adjustments" in template
+    assert "situation" in template
+    assert "delta" in template.lower()
+    assert "crop-safe" in template
 
 
 def test_an_unknown_prompt_version_raises() -> None:
@@ -240,28 +248,29 @@ async def test_the_plan_context_reaches_the_chain() -> None:
 # -- assembling the plan from the shrunk decision ---------------------------
 
 
-async def test_propose_assembles_a_single_point_trajectory_at_horizon_start() -> None:
-    # The model owns only the bundle; the code stamps the timestamp, builds the one-point trajectory,
-    # and makes immediate_setpoints equal it — so those failure modes never reach the model.
-    ctx = build_context()
+async def test_propose_resolves_a_delta_against_the_current_setpoint() -> None:
+    # The model returns a delta; the code adds it to the current setpoint (24.0 - 0.5 = 23.5), stamps
+    # the timestamp, builds the one-point trajectory, and makes immediate_setpoints equal it.
+    ctx = build_context()  # current temperature_day_c is 24.0
     horizon = choose_horizon(NOW, ctx.setpoints.targets, Settings())
-    planner = _planner(fake_chain(build_draft(patch=build_patch(temperature_day_c=23.0))))
+    planner = _planner(fake_chain(build_draft(adjustments={"temperature_day_c": -0.5})))
 
     proposal = await planner.propose(
         ctx, baseline_forecast=[], horizon=horizon, model="qwen2.5:7b", now=NOW
     )
 
     plan = proposal.output.plan
+    assert plan.immediate_setpoints.temperature_day_c == 23.5  # tracked current, not a fixed prior
     assert len(plan.trajectory) == 1
     assert plan.trajectory[0].at == horizon.start
     assert plan.immediate_setpoints == plan.trajectory[0].setpoints
     assert proposal.clamped_fields == ()
 
 
-async def test_propose_clamps_an_out_of_bounds_target_and_flags_it() -> None:
-    ctx = build_context()  # build_bounds() caps temperature_day_c at 26.0
+async def test_propose_clamps_a_delta_that_overshoots_the_bound() -> None:
+    ctx = build_context()  # current 24.0, build_bounds() caps temperature_day_c at 26.0
     horizon = choose_horizon(NOW, ctx.setpoints.targets, Settings())
-    planner = _planner(fake_chain(build_draft(patch=build_patch(temperature_day_c=40.0))))
+    planner = _planner(fake_chain(build_draft(adjustments={"temperature_day_c": 3.0})))  # 24+3=27
 
     proposal = await planner.propose(
         ctx, baseline_forecast=[], horizon=horizon, model="qwen2.5:7b", now=NOW
@@ -273,9 +282,9 @@ async def test_propose_clamps_an_out_of_bounds_target_and_flags_it() -> None:
 
 
 async def test_an_empty_decision_is_a_no_change_hold() -> None:
-    # An empty setpoints object is a first-class "hold" — surfaced as PlannerNoChange, not a parse
-    # error — so a constrained-decoding backend returning `{}` extends the baseline (spec 06 §1).
-    planner = _planner(fake_chain(build_draft(setpoints=SetpointsDraft())))
+    # Empty adjustments are a first-class "hold" — surfaced as PlannerNoChange, not a parse error —
+    # so a constrained-decoding backend returning `{}` extends the baseline (spec 06 §1).
+    planner = _planner(fake_chain(build_draft(adjustments={})))
     with pytest.raises(PlannerNoChange):
         await _propose(planner)
 

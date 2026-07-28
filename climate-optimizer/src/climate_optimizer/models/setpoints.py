@@ -78,28 +78,26 @@ class SetpointsPatch(StrictModel):
         return self
 
 
-class SetpointsDraft(StrictModel):
-    """The *lenient* twin of :class:`SetpointsPatch` — the raw setpoint object the LLM emits.
+class SetpointAdjustments(StrictModel):
+    """The model's per-cycle *adjustments* — how much to change each climate target, not new absolutes.
 
-    Same optional fields and per-field ranges as ``SetpointsPatch``, but **without** its
-    ``minProperties: 1`` / no-explicit-null validators. This is the ingestion boundary for a
-    constrained-decoding backend (spec 04 §Determinism): JSON-Schema grammar constraints can enforce
-    field *names, types, and ranges*, but not a model-level "at least one field" or "no null" rule —
-    so a small model can legally emit ``{}`` or a null for a field it is not changing. Accepting that
-    here (rather than rejecting it as ``plan_unparseable``) lets the planner interpret it: an empty
-    draft is a deliberate "hold" and the nulls are dropped, in :meth:`Planner.propose`. The strict
-    ``SetpointsPatch`` is then rebuilt from the surviving fields, so nothing downstream loosens.
+    Rec 1 (delta action space, spec 04): the planner returns a small signed *delta* per target, which
+    :meth:`Planner._assemble` adds to the current setpoint (``target = clamp(current + delta, bounds)``).
+    The per-field caps below are the load-bearing mechanism: an absolute like ``23`` is outside every
+    cap, so a constrained-decoding backend *cannot* emit one — it can only say "nudge the current value
+    by N", which forces it to condition on the current setpoint we hand it instead of falling back on a
+    training prior. Lenient like a draft (no ``minProperties`` / no-null validators): an empty object, a
+    null, or an all-zero set is a deliberate "hold", read as an extend in ``_assemble`` rather than
+    rejected. **Climate scalars only** — schedule times (``day_start``/``day_end``) and irrigation zones
+    are not LLM-refined; they stay on their profile/baseline values.
     """
 
-    temperature_day_c: float | None = Field(default=None, ge=-20, le=60)
-    temperature_night_c: float | None = Field(default=None, ge=-20, le=60)
-    day_start: str | None = Field(default=None, pattern=r"^([01][0-9]|2[0-3]):[0-5][0-9]$")
-    day_end: str | None = Field(default=None, pattern=r"^([01][0-9]|2[0-3]):[0-5][0-9]$")
-    humidity_low_pct: float | None = Field(default=None, ge=0, le=100)
-    humidity_high_pct: float | None = Field(default=None, ge=0, le=100)
-    humidity_deadband_pct: float | None = Field(default=None, ge=0, le=50)
-    co2_target_ppm: int | None = Field(default=None, ge=0, le=5000)
-    co2_vent_interlock_threshold_pct: float | None = Field(default=None, ge=0, le=100)
-    vpd_target_kpa: float | None = Field(default=None, ge=0)
-    dli_target_mol: float | None = Field(default=None, ge=0)
-    zones: list[ZoneTargets] | None = None
+    temperature_day_c: float | None = Field(default=None, ge=-3.0, le=3.0)
+    temperature_night_c: float | None = Field(default=None, ge=-3.0, le=3.0)
+    humidity_low_pct: float | None = Field(default=None, ge=-10.0, le=10.0)
+    humidity_high_pct: float | None = Field(default=None, ge=-10.0, le=10.0)
+    humidity_deadband_pct: float | None = Field(default=None, ge=-5.0, le=5.0)
+    co2_target_ppm: int | None = Field(default=None, ge=-150, le=150)
+    co2_vent_interlock_threshold_pct: float | None = Field(default=None, ge=-10.0, le=10.0)
+    vpd_target_kpa: float | None = Field(default=None, ge=-0.3, le=0.3)
+    dli_target_mol: float | None = Field(default=None, ge=-3.0, le=3.0)

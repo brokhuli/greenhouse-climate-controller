@@ -92,7 +92,7 @@ async def test_a_real_ollama_cycle_produces_a_contract_valid_plan() -> None:
     # A healthy, gate-passing context with no prior cycle memory means the state-change gate has
     # nothing to suppress against, so the LLM is always invoked. With the shrunk decision plus
     # constrained decoding, a small local model now reliably clears the schema; the possible plan-less
-    # outcomes are a deliberate no-change hold (``EXTENDED``, an empty ``{}`` decision — no reason
+    # outcomes are a deliberate no-change hold (``EXTENDED``, empty ``{}`` adjustments — no reason
     # code) or a reachable-backend failure (``PLAN_UNPARSEABLE`` off-schema output / ``LLM_UNAVAILABLE``
     # outage or per-call timeout). An out-of-range target is clamped and applied, never rejected
     # (lever 2). Any *other* plan-less reason (a gate hold, a twin fault) would mean something broke.

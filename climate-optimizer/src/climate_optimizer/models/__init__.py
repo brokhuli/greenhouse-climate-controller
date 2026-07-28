@@ -42,7 +42,7 @@ from .plan import (
     SetpointDecision,
     TrajectoryPoint,
 )
-from .setpoints import Setpoints, SetpointsDraft, SetpointsPatch, ZoneTargets
+from .setpoints import SetpointAdjustments, Setpoints, SetpointsPatch, ZoneTargets
 
 __all__ = [
     "REASON_CLASS",
@@ -73,10 +73,10 @@ __all__ = [
     "ReasonCode",
     "SensorFault",
     "SensorFaultKind",
+    "SetpointAdjustments",
     "SetpointDecision",
     "Setpoints",
     "SetpointSource",
-    "SetpointsDraft",
     "SetpointsPatch",
     "StageBounds",
     "SummaryBucket",

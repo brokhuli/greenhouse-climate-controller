@@ -38,7 +38,6 @@ from conftest import (
     StubPlatformClient,
     build_context,
     build_draft,
-    build_patch,
     build_setpoints,
     chain_factory,
     fake_chain,
@@ -235,12 +234,18 @@ async def _residual_fidelity_fault() -> None:
 async def _contradictory_objectives() -> None:
     """A self-contradictory bundle (no in-bounds way to satisfy every objective) is rejected.
 
-    An out-of-*range* target is now pulled to its crop-safe edge and applied (lever 2), so what still
-    escalates as a ``constraint_violation`` is an internally inconsistent bundle — here
-    ``humidity_low_pct`` above ``humidity_high_pct`` — which clamping deliberately does not repair.
+    An out-of-*range* delta is now pulled to its crop-safe edge and applied (lever 2), so what still
+    escalates as a ``constraint_violation`` is an internally inconsistent bundle — here a narrow
+    humidity band crossed into ``humidity_low_pct`` > ``humidity_high_pct`` — which clamping does not
+    repair.
     """
-    patch = build_patch(humidity_low_pct=80.0, humidity_high_pct=40.0)
-    record = await _run_cycle(chain=fake_chain(build_draft(patch=patch)))
+    ctx = build_context()
+    ctx.setpoints.targets.humidity_low_pct = 79.0
+    ctx.setpoints.targets.humidity_high_pct = 81.0
+    chain = fake_chain(
+        build_draft(adjustments={"humidity_low_pct": 5.0, "humidity_high_pct": -5.0})
+    )
+    record = await _run_cycle(client=StubPlatformClient(context=ctx), chain=chain)
     assert record.outcome.reason_code is ReasonCode.CONSTRAINT_VIOLATION
     assert record.plan is not None
 

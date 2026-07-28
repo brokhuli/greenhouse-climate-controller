@@ -22,7 +22,6 @@ from climate_optimizer.models import (
     OutcomeStatus,
     PlanRecord,
     ReasonCode,
-    SetpointsDraft,
     SetpointsPatch,
 )
 from climate_optimizer.orchestration.cycle import plan_record_payload, run_cycle
@@ -34,7 +33,6 @@ from conftest import (
     StubPlatformClient,
     build_context,
     build_draft,
-    build_patch,
     chain_factory,
     failing_chain,
     fake_chain,
@@ -467,15 +465,16 @@ async def test_a_post_planner_escalation_does_not_name_a_source_plan() -> None:
     assert escalated.source_plan_id is None
 
 
-async def test_an_out_of_bounds_target_is_clamped_and_applied() -> None:
-    # A stray target is pulled back to its crop-safe edge and applied, not discarded (lever 2). In
-    # build_bounds() temperature_day_c is capped at 26.0, so a proposed 40.0 lands there.
+async def test_an_out_of_bounds_delta_is_clamped_and_applied() -> None:
+    # A delta that overshoots is pulled back to the crop-safe edge and applied, not discarded (lever 2).
+    # Current temperature_day_c is 24.0 and build_bounds() caps it at 26.0, so a +3 delta (→27) lands
+    # at 26.0.
     from climate_optimizer.infra import metrics
 
     before = metrics.PLANNER_CLAMPED_TOTAL.labels("gh-a")._value.get()
     client = StubPlatformClient()
     record = await _run(
-        client=client, chain=fake_chain(build_draft(patch=build_patch(temperature_day_c=40.0)))
+        client=client, chain=fake_chain(build_draft(adjustments={"temperature_day_c": 3.0}))
     )
 
     assert record.outcome.status is OutcomeStatus.APPLIED
@@ -487,17 +486,22 @@ async def test_an_out_of_bounds_target_is_clamped_and_applied() -> None:
 
 
 async def test_an_inconsistent_bundle_is_a_constraint_violation() -> None:
-    # Clamping does not repair a self-contradictory bundle: humidity_low above humidity_high still
-    # escalates (both fields are unbounded in build_bounds(), so neither is pulled to an edge).
-    patch = build_patch(humidity_low_pct=80.0, humidity_high_pct=40.0)
-    record = await _run(chain=fake_chain(build_draft(patch=patch)))
+    # Clamping does not repair a self-contradictory bundle. Deltas make this hard to reach (small caps),
+    # so start from a narrow humidity band and cross it: low 79 +5 = 84, high 81 -5 = 76 → low > high.
+    ctx = build_context()
+    ctx.setpoints.targets.humidity_low_pct = 79.0
+    ctx.setpoints.targets.humidity_high_pct = 81.0
+    chain = fake_chain(
+        build_draft(adjustments={"humidity_low_pct": 5.0, "humidity_high_pct": -5.0})
+    )
+    record = await _run(client=StubPlatformClient(context=ctx), chain=chain)
     assert record.outcome.reason_code is ReasonCode.CONSTRAINT_VIOLATION
 
 
 async def test_a_no_change_decision_extends_the_baseline() -> None:
-    # An empty setpoints decision is the model choosing to hold — a benign extend, not an error.
+    # Empty adjustments are the model choosing to hold — a benign extend, not an error.
     client = StubPlatformClient()
-    record = await _run(client=client, chain=fake_chain(build_draft(setpoints=SetpointsDraft())))
+    record = await _run(client=client, chain=fake_chain(build_draft(adjustments={})))
 
     assert record.outcome.status is OutcomeStatus.EXTENDED
     assert record.outcome.reason_code is None
@@ -639,7 +643,7 @@ async def test_the_record_stamps_the_active_backend() -> None:
 
     # A held cycle still records which backend would have run it (P3-OBS-1).
     assert record.backend.model == "mistral"
-    assert record.backend.prompt_version == "v4"
+    assert record.backend.prompt_version == "v5"
 
 
 # -- live stage progress ----------------------------------------------------

@@ -43,9 +43,9 @@ from climate_optimizer.models import (
     PlanRecord,
     Provider,
     SensorFault,
+    SetpointAdjustments,
     SetpointDecision,
     Setpoints,
-    SetpointsDraft,
     SetpointSource,
     SetpointsPatch,
     StageBounds,
@@ -287,23 +287,27 @@ def build_plan(
 
 def build_draft(
     *,
+    adjustments: SetpointAdjustments | dict[str, float] | None = None,
     confidence: float = 0.95,
-    patch: SetpointsPatch | None = None,
-    setpoints: SetpointsDraft | None = None,
     role: BackendRole = BackendRole.PRIMARY,
-    explanation: str = "test plan",
+    situation: str = "test situation",
+    reasoning: str = "test reasoning",
 ) -> BackendDraft:
-    """The chain's provenance-stamped decision for a canned setpoint bundle.
+    """The chain's provenance-stamped decision for a canned set of *adjustments* (deltas).
 
-    ``patch`` is the convenient path — reuse :func:`build_patch` to shape the bundle; ``setpoints``
-    takes a raw :class:`SetpointsDraft` directly (e.g. an empty one to drive the no-change hold).
+    ``adjustments`` is a dict of ``field -> delta`` (or a :class:`SetpointAdjustments`). Default is a
+    small in-bounds nudge; pass ``{}`` to drive the no-change hold path.
     """
-    if setpoints is None:
-        source = patch if patch is not None else build_patch()
-        setpoints = SetpointsDraft(**source.model_dump(exclude_unset=True))
+    if adjustments is None:
+        adjustments = {"temperature_day_c": -0.5}
+    if isinstance(adjustments, dict):
+        adjustments = SetpointAdjustments(**adjustments)
     return BackendDraft(
         decision=SetpointDecision(
-            setpoints=setpoints, confidence=confidence, explanation=explanation
+            situation=situation,
+            reasoning=reasoning,
+            adjustments=adjustments,
+            confidence=confidence,
         ),
         provider=Provider.OLLAMA,
         model="qwen2.5:7b",
