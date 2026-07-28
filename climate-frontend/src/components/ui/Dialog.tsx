@@ -10,6 +10,14 @@ import { X } from "lucide-react";
 const FOCUSABLE =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+/** Panel width caps. `md` is the default (confirmations, small forms); wider sizes suit dense forms. */
+type DialogSize = "md" | "lg" | "xl";
+const SIZE_CLASS: Record<DialogSize, string> = {
+  md: "max-w-lg",
+  lg: "max-w-2xl",
+  xl: "max-w-4xl",
+};
+
 export function Dialog({
   open,
   onClose,
@@ -17,6 +25,7 @@ export function Dialog({
   description,
   children,
   footer,
+  size = "md",
 }: {
   open: boolean;
   onClose: () => void;
@@ -24,6 +33,7 @@ export function Dialog({
   description?: string;
   children?: ReactNode;
   footer?: ReactNode;
+  size?: DialogSize;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const opener = useRef<HTMLElement | null>(null);
@@ -89,7 +99,7 @@ export function Dialog({
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className="border-border bg-surface-1 relative w-full max-w-lg rounded-lg border shadow-[var(--shadow-md)]"
+        className={`border-border bg-surface-1 relative w-full ${SIZE_CLASS[size]} rounded-lg border shadow-[var(--shadow-md)]`}
         style={{ padding: "var(--space-5)" }}
       >
         <div className="mb-4 flex items-start justify-between gap-4">
