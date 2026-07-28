@@ -115,7 +115,7 @@ export function pipelineStages(
       state,
       message:
         i === activeIndex && (state === "failed" || state === "held")
-          ? outcomeMessage ?? undefined
+          ? (outcomeMessage ?? undefined)
           : undefined,
     };
   });

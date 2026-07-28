@@ -18,9 +18,7 @@ describe("PipelineTracker outcome detail", () => {
 
     render(<PipelineTracker nodes={nodes} />);
 
-    expect(
-      screen.getByTitle(`Quality Gate — failed here: ${message}`),
-    ).toBeInTheDocument();
+    expect(screen.getByTitle(`Quality Gate — failed here: ${message}`)).toBeInTheDocument();
   });
 
   it("includes the held stage's full reason in its tooltip", () => {

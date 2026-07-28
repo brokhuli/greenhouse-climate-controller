@@ -4,8 +4,9 @@ import (
 	"net/http"
 	"sort"
 
-	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/domain"
 	"github.com/labstack/echo/v4"
+
+	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/domain"
 )
 
 // listActiveAlerts serves the current retained controller fault set, using the activity feed's
