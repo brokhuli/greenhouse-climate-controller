@@ -22,8 +22,8 @@ from climate_optimizer.orchestration.scheduler import (
 )
 from climate_optimizer.orchestration.store import ServiceStore
 from climate_optimizer.planner import Planner, PlannerChain
-from climate_optimizer.planner.chain import BackendOutput
-from conftest import StubPlatformClient, build_output, chain_factory, fake_chain
+from climate_optimizer.planner.chain import BackendDraft
+from conftest import StubPlatformClient, build_draft, chain_factory, fake_chain
 
 NOW = datetime(2026, 6, 17, 12, 0, tzinfo=UTC)
 
@@ -61,12 +61,12 @@ class _Gate:
 
     @property
     def chain(self) -> PlannerChain:
-        async def gated(_payload: dict[str, Any]) -> BackendOutput:
+        async def gated(_payload: dict[str, Any]) -> BackendDraft:
             self.live += 1
             self.peak = max(self.peak, self.live)
             await self.release.wait()
             self.live -= 1
-            return build_output()
+            return build_draft()
 
         gated_chain: PlannerChain = RunnableLambda(gated)
         return gated_chain
@@ -159,7 +159,7 @@ async def test_fleet_discovery_failure_skips_the_tick_without_crashing() -> None
 
 
 async def test_a_failing_cycle_does_not_stop_the_others() -> None:
-    def explode(_payload: dict[str, Any]) -> BackendOutput:
+    def explode(_payload: dict[str, Any]) -> BackendDraft:
         raise RuntimeError("planner exploded")
 
     client = StubPlatformClient(fleet=["gh-a", "gh-b"])

@@ -1,54 +1,43 @@
 import { useState } from "react";
-import { CircleCheck, CircleMinus, Clock, Inbox, Pause, Play, TriangleAlert } from "lucide-react";
+import { CircleCheck, CircleMinus, OctagonX, Pause, Play, TriangleAlert } from "lucide-react";
 import type { FleetOptimizerRollup, ModelState } from "../../api/schemas";
 import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
 import { SummaryStat } from "../../components/ui/SummaryStat";
-import { formatDurationSecs } from "./derivations";
 
 const GRID_STYLE = { gap: "var(--layout-card-gap)" };
 
-/** Site-wide optimizer rollup: open-escalation backlog, counts by outcome, and the oldest open age. */
+/** Site-wide optimizer rollup of each greenhouse's latest cycle outcome. */
 export function OptimizerRollupBar({ rollup }: { rollup: FleetOptimizerRollup }) {
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5" style={GRID_STYLE}>
-      <SummaryStat
-        label="Open Escalations"
-        value={rollup.backlog}
-        caption="Awaiting review"
-        dot={rollup.backlog > 0}
-        Icon={Inbox}
-        color="var(--color-status-degraded)"
-      />
+    <div className="grid grid-cols-2 lg:grid-cols-4" style={GRID_STYLE}>
       <SummaryStat
         label="Applied"
         value={rollup.byOutcome.applied}
-        caption="Latest cycle"
+        caption="Setpoints published"
         Icon={CircleCheck}
         color="var(--color-status-online)"
       />
       <SummaryStat
-        label="Escalated"
-        value={rollup.byOutcome.escalated}
-        caption="Held for review"
-        Icon={TriangleAlert}
-        color="var(--color-status-degraded)"
-      />
-      <SummaryStat
-        label="Extended"
-        value={rollup.byOutcome.extended}
-        caption="Last bundle held"
+        label="Unchanged"
+        value={rollup.byOutcome.unchanged}
+        caption="No change needed"
         Icon={CircleMinus}
         color="var(--color-info)"
       />
       <SummaryStat
-        label="Oldest Open"
-        value={
-          rollup.oldestOpenAgeSecs == null ? "—" : formatDurationSecs(rollup.oldestOpenAgeSecs)
-        }
-        caption="Open escalation age"
-        Icon={Clock}
-        color="var(--color-status-offline)"
+        label="Held"
+        value={rollup.byOutcome.held}
+        caption="Existing setpoints kept"
+        Icon={TriangleAlert}
+        color="var(--color-status-degraded)"
+      />
+      <SummaryStat
+        label="Failed"
+        value={rollup.byOutcome.failed}
+        caption="No valid plan produced"
+        Icon={OctagonX}
+        color="var(--color-fault)"
       />
     </div>
   );

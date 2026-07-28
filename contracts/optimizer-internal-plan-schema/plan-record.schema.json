@@ -7,7 +7,7 @@
   "$defs": {
     "ReasonCode": {
       "type": "string",
-      "description": "Canonical escalation reason code - the single source of truth is the optimizer interfaces spec (Escalation reason codes). Present on outcome only when status is escalated.",
+      "description": "Canonical reason code for a held or failed outcome.",
       "enum": [
         "input_stale",
         "input_incomplete",
@@ -52,19 +52,19 @@
     },
     "Outcome": {
       "type": "object",
-      "description": "What the gates decided. reason_code is required when status is escalated (enforced by the if/then below); message is the optional operator-facing detail.",
+      "description": "What the cycle decided. reason_code is required when status is held or failed.",
       "properties": {
         "status": {
           "type": "string",
-          "enum": ["applied", "escalated", "extended"],
-          "description": "applied = submitted to Phase 2; escalated = surfaced, not applied; extended = no new plan applied and nothing new written - the state-change gate skipped the LLM (or there was nothing to refine), so the last applied bundle stays in force (plan is null; source_plan_id names the held prior plan, absent on a cold-start hold of the Phase 2 baseline)."
+          "enum": ["applied", "unchanged", "held", "failed"],
+          "description": "applied = valid plan published; unchanged = no change needed; held = a valid plan was intentionally not applied; failed = no valid plan could be produced or processed."
         },
         "reason_code": { "$ref": "#/$defs/ReasonCode" },
-        "message": { "type": "string", "description": "Operator-facing detail for an escalation." }
+        "message": { "type": "string", "description": "Operator-facing outcome detail." }
       },
       "required": ["status"],
       "additionalProperties": false,
-      "if": { "properties": { "status": { "const": "escalated" } }, "required": ["status"] },
+      "if": { "properties": { "status": { "enum": ["held", "failed"] } }, "required": ["status"] },
       "then": { "required": ["reason_code"] }
     }
   },
@@ -72,7 +72,7 @@
     "schema_version": { "type": "integer", "minimum": 1, "description": "Major version of this plan contract (internal; a bump is an ADR event)." },
     "optimizer_run_id": { "type": "string", "format": "uuid", "description": "The cycle's trace / provenance id. Phase 2 records it on the applied bundle; every plan and escalation is traced by it (P3-OBS-1)." },
     "greenhouse_id": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$", "description": "The greenhouse this plan is for." },
-    "created_at": { "type": "string", "format": "date-time", "description": "When the cycle ran (RFC 3339, UTC) - the instant this record was produced, whether it applied, escalated, or extended." },
+    "created_at": { "type": "string", "format": "date-time", "description": "When the cycle ran (RFC 3339, UTC)." },
     "horizon": { "$ref": "#/$defs/Horizon" },
     "backend": { "$ref": "#/$defs/Backend" },
     "plan": {

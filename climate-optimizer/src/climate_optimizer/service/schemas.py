@@ -77,8 +77,9 @@ class FleetRollupResponse(BaseModel):
 
     backlog: int
     applied: int
-    escalated: int
-    extended: int
+    unchanged: int
+    held: int
+    failed: int
     oldest_open_escalation_age_seconds: float | None = None
 
 

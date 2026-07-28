@@ -30,7 +30,7 @@ func TestReadsAreUntokened(t *testing.T) {
 	var gotAuth string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("Authorization")
-		_, _ = w.Write([]byte(`{"greenhouses":[],"rollup":{"backlog":0,"applied":0,"escalated":0,"extended":0,"oldest_open_escalation_age_seconds":null}}`))
+		_, _ = w.Write([]byte(`{"greenhouses":[],"rollup":{"backlog":0,"applied":0,"unchanged":0,"held":0,"failed":0,"oldest_open_escalation_age_seconds":null}}`))
 	}))
 	defer srv.Close()
 

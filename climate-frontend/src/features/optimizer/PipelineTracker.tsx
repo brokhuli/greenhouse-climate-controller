@@ -33,6 +33,7 @@ const NODE_META: Record<
   active: { color: ACTIVE, Icon: LoaderCircle, spin: true, word: "running" },
   failed: { color: FAILED, Icon: TriangleAlert, word: "failed here" },
   held: { color: HELD, Icon: CircleMinus, word: "held here" },
+  unchanged: { color: HELD, Icon: CircleMinus, word: "unchanged here" },
   pending: { color: MUTED, Icon: CircleDashed, word: "pending" },
   idle: { color: MUTED, Icon: CircleDashed, word: "idle" },
 };

@@ -14,7 +14,7 @@
     ]
   },
   "outcome": {
-    "status": "escalated",
+    "status": "held",
     "message": "escalated with no reason_code - must be rejected by the outcome if/then rule"
   }
 }

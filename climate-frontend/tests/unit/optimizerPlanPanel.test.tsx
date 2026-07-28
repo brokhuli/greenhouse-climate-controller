@@ -58,14 +58,14 @@ describe("OptimizerPlanPanel", () => {
         plan: {
           plan: {
             ...sampleOptimizerPlanDetail().plan,
-            outcome: { status: "escalated", reasonCode: "input_stale", message: "stream stale" },
+            outcome: { status: "held", reasonCode: "input_stale", message: "stream stale" },
             plan: null,
           },
           diff: null,
         },
       }),
     );
-    expect(screen.getByText("Escalated")).toBeInTheDocument();
+    expect(screen.getByText("Held")).toBeInTheDocument();
     expect(screen.getByText(/input stale/i)).toBeInTheDocument();
     expect(screen.getByText(/Cycle ran; nothing applied/i)).toBeInTheDocument();
     expect(screen.queryByText("Temp (day)")).not.toBeInTheDocument();

@@ -76,3 +76,28 @@ class SetpointsPatch(StrictModel):
                 f"SetpointsPatch fields must not be explicitly null: {', '.join(explicit_nulls)}"
             )
         return self
+
+
+class SetpointAdjustments(StrictModel):
+    """The model's per-cycle *adjustments* — how much to change each climate target, not new absolutes.
+
+    Rec 1 (delta action space, spec 04): the planner returns a small signed *delta* per target, which
+    :meth:`Planner._assemble` adds to the current setpoint (``target = clamp(current + delta, bounds)``).
+    The per-field caps below are the load-bearing mechanism: an absolute like ``23`` is outside every
+    cap, so a constrained-decoding backend *cannot* emit one — it can only say "nudge the current value
+    by N", which forces it to condition on the current setpoint we hand it instead of falling back on a
+    training prior. Lenient like a draft (no ``minProperties`` / no-null validators): an empty object, a
+    null, or an all-zero set is a deliberate "hold", read as an extend in ``_assemble`` rather than
+    rejected. **Climate scalars only** — schedule times (``day_start``/``day_end``) and irrigation zones
+    are not LLM-refined; they stay on their profile/baseline values.
+    """
+
+    temperature_day_c: float | None = Field(default=None, ge=-3.0, le=3.0)
+    temperature_night_c: float | None = Field(default=None, ge=-3.0, le=3.0)
+    humidity_low_pct: float | None = Field(default=None, ge=-10.0, le=10.0)
+    humidity_high_pct: float | None = Field(default=None, ge=-10.0, le=10.0)
+    humidity_deadband_pct: float | None = Field(default=None, ge=-5.0, le=5.0)
+    co2_target_ppm: int | None = Field(default=None, ge=-150, le=150)
+    co2_vent_interlock_threshold_pct: float | None = Field(default=None, ge=-10.0, le=10.0)
+    vpd_target_kpa: float | None = Field(default=None, ge=-0.3, le=0.3)
+    dli_target_mol: float | None = Field(default=None, ge=-3.0, le=3.0)

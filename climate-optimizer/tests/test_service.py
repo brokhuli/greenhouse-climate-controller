@@ -19,14 +19,14 @@ from climate_optimizer.orchestration.runtime import RuntimeState
 from climate_optimizer.orchestration.scheduler import Scheduler
 from climate_optimizer.orchestration.store import Escalation, ServiceStore
 from climate_optimizer.planner import Planner, PlannerChain
-from climate_optimizer.planner.chain import BackendOutput
+from climate_optimizer.planner.chain import BackendDraft
 from climate_optimizer.service import (
     ConfigurationError,
     ServiceContext,
     create_app,
     validate_startup,
 )
-from conftest import StubPlatformClient, build_output, chain_factory, fake_chain
+from conftest import StubPlatformClient, build_draft, chain_factory, fake_chain
 
 NOW = datetime(2026, 6, 17, 12, 0, tzinfo=UTC)
 
@@ -261,8 +261,9 @@ def test_fleet_reports_each_greenhouse_and_the_rollup() -> None:
     assert body["rollup"] == {
         "backlog": 1,
         "applied": 1,
-        "escalated": 0,
-        "extended": 0,
+        "held": 0,
+        "unchanged": 0,
+        "failed": 0,
         "oldest_open_escalation_age_seconds": pytest.approx(
             body["rollup"]["oldest_open_escalation_age_seconds"]
         ),
@@ -291,9 +292,9 @@ def test_fleet_reports_the_settled_stage_of_a_completed_cycle() -> None:
 async def test_fleet_reports_the_live_stage_of_an_in_flight_cycle() -> None:
     release = asyncio.Event()
 
-    async def gated(_payload: dict[str, Any]) -> BackendOutput:
+    async def gated(_payload: dict[str, Any]) -> BackendDraft:
         await release.wait()
-        return build_output()
+        return build_draft()
 
     gated_chain: PlannerChain = RunnableLambda(gated)
     ctx = _context(chain=gated_chain)
@@ -366,7 +367,7 @@ def test_latest_plan_returns_the_recorded_envelope() -> None:
 
     assert body["greenhouse_id"] == "gh-a"
     assert body["outcome"]["status"] == "applied"
-    assert body["backend"]["prompt_version"] == "v3"
+    assert body["backend"]["prompt_version"] == "v5"
     assert body["plan"]["confidence"] == 0.95
 
 
@@ -411,9 +412,9 @@ def test_triggering_a_paused_greenhouse_is_409() -> None:
 async def test_triggering_a_greenhouse_already_planning_is_409() -> None:
     release = asyncio.Event()
 
-    async def gated(_payload: dict[str, Any]) -> BackendOutput:
+    async def gated(_payload: dict[str, Any]) -> BackendDraft:
         await release.wait()
-        return build_output()
+        return build_draft()
 
     gated_chain: PlannerChain = RunnableLambda(gated)
     ctx = _context(chain=gated_chain)
@@ -479,7 +480,7 @@ def test_model_reports_the_active_backend_and_allowlist() -> None:
 
     assert body["provider"] == "ollama"
     assert body["model"] == "qwen2.5:7b"
-    assert body["prompt_version"] == "v3"
+    assert body["prompt_version"] == "v5"
     assert "mistral" in body["available_models"]
 
 

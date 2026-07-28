@@ -179,7 +179,7 @@ export const sampleFleetOptimizerSummary = (
   greenhouses: [sampleFleetOptimizerGreenhouse()],
   rollup: {
     backlog: 0,
-    byOutcome: { applied: 1, escalated: 0, extended: 0 },
+    byOutcome: { applied: 1, unchanged: 0, held: 0, failed: 0 },
     oldestOpenAgeSecs: null,
   },
   ...overrides,

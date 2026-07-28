@@ -2,15 +2,13 @@ import { CirclePause, Lock, Sparkle } from "lucide-react";
 import {
   useGreenhouseOptimizerEnabled,
   useOptimizerEnabled,
-  useOptimizerEscalations,
+  useOptimizerFleet,
   useOptimizerPlan,
   useOptimizerStatus,
-  useResolveEscalation,
   useSetGreenhouseOptimizerEnabled,
   useTriggerOptimizerCycle,
 } from "../../api/queries/optimizer";
 import { useRole } from "../../hooks/useRole";
-import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/Card";
 import { PanelHeader } from "../../components/ui/PanelHeader";
 import { Pill } from "../../components/ui/Pill";
@@ -40,12 +38,11 @@ export function OptimizerPlanPanel({
   const serviceEnabledQuery = useOptimizerEnabled();
   const ghEnabledQuery = useGreenhouseOptimizerEnabled(greenhouseId);
   const planQuery = useOptimizerPlan(greenhouseId);
-  const escalations = useOptimizerEscalations();
+  const optimizerFleet = useOptimizerFleet();
   const { isOperator } = useRole();
   const toast = useToast();
   const trigger = useTriggerOptimizerCycle(greenhouseId);
   const setEnabled = useSetGreenhouseOptimizerEnabled(greenhouseId);
-  const resolve = useResolveEscalation();
 
   // The optimizer isn't reachable / deployed — the panel is absent rather than a broken card.
   if (status.data?.status === "unavailable") return null;
@@ -62,8 +59,6 @@ export function OptimizerPlanPanel({
   const greenhouseEnabled = ghEnabledQuery.data?.enabled ?? true;
   const globallyPaused = !serviceEnabled;
   const operatorReason = isOperator ? undefined : "Operator role required";
-
-  const openEscalation = (escalations.data ?? []).find((e) => e.greenhouseId === greenhouseId);
 
   const runCycle = () =>
     trigger.mutate(
@@ -103,23 +98,6 @@ export function OptimizerPlanPanel({
       },
     );
 
-  const resolveEscalation = () => {
-    if (!openEscalation) return;
-    resolve.mutate(
-      { escalationId: openEscalation.id },
-      {
-        onSuccess: () =>
-          toast.push({ variant: "success", title: "Escalation resolved", message: displayName }),
-        onError: (error) =>
-          toast.push({
-            variant: "warning",
-            title: "Couldn't resolve",
-            message: optimizerActionError(error, "Resolve failed"),
-          }),
-      },
-    );
-  };
-
   // Header pill: global pause wins (Read-only), then this greenhouse's own pause (Disabled).
   const headerPill = globallyPaused ? (
     <Pill color={MUTED} icon={<Lock size={12} aria-hidden />}>
@@ -136,7 +114,13 @@ export function OptimizerPlanPanel({
   );
 
   const detail = planQuery.data;
-  const escalated = detail?.plan.outcome.status === "escalated";
+  const nonAppliedOutcome =
+    detail?.plan.outcome.status === "held" || detail?.plan.outcome.status === "failed";
+  // A fleet entry proves a cycle completed, even during the short handoff before its detail record
+  // is readable. Do not report that state as a first-run cold start.
+  const completedCycle = optimizerFleet.data?.greenhouses.find(
+    (greenhouse) => greenhouse.greenhouseId === greenhouseId,
+  )?.createdAt;
 
   return (
     <Card>
@@ -181,18 +165,21 @@ export function OptimizerPlanPanel({
       {planQuery.isLoading ? (
         <Skeleton height={120} />
       ) : !detail ? (
-        <p className="text-fg-subtle text-sm">
-          No optimizer plan yet — the first cycle hasn't run.
-        </p>
+        completedCycle ? (
+          <p className="text-fg-subtle text-sm">
+            The latest optimizer cycle completed; loading its plan details…
+          </p>
+        ) : (
+          <p className="text-fg-subtle text-sm">
+            No optimizer plan yet — the first cycle hasn't run.
+          </p>
+        )
       ) : (
         <div className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center gap-2">
             <PlanOutcomeBadge status={detail.plan.outcome.status} />
-            {escalated && detail.plan.outcome.reasonCode ? (
-              <ReasonCodeChip
-                code={detail.plan.outcome.reasonCode}
-                reasonClass={openEscalation?.reasonClass}
-              />
+            {nonAppliedOutcome && detail.plan.outcome.reasonCode ? (
+              <ReasonCodeChip code={detail.plan.outcome.reasonCode} />
             ) : null}
           </div>
 
@@ -217,23 +204,13 @@ export function OptimizerPlanPanel({
               )}
             </>
           ) : (
-            <p className="text-fg-subtle text-sm">Cycle ran; nothing applied.</p>
+            <p className="text-fg-subtle text-sm">
+              {detail.plan.outcome.status === "applied"
+                ? "Setpoints were applied; detailed plan metadata is unavailable."
+                : "Cycle ran; nothing applied."}
+            </p>
           )}
 
-          <div className="flex flex-wrap items-center gap-2">
-            {escalated ? (
-              <Button
-                variant="secondary"
-                onClick={resolveEscalation}
-                disabled={!isOperator || resolve.isPending || !openEscalation}
-                title={
-                  !isOperator ? operatorReason : !openEscalation ? "No open escalation" : undefined
-                }
-              >
-                {resolve.isPending ? "Resolving…" : "Resolve"}
-              </Button>
-            ) : null}
-          </div>
         </div>
       )}
     </Card>

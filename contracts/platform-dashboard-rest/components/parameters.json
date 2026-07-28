@@ -27,7 +27,7 @@
     "description": "Filter the optimizer fleet queue to one latest-cycle outcome.",
     "schema": {
       "type": "string",
-      "enum": ["applied", "escalated", "extended"]
+      "enum": ["applied", "unchanged", "held", "failed"]
     }
   },
   "Window": {

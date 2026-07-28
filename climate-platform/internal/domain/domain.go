@@ -85,6 +85,7 @@ var EventKinds = map[string]bool{
 	"setpoint_edit":            true,
 	"drift":                    true,
 	"optimizer_plan_applied":   true,
+	"optimizer_plan_held":      true,
 	"optimizer_plan_escalated": true,
 	"optimizer_resolved":       true,
 	"optimizer_run_failed":     true,

@@ -30,6 +30,7 @@ from .enums import (
     ReasonCode,
     SensorFaultKind,
     SetpointSource,
+    outcome_status_for_reason,
 )
 from .plan import (
     Backend,
@@ -39,9 +40,10 @@ from .plan import (
     OptimizerPlan,
     Outcome,
     PlanRecord,
+    SetpointDecision,
     TrajectoryPoint,
 )
-from .setpoints import Setpoints, SetpointsPatch, ZoneTargets
+from .setpoints import SetpointAdjustments, Setpoints, SetpointsPatch, ZoneTargets
 
 __all__ = [
     "REASON_CLASS",
@@ -65,6 +67,7 @@ __all__ = [
     "OptimizerPlan",
     "Outcome",
     "OutcomeStatus",
+    "outcome_status_for_reason",
     "PlanRecord",
     "PlanningContext",
     "Provider",
@@ -72,6 +75,8 @@ __all__ = [
     "ReasonCode",
     "SensorFault",
     "SensorFaultKind",
+    "SetpointAdjustments",
+    "SetpointDecision",
     "Setpoints",
     "SetpointSource",
     "SetpointsPatch",

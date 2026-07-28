@@ -21,13 +21,14 @@ const twoGreenhouseSummary = (): FleetOptimizerSummary =>
       sampleFleetOptimizerGreenhouse({ greenhouseId: "gh-a", status: "applied" }),
       sampleFleetOptimizerGreenhouse({
         greenhouseId: "gh-b",
-        status: "escalated",
+        status: "held",
         reasonCode: "low_confidence",
+        message: "confidence 0.62 < threshold 0.80",
       }),
     ],
     rollup: {
       backlog: 1,
-      byOutcome: { applied: 1, escalated: 1, extended: 0 },
+      byOutcome: { applied: 1, unchanged: 0, held: 1, failed: 0 },
       oldestOpenAgeSecs: 120,
     },
   });
@@ -63,7 +64,7 @@ describe("OptimizerConsole", () => {
     expect(screen.getByText(/low confidence · transient/i)).toBeInTheDocument();
   });
 
-  it("surfaces the specific gate message on an escalated row", () => {
+  it("surfaces the specific gate message on a held row", () => {
     // The precise cause (which metric / what coverage) reaches the browser on the escalation;
     // the fleet row must render it, not just the generic reason-code chip.
     renderWithProviders(<OptimizerConsole />, { client: seededClient(), route: "/optimizer" });
@@ -76,14 +77,14 @@ describe("OptimizerConsole", () => {
         fleet: sampleFleetOptimizerSummary({
           greenhouses: [
             sampleFleetOptimizerGreenhouse({
-              status: "extended",
+              status: "unchanged",
               message: "no crop-safe bounds present; holding the baseline",
               currentStage: "forecast",
             }),
           ],
           rollup: {
             backlog: 0,
-            byOutcome: { applied: 0, escalated: 0, extended: 1 },
+            byOutcome: { applied: 0, unchanged: 1, held: 0, failed: 0 },
             oldestOpenAgeSecs: null,
           },
         }),
@@ -92,14 +93,14 @@ describe("OptimizerConsole", () => {
     });
 
     expect(
-      screen.getByText(/forecast held: no crop-safe bounds present; holding the baseline/i),
+      screen.getByText(/forecast unchanged: no crop-safe bounds present; holding the baseline/i),
     ).toBeInTheDocument();
   });
 
   it.each([
     ["ingest", "platform_unavailable", "platform request timed out", "Ingest failed"],
-    ["quality_gate", "input_incomplete", "humidity coverage 0.50 < 0.95", "Quality Gate failed"],
-    ["constrain", "low_confidence", "confidence 0.62 < threshold 0.80", "Constrain failed"],
+    ["quality_gate", "input_incomplete", "humidity coverage 0.50 < 0.95", "Quality Gate held"],
+    ["constrain", "low_confidence", "confidence 0.62 < threshold 0.80", "Constrain held"],
   ] as const)(
     "labels the %s failure with its actionable reason",
     (stage, reasonCode, message, label) => {
@@ -108,7 +109,7 @@ describe("OptimizerConsole", () => {
           fleet: sampleFleetOptimizerSummary({
             greenhouses: [
               sampleFleetOptimizerGreenhouse({
-                status: "escalated",
+                status: reasonCode === "platform_unavailable" ? "failed" : "held",
                 reasonCode,
                 message,
                 currentStage: stage,
@@ -116,7 +117,12 @@ describe("OptimizerConsole", () => {
             ],
             rollup: {
               backlog: 1,
-              byOutcome: { applied: 0, escalated: 1, extended: 0 },
+              byOutcome: {
+                applied: 0,
+                unchanged: 0,
+                held: reasonCode === "platform_unavailable" ? 0 : 1,
+                failed: reasonCode === "platform_unavailable" ? 1 : 0,
+              },
               oldestOpenAgeSecs: 30,
             },
           }),
@@ -137,13 +143,13 @@ describe("OptimizerConsole", () => {
         greenhouses: [
           sampleFleetOptimizerGreenhouse({
             greenhouseId: "gh-c",
-            status: "escalated",
+            status: "held",
             reasonCode: "input_incomplete",
           }),
         ],
         rollup: {
           backlog: 0,
-          byOutcome: { applied: 0, escalated: 1, extended: 0 },
+          byOutcome: { applied: 0, unchanged: 0, held: 1, failed: 0 },
           oldestOpenAgeSecs: null,
         },
       }),
@@ -162,10 +168,10 @@ describe("OptimizerConsole", () => {
     expect(screen.queryByText(/input incomplete/i)).not.toBeInTheDocument();
   });
 
-  it("filters to the escalation worklist under ?status=escalated", () => {
+  it("filters to held outcomes under ?status=held", () => {
     renderWithProviders(<OptimizerConsole />, {
       client: seededClient(),
-      route: "/optimizer?status=escalated",
+      route: "/optimizer?status=held",
     });
     expect(screen.getByText("Greenhouse B")).toBeInTheDocument();
     expect(screen.queryByText("Greenhouse A")).not.toBeInTheDocument();
@@ -202,7 +208,7 @@ describe("OptimizerConsole", () => {
           greenhouses: [],
           rollup: {
             backlog: 0,
-            byOutcome: { applied: 0, escalated: 0, extended: 0 },
+            byOutcome: { applied: 0, unchanged: 0, held: 0, failed: 0 },
             oldestOpenAgeSecs: null,
           },
         }),

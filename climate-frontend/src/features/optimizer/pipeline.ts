@@ -10,7 +10,14 @@ import type { OptimizerCardState } from "./derivations";
  * Kept out of the component (like `toOptimizerCardState`) so the stage precedence is unit-tested.
  */
 
-export type PipelineNodeState = "done" | "active" | "failed" | "held" | "pending" | "idle";
+export type PipelineNodeState =
+  | "done"
+  | "active"
+  | "failed"
+  | "held"
+  | "unchanged"
+  | "pending"
+  | "idle";
 export type PipelineNode = {
   stage: CycleStage;
   label: string;
@@ -71,7 +78,7 @@ const idleTrack = (): PipelineNode[] => CYCLE_STAGES.map((s) => ({ ...s, state: 
 /**
  * Resolve the six-node pipeline tracker for one greenhouse. States:
  * - `done` — a stage the cycle cleared; `active` — the stage a cycle is executing now (in flight);
- * - `failed` — where a settled cycle escalated; `held` — where an `extended` cycle benignly stopped;
+ * - `failed`, `held`, or `unchanged` — the terminal disposition of a settled non-applied cycle;
  * - `pending` — a stage not yet reached; `idle` — no cycle to show (read-only / disabled / no plan).
  */
 export function pipelineStages(
@@ -101,9 +108,11 @@ export function pipelineStages(
   // The disposition of the stage the cycle sits on when settled.
   const marker: PipelineNodeState = inFlight
     ? "active"
-    : cardState.kind === "outcome" && cardState.status === "escalated"
+    : cardState.kind === "outcome" && cardState.status === "failed"
       ? "failed"
-      : "held"; // extended: a benign hold, not a failure
+      : cardState.kind === "outcome" && cardState.status === "held"
+        ? "held"
+        : "unchanged";
 
   return CYCLE_STAGES.map((s, i) => {
     let state: PipelineNodeState;
@@ -114,7 +123,7 @@ export function pipelineStages(
       ...s,
       state,
       message:
-        i === activeIndex && (state === "failed" || state === "held")
+        i === activeIndex && (state === "failed" || state === "held" || state === "unchanged")
           ? (outcomeMessage ?? undefined)
           : undefined,
     };

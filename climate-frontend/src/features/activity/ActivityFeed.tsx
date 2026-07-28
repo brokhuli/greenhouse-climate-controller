@@ -27,6 +27,7 @@ const KIND_OPTIONS: EventKind[] = [
   "drift",
   "optimizer_plan_applied",
   "optimizer_plan_escalated",
+  "optimizer_plan_held",
   "optimizer_resolved",
   "optimizer_run_failed",
 ];

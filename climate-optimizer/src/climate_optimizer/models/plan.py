@@ -2,7 +2,7 @@
 
 Mirrors ``contracts/optimizer-internal-plan-schema/`` (optimizer-plan / plan-record). The
 conditional invariants the JSON Schema enforces are re-expressed as validators here:
-``reason_code`` is required iff ``status == escalated``, and an ``applied`` record carries a
+``reason_code`` is required when ``status`` is held or failed, and an ``applied`` record carries a
 non-null ``plan``. The ``immediate_setpoints ≡ trajectory[0].setpoints`` invariant is *not*
 here — it is a constraint-engine check (spec 06 §1), matching the contract note.
 """
@@ -17,7 +17,32 @@ from pydantic import Field, model_validator
 
 from .base import SLUG_PATTERN, StrictModel
 from .enums import BackendRole, OutcomeStatus, Provider, ReasonCode
-from .setpoints import SetpointsPatch
+from .setpoints import SetpointAdjustments, SetpointsPatch
+
+
+class SetpointDecision(StrictModel):
+    """The planner LLM's *entire* output — a grounded, delta-based decision (spec 04).
+
+    This is **not** a wire contract: it is the structured-output shape the backend is asked to produce.
+    Everything mechanical — the ``horizon.start`` timestamp, the single-point trajectory, the
+    ``immediate_setpoints ≡ trajectory[0]`` equality, and turning deltas into absolute setpoints — is
+    assembled deterministically in :meth:`~climate_optimizer.planner.planner.Planner.propose`.
+
+    The **field order is deliberate** (Rec 2, quote-then-answer): with constrained decoding the schema's
+    field order *is* the generation order, so the model writes its grounding — ``situation`` (quote the
+    current target, the observation/forecast, and the bound) then ``reasoning`` — *before* it commits to
+    the ``adjustments``. The numbers are therefore produced in the presence of the model's own analysis,
+    rather than rationalized after the fact. ``situation``/``reasoning`` are plain strings (no
+    ``min_length``) so a terse backend can never turn an empty rationale into a parse failure; the
+    assembled plan's ``explanation`` falls back to a placeholder if both are blank. An empty (or
+    all-zero) ``adjustments`` is a valid "hold", read as an extend; see
+    :class:`~climate_optimizer.models.SetpointAdjustments`.
+    """
+
+    situation: str
+    reasoning: str
+    adjustments: SetpointAdjustments
+    confidence: float = Field(ge=0, le=1)
 
 
 class TrajectoryPoint(StrictModel):
@@ -99,16 +124,16 @@ class Horizon(StrictModel):
 
 
 class Outcome(StrictModel):
-    """What the gates decided. ``reason_code`` is required when ``status == escalated``."""
+    """What the cycle decided. Held and failed outcomes require a reason code."""
 
     status: OutcomeStatus
     reason_code: ReasonCode | None = None
     message: str | None = None
 
     @model_validator(mode="after")
-    def _reason_required_when_escalated(self) -> Outcome:
-        if self.status == OutcomeStatus.ESCALATED and self.reason_code is None:
-            raise ValueError("reason_code is required when status is escalated")
+    def _reason_required_when_not_applied(self) -> Outcome:
+        if self.status in (OutcomeStatus.HELD, OutcomeStatus.FAILED) and self.reason_code is None:
+            raise ValueError("reason_code is required when status is held or failed")
         return self
 
 

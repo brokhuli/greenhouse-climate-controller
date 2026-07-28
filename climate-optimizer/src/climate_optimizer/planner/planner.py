@@ -14,18 +14,20 @@ on the **next** cycle (spec 10) without rebuilding the chain every cadence.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
 from langchain_core.exceptions import OutputParserException
 from pydantic import ValidationError
 
 from ..config import Settings
+from ..domain.constraints import apply_adjustments, clamp_to_bounds
 from ..domain.twin import PredictedPoint
-from ..models import Horizon, PlanningContext, Setpoints
-from .chain import BackendOutput, PlannerChain, build_chain
+from ..models import Horizon, OptimizerPlan, PlanningContext, Setpoints, TrajectoryPoint
+from .chain import BackendDraft, BackendOutput, PlannerChain, build_chain
 from .serializer import PlanContextPayload, build_plan_context
 
 logger = logging.getLogger(__name__)
@@ -88,10 +90,21 @@ class PlannerUnavailableError(Exception):
 
 
 class PlannerParseError(Exception):
-    """The backend responded, but the completion would not parse into a valid ``OptimizerPlan``.
+    """The backend responded, but the completion would not parse into a valid ``SetpointDecision``.
 
     Held with ``plan_unparseable`` — distinct from an unreachable backend (:class:`PlannerUnavailableError`):
-    the LLM is up, its output is just off-schema (a missing field, an empty patch, a hallucinated key).
+    the LLM is up, its output is just off-schema (a bad field type, a hallucinated key).
+    """
+
+
+class PlannerNoChange(Exception):
+    """The model deliberately proposed *no* setpoint change — a valid hold, not an error.
+
+    Empty (or all-zero) ``SetpointDecision.adjustments`` means "no change earns its cost this cycle".
+    The cycle reads this as an :class:`~climate_optimizer.models.OutcomeStatus.EXTENDED` outcome — the
+    last applied bundle stays in force and nothing is written — rather than an escalation. It falls
+    out of the shrunk output naturally: a constrained-decoding backend can return ``{}``, and we treat
+    that as the decision it is instead of a malformed plan.
     """
 
 
@@ -101,6 +114,7 @@ class PlanProposal:
 
     output: BackendOutput
     context: PlanContextPayload
+    clamped_fields: tuple[str, ...] = field(default_factory=tuple)
 
 
 def _hhmm_to_seconds(hhmm: str) -> int:
@@ -155,7 +169,9 @@ class Planner:
         """Serialize the context and invoke the planner; raise on any failure to produce a plan.
 
         A :class:`~climate_optimizer.planner.serializer.ContextBudgetExceededError` propagates
-        unchanged — an over-budget context is a configuration fault, not a backend outage.
+        unchanged — an over-budget context is a configuration fault, not a backend outage. The chain
+        call is bounded by ``llm.request_timeout_seconds`` — a sub-budget under the cycle timeout that
+        attributes a slow backend to ``llm_unavailable`` rather than a whole-cycle ``cycle_timeout``.
         """
         payload = build_plan_context(
             ctx,
@@ -166,7 +182,18 @@ class Planner:
         )
 
         try:
-            output = await self.chain_for(model).ainvoke({"plan_context": payload.text})
+            draft = await asyncio.wait_for(
+                self.chain_for(model).ainvoke({"plan_context": payload.text}),
+                timeout=self._settings.llm.request_timeout_seconds,
+            )
+        except TimeoutError as err:
+            # The backend did not answer within its own budget: an outage-class hold, but named so an
+            # operator sees the LLM was the slow part (distinct from a whole-cycle timeout).
+            _log_no_plan(ctx.greenhouse_id, model, err)
+            raise PlannerUnavailableError(
+                "planner produced no plan: llm request exceeded "
+                f"{self._settings.llm.request_timeout_seconds:g}s"
+            ) from err
         except (OutputParserException, ValidationError) as err:
             # The backend responded; the completion is just off-schema. Distinct from an outage so the
             # operator sees `plan_unparseable`, not a false "backend unreachable".
@@ -176,15 +203,58 @@ class Planner:
             _log_no_plan(ctx.greenhouse_id, model, err)
             raise PlannerUnavailableError(_summarize_planner_error(err)) from err
 
-        if output.role.value != "primary":
+        if draft.role.value != "primary":
             logger.warning(
                 "planner failed over to the fallback backend",
                 extra={
                     "event": "optimizer_planner_failover",
                     "greenhouse_id": ctx.greenhouse_id,
-                    "provider": output.provider.value,
-                    "model": output.model,
+                    "provider": draft.provider.value,
+                    "model": draft.model,
                 },
             )
 
-        return PlanProposal(output=output, context=payload)
+        output, clamped_fields = self._assemble(draft, ctx=ctx, horizon=horizon)
+        return PlanProposal(output=output, context=payload, clamped_fields=clamped_fields)
+
+    def _assemble(
+        self, draft: BackendDraft, *, ctx: PlanningContext, horizon: Horizon
+    ) -> tuple[BackendOutput, tuple[str, ...]]:
+        """Turn the model's grounded, delta-based decision into a full, guardrail-safe ``OptimizerPlan``.
+
+        The model owns only the semantic choice — *how much* to nudge each target; the code owns the
+        rest. Deltas are resolved against the *current* setpoints (``target = current + delta``), so an
+        empty or all-zero set is a deliberate hold (:class:`PlannerNoChange`). ``apply_adjustments``
+        keeps the result constructible (physical range); ``clamp_to_bounds`` pulls it inside the
+        crop-safe envelope and flags what moved. The ``horizon.start`` timestamp, the single-point
+        trajectory, and ``immediate_setpoints ≡ trajectory[0]`` are stamped here, so the timestamp-echo
+        and equality failure modes never reach the model.
+        """
+        decision = draft.decision
+        deltas = {
+            field: delta
+            for field, delta in decision.adjustments.model_dump(exclude_none=True).items()
+            if delta != 0
+        }
+        if not deltas:
+            raise PlannerNoChange("model proposed no setpoint change")
+
+        clamp = clamp_to_bounds(
+            apply_adjustments(ctx.setpoints.targets, deltas), ctx.setpoints.bounds
+        )
+
+        rationale = f"{decision.situation} {decision.reasoning}".strip()
+        explanation = rationale or "planner gave no rationale"
+        if clamp.clamped_fields:
+            explanation = f"{explanation} [clamped to crop-safe: {', '.join(clamp.clamped_fields)}]"
+
+        plan = OptimizerPlan(
+            trajectory=[TrajectoryPoint(at=horizon.start, setpoints=clamp.patch)],
+            immediate_setpoints=clamp.patch,
+            confidence=decision.confidence,
+            explanation=explanation,
+        )
+        output = BackendOutput(
+            plan=plan, provider=draft.provider, model=draft.model, role=draft.role
+        )
+        return output, clamp.clamped_fields

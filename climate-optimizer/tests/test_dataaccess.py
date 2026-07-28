@@ -49,7 +49,7 @@ def _escalated_record() -> PlanRecord:
         ),
         plan=None,
         outcome=Outcome(
-            status=OutcomeStatus.ESCALATED,
+            status=OutcomeStatus.FAILED,
             reason_code=ReasonCode.LLM_UNAVAILABLE,
             message="planner unreachable",
         ),
@@ -258,7 +258,7 @@ async def test_report_outcome_posts_the_escalation() -> None:
     body = json.loads(route.calls.last.request.content)
     assert body == {
         "optimizer_run_id": str(_RUN_ID),
-        "status": "escalated",
+        "status": "failed",
         "reason_code": "llm_unavailable",
         "message": "planner unreachable",
     }

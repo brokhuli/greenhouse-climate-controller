@@ -90,16 +90,23 @@ async def test_a_real_ollama_cycle_produces_a_contract_valid_plan() -> None:
     assert record.backend.model == MODEL
 
     # A healthy, gate-passing context with no prior cycle memory means the state-change gate has
-    # nothing to suppress against, so the LLM is always invoked. A small local model does not always
-    # return a schema-valid structured output, though (e.g. an empty ``{}`` patch on one trajectory
-    # point) — the backend is reachable, so that is a legitimate ``PLAN_UNPARSEABLE`` escalation with
-    # ``plan: None``, proving the pipeline correctly rejects malformed model output, not a pipeline
-    # bug. (An unreachable backend would be ``LLM_UNAVAILABLE`` instead.) Any *other* plan-less reason
-    # (a gate hold, a twin fault, a timeout) would mean something upstream broke.
+    # nothing to suppress against, so the LLM is always invoked. With the shrunk decision plus
+    # constrained decoding, a small local model now reliably clears the schema; the possible plan-less
+    # outcomes are a deliberate no-change hold (``EXTENDED``, empty ``{}`` adjustments — no reason
+    # code) or a reachable-backend failure (``PLAN_UNPARSEABLE`` off-schema output / ``LLM_UNAVAILABLE``
+    # outage or per-call timeout). An out-of-range target is clamped and applied, never rejected
+    # (lever 2). Any *other* plan-less reason (a gate hold, a twin fault) would mean something broke.
     if record.plan is None:
-        assert record.outcome.reason_code in (
-            ReasonCode.PLAN_UNPARSEABLE,
-            ReasonCode.LLM_UNAVAILABLE,
-        ), record.outcome
+        if record.outcome.status is OutcomeStatus.UNCHANGED:
+            assert record.outcome.reason_code is None, record.outcome
+        else:
+            assert record.outcome.reason_code in (
+                ReasonCode.PLAN_UNPARSEABLE,
+                ReasonCode.LLM_UNAVAILABLE,
+            ), record.outcome
     else:
-        assert record.outcome.status in (OutcomeStatus.APPLIED, OutcomeStatus.ESCALATED)
+        assert record.outcome.status in (
+            OutcomeStatus.APPLIED,
+            OutcomeStatus.HELD,
+            OutcomeStatus.FAILED,
+        )

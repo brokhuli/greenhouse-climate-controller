@@ -55,10 +55,10 @@ describe("pipelineStages — live progress", () => {
 });
 
 describe("pipelineStages — settled outcomes", () => {
-  it("an escalation fails at its stage; earlier done, later pending", () => {
+  it("a held plan stops at its stage; earlier stages are done", () => {
     const s = statesFor(
       sampleFleetOptimizerGreenhouse({
-        status: "escalated",
+        status: "held",
         reasonCode: "low_confidence",
         inFlight: false,
         currentStage: "constrain",
@@ -66,15 +66,15 @@ describe("pipelineStages — settled outcomes", () => {
     );
     expect(s.forecast).toBe("done");
     expect(s.plan).toBe("done");
-    expect(s.constrain).toBe("failed");
+    expect(s.constrain).toBe("held");
     expect(s.publish).toBe("pending");
   });
 
-  it("an extended cycle is held (not failed) at its stage", () => {
+  it("an unchanged cycle is marked unchanged at its stage", () => {
     const s = statesFor(
-      sampleFleetOptimizerGreenhouse({ status: "extended", inFlight: false, currentStage: "plan" }),
+      sampleFleetOptimizerGreenhouse({ status: "unchanged", inFlight: false, currentStage: "plan" }),
     );
-    expect(s.plan).toBe("held");
+    expect(s.plan).toBe("unchanged");
     expect(s.forecast).toBe("done");
     expect(s.constrain).toBe("pending");
   });
@@ -83,13 +83,13 @@ describe("pipelineStages — settled outcomes", () => {
     // After a restart clears in-memory progress, a settled escalation still places its marker.
     const s = statesFor(
       sampleFleetOptimizerGreenhouse({
-        status: "escalated",
+        status: "held",
         reasonCode: "input_stale",
         inFlight: false,
         currentStage: null,
       }),
     );
-    expect(s.quality_gate).toBe("failed");
+    expect(s.quality_gate).toBe("held");
     expect(s.ingest).toBe("done");
     expect(s.forecast).toBe("pending");
   });

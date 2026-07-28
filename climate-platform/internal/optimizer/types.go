@@ -44,8 +44,9 @@ type FleetGreenhouse struct {
 type FleetRollup struct {
 	Backlog                        int      `json:"backlog"`
 	Applied                        int      `json:"applied"`
-	Escalated                      int      `json:"escalated"`
-	Extended                       int      `json:"extended"`
+	Unchanged                      int      `json:"unchanged"`
+	Held                           int      `json:"held"`
+	Failed                         int      `json:"failed"`
 	OldestOpenEscalationAgeSeconds *float64 `json:"oldest_open_escalation_age_seconds"`
 }
 

@@ -16,6 +16,8 @@ from climate_optimizer.models import (
     PlanRecord,
     Provider,
     ReasonCode,
+    SetpointAdjustments,
+    SetpointDecision,
     SetpointsPatch,
 )
 from conftest import load_fixture
@@ -64,9 +66,9 @@ def _record_kwargs() -> dict[str, object]:
     }
 
 
-def test_escalated_outcome_requires_reason_code() -> None:
+def test_held_outcome_requires_reason_code() -> None:
     with pytest.raises(ValidationError):
-        Outcome(status=OutcomeStatus.ESCALATED)
+        Outcome(status=OutcomeStatus.HELD)
 
 
 def test_applied_record_requires_plan() -> None:
@@ -74,13 +76,13 @@ def test_applied_record_requires_plan() -> None:
         PlanRecord(plan=None, outcome=Outcome(status=OutcomeStatus.APPLIED), **_record_kwargs())
 
 
-def test_escalated_record_requires_reason() -> None:
+def test_failed_outcome_requires_reason() -> None:
     with pytest.raises(ValidationError):
-        Outcome(status=OutcomeStatus.ESCALATED, message="held")
+        Outcome(status=OutcomeStatus.FAILED, message="failed")
 
 
 def test_reason_code_present_is_accepted() -> None:
-    outcome = Outcome(status=OutcomeStatus.ESCALATED, reason_code=ReasonCode.LOW_CONFIDENCE)
+    outcome = Outcome(status=OutcomeStatus.HELD, reason_code=ReasonCode.LOW_CONFIDENCE)
     assert outcome.reason_code is ReasonCode.LOW_CONFIDENCE
 
 
@@ -106,6 +108,43 @@ def test_explicit_null_field_rejected() -> None:
 def test_partial_patch_still_valid() -> None:
     patch = SetpointsPatch(temperature_day_c=22.5)
     assert patch.model_dump(exclude_unset=True) == {"temperature_day_c": 22.5}
+
+
+# -- the delta / grounded LLM shapes (SetpointAdjustments / SetpointDecision) ----
+
+
+def test_setpoint_adjustments_allow_empty() -> None:
+    # An empty adjustments object is the model's "hold"; the planner reads it as a no-change extend.
+    assert SetpointAdjustments().model_dump(exclude_none=True) == {}
+
+
+def test_setpoint_adjustments_tolerate_explicit_null() -> None:
+    # A backend may emit null for a target it is not moving; the model drops it (exclude_none).
+    adj = SetpointAdjustments.model_validate({"temperature_day_c": -1.0, "vpd_target_kpa": None})
+    assert adj.model_dump(exclude_none=True) == {"temperature_day_c": -1.0}
+
+
+def test_setpoint_adjustments_cap_the_delta_and_reject_unknown_fields() -> None:
+    # The caps are what make an absolute unrepresentable: 23 is far outside the +/-3 temperature delta,
+    # so a constrained-decoding backend cannot emit it — it can only nudge from the current value.
+    with pytest.raises(ValidationError):
+        SetpointAdjustments(temperature_day_c=23.0)
+    with pytest.raises(ValidationError):
+        SetpointAdjustments.model_validate({"nope": 1})
+
+
+def test_setpoint_decision_accepts_empty_adjustments() -> None:
+    decision = SetpointDecision(
+        situation="s", reasoning="r", adjustments=SetpointAdjustments(), confidence=0.5
+    )
+    assert decision.adjustments.model_dump(exclude_none=True) == {}
+
+
+def test_setpoint_decision_enforces_confidence() -> None:
+    with pytest.raises(ValidationError):
+        SetpointDecision(
+            situation="s", reasoning="r", adjustments=SetpointAdjustments(), confidence=1.5
+        )
 
 
 def _plan_payload(**overrides: object) -> dict[str, object]:

@@ -23,19 +23,16 @@ from climate_optimizer.models import (
     PlanRecord,
     ReasonCode,
     SetpointsPatch,
-    TrajectoryPoint,
 )
 from climate_optimizer.orchestration.cycle import plan_record_payload, run_cycle
 from climate_optimizer.orchestration.runtime import RuntimeState
 from climate_optimizer.orchestration.store import ServiceStore
 from climate_optimizer.planner import Planner, PlannerChain
-from climate_optimizer.planner.chain import BackendOutput
+from climate_optimizer.planner.chain import BackendDraft
 from conftest import (
     StubPlatformClient,
     build_context,
-    build_output,
-    build_patch,
-    build_plan,
+    build_draft,
     chain_factory,
     failing_chain,
     fake_chain,
@@ -148,12 +145,12 @@ async def test_an_unexpected_error_escalates_as_internal_error(
     store = ServiceStore()
     record = await _run(store=store)
 
-    assert record.outcome.status is OutcomeStatus.ESCALATED
+    assert record.outcome.status is OutcomeStatus.FAILED
     assert record.outcome.reason_code is ReasonCode.INTERNAL_ERROR
     assert record.plan is None
     schema_validation.validate_plan_record(plan_record_payload(record))
     assert store.plans.latest("gh-a") is record
-    assert store.escalations.backlog() >= 1
+    assert store.escalations.backlog() == 0
 
 
 # -- pre-planner holds (plan is null) ---------------------------------------
@@ -165,7 +162,7 @@ async def test_an_unreachable_platform_holds_the_cycle() -> None:
     )
     record = await _run(client=client)
 
-    assert record.outcome.status is OutcomeStatus.ESCALATED
+    assert record.outcome.status is OutcomeStatus.FAILED
     assert record.outcome.reason_code is ReasonCode.PLATFORM_UNAVAILABLE
     assert record.plan is None
 
@@ -198,19 +195,21 @@ async def test_a_diverging_twin_holds_the_cycle() -> None:
     assert record.plan is None
 
 
-async def test_an_unreachable_planner_holds_the_cycle() -> None:
+async def test_an_unreachable_planner_fails_the_cycle() -> None:
     record = await _run(chain=failing_chain())
 
+    assert record.outcome.status is OutcomeStatus.FAILED
     assert record.outcome.reason_code is ReasonCode.LLM_UNAVAILABLE
     assert record.plan is None
 
 
-async def test_an_unparseable_plan_holds_the_cycle_as_plan_unparseable() -> None:
+async def test_an_unparseable_plan_fails_the_cycle_as_plan_unparseable() -> None:
     # The backend responded but its completion is off-schema: a distinct reason from an outage, so the
     # operator sees plan_unparseable (not the false "backend unreachable" of llm_unavailable).
     err = OutputParserException("Failed to parse OptimizerPlan from completion {…}. Got: bad field")
     record = await _run(chain=failing_chain(err))
 
+    assert record.outcome.status is OutcomeStatus.FAILED
     assert record.outcome.reason_code is ReasonCode.PLAN_UNPARSEABLE
     assert record.plan is None
 
@@ -232,9 +231,9 @@ async def test_an_over_budget_context_holds_the_cycle() -> None:
 
 
 async def test_a_cycle_that_overruns_its_timeout_is_held() -> None:
-    async def slow(_payload: dict[str, Any]) -> BackendOutput:
+    async def slow(_payload: dict[str, Any]) -> BackendDraft:
         await asyncio.sleep(0.5)
-        return build_output()
+        return build_draft()
 
     slow_chain: PlannerChain = RunnableLambda(slow)
     record = await _run(
@@ -292,7 +291,7 @@ async def test_absent_bounds_extend_the_baseline_without_calling_the_llm() -> No
 
     record = await _run(client=client)
 
-    assert record.outcome.status is OutcomeStatus.EXTENDED
+    assert record.outcome.status is OutcomeStatus.UNCHANGED
     assert record.outcome.reason_code is None
     assert record.plan is None
     assert client.submitted == []
@@ -307,7 +306,7 @@ async def test_a_settled_greenhouse_extends_on_the_next_cadence() -> None:
 
     assert first.outcome.status is OutcomeStatus.APPLIED
     # Identical inputs mean an identical forecast, so the state-change gate suppresses the call.
-    assert second.outcome.status is OutcomeStatus.EXTENDED
+    assert second.outcome.status is OutcomeStatus.UNCHANGED
     assert second.plan is None
     assert len(client.submitted) == 1
 
@@ -322,7 +321,7 @@ async def test_an_extended_cycle_refreshes_the_cadence_watchdog() -> None:
     later = NOW + timedelta(hours=1)
     extended = await _run(client=client, store=store, now=later)
 
-    assert extended.outcome.status is OutcomeStatus.EXTENDED
+    assert extended.outcome.status is OutcomeStatus.UNCHANGED
     assert store.last_successful_cycle_at == later
 
 
@@ -341,7 +340,7 @@ async def test_an_escalated_cycle_does_not_refresh_the_watchdog() -> None:
         now=later,
     )
 
-    assert escalated.outcome.status is OutcomeStatus.ESCALATED
+    assert escalated.outcome.status is OutcomeStatus.FAILED
     assert store.last_successful_cycle_at == NOW
 
 
@@ -372,12 +371,12 @@ def _pausing_chain(runtime: RuntimeState, *, scope: str) -> PlannerChain:
     who pauses while the LLM is thinking. The plan still comes back, so the cycle can only hold the
     write by re-reading the enable gate at its commit point."""
 
-    def pause_then_plan(_payload: Any) -> BackendOutput:
+    def pause_then_plan(_payload: Any) -> BackendDraft:
         if scope == "global":
             runtime.set_enabled(False, reason="paused mid-cycle")
         else:
             runtime.set_greenhouse_enabled("gh-a", False, reason="paused mid-cycle")
-        return build_output()
+        return build_draft()
 
     return RunnableLambda(pause_then_plan)
 
@@ -392,7 +391,7 @@ async def test_a_global_pause_mid_cycle_holds_the_write() -> None:
 
     # The pause landed after the planner ran but before the write: the commit-point gate turns it
     # into an extend, and nothing reaches Phase 2 (spec 09 — a disabled optimizer writes nothing).
-    assert record.outcome.status is OutcomeStatus.EXTENDED
+    assert record.outcome.status is OutcomeStatus.UNCHANGED
     assert record.outcome.reason_code is None
     assert record.plan is None
     assert client.submitted == []
@@ -406,7 +405,7 @@ async def test_a_per_greenhouse_pause_mid_cycle_holds_the_write() -> None:
         client=client, runtime=runtime, chain=_pausing_chain(runtime, scope="greenhouse")
     )
 
-    assert record.outcome.status is OutcomeStatus.EXTENDED
+    assert record.outcome.status is OutcomeStatus.UNCHANGED
     assert record.plan is None
     assert client.submitted == []
 
@@ -425,7 +424,7 @@ async def test_a_pause_during_the_write_holds_it() -> None:
 
     record = await _run(client=client, runtime=runtime, store=store)
 
-    assert record.outcome.status is OutcomeStatus.EXTENDED
+    assert record.outcome.status is OutcomeStatus.UNCHANGED
     assert record.outcome.reason_code is None
     assert record.plan is None
     assert client.submitted == []
@@ -439,10 +438,11 @@ async def test_a_pause_during_the_write_holds_it() -> None:
 
 async def test_a_low_confidence_plan_is_surfaced_not_applied() -> None:
     client = StubPlatformClient()
-    chain = fake_chain(build_output(build_plan(confidence=0.4)))
+    chain = fake_chain(build_draft(confidence=0.4))
 
     record = await _run(client=client, chain=chain)
 
+    assert record.outcome.status is OutcomeStatus.HELD
     assert record.outcome.reason_code is ReasonCode.LOW_CONFIDENCE
     assert record.plan is not None  # the rejected plan is kept for review
     assert client.submitted == []
@@ -459,7 +459,7 @@ async def test_a_post_planner_escalation_does_not_name_a_source_plan() -> None:
         client=client,
         store=store,
         on_demand=True,  # bypass state-change suppression so the planner actually runs
-        chain=fake_chain(build_output(build_plan(confidence=0.4))),
+        chain=fake_chain(build_draft(confidence=0.4)),
     )
 
     assert applied.source_plan_id is None
@@ -468,29 +468,48 @@ async def test_a_post_planner_escalation_does_not_name_a_source_plan() -> None:
     assert escalated.source_plan_id is None
 
 
-async def test_an_out_of_bounds_target_is_a_constraint_violation() -> None:
-    chain = fake_chain(build_output(build_plan(patch=build_patch(temperature_day_c=40.0))))
-    record = await _run(chain=chain)
+async def test_an_out_of_bounds_delta_is_clamped_and_applied() -> None:
+    # A delta that overshoots is pulled back to the crop-safe edge and applied, not discarded (lever 2).
+    # Current temperature_day_c is 24.0 and build_bounds() caps it at 26.0, so a +3 delta (→27) lands
+    # at 26.0.
+    from climate_optimizer.infra import metrics
 
-    assert record.outcome.reason_code is ReasonCode.CONSTRAINT_VIOLATION
+    before = metrics.PLANNER_CLAMPED_TOTAL.labels("gh-a")._value.get()
+    client = StubPlatformClient()
+    record = await _run(
+        client=client, chain=fake_chain(build_draft(adjustments={"temperature_day_c": 3.0}))
+    )
+
+    assert record.outcome.status is OutcomeStatus.APPLIED
     assert record.plan is not None
+    assert record.plan.immediate_setpoints.temperature_day_c == 26.0
+    assert "clamped to crop-safe" in record.plan.explanation
+    assert len(client.submitted) == 1
+    assert metrics.PLANNER_CLAMPED_TOTAL.labels("gh-a")._value.get() == before + 1
 
 
 async def test_an_inconsistent_bundle_is_a_constraint_violation() -> None:
-    patch = SetpointsPatch(humidity_low_pct=80.0, humidity_high_pct=40.0)
-    record = await _run(chain=fake_chain(build_output(build_plan(patch=patch))))
-    assert record.outcome.reason_code is ReasonCode.CONSTRAINT_VIOLATION
-
-
-async def test_immediate_setpoints_must_match_the_first_trajectory_point() -> None:
-    plan = build_plan()
-    # Desynchronize the head of the trajectory from the bundle that would be written.
-    plan.trajectory[0] = TrajectoryPoint(
-        at=plan.trajectory[0].at, setpoints=build_patch(temperature_day_c=22.0)
+    # Clamping does not repair a self-contradictory bundle. Deltas make this hard to reach (small caps),
+    # so start from a narrow humidity band and cross it: low 79 +5 = 84, high 81 -5 = 76 → low > high.
+    ctx = build_context()
+    ctx.setpoints.targets.humidity_low_pct = 79.0
+    ctx.setpoints.targets.humidity_high_pct = 81.0
+    chain = fake_chain(
+        build_draft(adjustments={"humidity_low_pct": 5.0, "humidity_high_pct": -5.0})
     )
-
-    record = await _run(chain=fake_chain(build_output(plan)))
+    record = await _run(client=StubPlatformClient(context=ctx), chain=chain)
     assert record.outcome.reason_code is ReasonCode.CONSTRAINT_VIOLATION
+
+
+async def test_a_no_change_decision_extends_the_baseline() -> None:
+    # Empty adjustments are the model choosing to hold — a benign extend, not an error.
+    client = StubPlatformClient()
+    record = await _run(client=client, chain=fake_chain(build_draft(adjustments={})))
+
+    assert record.outcome.status is OutcomeStatus.UNCHANGED
+    assert record.outcome.reason_code is None
+    assert record.plan is None
+    assert client.submitted == []
 
 
 @pytest.mark.parametrize(
@@ -506,7 +525,8 @@ async def test_a_rejected_write_escalates_with_the_write_reason(reason: ReasonCo
     client = StubPlatformClient(write=WriteOutcome.escalated(reason, "rejected"))
     record = await _run(client=client)
 
-    assert record.outcome.status is OutcomeStatus.ESCALATED
+    expected = OutcomeStatus.HELD if reason is ReasonCode.BOUNDS_MISMATCH else OutcomeStatus.FAILED
+    assert record.outcome.status is expected
     assert record.outcome.reason_code is reason
     assert record.plan is not None
 
@@ -570,7 +590,7 @@ async def test_every_cycle_emits_a_contract_valid_record() -> None:
     for record in (
         await _run(),
         await _run(chain=failing_chain()),
-        await _run(chain=fake_chain(build_output(build_plan(confidence=0.1)))),
+        await _run(chain=fake_chain(build_draft(confidence=0.1))),
     ):
         schema_validation.validate_plan_record(plan_record_payload(record))
 
@@ -589,32 +609,35 @@ async def test_the_record_is_stored_as_the_greenhouses_latest() -> None:
     assert store.plans.latest("gh-a") is record
 
 
-async def test_an_escalated_cycle_opens_an_escalation() -> None:
+async def test_a_failed_cycle_is_a_historical_outcome_not_an_open_work_item() -> None:
+    store = ServiceStore()
+    failed = await _run(store=store, chain=failing_chain())
+
+    assert failed.outcome.status is OutcomeStatus.FAILED
+    assert store.escalations.open_escalations() == []
+
+
+async def test_a_repeated_failure_remains_history_without_creating_a_queue() -> None:
     store = ServiceStore()
     await _run(store=store, chain=failing_chain())
+    await _run(store=store, chain=failing_chain())
 
-    open_set = store.escalations.open_escalations()
-    assert len(open_set) == 1
-    assert open_set[0].reason_code is ReasonCode.LLM_UNAVAILABLE
+    assert store.escalations.open_escalations() == []
+    assert len(store.plans.history("gh-a")) == 2
 
 
-async def test_a_repeated_fault_folds_into_one_standing_escalation() -> None:
+async def test_a_recovered_cycle_supersedes_the_failed_latest_outcome() -> None:
     store = ServiceStore()
     await _run(store=store, chain=failing_chain())
-    await _run(store=store, chain=failing_chain())
-
-    open_set = store.escalations.open_escalations()
-    assert len(open_set) == 1
-    assert open_set[0].recurrence_count == 2
-
-
-async def test_a_recovered_cycle_supersedes_the_standing_escalation() -> None:
-    store = ServiceStore()
-    await _run(store=store, chain=failing_chain())
-    assert store.escalations.backlog() == 1
+    failed = store.plans.latest("gh-a")
+    assert failed is not None
+    assert failed.outcome.status is OutcomeStatus.FAILED
 
     await _run(store=store)
 
+    applied = store.plans.latest("gh-a")
+    assert applied is not None
+    assert applied.outcome.status is OutcomeStatus.APPLIED
     assert store.escalations.backlog() == 0
 
 
@@ -627,7 +650,7 @@ async def test_the_record_stamps_the_active_backend() -> None:
 
     # A held cycle still records which backend would have run it (P3-OBS-1).
     assert record.backend.model == "mistral"
-    assert record.backend.prompt_version == "v3"
+    assert record.backend.prompt_version == "v5"
 
 
 # -- live stage progress ----------------------------------------------------
@@ -676,7 +699,7 @@ async def test_an_unreachable_planner_stops_at_the_plan_stage() -> None:
 
 async def test_a_low_confidence_plan_stops_at_the_constrain_stage() -> None:
     store = ServiceStore()
-    await _run(store=store, chain=fake_chain(build_output(build_plan(confidence=0.4))))
+    await _run(store=store, chain=fake_chain(build_draft(confidence=0.4)))
     assert store.current_stage("gh-a") is CycleStage.CONSTRAIN
 
 
@@ -687,7 +710,7 @@ async def test_an_escalated_cycle_is_reported_to_the_platform() -> None:
     client = StubPlatformClient()
     record = await _run(client=client, chain=failing_chain())
 
-    assert record.outcome.status is OutcomeStatus.ESCALATED
+    assert record.outcome.status is OutcomeStatus.FAILED
     assert [r.optimizer_run_id for r in client.reported] == [record.optimizer_run_id]
 
 
@@ -707,7 +730,7 @@ async def test_an_extended_cycle_is_not_reported() -> None:
 
     client = StubPlatformClient(pause_before_write=pause)
     record = await _run(client=client, runtime=runtime)
-    assert record.outcome.status is OutcomeStatus.EXTENDED
+    assert record.outcome.status is OutcomeStatus.UNCHANGED
     assert client.reported == []
 
 
@@ -717,5 +740,5 @@ async def test_a_failing_outcome_report_does_not_break_the_cycle() -> None:
     store = ServiceStore()
     record = await _run(client=client, store=store, chain=failing_chain())
 
-    assert record.outcome.status is OutcomeStatus.ESCALATED
+    assert record.outcome.status is OutcomeStatus.FAILED
     assert store.plans.latest("gh-a") is record

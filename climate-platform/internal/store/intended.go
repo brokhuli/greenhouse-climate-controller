@@ -76,6 +76,28 @@ func (s *Store) CurrentRevision(ctx context.Context, greenhouseID string) (domai
 	return revision, true, nil
 }
 
+// RevisionBefore returns the newest intended-state revision older than beforeRevision. It is used
+// to reconstruct the before/after view of an already-applied optimizer plan: the current revision
+// contains the accepted target, while this row contains the target it replaced.
+func (s *Store) RevisionBefore(ctx context.Context, greenhouseID string, beforeRevision int64) (domain.SetpointRevision, bool, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT greenhouse_id, revision, source, actor, reason, setpoints, created_at, optimizer_run_id
+		 FROM setpoint_revisions WHERE greenhouse_id=$1 AND revision < $2
+		 ORDER BY revision DESC LIMIT 1`, greenhouseID, beforeRevision)
+	if err != nil {
+		return domain.SetpointRevision{}, false, err
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		return domain.SetpointRevision{}, false, rows.Err()
+	}
+	revision, err := scanRevision(rows)
+	if err != nil {
+		return domain.SetpointRevision{}, false, err
+	}
+	return revision, true, nil
+}
+
 // GetReconState returns a greenhouse's reconciliation bookkeeping; found is false when no
 // row exists yet (nothing has been applied).
 func (s *Store) GetReconState(ctx context.Context, greenhouseID string) (ReconState, bool, error) {

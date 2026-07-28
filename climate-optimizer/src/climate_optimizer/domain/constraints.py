@@ -10,8 +10,11 @@ interlocks, or reachability: those are controller-owned (spec 06 §1).
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import timedelta
+
+from annotated_types import Ge, Le
 
 from ..models import (
     Bound,
@@ -19,6 +22,7 @@ from ..models import (
     OptimizerPlan,
     OutcomeStatus,
     ReasonCode,
+    Setpoints,
     SetpointsPatch,
     StageBounds,
 )
@@ -43,6 +47,11 @@ _ZONE_BOUNDED: tuple[str, ...] = (
     "moisture_high_threshold",
     "drain_period_secs",
 )
+
+# Bounded targets whose type is integer — the clamped crop-safe edge is rounded back to an int so the
+# rebuilt patch still validates (``co2_target_ppm`` / zone ``drain_period_secs``).
+_INT_SCALARS: frozenset[str] = frozenset({"co2_target_ppm"})
+_INT_ZONE: frozenset[str] = frozenset({"drain_period_secs"})
 
 
 @dataclass(frozen=True)
@@ -71,8 +80,104 @@ class ApplicationDecision:
     message: str | None = None
 
 
+@dataclass(frozen=True)
+class ClampResult:
+    """A patch pulled back inside the crop-safe envelope, and which fields moved."""
+
+    patch: SetpointsPatch
+    clamped_fields: tuple[str, ...]
+
+
 def _within(value: float, bound: Bound) -> bool:
     return bound.min <= value <= bound.max
+
+
+def _clamp(value: float, bound: Bound) -> float:
+    """Pull a value to the nearest crop-safe edge (the bound *is* the safe value)."""
+    return min(max(value, bound.min), bound.max)
+
+
+def clamp_to_bounds(patch: SetpointsPatch, bounds: StageBounds | None) -> ClampResult:
+    """Return ``patch`` with every out-of-bounds target pulled to its crop-safe edge (spec 06 §1).
+
+    A small model occasionally proposes a target just outside its envelope. Rather than discard the
+    whole cycle as a ``constraint_violation`` — control lost over a single stray field — we clamp the
+    field to the boundary and apply: the crop-safe edge is safe by definition, and Phase 2's write
+    path still backstops it. Only the bounded scalar/zone targets are clamped; cross-field
+    consistency (``humidity_low ≤ humidity_high`` …) is *not* repaired here — a self-contradictory
+    bundle is a genuine model error and still escalates. Returns the original patch unchanged (and an
+    empty ``clamped_fields``) when nothing was out of range or there are no bounds.
+    """
+    if bounds is None:
+        return ClampResult(patch, ())
+
+    data = patch.model_dump(exclude_unset=True)
+    clamped: list[str] = []
+
+    for field in _BOUNDED_SCALARS:
+        value = data.get(field)
+        bound = getattr(bounds, field)
+        if value is None or bound is None or _within(float(value), bound):
+            continue
+        edge = _clamp(float(value), bound)
+        data[field] = int(round(edge)) if field in _INT_SCALARS else edge
+        clamped.append(field)
+
+    zones = data.get("zones")
+    if zones and bounds.zones is not None:
+        for zone in zones:
+            for field in _ZONE_BOUNDED:
+                value = zone.get(field)
+                bound = getattr(bounds.zones, field)
+                if value is None or bound is None or _within(float(value), bound):
+                    continue
+                edge = _clamp(float(value), bound)
+                zone[field] = int(round(edge)) if field in _INT_ZONE else edge
+                clamped.append(f"zones[{zone['zone_id']}].{field}")
+
+    if not clamped:
+        return ClampResult(patch, ())
+    return ClampResult(SetpointsPatch(**data), tuple(clamped))
+
+
+def _physical_range(field: str) -> tuple[float | None, float | None]:
+    """The hard physical ``[ge, le]`` for a setpoint field, read from its ``SetpointsPatch`` metadata.
+
+    Reused so the delta path never duplicates the physical limits already declared on the model (a
+    field may have only a lower bound, e.g. ``vpd_target_kpa`` ge=0, so either edge can be ``None``).
+    """
+    lo: float | None = None
+    hi: float | None = None
+    for meta in SetpointsPatch.model_fields[field].metadata:
+        # annotated-types types ``ge``/``le`` as SupportsGe/SupportsLe; our fields declare numeric
+        # literals, so the float() is safe at runtime.
+        if isinstance(meta, Ge):
+            lo = float(meta.ge)  # type: ignore[arg-type]
+        elif isinstance(meta, Le):
+            hi = float(meta.le)  # type: ignore[arg-type]
+    return lo, hi
+
+
+def apply_adjustments(current: Setpoints, deltas: Mapping[str, float]) -> SetpointsPatch:
+    """Turn per-field *deltas* into an absolute patch: ``current + delta``, held to each field's range.
+
+    Rec 1 (delta action space): the model proposes how much to *change* each target, and the absolute
+    setpoint is ``current + delta``. Clamping the result into the field's **physical** range (from the
+    ``SetpointsPatch`` constraints) guarantees the rebuilt patch always validates — even an unbounded
+    field nudged past a hard limit (e.g. ``humidity_high_pct`` + delta > 100). Crop-safe clamping is a
+    separate, operator-visible step (:func:`clamp_to_bounds`); this one only keeps the value constructible.
+    ``deltas`` is expected pre-filtered to the fields actually moved (non-null, non-zero).
+    """
+    values: dict[str, float | int] = {}
+    for field, delta in deltas.items():
+        target = float(getattr(current, field)) + float(delta)
+        lo, hi = _physical_range(field)
+        if lo is not None:
+            target = max(target, lo)
+        if hi is not None:
+            target = min(target, hi)
+        values[field] = int(round(target)) if field in _INT_SCALARS else target
+    return SetpointsPatch(**values)
 
 
 def _patch_signature(patch: SetpointsPatch) -> tuple[tuple[tuple[str, object], ...], object]:
@@ -200,16 +305,16 @@ def evaluate_application(
     """
     if bounds is None:
         return ApplicationDecision(
-            OutcomeStatus.EXTENDED, message="no crop-safe bounds present; holding baseline"
+            OutcomeStatus.UNCHANGED, message="no crop-safe bounds present; holding baseline"
         )
 
     result = check_constraints(plan, bounds, horizon)
     if not result.ok:
-        return ApplicationDecision(OutcomeStatus.ESCALATED, result.reason_code, result.message)
+        return ApplicationDecision(OutcomeStatus.HELD, result.reason_code, result.message)
 
     if plan.confidence < confidence_threshold:
         return ApplicationDecision(
-            OutcomeStatus.ESCALATED,
+            OutcomeStatus.HELD,
             ReasonCode.LOW_CONFIDENCE,
             f"confidence {plan.confidence} < threshold {confidence_threshold}",
         )

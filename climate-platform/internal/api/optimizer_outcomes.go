@@ -22,13 +22,6 @@ import (
 // infrastructure failure surfaced as optimizer_run_failed. Every other escalation reason is a plan
 // held for operator review (optimizer_plan_escalated). Mirrors the frontend emission table
 // (spec 05 §Events) and the optimizer's ReasonCode set.
-var runFailureReasons = map[string]bool{
-	"cycle_timeout":    true,
-	"llm_unavailable":  true,
-	"plan_unparseable": true,
-	"internal_error":   true,
-}
-
 // optimizerOutcomeReportDTO is the optimizer's outcome-report body (dataaccess.report_outcome).
 type optimizerOutcomeReportDTO struct {
 	OptimizerRunID string  `json:"optimizer_run_id"`
@@ -54,7 +47,7 @@ func (s *Server) submitOptimizerOutcome(c echo.Context) error {
 	if err := c.Bind(&body); err != nil {
 		return respondError(c, http.StatusBadRequest, "invalid JSON body")
 	}
-	if body.Status == "escalated" {
+	if body.Status == "held" || body.Status == "failed" {
 		s.emitEvent(ctx, optimizerOutcomeEvent(id, body))
 	}
 	return c.NoContent(http.StatusAccepted)
@@ -68,8 +61,8 @@ func optimizerOutcomeEvent(greenhouseID string, body optimizerOutcomeReportDTO) 
 	if body.ReasonCode != nil {
 		reason = *body.ReasonCode
 	}
-	kind := "optimizer_plan_escalated"
-	if runFailureReasons[reason] {
+	kind := "optimizer_plan_held"
+	if body.Status == "failed" {
 		kind = "optimizer_run_failed"
 	}
 	return domain.Event{
@@ -77,19 +70,19 @@ func optimizerOutcomeEvent(greenhouseID string, body optimizerOutcomeReportDTO) 
 		TS:           time.Now().UTC(),
 		Kind:         kind,
 		Severity:     "warning",
-		Message:      optimizerOutcomeMessage(reason, body.OptimizerRunID, body.Message),
+		Message:      optimizerOutcomeMessage(body.Status, reason, body.OptimizerRunID, body.Message),
 		Source:       "optimizer",
 	}
 }
 
 // optimizerOutcomeMessage composes the operator-facing troubleshooting line: the reason code, a short
 // run id, and the cycle's recorded detail (e.g. "cycle exceeded cycle_timeout_seconds (240s)").
-func optimizerOutcomeMessage(reason, runID string, detail *string) string {
+func optimizerOutcomeMessage(status, reason, runID string, detail *string) string {
 	head := reason
 	if head == "" {
-		head = "escalated"
+		head = status
 	}
-	msg := fmt.Sprintf("optimizer cycle held: %s (run %s)", head, shortRunID(runID))
+	msg := fmt.Sprintf("optimizer cycle %s: %s (run %s)", status, head, shortRunID(runID))
 	if detail != nil && *detail != "" {
 		msg += " — " + *detail
 	}

@@ -297,7 +297,10 @@ func TestApplyRecordsOptimizerRunID(t *testing.T) {
 func TestOptimizerApplyEmitsOptimizerPlanAppliedEvent(t *testing.T) {
 	fs := newFakeStore()
 	fs.endpoints["gh-a"] = store.Endpoint{RESTBaseURL: "http://gh-a"}
-	setpoints := domain.Setpoints{TemperatureDayC: 24}
+	fs.revisions["gh-a"] = []domain.SetpointRevision{{
+		GreenhouseID: "gh-a", Revision: 1, Setpoints: domain.Setpoints{TemperatureDayC: 22, VPDTargetKPa: 1.0},
+	}}
+	setpoints := domain.Setpoints{TemperatureDayC: 24, VPDTargetKPa: 1.2}
 	fr := &fakeRelay{responder: okController("gh-a", setpoints)}
 	r := newTestReconciler(fs, fr, onlineFleet("gh-a"), &fakeHub{})
 
@@ -316,6 +319,9 @@ func TestOptimizerApplyEmitsOptimizerPlanAppliedEvent(t *testing.T) {
 	}
 	if ev.Source != "optimizer" || !strings.Contains(ev.Message, "018f9c2e") {
 		t.Fatalf("event does not carry optimizer provenance + run id: %+v", ev)
+	}
+	if !strings.Contains(ev.Message, "day temperature 22°C → 24°C") || !strings.Contains(ev.Message, "VPD target 1 kPa → 1.2 kPa") {
+		t.Fatalf("event does not describe the optimizer's setpoint changes: %+v", ev)
 	}
 }
 

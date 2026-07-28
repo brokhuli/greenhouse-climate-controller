@@ -7,7 +7,7 @@
   "backend": { "provider": "ollama", "model": "llama3", "prompt_version": "v1", "role": "primary" },
   "plan": null,
   "outcome": {
-    "status": "escalated",
+    "status": "held",
     "reason_code": "input_stale",
     "message": "temperature reading 41m old > max_telemetry_age_minutes 35; input gate held the cycle before the planner ran, holding the Phase 2 baseline (no prior plan)"
   }
