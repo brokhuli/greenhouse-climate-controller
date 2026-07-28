@@ -37,8 +37,8 @@
           },
           "status": {
             "type": "string",
-            "enum": ["applied", "escalated", "extended"],
-            "description": "The cycle outcome. Only `escalated` produces an event; `applied` (surfaces via its setpoint write) and `extended` (writes nothing) are accepted as no-ops."
+            "enum": ["applied", "unchanged", "held", "failed"],
+            "description": "The cycle outcome. Held and failed outcomes produce activity events; applied surfaces through its setpoint write and unchanged is a no-op."
           },
           "reason_code": {
             "type": ["string", "null"],

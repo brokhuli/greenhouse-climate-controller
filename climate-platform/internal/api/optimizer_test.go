@@ -104,10 +104,10 @@ func TestGetOptimizerFleetMapsFiltersAndKeepsUnplanned(t *testing.T) {
 		_, _ = w.Write([]byte(`{
 			"greenhouses":[
 				{"greenhouse_id":"gh-a","enabled":true,"status":"applied","reason_code":null,"created_at":"2026-07-22T13:30:00.000Z","optimizer_run_id":"11111111-1111-1111-1111-111111111111"},
-				{"greenhouse_id":"gh-b","enabled":true,"status":"escalated","reason_code":"low_confidence","message":"confidence 0.62 < threshold 0.80","created_at":"2026-07-22T13:28:00.000Z","optimizer_run_id":"22222222-2222-2222-2222-222222222222"},
+				{"greenhouse_id":"gh-b","enabled":true,"status":"held","reason_code":"low_confidence","message":"confidence 0.62 < threshold 0.80","created_at":"2026-07-22T13:28:00.000Z","optimizer_run_id":"22222222-2222-2222-2222-222222222222"},
 				{"greenhouse_id":"gh-z","enabled":false,"status":null,"reason_code":null,"created_at":null,"optimizer_run_id":null}
 			],
-			"rollup":{"backlog":1,"applied":1,"escalated":1,"extended":0,"oldest_open_escalation_age_seconds":120.7}
+			"rollup":{"backlog":0,"applied":1,"unchanged":0,"held":1,"failed":0,"oldest_open_escalation_age_seconds":null}
 		}`))
 	})
 	defer cleanup()
@@ -131,13 +131,12 @@ func TestGetOptimizerFleetMapsFiltersAndKeepsUnplanned(t *testing.T) {
 	if got.Greenhouses[1].Message == nil || *got.Greenhouses[1].Message != "confidence 0.62 < threshold 0.80" {
 		t.Fatalf("outcome message lost: %+v", got.Greenhouses[1])
 	}
-	// The float age is rounded down to the contract's integer seconds.
-	if got.Rollup.OldestOpenAgeSec == nil || *got.Rollup.OldestOpenAgeSec != 120 {
-		t.Fatalf("oldest age = %v, want 120", got.Rollup.OldestOpenAgeSec)
+	if got.Rollup.OldestOpenAgeSec != nil {
+		t.Fatalf("oldest age = %v, want nil without an escalation queue", got.Rollup.OldestOpenAgeSec)
 	}
 
-	// status=escalated narrows to the one held cycle — a null-status entry is excluded, not matched.
-	filtered := fleetVia(t, s, "?status=escalated")
+	// status=held narrows to the one held cycle — a null-status entry is excluded, not matched.
+	filtered := fleetVia(t, s, "?status=held")
 	if len(filtered.Greenhouses) != 1 || filtered.Greenhouses[0].GreenhouseID != "gh-b" {
 		t.Fatalf("status filter wrong: %+v", filtered.Greenhouses)
 	}
@@ -150,7 +149,7 @@ func TestGetOptimizerFleetPassesThroughPipelineProgress(t *testing.T) {
 				{"greenhouse_id":"gh-a","enabled":true,"status":null,"reason_code":null,"created_at":null,"optimizer_run_id":null,"in_flight":true,"current_stage":"forecast"},
 				{"greenhouse_id":"gh-b","enabled":true,"status":"applied","reason_code":null,"created_at":"2026-07-22T13:30:00.000Z","optimizer_run_id":"22222222-2222-2222-2222-222222222222","in_flight":false,"current_stage":"publish"}
 			],
-			"rollup":{"backlog":0,"applied":1,"escalated":0,"extended":0,"oldest_open_escalation_age_seconds":null}
+			"rollup":{"backlog":0,"applied":1,"unchanged":0,"held":0,"failed":0,"oldest_open_escalation_age_seconds":null}
 		}`))
 	})
 	defer cleanup()
@@ -209,12 +208,12 @@ func TestToPlanViewHeldCycleHasNoPlan(t *testing.T) {
 	view := toPlanView(optimizer.PlanRecord{
 		OptimizerRunID: "run-1",
 		GreenhouseID:   "gh-b",
-		Outcome:        optimizer.Outcome{Status: "escalated", ReasonCode: strptr("input_stale")},
+		Outcome:        optimizer.Outcome{Status: "held", ReasonCode: strptr("input_stale")},
 	})
 	if view.Plan != nil {
 		t.Fatalf("held cycle must flatten to a null plan, got %+v", view.Plan)
 	}
-	if view.Outcome.Status != "escalated" || view.Outcome.ReasonCode == nil {
+	if view.Outcome.Status != "held" || view.Outcome.ReasonCode == nil {
 		t.Fatalf("outcome not carried: %+v", view.Outcome)
 	}
 }
@@ -240,6 +239,31 @@ func TestToPlanViewCarriesRawPlanBody(t *testing.T) {
 	}
 	if view.Backend.Provider != "ollama" {
 		t.Fatalf("backend not converted: %+v", view.Backend)
+	}
+}
+
+func TestCompactJSONObjectDropsUnsetSetpoints(t *testing.T) {
+	got, err := compactJSONObject([]byte(`{"temperature_day_c":20.5,"vpd_target_kpa":null,"zones":null}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]any
+	if err := json.Unmarshal(got, &fields); err != nil {
+		t.Fatal(err)
+	}
+	if len(fields) != 1 || fields["temperature_day_c"] != 20.5 {
+		t.Fatalf("normalized patch = %s, want only temperature_day_c", got)
+	}
+}
+
+func TestFormatAppliedSetpointChanges(t *testing.T) {
+	before := domain.Setpoints{TemperatureDayC: 21, VPDTargetKPa: 0.6, CO2TargetPPM: 650}
+	after := before
+	after.TemperatureDayC = 20.5
+	after.VPDTargetKPa = 0.7
+	got := formatAppliedSetpointChanges(before, after)
+	if got != "day temperature 21°C → 20.5°C, VPD target 0.6 kPa → 0.7 kPa" {
+		t.Fatalf("change summary = %q", got)
 	}
 }
 

@@ -55,6 +55,7 @@ export const eventKindSchema = z.enum([
   // transitions; the actionable open-hold set stays in the polled optimizer console queue.
   "optimizer_plan_applied",
   "optimizer_plan_escalated",
+  "optimizer_plan_held",
   "optimizer_resolved",
   "optimizer_run_failed",
 ]);
@@ -962,7 +963,7 @@ export const toWireAssignmentInput = (
 // ---------------------------------------------------------------------------
 
 /** The three per-cycle outcome states (optimizer plan contract §3 PlanRecord.outcome). */
-export const optimizerOutcomeStatusSchema = z.enum(["applied", "escalated", "extended"]);
+export const optimizerOutcomeStatusSchema = z.enum(["applied", "unchanged", "held", "failed"]);
 /** The LLM provider — fixed per optimizer instance (an offline config change), read-only here. */
 export const optimizerProviderSchema = z.enum(["ollama", "anthropic", "openai"]);
 /** Canonical held-cycle reason code — the SPA renders whatever the API sends via `ReasonCodeChip`. */
@@ -1094,8 +1095,9 @@ export const wireFleetOptimizerRollup = z.object({
   backlog: z.number().int().min(0),
   by_outcome: z.object({
     applied: z.number().int().min(0),
-    escalated: z.number().int().min(0),
-    extended: z.number().int().min(0),
+    unchanged: z.number().int().min(0),
+    held: z.number().int().min(0),
+    failed: z.number().int().min(0),
   }),
   oldest_open_age_secs: z.number().int().min(0).nullable(),
 });
@@ -1223,7 +1225,7 @@ export type FleetOptimizerGreenhouse = {
 
 export type FleetOptimizerRollup = {
   backlog: number;
-  byOutcome: { applied: number; escalated: number; extended: number };
+  byOutcome: { applied: number; unchanged: number; held: number; failed: number };
   oldestOpenAgeSecs: number | null;
 };
 

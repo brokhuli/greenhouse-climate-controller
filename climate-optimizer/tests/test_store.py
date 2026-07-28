@@ -226,15 +226,15 @@ def test_plan_store_prune_drops_superseded_records_past_retention() -> None:
 def test_rollup_counts_outcomes_and_backlog() -> None:
     store = ServiceStore()
     store.plans.record(_record("gh-a", status=OutcomeStatus.APPLIED))
-    store.plans.record(_record("gh-b", status=OutcomeStatus.EXTENDED))
+    store.plans.record(_record("gh-b", status=OutcomeStatus.UNCHANGED))
     store.plans.record(
-        _record("gh-c", status=OutcomeStatus.ESCALATED, reason_code=ReasonCode.LOW_CONFIDENCE)
+        _record("gh-c", status=OutcomeStatus.HELD, reason_code=ReasonCode.LOW_CONFIDENCE)
     )
     _raise(store.escalations, greenhouse_id="gh-c", reason_code=ReasonCode.LOW_CONFIDENCE)
 
     rollup = store.rollup(NOW + timedelta(minutes=5))
 
-    assert (rollup.applied, rollup.extended, rollup.escalated) == (1, 1, 1)
+    assert (rollup.applied, rollup.unchanged, rollup.held, rollup.failed) == (1, 1, 1, 0)
     assert rollup.backlog == 1
     assert rollup.oldest_open_escalation_age_seconds == 300.0
 

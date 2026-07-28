@@ -131,8 +131,9 @@ async def fleet(ctx: Context) -> FleetResponse:
         rollup=FleetRollupResponse(
             backlog=rollup.backlog,
             applied=rollup.applied,
-            escalated=rollup.escalated,
-            extended=rollup.extended,
+            unchanged=rollup.unchanged,
+            held=rollup.held,
+            failed=rollup.failed,
             oldest_open_escalation_age_seconds=rollup.oldest_open_escalation_age_seconds,
         ),
     )

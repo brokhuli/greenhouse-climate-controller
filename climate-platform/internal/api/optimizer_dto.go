@@ -50,8 +50,9 @@ type fleetGreenhouseDTO struct {
 
 type byOutcomeDTO struct {
 	Applied   int `json:"applied"`
-	Escalated int `json:"escalated"`
-	Extended  int `json:"extended"`
+	Unchanged int `json:"unchanged"`
+	Held      int `json:"held"`
+	Failed    int `json:"failed"`
 }
 
 type fleetRollupDTO struct {

@@ -105,8 +105,9 @@ class FleetRollup:
 
     backlog: int
     applied: int
-    escalated: int
-    extended: int
+    unchanged: int
+    held: int
+    failed: int
     oldest_open_escalation_age_seconds: float | None
 
 
@@ -369,8 +370,9 @@ class ServiceStore:
         return FleetRollup(
             backlog=self.escalations.backlog(),
             applied=counts[OutcomeStatus.APPLIED],
-            escalated=counts[OutcomeStatus.ESCALATED],
-            extended=counts[OutcomeStatus.EXTENDED],
+            unchanged=counts[OutcomeStatus.UNCHANGED],
+            held=counts[OutcomeStatus.HELD],
+            failed=counts[OutcomeStatus.FAILED],
             oldest_open_escalation_age_seconds=self.escalations.oldest_open_age_seconds(now),
         )
 

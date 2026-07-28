@@ -8,7 +8,7 @@
   "plan": null,
   "source_plan_id": "018f9c2e-6b7a-7c31-9e4d-2a1b5c6d7e8f",
   "outcome": {
-    "status": "extended",
+    "status": "unchanged",
     "message": "predicted climate within state_change_threshold of the reference forecast; LLM skipped and the last applied bundle held in force"
   }
 }

@@ -11,7 +11,7 @@ func TestOptimizerOutcomeEventMapsRunFailureReasons(t *testing.T) {
 	for _, reason := range []string{"cycle_timeout", "llm_unavailable", "plan_unparseable", "internal_error"} {
 		ev := optimizerOutcomeEvent("gh-a", optimizerOutcomeReportDTO{
 			OptimizerRunID: runID,
-			Status:         "escalated",
+			Status:         "failed",
 			ReasonCode:     strptr(reason),
 			Message:        strptr("boom"),
 		})
@@ -24,15 +24,15 @@ func TestOptimizerOutcomeEventMapsRunFailureReasons(t *testing.T) {
 	}
 }
 
-func TestOptimizerOutcomeEventMapsHeldReasonsToEscalated(t *testing.T) {
+func TestOptimizerOutcomeEventMapsHeldOutcome(t *testing.T) {
 	ev := optimizerOutcomeEvent("gh-a", optimizerOutcomeReportDTO{
 		OptimizerRunID: runID,
-		Status:         "escalated",
+		Status:         "held",
 		ReasonCode:     strptr("low_confidence"),
 		Message:        strptr("confidence 0.42 below threshold"),
 	})
-	if ev.Kind != "optimizer_plan_escalated" {
-		t.Fatalf("kind = %q, want optimizer_plan_escalated", ev.Kind)
+	if ev.Kind != "optimizer_plan_held" {
+		t.Fatalf("kind = %q, want optimizer_plan_held", ev.Kind)
 	}
 	// The message carries the reason, the short run id, and the cycle's own troubleshooting detail.
 	for _, want := range []string{"low_confidence", "018f9c2e", "confidence 0.42 below threshold"} {
@@ -44,7 +44,7 @@ func TestOptimizerOutcomeEventMapsHeldReasonsToEscalated(t *testing.T) {
 
 func TestOptimizerOutcomeMessageWithoutDetail(t *testing.T) {
 	// A report with no detail still names the reason and the run — no dangling separator.
-	msg := optimizerOutcomeMessage("cycle_timeout", runID, nil)
+	msg := optimizerOutcomeMessage("failed", "cycle_timeout", runID, nil)
 	if !strings.Contains(msg, "cycle_timeout") || !strings.Contains(msg, "018f9c2e") {
 		t.Fatalf("message = %q, want reason + short run id", msg)
 	}

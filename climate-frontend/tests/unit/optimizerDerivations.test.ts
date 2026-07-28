@@ -36,8 +36,8 @@ describe("toOptimizerCardState — precedence", () => {
 
   it("surfaces the outcome for an enabled greenhouse", () => {
     expect(
-      toOptimizerCardState(entry({ status: "escalated", reasonCode: "low_confidence" }), true),
-    ).toEqual({ kind: "outcome", status: "escalated", reasonCode: "low_confidence" });
+      toOptimizerCardState(entry({ status: "held", reasonCode: "low_confidence" }), true),
+    ).toEqual({ kind: "outcome", status: "held", reasonCode: "low_confidence" });
   });
 
   it("no-plan when the greenhouse is absent from the summary", () => {
@@ -85,9 +85,9 @@ describe("escalation triage ordering", () => {
 
   it("compareFleetTriage derives class from the reason code", () => {
     // constraint_violation is persistent; low_confidence is transient.
-    const persistent = entry({ status: "escalated", reasonCode: "constraint_violation" });
+    const persistent = entry({ status: "held", reasonCode: "constraint_violation" });
     const transient = entry({
-      status: "escalated",
+      status: "held",
       reasonCode: "low_confidence",
       createdAt: new Date("2026-06-29T09:00:00.000Z"),
     });

@@ -30,6 +30,7 @@ from .enums import (
     ReasonCode,
     SensorFaultKind,
     SetpointSource,
+    outcome_status_for_reason,
 )
 from .plan import (
     Backend,
@@ -66,6 +67,7 @@ __all__ = [
     "OptimizerPlan",
     "Outcome",
     "OutcomeStatus",
+    "outcome_status_for_reason",
     "PlanRecord",
     "PlanningContext",
     "Provider",

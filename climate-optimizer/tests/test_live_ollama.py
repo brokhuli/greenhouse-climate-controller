@@ -97,7 +97,7 @@ async def test_a_real_ollama_cycle_produces_a_contract_valid_plan() -> None:
     # outage or per-call timeout). An out-of-range target is clamped and applied, never rejected
     # (lever 2). Any *other* plan-less reason (a gate hold, a twin fault) would mean something broke.
     if record.plan is None:
-        if record.outcome.status is OutcomeStatus.EXTENDED:
+        if record.outcome.status is OutcomeStatus.UNCHANGED:
             assert record.outcome.reason_code is None, record.outcome
         else:
             assert record.outcome.reason_code in (
@@ -105,4 +105,8 @@ async def test_a_real_ollama_cycle_produces_a_contract_valid_plan() -> None:
                 ReasonCode.LLM_UNAVAILABLE,
             ), record.outcome
     else:
-        assert record.outcome.status in (OutcomeStatus.APPLIED, OutcomeStatus.ESCALATED)
+        assert record.outcome.status in (
+            OutcomeStatus.APPLIED,
+            OutcomeStatus.HELD,
+            OutcomeStatus.FAILED,
+        )

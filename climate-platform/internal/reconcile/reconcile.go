@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"math/rand/v2"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/domain"
@@ -148,6 +149,19 @@ func (r *Reconciler) Apply(ctx context.Context, greenhouseID string, intended do
 // record appends the provenance revision, updates reconciliation bookkeeping, and emits the
 // change-attribution event.
 func (r *Reconciler) record(ctx context.Context, greenhouseID string, intended domain.Setpoints, source domain.SetpointSource, actor, reason string, optimizerRunID *string, delivery string, status int, body []byte) (ApplyOutcome, error) {
+	// Capture the incumbent bundle before appending the optimizer revision. The activity feed is the
+	// operator-facing audit trail, so an optimizer plan needs to say what it actually changed rather
+	// than merely naming the run that produced it.
+	var previous *domain.Setpoints
+	if source == domain.SourceOptimizer {
+		current, found, err := r.store.CurrentRevision(ctx, greenhouseID)
+		if err != nil {
+			return ApplyOutcome{}, err
+		}
+		if found {
+			previous = &current.Setpoints
+		}
+	}
 	revision, err := r.store.AppendRevision(ctx, domain.SetpointRevision{
 		GreenhouseID: greenhouseID, Source: source, Actor: actor, Reason: reason, Setpoints: intended,
 		OptimizerRunID: optimizerRunID,
@@ -173,7 +187,7 @@ func (r *Reconciler) record(ctx context.Context, greenhouseID string, intended d
 	if err := r.store.UpsertReconState(ctx, recon); err != nil {
 		return ApplyOutcome{}, err
 	}
-	r.emitApplyEvent(ctx, greenhouseID, source, delivery, optimizerRunID)
+	r.emitApplyEvent(ctx, greenhouseID, source, delivery, optimizerRunID, previous, intended)
 	switch delivery {
 	case store.DeliveryDelivered:
 		r.metrics.ReconcileAction("apply")
@@ -450,7 +464,7 @@ func (r *Reconciler) stagger(ctx context.Context) {
 	}
 }
 
-func (r *Reconciler) emitApplyEvent(ctx context.Context, greenhouseID string, source domain.SetpointSource, delivery string, optimizerRunID *string) {
+func (r *Reconciler) emitApplyEvent(ctx context.Context, greenhouseID string, source domain.SetpointSource, delivery string, optimizerRunID *string, previous *domain.Setpoints, intended domain.Setpoints) {
 	kind, message, actorSource := "setpoint_edit", "setpoint edit applied", "operator"
 	switch source {
 	case domain.SourceProfile:
@@ -463,6 +477,11 @@ func (r *Reconciler) emitApplyEvent(ctx context.Context, greenhouseID string, so
 		if optimizerRunID != nil && *optimizerRunID != "" {
 			message = fmt.Sprintf("optimizer plan applied (run %s)", shortRunID(*optimizerRunID))
 		}
+		if previous != nil {
+			if changes := optimizerSetpointChanges(*previous, intended); len(changes) > 0 {
+				message += ": " + changes
+			}
+		}
 	}
 	if delivery == store.DeliveryDeferred {
 		message += " (held until the controller reconnects)"
@@ -470,6 +489,29 @@ func (r *Reconciler) emitApplyEvent(ctx context.Context, greenhouseID string, so
 	r.emitEvent(ctx, domain.Event{
 		GreenhouseID: greenhouseID, TS: r.now(), Kind: kind, Severity: "info", Message: message, Source: actorSource,
 	})
+}
+
+// optimizerSetpointChanges produces a compact, human-readable diff for the activity feed. The
+// optimizer refines climate scalars only; schedules and irrigation zones remain profile-owned.
+func optimizerSetpointChanges(before, after domain.Setpoints) string {
+	changes := make([]string, 0, 9)
+	addFloat := func(label, unit string, old, next float64) {
+		if old != next {
+			changes = append(changes, fmt.Sprintf("%s %g%s → %g%s", label, old, unit, next, unit))
+		}
+	}
+	addFloat("day temperature", "°C", before.TemperatureDayC, after.TemperatureDayC)
+	addFloat("night temperature", "°C", before.TemperatureNightC, after.TemperatureNightC)
+	addFloat("humidity low", "%", before.HumidityLowPct, after.HumidityLowPct)
+	addFloat("humidity high", "%", before.HumidityHighPct, after.HumidityHighPct)
+	addFloat("humidity deadband", "%", before.HumidityDeadbandPct, after.HumidityDeadbandPct)
+	if before.CO2TargetPPM != after.CO2TargetPPM {
+		changes = append(changes, fmt.Sprintf("CO₂ target %d ppm → %d ppm", before.CO2TargetPPM, after.CO2TargetPPM))
+	}
+	addFloat("CO₂ vent interlock", "%", before.CO2VentInterlockThresholdPct, after.CO2VentInterlockThresholdPct)
+	addFloat("VPD target", " kPa", before.VPDTargetKPa, after.VPDTargetKPa)
+	addFloat("DLI target", " mol/m²/day", before.DLITargetMol, after.DLITargetMol)
+	return strings.Join(changes, ", ")
 }
 
 // shortRunID abbreviates an optimizer run id for an operator-facing event message — the leading

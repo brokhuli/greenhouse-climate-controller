@@ -23,8 +23,9 @@ import { lastCycleAge, formatDurationSecs, type OptimizerCardState } from "./der
 // benign informational blue; every "not actively planning" state (disabled / read-only / no plan /
 // unavailable) uses the muted offline grey — an absence of activity, not an alarm.
 const APPLIED = "var(--color-status-online)";
-const ESCALATED = "var(--color-status-degraded)";
-const EXTENDED = "var(--color-info)";
+const HELD = "var(--color-status-degraded)";
+const FAILED = "var(--color-fault)";
+const UNCHANGED = "var(--color-info)";
 const MUTED = "var(--color-status-offline)";
 const PERSISTENT = "var(--color-fault)";
 const TRANSIENT = "var(--color-warning)";
@@ -34,8 +35,9 @@ const OUTCOME_META: Record<
   { label: string; color: string; Icon: LucideIcon }
 > = {
   applied: { label: "Applied", color: APPLIED, Icon: CircleCheck },
-  escalated: { label: "Escalated", color: ESCALATED, Icon: TriangleAlert },
-  extended: { label: "Extended", color: EXTENDED, Icon: CircleMinus },
+  unchanged: { label: "Unchanged", color: UNCHANGED, Icon: CircleMinus },
+  held: { label: "Held", color: HELD, Icon: TriangleAlert },
+  failed: { label: "Failed", color: FAILED, Icon: TriangleAlert },
 };
 
 /** The `applied` / `escalated` / `extended` cycle-outcome pill (text + icon, never color-only). */
@@ -102,7 +104,7 @@ const HEALTH_META: Record<
   { label: string; color: string; Icon: LucideIcon }
 > = {
   healthy: { label: "Healthy", color: APPLIED, Icon: CircleCheck },
-  degraded: { label: "Degraded", color: ESCALATED, Icon: TriangleAlert },
+  degraded: { label: "Degraded", color: HELD, Icon: TriangleAlert },
   unavailable: { label: "Unavailable", color: MUTED, Icon: CloudOff },
 };
 

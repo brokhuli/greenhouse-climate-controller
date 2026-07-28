@@ -1,11 +1,10 @@
 import { useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Lock } from "lucide-react";
-import type { Escalation, OptimizerOutcomeStatus } from "../../api/schemas";
+import type { OptimizerOutcomeStatus } from "../../api/schemas";
 import { useFleet } from "../../api/queries/greenhouses";
 import {
   useOptimizerEnabled,
-  useOptimizerEscalations,
   useOptimizerFleet,
   useOptimizerModel,
   useOptimizerStatus,
@@ -22,7 +21,6 @@ import { Skeleton } from "../../components/ui/Skeleton";
 import { useToast } from "../../components/ui/toast-context";
 import { OptimizerHealthBadge } from "./badges";
 import { ModelSelector, OptimizerEnableToggle, OptimizerRollupBar } from "./controls";
-import { compareFleetTriage } from "./derivations";
 import { optimizerActionError } from "./errors";
 import { FleetOptimizerRow } from "./FleetOptimizerRow";
 
@@ -31,12 +29,13 @@ const SECTION_STYLE = { gap: "var(--layout-section-gap)" };
 const STATUS_FILTERS: { value: OptimizerOutcomeStatus | ""; label: string }[] = [
   { value: "", label: "All" },
   { value: "applied", label: "Applied" },
-  { value: "escalated", label: "Escalated" },
-  { value: "extended", label: "Extended" },
+  { value: "unchanged", label: "Unchanged" },
+  { value: "held", label: "Held" },
+  { value: "failed", label: "Failed" },
 ];
 
 const isOutcomeStatus = (value: string | null): value is OptimizerOutcomeStatus =>
-  value === "applied" || value === "escalated" || value === "extended";
+  value === "applied" || value === "unchanged" || value === "held" || value === "failed";
 
 /**
  * The `/optimizer` view (frontend components §OptimizerConsole): the service-health header, the site
@@ -47,7 +46,6 @@ const isOutcomeStatus = (value: string | null): value is OptimizerOutcomeStatus 
 export default function OptimizerConsole() {
   const status = useOptimizerStatus();
   const fleetOpt = useOptimizerFleet();
-  const escalations = useOptimizerEscalations();
   const model = useOptimizerModel();
   const enabled = useOptimizerEnabled();
   const fleet = useFleet();
@@ -82,15 +80,6 @@ export default function OptimizerConsole() {
     return map;
   }, [fleet.data]);
 
-  // One open escalation per greenhouse (the standing entry after dedup) — the row's Resolve target.
-  const escalationByGreenhouse = useMemo(() => {
-    const map = new Map<string, Escalation>();
-    for (const esc of escalations.data ?? []) {
-      if (!map.has(esc.greenhouseId)) map.set(esc.greenhouseId, esc);
-    }
-    return map;
-  }, [escalations.data]);
-
   const serviceEnabled = enabled.data?.enabled ?? status.data?.enabled ?? true;
 
   const rows = useMemo(() => {
@@ -100,11 +89,7 @@ export default function OptimizerConsole() {
         (statusFilter === "" || g.status === statusFilter) &&
         (!ghParam || g.greenhouseId === ghParam),
     );
-    // The escalation worklist sorts persistent-before-transient, oldest first; otherwise a stable
-    // greenhouse-id order so the table doesn't reshuffle between polls.
-    return statusFilter === "escalated"
-      ? [...filtered].sort(compareFleetTriage)
-      : [...filtered].sort((a, b) => a.greenhouseId.localeCompare(b.greenhouseId));
+    return [...filtered].sort((a, b) => a.greenhouseId.localeCompare(b.greenhouseId));
   }, [fleetOpt.data, statusFilter, ghParam]);
 
   const toggleService = (next: boolean) =>
@@ -209,7 +194,7 @@ export default function OptimizerConsole() {
         {fleetOpt.data ? <OptimizerRollupBar rollup={fleetOpt.data.rollup} /> : null}
       </div>
 
-      {/* Status filter — escalated yields the worklist. */}
+      {/* Latest-cycle outcome filter. */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-fg-muted text-sm">Filter</span>
         {STATUS_FILTERS.map((option) => (
@@ -239,16 +224,8 @@ export default function OptimizerConsole() {
         />
       ) : rows.length === 0 ? (
         <EmptyState
-          title={
-            statusFilter === "escalated"
-              ? "No open escalations"
-              : "No greenhouses match this filter"
-          }
-          message={
-            statusFilter === "escalated"
-              ? "All cycles applied or extended."
-              : "Clear the filter to see the whole fleet."
-          }
+          title="No greenhouses match this filter"
+          message="Clear the filter to see the whole fleet."
         />
       ) : (
         <Card>
@@ -270,7 +247,6 @@ export default function OptimizerConsole() {
                     displayName={nameById.get(entry.greenhouseId) ?? entry.greenhouseId}
                     serviceEnabled={serviceEnabled}
                     offline={offlineById.get(entry.greenhouseId) ?? false}
-                    escalation={escalationByGreenhouse.get(entry.greenhouseId)}
                     nowMs={nowMs}
                   />
                 ))}

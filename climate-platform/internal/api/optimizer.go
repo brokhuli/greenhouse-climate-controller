@@ -1,10 +1,13 @@
 package api
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -94,11 +97,19 @@ func (s *Server) getOptimizerFleet(c echo.Context) error {
 			formatted := fmtTS(*gh.CreatedAt)
 			createdAt = &formatted
 		}
+		message := gh.Message
+		if gh.Status != nil && *gh.Status == "applied" && s.store != nil {
+			if summary, summaryErr := s.appliedOptimizerSetpointChanges(c.Request().Context(), gh.GreenhouseID, gh.OptimizerRunID); summaryErr != nil {
+				s.log.Warn("compose applied optimizer summary", "greenhouse_id", gh.GreenhouseID, "err", summaryErr)
+			} else if summary != "" {
+				message = &summary
+			}
+		}
 		greenhouses = append(greenhouses, fleetGreenhouseDTO{
 			GreenhouseID: gh.GreenhouseID,
 			Status:       gh.Status,
 			ReasonCode:   gh.ReasonCode,
-			Message:      gh.Message,
+			Message:      message,
 			Enabled:      gh.Enabled,
 			CreatedAt:    createdAt,
 			InFlight:     gh.InFlight,
@@ -117,8 +128,9 @@ func (s *Server) getOptimizerFleet(c echo.Context) error {
 			Backlog: fleet.Rollup.Backlog,
 			ByOutcome: byOutcomeDTO{
 				Applied:   fleet.Rollup.Applied,
-				Escalated: fleet.Rollup.Escalated,
-				Extended:  fleet.Rollup.Extended,
+				Unchanged: fleet.Rollup.Unchanged,
+				Held:      fleet.Rollup.Held,
+				Failed:    fleet.Rollup.Failed,
 			},
 			OldestOpenAgeSec: oldest,
 		},
@@ -295,7 +307,26 @@ func (s *Server) getOptimizerPlan(c echo.Context) error {
 	}
 	record, err := s.optimizer.LatestPlan(ctx, id)
 	if err != nil {
+		// Plan records are deliberately in-memory in the optimizer, but a successful setpoint
+		// submission is durable platform state. If the optimizer restarted after publishing, recover
+		// the applied outcome from that provenance instead of telling the operator no cycle ran.
+		if optimizer.StatusCode(err) == http.StatusNotFound {
+			if durable, found, durableErr := s.durableAppliedOptimizerPlan(ctx, id); durableErr != nil {
+				return s.fail(c, durableErr)
+			} else if found {
+				return c.JSON(http.StatusOK, optimizerPlanDetailDTO{Plan: durable, Diff: nil})
+			}
+		}
 		return s.optimizerFail(c, err)
+	}
+	if record.Plan != nil {
+		record.Plan.ImmediateSetpoints, err = compactJSONObject(record.Plan.ImmediateSetpoints)
+		if err != nil {
+			return s.fail(c, fmt.Errorf("normalize optimizer setpoint patch: %w", err))
+		}
+		if bytes.Equal(bytes.TrimSpace(record.Plan.ObjectiveScores), []byte("null")) {
+			record.Plan.ObjectiveScores = nil
+		}
 	}
 
 	view := toPlanView(record)
@@ -303,11 +334,41 @@ func (s *Server) getOptimizerPlan(c echo.Context) error {
 	if record.Plan == nil {
 		return c.JSON(http.StatusOK, optimizerPlanDetailDTO{Plan: view, Diff: nil})
 	}
-	diff, err := s.composeSetpointDiff(ctx, id, record.Plan.ImmediateSetpoints)
+	diff, err := s.composeSetpointDiff(ctx, id, record.OptimizerRunID, record.Plan.ImmediateSetpoints)
 	if err != nil {
 		return s.fail(c, err)
 	}
 	return c.JSON(http.StatusOK, optimizerPlanDetailDTO{Plan: view, Diff: diff})
+}
+
+// durableAppliedOptimizerPlan recovers the minimal truthful plan view from the platform's
+// append-only intended-state ledger. The optimizer owns rich plan detail in memory, so a restart
+// loses the explanation and original patch; the applied bundle and its run provenance remain
+// durable here. This keeps the detail card honest until the next cycle recreates full detail.
+func (s *Server) durableAppliedOptimizerPlan(ctx context.Context, greenhouseID string) (optimizerPlanViewDTO, bool, error) {
+	current, found, err := s.store.CurrentRevision(ctx, greenhouseID)
+	if err != nil || !found || current.Source != domain.SourceOptimizer || current.OptimizerRunID == nil {
+		return optimizerPlanViewDTO{}, false, err
+	}
+	model, err := s.optimizer.Model(ctx)
+	if err != nil {
+		return optimizerPlanViewDTO{}, false, err
+	}
+	message := "Setpoints were applied; detailed planner metadata was cleared when the optimizer restarted."
+	createdAt := fmtTS(current.CreatedAt)
+	return optimizerPlanViewDTO{
+		OptimizerRunID: *current.OptimizerRunID,
+		GreenhouseID:   greenhouseID,
+		CreatedAt:      createdAt,
+		// The original horizon belongs to the optimizer's volatile record. Use the durable applied
+		// timestamp for both bounds rather than inventing a planning interval.
+		Horizon: horizonDTO{Start: createdAt, End: createdAt},
+		Backend: backendDTO{
+			Provider: model.Provider, Model: model.Model, PromptVersion: model.PromptVersion, Role: model.Role,
+		},
+		Outcome: outcomeDTO{Status: "applied", Message: &message},
+		Plan:    nil,
+	}, true, nil
 }
 
 // toPlanView flattens the optimizer's PlanRecord onto the frontend OptimizerPlanView, dropping
@@ -338,8 +399,8 @@ func toPlanView(record optimizer.PlanRecord) optimizerPlanViewDTO {
 // bundle and its crop-safe bounds — both platform-owned, stitched here so the SPA reads one
 // response. The bounds map is the scalar climate envelope flattened to the field names the
 // diff keys by.
-func (s *Server) composeSetpointDiff(ctx context.Context, id string, proposed []byte) (*setpointDiffDTO, error) {
-	current, err := s.currentSetpoints(ctx, id)
+func (s *Server) composeSetpointDiff(ctx context.Context, id, optimizerRunID string, proposed []byte) (*setpointDiffDTO, error) {
+	current, err := s.setpointsBeforeOptimizerRun(ctx, id, optimizerRunID)
 	if err != nil {
 		return nil, err
 	}
@@ -352,6 +413,82 @@ func (s *Server) composeSetpointDiff(ctx context.Context, id string, proposed []
 		Current:  current,
 		Bounds:   flattenClimateBounds(bounds),
 	}, nil
+}
+
+// setpointsBeforeOptimizerRun returns the bundle an applied optimizer revision replaced. If the
+// plan has not been applied yet (for example, an escalated proposal), the current bundle remains
+// the correct comparison. Matching the run id prevents an older plan from borrowing a newer
+// revision's baseline.
+func (s *Server) setpointsBeforeOptimizerRun(ctx context.Context, id, optimizerRunID string) (domain.Setpoints, error) {
+	current, found, err := s.store.CurrentRevision(ctx, id)
+	if err != nil {
+		return domain.Setpoints{}, err
+	}
+	if found && current.Source == domain.SourceOptimizer && current.OptimizerRunID != nil && *current.OptimizerRunID == optimizerRunID {
+		previous, previousFound, previousErr := s.store.RevisionBefore(ctx, id, current.Revision)
+		if previousErr != nil {
+			return domain.Setpoints{}, previousErr
+		}
+		if previousFound {
+			return previous.Setpoints, nil
+		}
+	}
+	return s.currentSetpoints(ctx, id)
+}
+
+// compactJSONObject removes explicit null properties from the optimizer's partial-setpoint JSON.
+// Pydantic's service response includes unset optional fields as null, while the dashboard contract
+// represents an omitted setpoint as an absent property. Normalize that internal/service mismatch at
+// the Go API boundary before validating it in the browser.
+func compactJSONObject(raw []byte) (json.RawMessage, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return nil, err
+	}
+	for name, value := range fields {
+		if bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+			delete(fields, name)
+		}
+	}
+	return json.Marshal(fields)
+}
+
+// appliedOptimizerSetpointChanges builds the successful pipeline message from durable revisions,
+// giving the fleet row the same actionable feedback that failed/held pipeline rows already show.
+func (s *Server) appliedOptimizerSetpointChanges(ctx context.Context, greenhouseID string, optimizerRunID *string) (string, error) {
+	if optimizerRunID == nil {
+		return "", nil
+	}
+	current, found, err := s.store.CurrentRevision(ctx, greenhouseID)
+	if err != nil || !found || current.Source != domain.SourceOptimizer || current.OptimizerRunID == nil || *current.OptimizerRunID != *optimizerRunID {
+		return "", err
+	}
+	previous, found, err := s.store.RevisionBefore(ctx, greenhouseID, current.Revision)
+	if err != nil || !found {
+		return "", err
+	}
+	return formatAppliedSetpointChanges(previous.Setpoints, current.Setpoints), nil
+}
+
+func formatAppliedSetpointChanges(before, after domain.Setpoints) string {
+	changes := make([]string, 0, 9)
+	addFloat := func(label, unit string, old, next float64) {
+		if old != next {
+			changes = append(changes, fmt.Sprintf("%s %g%s → %g%s", label, old, unit, next, unit))
+		}
+	}
+	addFloat("day temperature", "°C", before.TemperatureDayC, after.TemperatureDayC)
+	addFloat("night temperature", "°C", before.TemperatureNightC, after.TemperatureNightC)
+	addFloat("humidity low", "%", before.HumidityLowPct, after.HumidityLowPct)
+	addFloat("humidity high", "%", before.HumidityHighPct, after.HumidityHighPct)
+	addFloat("humidity deadband", "%", before.HumidityDeadbandPct, after.HumidityDeadbandPct)
+	if before.CO2TargetPPM != after.CO2TargetPPM {
+		changes = append(changes, fmt.Sprintf("CO₂ target %d ppm → %d ppm", before.CO2TargetPPM, after.CO2TargetPPM))
+	}
+	addFloat("CO₂ vent interlock", "%", before.CO2VentInterlockThresholdPct, after.CO2VentInterlockThresholdPct)
+	addFloat("VPD target", " kPa", before.VPDTargetKPa, after.VPDTargetKPa)
+	addFloat("DLI target", " mol/m²/day", before.DLITargetMol, after.DLITargetMol)
+	return strings.Join(changes, ", ")
 }
 
 // currentSetpoints returns the greenhouse's in-force bundle: its current intended revision, or

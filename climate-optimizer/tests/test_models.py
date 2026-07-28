@@ -66,9 +66,9 @@ def _record_kwargs() -> dict[str, object]:
     }
 
 
-def test_escalated_outcome_requires_reason_code() -> None:
+def test_held_outcome_requires_reason_code() -> None:
     with pytest.raises(ValidationError):
-        Outcome(status=OutcomeStatus.ESCALATED)
+        Outcome(status=OutcomeStatus.HELD)
 
 
 def test_applied_record_requires_plan() -> None:
@@ -76,13 +76,13 @@ def test_applied_record_requires_plan() -> None:
         PlanRecord(plan=None, outcome=Outcome(status=OutcomeStatus.APPLIED), **_record_kwargs())
 
 
-def test_escalated_record_requires_reason() -> None:
+def test_failed_outcome_requires_reason() -> None:
     with pytest.raises(ValidationError):
-        Outcome(status=OutcomeStatus.ESCALATED, message="held")
+        Outcome(status=OutcomeStatus.FAILED, message="failed")
 
 
 def test_reason_code_present_is_accepted() -> None:
-    outcome = Outcome(status=OutcomeStatus.ESCALATED, reason_code=ReasonCode.LOW_CONFIDENCE)
+    outcome = Outcome(status=OutcomeStatus.HELD, reason_code=ReasonCode.LOW_CONFIDENCE)
     assert outcome.reason_code is ReasonCode.LOW_CONFIDENCE
 
 

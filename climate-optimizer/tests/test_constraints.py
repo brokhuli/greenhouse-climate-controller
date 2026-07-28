@@ -56,7 +56,7 @@ def test_in_bounds_applies() -> None:
 def test_out_of_bounds_escalates() -> None:
     plan = _plan(SetpointsPatch(temperature_day_c=30.0))
     decision = evaluate_application(plan, BOUNDS, 0.8, HORIZON)
-    assert decision.status is OutcomeStatus.ESCALATED
+    assert decision.status is OutcomeStatus.HELD
     assert decision.reason_code is ReasonCode.CONSTRAINT_VIOLATION
 
 
@@ -80,7 +80,7 @@ def test_bundle_inconsistency_escalates() -> None:
 
 def test_absent_bounds_extends() -> None:
     plan = _plan(SetpointsPatch(temperature_day_c=22.5))
-    assert evaluate_application(plan, None, 0.8, HORIZON).status is OutcomeStatus.EXTENDED
+    assert evaluate_application(plan, None, 0.8, HORIZON).status is OutcomeStatus.UNCHANGED
 
 
 def test_unbounded_field_is_not_rejected() -> None:

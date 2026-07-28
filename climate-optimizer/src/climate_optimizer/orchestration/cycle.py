@@ -55,6 +55,7 @@ from ..models import (
     PlanningContext,
     PlanRecord,
     ReasonCode,
+    outcome_status_for_reason,
 )
 from ..planner import (
     ContextBudgetExceededError,
@@ -225,7 +226,7 @@ async def run_cycle(
         record = _build_record(
             frame,
             plan=None,
-            status=OutcomeStatus.ESCALATED,
+            status=OutcomeStatus.FAILED,
             reason_code=ReasonCode.CYCLE_TIMEOUT,
             message=(
                 f"cycle exceeded cycle_timeout_seconds "
@@ -255,7 +256,7 @@ async def run_cycle(
         record = _build_record(
             frame,
             plan=None,
-            status=OutcomeStatus.ESCALATED,
+            status=OutcomeStatus.FAILED,
             reason_code=ReasonCode.INTERNAL_ERROR,
             message=f"unexpected cycle error: {type(err).__name__}: {err}",
         )
@@ -306,14 +307,20 @@ async def _deliberate(
     try:
         ctx = await client.get_planning_context(frame.greenhouse_id)
     except PlatformError as err:
-        raise _Held(OutcomeStatus.ESCALATED, err.reason_code, err.message) from err
+        raise _Held(
+            outcome_status_for_reason(err.reason_code), err.reason_code, err.message
+        ) from err
 
     # 2. Input-quality gate — never plan over stale, incomplete, or faulted inputs (spec 07).
     store.advance_stage(frame.greenhouse_id, CycleStage.QUALITY_GATE)
     gate = evaluate_input_gate(ctx, settings, expected_greenhouse_id=frame.greenhouse_id)
     if not gate.trusted:
         assert gate.reason_code is not None  # noqa: S101 — GateOutcome.hold always sets one
-        raise _Held(OutcomeStatus.ESCALATED, gate.reason_code, gate.message or "input gate held")
+        raise _Held(
+            outcome_status_for_reason(gate.reason_code),
+            gate.reason_code,
+            gate.message or "input gate held",
+        )
 
     frame.horizon = choose_horizon(ctx.to, ctx.setpoints.targets, settings)
 
@@ -335,7 +342,7 @@ async def _deliberate(
     if result.diverged:
         metrics.TWIN_DIVERGENCE_TOTAL.labels(frame.greenhouse_id, "diverged").inc()
         raise _Held(
-            OutcomeStatus.ESCALATED,
+            OutcomeStatus.FAILED,
             ReasonCode.TWIN_DIVERGED,
             "twin diverged (non-finite or out-of-envelope step)",
         )
@@ -343,7 +350,7 @@ async def _deliberate(
     # 5. Nothing to refine within — a benign pre-planner extend, not an escalation (spec 06 §1).
     if ctx.setpoints.bounds is None:
         raise _Held(
-            OutcomeStatus.EXTENDED,
+            OutcomeStatus.UNCHANGED,
             None,
             "no crop-safe bounds present; holding the baseline",
         )
@@ -359,13 +366,13 @@ async def _deliberate(
         )
         if decision.suppressed:
             metrics.PLANNER_SUPPRESSED_TOTAL.labels(frame.greenhouse_id).inc()
-            raise _Held(OutcomeStatus.EXTENDED, None, decision.reason)
+            raise _Held(OutcomeStatus.UNCHANGED, None, decision.reason)
 
     # 7. Plan. Re-read the enable gate first: a pause that landed while the earlier steps awaited
     #    must stop here rather than spend LLM tokens on a plan the commit point will discard (spec 09).
     if not runtime.is_greenhouse_active(frame.greenhouse_id):
         raise _Held(
-            OutcomeStatus.EXTENDED,
+            OutcomeStatus.UNCHANGED,
             None,
             "planning paused mid-cycle; the last applied bundle stays in force",
         )
@@ -381,14 +388,14 @@ async def _deliberate(
         # The model deliberately proposed no change: a benign extend, not an escalation. The last
         # applied bundle stays in force and nothing is written (spec 06 §1).
         raise _Held(
-            OutcomeStatus.EXTENDED,
+            OutcomeStatus.UNCHANGED,
             None,
             "planner proposed no setpoint change; holding the baseline",
         ) from err
     except PlannerParseError as err:
-        raise _Held(OutcomeStatus.ESCALATED, ReasonCode.PLAN_UNPARSEABLE, str(err)) from err
+        raise _Held(OutcomeStatus.FAILED, ReasonCode.PLAN_UNPARSEABLE, str(err)) from err
     except (PlannerUnavailableError, ContextBudgetExceededError) as err:
-        raise _Held(OutcomeStatus.ESCALATED, ReasonCode.LLM_UNAVAILABLE, str(err)) from err
+        raise _Held(OutcomeStatus.FAILED, ReasonCode.LLM_UNAVAILABLE, str(err)) from err
 
     plan = proposal.output.plan
     frame.backend = Backend(
@@ -418,7 +425,7 @@ async def _deliberate(
         schema_validation.validate_optimizer_plan(plan.model_dump(mode="json", exclude_none=True))
     except Exception as err:  # noqa: BLE001 — a plan off-contract is a plan we cannot use
         raise _Held(
-            OutcomeStatus.ESCALATED,
+            OutcomeStatus.FAILED,
             ReasonCode.PLAN_UNPARSEABLE,
             f"plan failed contract validation: {err}",
         ) from err
@@ -440,7 +447,7 @@ async def _deliberate(
     # auto-apply — it is surfaced with its own code, carrying the plan it withheld (spec 03 §2).
     if fidelity_fault:
         raise _Held(
-            OutcomeStatus.ESCALATED,
+            OutcomeStatus.HELD,
             ReasonCode.TWIN_FIDELITY_FAULT,
             "sustained twin parameter drift; confidence capped below the apply threshold",
             plan=plan,
@@ -472,7 +479,7 @@ async def _commit(
     store.advance_stage(frame.greenhouse_id, CycleStage.PUBLISH)
     if not runtime.is_greenhouse_active(frame.greenhouse_id):
         raise _Held(
-            OutcomeStatus.EXTENDED,
+            OutcomeStatus.UNCHANGED,
             None,
             "planning paused mid-cycle; the last applied bundle stays in force",
         )
@@ -484,9 +491,14 @@ async def _commit(
     )
     if write.held:
         # Paused after token acquisition, before the send: a held write, not an escalation.
-        raise _Held(OutcomeStatus.EXTENDED, None, write.message)
+        raise _Held(OutcomeStatus.UNCHANGED, None, write.message)
     if not write.applied:
-        raise _Held(OutcomeStatus.ESCALATED, write.reason_code, write.message, plan=decision.plan)
+        raise _Held(
+            outcome_status_for_reason(write.reason_code),
+            write.reason_code,
+            write.message,
+            plan=decision.plan,
+        )
 
     state.last_applied_plan_id = frame.run_id
     state.last_applied_setpoints = decision.plan.immediate_setpoints
@@ -580,26 +592,13 @@ def _settle(record: PlanRecord, *, store: ServiceStore, settings: Settings, now:
     # the baseline (the contract's "applied/extended successfully"). A steadily-extending greenhouse
     # (stable climate, or no crop-safe bounds) is running fine, so its last-successful-cycle age must
     # not grow into a false cycle_stalled. An escalation (incl. timeout/internal error) never counts.
-    if record.outcome.status in (OutcomeStatus.APPLIED, OutcomeStatus.EXTENDED):
+    if record.outcome.status in (OutcomeStatus.APPLIED, OutcomeStatus.UNCHANGED):
         store.last_successful_cycle_at = now
         metrics.LAST_SUCCESSFUL_CYCLE_TIMESTAMP.set(now.timestamp())
 
-    service = settings.service
-    reason_code = record.outcome.reason_code
-    if record.outcome.status is OutcomeStatus.ESCALATED and reason_code is not None:
-        store.escalations.raise_escalation(
-            greenhouse_id=record.greenhouse_id,
-            reason_code=reason_code,
-            optimizer_run_id=record.optimizer_run_id,
-            message=record.outcome.message,
-            now=now,
-            dedup_window=timedelta(minutes=service.escalation_dedup_window_minutes),
-        )
-        metrics.ESCALATIONS_TOTAL.labels(record.greenhouse_id, reason_code.value).inc()
-
-    # A fresh outcome supersedes the greenhouse's other open holds; an identical recurring fault
-    # folds into its standing entry instead of superseding itself (spec 09).
-    store.escalations.supersede(record.greenhouse_id, now=now, except_reason=reason_code)
+    # Outcomes are historical facts, not an operator work queue. A new cycle supersedes any legacy
+    # open escalation retained by a pre-taxonomy process; there is no manual resolve lifecycle.
+    store.escalations.supersede(record.greenhouse_id, now=now)
     metrics.OPEN_ESCALATIONS.set(store.escalations.backlog())
 
 
@@ -611,7 +610,7 @@ async def _report_escalation(client: PlatformClient, record: PlanRecord) -> None
     ``optimizer_run_failed`` / ``optimizer_plan_escalated`` audit events. A report failure must never
     break planning, so it is logged and swallowed; the escalation is already recorded locally.
     """
-    if record.outcome.status is not OutcomeStatus.ESCALATED:
+    if record.outcome.status not in (OutcomeStatus.HELD, OutcomeStatus.FAILED):
         return
     try:
         await client.report_outcome(record)

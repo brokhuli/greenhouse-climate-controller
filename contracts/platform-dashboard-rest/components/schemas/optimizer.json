@@ -38,8 +38,8 @@
     "properties": {
       "status": {
         "type": "string",
-        "enum": ["applied", "escalated", "extended"],
-        "description": "applied = the immediate bundle was written; escalated = held for operator review; extended = no new plan/write, the last applied bundle stays in force."
+        "enum": ["applied", "unchanged", "held", "failed"],
+        "description": "applied = valid plan published; unchanged = no change needed; held = valid plan intentionally not applied; failed = no valid plan could be produced or processed."
       },
       "reason_code": {
         "oneOf": [{ "$ref": "#/ReasonCode" }, { "type": "null" }],
@@ -239,7 +239,7 @@
             "greenhouse_id": { "$ref": "./common.json#/Slug" },
             "status": {
               "oneOf": [
-                { "type": "string", "enum": ["applied", "escalated", "extended"] },
+                { "type": "string", "enum": ["applied", "unchanged", "held", "failed"] },
                 { "type": "null" }
               ],
               "description": "The greenhouse's latest cycle outcome status, or null when it is known to the optimizer but has not yet completed a cycle (discovered or paused before its first cycle — the SPA renders this as No plan, unless a Disabled/Read-only pill takes precedence)."
@@ -288,10 +288,11 @@
             "description": "Count of greenhouses by their latest cycle outcome.",
             "properties": {
               "applied": { "type": "integer", "minimum": 0 },
-              "escalated": { "type": "integer", "minimum": 0 },
-              "extended": { "type": "integer", "minimum": 0 }
+              "unchanged": { "type": "integer", "minimum": 0 },
+              "held": { "type": "integer", "minimum": 0 },
+              "failed": { "type": "integer", "minimum": 0 }
             },
-            "required": ["applied", "escalated", "extended"],
+            "required": ["applied", "unchanged", "held", "failed"],
             "additionalProperties": false
           },
           "oldest_open_age_secs": {

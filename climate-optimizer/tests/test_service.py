@@ -261,8 +261,9 @@ def test_fleet_reports_each_greenhouse_and_the_rollup() -> None:
     assert body["rollup"] == {
         "backlog": 1,
         "applied": 1,
-        "escalated": 0,
-        "extended": 0,
+        "held": 0,
+        "unchanged": 0,
+        "failed": 0,
         "oldest_open_escalation_age_seconds": pytest.approx(
             body["rollup"]["oldest_open_escalation_age_seconds"]
         ),

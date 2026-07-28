@@ -105,7 +105,10 @@ export function useOptimizerPlan(greenhouseId: string) {
         await apiClient.get(`/optimizer/greenhouses/${greenhouseId}/plan`, wireOptimizerPlanDetail),
       ),
     enabled: greenhouseId.length > 0,
-    refetchInterval: OPTIMIZER_POLL_MS,
+    // A cycle is accepted before its background work stores the PlanRecord. Poll that settling
+    // window quickly so a detail page that first saw its 404 promptly picks up the completed plan.
+    refetchInterval: (query) =>
+      query.state.data === undefined ? OPTIMIZER_ACTIVE_POLL_MS : OPTIMIZER_POLL_MS,
     // A greenhouse with no plan yet (cold start) returns 404 — treat that as "no plan", not an error.
     retry: false,
   });

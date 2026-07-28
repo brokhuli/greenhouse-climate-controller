@@ -8,7 +8,7 @@ import { sampleFleetOptimizerGreenhouse } from "../utils";
 describe("PipelineTracker outcome detail", () => {
   it("includes the failed stage's full reason in its tooltip", () => {
     const entry = sampleFleetOptimizerGreenhouse({
-      status: "escalated",
+      status: "failed",
       reasonCode: "input_incomplete",
       currentStage: "quality_gate",
       inFlight: false,
@@ -21,9 +21,9 @@ describe("PipelineTracker outcome detail", () => {
     expect(screen.getByTitle(`Quality Gate — failed here: ${message}`)).toBeInTheDocument();
   });
 
-  it("includes the held stage's full reason in its tooltip", () => {
+  it("includes an unchanged stage's full reason in its tooltip", () => {
     const entry = sampleFleetOptimizerGreenhouse({
-      status: "extended",
+      status: "unchanged",
       currentStage: "forecast",
       inFlight: false,
     });
@@ -32,6 +32,6 @@ describe("PipelineTracker outcome detail", () => {
 
     render(<PipelineTracker nodes={nodes} />);
 
-    expect(screen.getByTitle(`Forecast — held here: ${message}`)).toBeInTheDocument();
+    expect(screen.getByTitle(`Forecast — unchanged here: ${message}`)).toBeInTheDocument();
   });
 });

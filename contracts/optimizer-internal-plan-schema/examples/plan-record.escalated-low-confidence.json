@@ -14,7 +14,7 @@
     ]
   },
   "outcome": {
-    "status": "escalated",
+    "status": "held",
     "reason_code": "low_confidence",
     "message": "confidence 0.62 < threshold 0.80"
   }

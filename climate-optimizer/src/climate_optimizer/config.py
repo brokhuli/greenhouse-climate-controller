@@ -71,7 +71,7 @@ class LlmSettings(_Group):
     output_token_budget: int = Field(default=2048, gt=0)
     # Per-call budget for the chain invocation — a sub-budget under service.cycle_timeout_seconds so a
     # slow backend is attributed to llm_unavailable rather than a whole-cycle cycle_timeout (spec 04).
-    request_timeout_seconds: float = Field(default=75.0, gt=0)
+    request_timeout_seconds: float = Field(default=90.0, gt=0)
     available_models: dict[str, list[str]] = Field(
         default_factory=lambda: {
             "ollama": ["llama3.2", "mistral", "qwen2.5:7b", "llama3.1:8b"],

@@ -305,16 +305,16 @@ def evaluate_application(
     """
     if bounds is None:
         return ApplicationDecision(
-            OutcomeStatus.EXTENDED, message="no crop-safe bounds present; holding baseline"
+            OutcomeStatus.UNCHANGED, message="no crop-safe bounds present; holding baseline"
         )
 
     result = check_constraints(plan, bounds, horizon)
     if not result.ok:
-        return ApplicationDecision(OutcomeStatus.ESCALATED, result.reason_code, result.message)
+        return ApplicationDecision(OutcomeStatus.HELD, result.reason_code, result.message)
 
     if plan.confidence < confidence_threshold:
         return ApplicationDecision(
-            OutcomeStatus.ESCALATED,
+            OutcomeStatus.HELD,
             ReasonCode.LOW_CONFIDENCE,
             f"confidence {plan.confidence} < threshold {confidence_threshold}",
         )

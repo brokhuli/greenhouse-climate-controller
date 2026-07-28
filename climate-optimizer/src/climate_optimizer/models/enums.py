@@ -110,8 +110,9 @@ class OutcomeStatus(StrEnum):
     """What the gates decided for a cycle (PlanRecord.outcome.status)."""
 
     APPLIED = "applied"
-    ESCALATED = "escalated"
-    EXTENDED = "extended"
+    UNCHANGED = "unchanged"
+    HELD = "held"
+    FAILED = "failed"
 
 
 class ReasonClass(StrEnum):
@@ -172,3 +173,25 @@ REASON_CLASS: dict[ReasonCode, ReasonClass] = {
     # one folds into a standing escalation rather than re-firing every cycle.
     ReasonCode.INTERNAL_ERROR: ReasonClass.TRANSIENT,
 }
+
+
+# A failed cycle could not produce or process a usable plan. Every other reason is a deliberate
+# safety hold: the optimizer understood the situation or proposal and chose not to apply it.
+FAILED_REASON_CODES = frozenset(
+    {
+        ReasonCode.CONTRACT_DRIFT,
+        ReasonCode.TWIN_DIVERGED,
+        ReasonCode.PLATFORM_UNAVAILABLE,
+        ReasonCode.WRITE_UNAUTHORIZED,
+        ReasonCode.CYCLE_TIMEOUT,
+        ReasonCode.LLM_UNAVAILABLE,
+        ReasonCode.PLAN_UNPARSEABLE,
+        ReasonCode.INTERNAL_ERROR,
+    }
+)
+
+
+def outcome_status_for_reason(reason_code: ReasonCode) -> OutcomeStatus:
+    """Classify a non-applied reason under the public cycle-outcome taxonomy."""
+
+    return OutcomeStatus.FAILED if reason_code in FAILED_REASON_CODES else OutcomeStatus.HELD

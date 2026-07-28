@@ -2,7 +2,7 @@
 
 Mirrors ``contracts/optimizer-internal-plan-schema/`` (optimizer-plan / plan-record). The
 conditional invariants the JSON Schema enforces are re-expressed as validators here:
-``reason_code`` is required iff ``status == escalated``, and an ``applied`` record carries a
+``reason_code`` is required when ``status`` is held or failed, and an ``applied`` record carries a
 non-null ``plan``. The ``immediate_setpoints ≡ trajectory[0].setpoints`` invariant is *not*
 here — it is a constraint-engine check (spec 06 §1), matching the contract note.
 """
@@ -124,16 +124,16 @@ class Horizon(StrictModel):
 
 
 class Outcome(StrictModel):
-    """What the gates decided. ``reason_code`` is required when ``status == escalated``."""
+    """What the cycle decided. Held and failed outcomes require a reason code."""
 
     status: OutcomeStatus
     reason_code: ReasonCode | None = None
     message: str | None = None
 
     @model_validator(mode="after")
-    def _reason_required_when_escalated(self) -> Outcome:
-        if self.status == OutcomeStatus.ESCALATED and self.reason_code is None:
-            raise ValueError("reason_code is required when status is escalated")
+    def _reason_required_when_not_applied(self) -> Outcome:
+        if self.status in (OutcomeStatus.HELD, OutcomeStatus.FAILED) and self.reason_code is None:
+            raise ValueError("reason_code is required when status is held or failed")
         return self
 
 
