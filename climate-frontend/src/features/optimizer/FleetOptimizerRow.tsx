@@ -54,7 +54,7 @@ export function FleetOptimizerRow({
   const escalated = entry.status === "escalated";
   // Prefer the latest-cycle detail from the fleet response. Retain the escalation detail as a
   // fallback for older optimizer responses that omit the fleet-level message.
-  const outcomeMessage = entry.message ?? (escalated ? escalation?.message ?? null : null);
+  const outcomeMessage = entry.message ?? (escalated ? (escalation?.message ?? null) : null);
   const operatorReason = isOperator ? undefined : "Operator role required";
   // Global precedence: while the service is globally paused, per-greenhouse controls can't act.
   const globallyPaused = !serviceEnabled;
@@ -166,7 +166,10 @@ export function FleetOptimizerRow({
               </div>
               {/* State the pipeline stage and outcome alongside the backend's actionable detail. */}
               {outcomeFeedback ? (
-                <p className="text-fg-subtle line-clamp-3 text-xs break-words" title={outcomeFeedback}>
+                <p
+                  className="text-fg-subtle line-clamp-3 text-xs break-words"
+                  title={outcomeFeedback}
+                >
                   {outcomeFeedback}
                 </p>
               ) : null}
