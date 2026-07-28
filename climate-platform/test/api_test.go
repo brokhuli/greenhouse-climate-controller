@@ -124,10 +124,19 @@ func TestProfileAssignmentHTTP(t *testing.T) {
 	}
 	client.do(http.MethodPost, "/api/profiles", profile, http.StatusCreated)
 
+	// The library also carries the standard seed profiles (migration 000005), so the newly
+	// created "lettuce" profile joins them rather than being the library's only entry.
 	var listed []domain.CropProfile
 	client.doInto(http.MethodGet, "/api/profiles", nil, http.StatusOK, &listed)
-	if len(listed) != 1 || listed[0].ID != "lettuce" {
-		t.Fatalf("profile library = %+v", listed)
+	var foundLettuce bool
+	for _, p := range listed {
+		if p.ID == "lettuce" {
+			foundLettuce = true
+			break
+		}
+	}
+	if !foundLettuce {
+		t.Fatalf("profile library = %+v, want it to contain the created \"lettuce\" profile", listed)
 	}
 
 	// Assign the profile: the platform resolves the stage targets and delivers them.
