@@ -12,14 +12,22 @@ vi.mock("../../src/app/stream-context", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../src/app/stream-context")>();
   return {
     ...actual,
-    useStream: vi.fn(() => ({ connectionState: "open", subscribeTelemetry: () => () => {} })),
+    useStream: vi.fn(() => ({
+      connectionState: "open",
+      subscribeTelemetry: () => () => {},
+      schemaDrift: { count: 0, lastType: null, lastIssue: null },
+    })),
   };
 });
 import { useStream } from "../../src/app/stream-context";
 
 const mockedUseStream = vi.mocked(useStream);
 const setStream = (connectionState: WsConnectionState) =>
-  mockedUseStream.mockReturnValue({ connectionState, subscribeTelemetry: () => () => {} });
+  mockedUseStream.mockReturnValue({
+    connectionState,
+    subscribeTelemetry: () => () => {},
+    schemaDrift: { count: 0, lastType: null, lastIssue: null },
+  });
 
 /** Seed the sparklines cache so the poll query resolves offline (isError stays false). */
 const seedSparklines = (client: ReturnType<typeof makeClient>) => {

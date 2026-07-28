@@ -1,7 +1,10 @@
 import { useMemo, useState } from "react";
 import { Plus, TriangleAlert } from "lucide-react";
+import type { FleetOptimizerGreenhouse } from "../../api/schemas";
 import { useFleet } from "../../api/queries/greenhouses";
 import { fleetStaleNotice, isStreamDegraded, useFleetSparklines } from "../../api/queries/fleet";
+import { useOptimizerEnabled, useOptimizerFleet } from "../../api/queries/optimizer";
+import { toOptimizerCardState } from "../optimizer/derivations";
 import { useStream } from "../../app/stream-context";
 import { usePersistentRange } from "../../hooks/usePersistentRange";
 import { useRole } from "../../hooks/useRole";
@@ -47,6 +50,19 @@ export default function FleetOverview() {
   // fails, so tell the operator rather than let frozen charts read as live.
   const { connectionState } = useStream();
   const staleNotice = fleetStaleNotice(isStreamDegraded(connectionState), sparklines.isError);
+
+  // Phase 3: source each card's optimizer pill from the same polled fleet summary the console reads,
+  // joined by greenhouse_id. Pills only render when the optimizer is deployed (the summary loads);
+  // otherwise the query errors and the cards carry no pill.
+  const optimizerFleet = useOptimizerFleet();
+  const optimizerEnabled = useOptimizerEnabled();
+  const optimizerAvailable = optimizerFleet.data != null;
+  const optimizerServiceEnabled = optimizerEnabled.data?.enabled ?? true;
+  const optimizerEntryById = useMemo(() => {
+    const map = new Map<string, FleetOptimizerGreenhouse>();
+    for (const g of optimizerFleet.data?.greenhouses ?? []) map.set(g.greenhouseId, g);
+    return map;
+  }, [optimizerFleet.data]);
 
   const summaries = fleet.data ?? [];
   const anySim = summaries.some((summary) => summary.timeScale != null);
@@ -145,6 +161,14 @@ export default function FleetOverview() {
                 summary={summary}
                 history={historyFor(history, summary.id)}
                 windowMs={windowMs}
+                optimizerState={
+                  optimizerAvailable
+                    ? toOptimizerCardState(
+                        optimizerEntryById.get(summary.id),
+                        optimizerServiceEnabled,
+                      )
+                    : undefined
+                }
               />
             ))}
           </div>

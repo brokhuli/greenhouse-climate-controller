@@ -184,7 +184,7 @@ bundled default.
 
 The twin emits a **predicted-climate trajectory**: points spaced at
 `twin.output_interval_minutes` ([configuration](./11-spec-optimizer-configuration.md),
-default 60 — the planner's hourly granularity) across the horizon, each carrying the full
+default 60 — the planner's future-change grid) across the horizon, each carrying the full
 state + derived vector under the baseline setpoints, plus per-run flags (`diverged`,
 `fidelity_attenuated`). Internally the sim steps at ≤ `solver_max_step_minutes`; only the
 output points are down-sampled.

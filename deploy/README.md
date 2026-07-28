@@ -3,8 +3,10 @@
 Root orchestration for the local stack — **Docker Compose**.
 
 The stack is the full Phase 2 platform — the MQTT broker, TimescaleDB, the Go `api`, Keycloak
-(`auth`), and the nginx `proxy` that fronts everything — plus the generated Phase 1 controllers,
-running with a single command.
+(`auth`), and the nginx `proxy` that fronts everything — plus the generated Phase 1 controllers and
+the Phase 3 `optimizer` (with its local `ollama` LLM backend), running with a single command.
+Prometheus, Grafana, and cAdvisor are an opt-in `observability` profile, so the default loop stays
+lightweight.
 
 **The `proxy` is the single entry point: everything is reached at `http://localhost:8080`** — it
 serves the built React SPA and reverse-proxies `/api` (REST + WebSocket) and `/auth` (Keycloak). The
@@ -33,7 +35,8 @@ cp deploy/.env.example deploy/.env
 # 2. Generate N controller services (per-greenhouse TOML + override + register.sh).
 bash deploy/scripts/gen-controllers.sh 2
 
-# 3. Build + start broker, DB, API, Keycloak, proxy, and the N controllers.
+# 3. Build + start the lightweight development stack: broker, DB, API, Keycloak,
+# proxy, optimizer, and the N controllers.
 docker compose --env-file deploy/.env \
     -f deploy/docker-compose.yml -f deploy/docker-compose.override.yml up -d --build
 
@@ -96,6 +99,58 @@ any time — the fast alternative to wiping the volume, since it keeps registrat
 `bash deploy/scripts/reset-sim-data.sh` (add `--if-behind <start>` for the guarded form). Wiping the whole
 `db_data` volume (`docker compose … down -v`) remains the full-reset fallback.
 
+## Phase 3 optimizer
+
+The **`optimizer`** (Python/FastAPI) plans refined setpoints per greenhouse and writes them back through
+the `api`'s single-authority setpoint path. Like the `api`, it has **no host port** — it is reached only
+through the proxy, at the `/api/optimizer/*` routes the Go API aggregates. Open the operator console at
+**`http://localhost:8080/optimizer`** (and the per-greenhouse plan panel on each greenhouse's detail page).
+While the optimizer is down or absent, the console renders it as `unavailable` and the rest of the stack is
+unaffected — the platform keeps serving the Phase 2 crop-profile baseline.
+
+### LLM backend: container vs. host Ollama
+
+Its planner runs against an **Ollama** server (offline, no API key). Which Ollama is a **config switch**
+in `deploy/.env` — pick one:
+
+- **Container (default).** A bundled `ollama` container runs in the stack — self-contained and
+  reproducible. `fresh-run.sh` pulls `OLLAMA_MODEL` into the `ollama_data` volume on bring-up (**the first
+  run downloads several GB**); it persists across restarts, so a plain `docker compose … up -d` needs no
+  re-pull. This is what `cp deploy/.env.example deploy/.env` gives you:
+
+  ```sh
+  COMPOSE_PROFILES=ollama-container
+  OPTIMIZER_LLM__ENDPOINT=http://ollama:11434
+  ```
+
+- **Host.** Reuse the Ollama already running on your machine — your existing models, no second server, no
+  re-download. Comment the two lines above and uncomment these:
+
+  ```sh
+  COMPOSE_PROFILES=
+  OPTIMIZER_LLM__ENDPOINT=http://host.docker.internal:11434
+  ```
+
+  With `COMPOSE_PROFILES` empty the `ollama` container is skipped entirely (it lives behind the
+  `ollama-container` profile), and the optimizer reaches your host via `host.docker.internal`.
+  `fresh-run.sh` detects the absent container and skips the model pull. Make sure the model named by
+  `OLLAMA_MODEL` is present on your host (`ollama list`).
+
+The model defaults to `OLLAMA_MODEL` (`qwen2.5:7b`) — reliable at the structured output the planner
+needs; `llama3.2` (3B) is snappier on CPU but its output is often off-schema (empty patches, out-of-range
+values), which the planner rejects as `plan_unparseable`. An operator can switch models at runtime from
+the console (within the provider's allowlist). To plan with a cloud model instead, set
+`OPTIMIZER_LLM__PROVIDER=anthropic|openai` on the `optimizer` service and supply `PLANNER_API_KEY`.
+
+The local stack sets `OPTIMIZER_SERVICE__MAX_CONCURRENT_CYCLES=1`: one Ollama backend serves one
+greenhouse plan at a time, avoiding queued concurrent generations. Increase it in `deploy/.env` only
+after the configured backend has demonstrated reliable parallel inference.
+
+Ollama runs on **CPU by default**; a GPU (NVIDIA Container Toolkit) is an optional speed-up, not required.
+The bundled container has no memory ceiling — size Docker Desktop's memory to the chosen model
+(`llama3.2` ≈ 4 GB; `qwen2.5:7b` more). If cycles report an `extended` outcome because CPU inference
+exceeds the 90 s cycle timeout, switch to a smaller model or allocate a GPU.
+
 ## Service-auth hardening (RFC-011, dormant by default)
 
 Beyond the human viewer/operator auth above, two internal **service** write boundaries can be hardened
@@ -124,8 +179,16 @@ for a multi-host posture. Both are **off by default** — the single-host stack 
 
 ## Observability
 
-Prometheus and Grafana ship with the stack (operations §1). Prometheus scrapes two sources over the
-internal network — **nothing extra is exposed through the proxy**:
+Prometheus, Grafana, and cAdvisor are opt-in so normal development starts faster and uses less memory.
+Start the full stack with observability by adding the profile:
+
+```sh
+docker compose --profile observability --env-file deploy/.env \
+    -f deploy/docker-compose.yml -f deploy/docker-compose.override.yml up -d --build
+```
+
+The normal command above leaves all three services out. Prometheus scrapes these sources over the internal
+network — **nothing extra is exposed through the proxy**:
 
 - **`api:8080/metrics`** — platform-health: ingestion rate, API latency/errors, reconciliation
   actions, per-controller connectivity, and datastore/background-job health (`platform_*`).
@@ -139,13 +202,15 @@ internal network — **nothing extra is exposed through the proxy**:
   the `platform_*`/`controller_*` app metrics can't give ("is a container starving or leaking?"). The
   `cadvisor` service reads Docker/cgroup stats; its own UI is on the host at
   [http://localhost:8081](http://localhost:8081) for debugging.
+- **`optimizer:8000/metrics`** — optimizer-health: the Phase 3 planning cycles, plan outcomes,
+  escalations, and LLM-backend calls (`optimizer_*`). A single static target, like the `api`.
 
 ```sh
-open http://localhost:3000        # Grafana (admin/admin) → "Platform Health" + "Controller Fleet" + "Container Resources"
-open http://localhost:9090/targets # Prometheus — platform-api + controllers + cadvisor should be UP
+open http://localhost:3000        # Grafana (admin/admin) → "Platform Health" + "Controller Fleet" + "Container Resources" + "Optimizer"
+open http://localhost:9090/targets # Prometheus — platform-api + controllers + cadvisor + optimizer should be UP
 ```
 
-Grafana's Prometheus datasource and all three dashboards are auto-provisioned from `deploy/grafana/`
+Grafana's Prometheus datasource and all four dashboards are auto-provisioned from `deploy/grafana/`
 (dropping a JSON into `grafana/dashboards/` is enough — the provider globs the directory); the admin
 login is `GRAFANA_ADMIN` / `GRAFANA_ADMIN_PASSWORD` (default `admin`/`admin`, in `deploy/.env`).
 
@@ -162,6 +227,15 @@ or more controllers. **Container Resources** follows the same layout for the cAd
 metrics — a "right now" row (containers running / total CPU / total memory), per-container CPU and
 memory bar gauges, an uptime table, and CPU / memory / network trend lines — scoped to the stack via
 `{name=~"greenhouse-.+"}`.
+
+**Optimizer** covers Phase 3 (`optimizer_*`) in the same idiom: a "right now" row (planning enabled /
+open escalations / age of the last applied plan / cycles + applied-share + twin failures over the range),
+then the cycle-outcome and escalation-reason bar charts, the planning-enabled state timeline with the
+open-escalation trend, cycle-duration p95 bar gauges + a distribution heatmap against the 90 s bound
+(P3-PERF-2), and a twin/backend-health row (twin failures per greenhouse and by kind, planner fallback +
+state-change suppression). A `$greenhouse` template variable filters the per-greenhouse panels; the
+service-wide gauges (enable, backlog, last-applied) are unfiltered. Because cycles are sparse (30 min
+cadence), counts use `increase(…[$__range])` rather than short rate windows.
 
 ## Inject demo faults
 

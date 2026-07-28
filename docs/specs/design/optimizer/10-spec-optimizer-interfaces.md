@@ -37,9 +37,9 @@ versioned wire contract.
 |---|---|
 | `GET /health` | Liveness/readiness — Phase 2 reachability, LLM backend reachability, last-successful-cycle time, escalation backlog, and whether planning is **enabled** or the service is in read-only mode ([resilience — watchdog](./09-spec-optimizer-resilience.md)) |
 | `GET /metrics` | Prometheus optimizer-health scrape (the `/metrics` row above) |
-| `POST /api/optimizer/greenhouses/{id}/cycles` | Operator-gated: trigger an **on-demand** planning cycle for one greenhouse, out of band from the fixed cadence (body `{ reason? }`). The request asks for a fresh plan, so it bypasses state-change suppression but not input/safety/application gates; `409` while the optimizer is **disabled** — service-wide *or* for this greenhouse (read-only — [resilience](./09-spec-optimizer-resilience.md)) — or that greenhouse already has a cycle in flight |
+| `POST /api/optimizer/greenhouses/{id}/cycles` | Operator-gated: trigger an **on-demand** planning cycle for one greenhouse, out of band from the fixed cadence (body `{ reason? }`). Returns **`202`** immediately with the reserved `{ optimizer_run_id, greenhouse_id }` and runs the cycle **in the background** — the caller (and the Go proxy hop) never waits out the LLM call; the resulting plan is read back from `plans/latest` / `fleet`. The request asks for a fresh plan, so it bypasses state-change suppression but not input/safety/application gates; `409` while the optimizer is **disabled** — service-wide *or* for this greenhouse (read-only — [resilience](./09-spec-optimizer-resilience.md)) — or that greenhouse already has a cycle in flight |
 | `GET /api/optimizer/greenhouses/{id}/plans/latest` | Inspect the latest proposed / applied plan for one greenhouse |
-| `GET /api/optimizer/fleet` | Fleet-wide optimizer rollup for the operator overview: for **each** greenhouse its latest cycle outcome (`status`, `reason_code?`, `created_at`) and its per-greenhouse **`enabled`** flag, plus site aggregates — the open-escalation **backlog** count, counts **by outcome** (`applied` / `escalated` / `extended`), and the **oldest open escalation age**. Computed server-side from the plan store (the optimizer already owns it), so the operator surface reads **one** endpoint rather than fanning out `plans/latest` per greenhouse. The scalar backlog it reports is the same one `GET /health` surfaces |
+| `GET /api/optimizer/fleet` | Fleet-wide optimizer rollup for the operator overview: for **each** greenhouse its latest cycle outcome (`status`, `reason_code?`, `created_at`), its per-greenhouse **`enabled`** flag, and its **live pipeline progress** — `in_flight` (a cycle is running now) and `current_stage` (the [pipeline stage](#pipeline-stages) its current-or-most-recent cycle reached, retained after it ends), plus site aggregates — the open-escalation **backlog** count, counts **by outcome** (`applied` / `escalated` / `extended`), and the **oldest open escalation age**. Computed server-side from the plan store (the optimizer already owns it), so the operator surface reads **one** endpoint rather than fanning out `plans/latest` per greenhouse. The scalar backlog it reports is the same one `GET /health` surfaces |
 | `GET /api/optimizer/escalations` | List **open** escalations (held cycles awaiting operator review); see the escalation-lifecycle note below |
 | `POST /api/optimizer/escalations/{id}/resolve` | Operator-gated: resolve an open escalation (the `operator` resolution). Open escalations also close **automatically** as `superseded` or `expired` ([resilience](./09-spec-optimizer-resilience.md)) |
 | `GET /api/optimizer/model` | Inspect the active backend (`provider`, `model`, `prompt_version`, `role`) and the active provider's runtime `available_models` allowlist ([configuration](./11-spec-optimizer-configuration.md)) |
@@ -110,13 +110,15 @@ raising gates reference it rather than re-listing codes.
 | `contract_drift` | input gating — identity / `schema_version` mismatch; write path — Phase 2 `404` (greenhouse not in the platform registry) | persistent |
 | `twin_diverged` | twin — numerical divergence (non-finite / out-of-envelope step) | transient |
 | `twin_fidelity_fault` | twin — sustained parameter drift | persistent |
-| `constraint_violation` | constraint engine — target out of crop-safe range, or an inconsistent setpoint bundle | persistent (for this plan) |
+| `constraint_violation` | constraint engine — target out of crop-safe range, an inconsistent setpoint bundle, or a malformed trajectory (not anchored at `horizon.start`, unordered, off the hourly grid, or past its horizon) | persistent (for this plan) |
 | `low_confidence` | application gate — plan below the confidence threshold | transient |
 | `bounds_mismatch` | write path — Phase 2 `422` disagreement with local bounds | persistent |
 | `write_unauthorized` | write path — Phase 2 `401` / `403` (missing/invalid token or absent `setpoints:write` role, `SERVICE_AUTH_MODE=oidc`) | persistent |
-| `platform_unavailable` | read / write path — Phase 2 REST unreachable (transport failure / timeout / 5xx gateway) | transient |
+| `platform_unavailable` | read / write path — Phase 2 REST unreachable (transport failure / timeout / 5xx gateway), or a write `503` where Phase 2 could not establish a baseline (nothing recorded) | transient |
 | `cycle_timeout` | resilience — cycle overran `cycle_timeout_seconds` | transient |
-| `llm_unavailable` | planner — backend unreachable and no fallback configured | transient |
+| `llm_unavailable` | planner — backend unreachable (no response) and no fallback configured | transient |
+| `plan_unparseable` | planner — backend responded, but the completion could not be parsed into a valid `OptimizerPlan` (missing/extra field, empty patch, off-contract) | transient |
+| `internal_error` | resilience — an unexpected fault escaped the pipeline (twin, storage, serialization, client); surfaced so no cycle fails silently ([P3-RESIL-1](../../artifacts/non-functional-requirements.md)) | transient |
 
 **Class** is the operator-triage hint the input gate already draws
 ([input gating](./07-spec-optimizer-input-gating.md)): a **transient** code may clear on the next cycle
@@ -146,9 +148,13 @@ dormant in the single-host local deployment, enabled by configuration alone.
 above. In `oidc` mode the caller must present a Keycloak token carrying the **operator role**; by default
 (`trusted_network`) the call is untokened like the rest of the single-host local surface. The request is
 structured-logged with the operator identity, greenhouse id, supplied `reason`, and resulting
-`optimizer_run_id`. Manual cycles use the same single-flight and safety gates as scheduled cycles: a request
-is refused if the optimizer is disabled or that greenhouse is already planning, and a plan can still be held
-or escalated rather than applied.
+`optimizer_run_id`. The gates are checked and the single-flight slot claimed **synchronously**, then the
+endpoint returns `202 { optimizer_run_id, greenhouse_id }` and the cycle — the LLM call and setpoint
+write — runs in the **background** after the response is sent, so a slow cycle never blocks the caller or
+times out the platform's proxy hop; the plan surfaces on `plans/latest` / `fleet` once it completes. Manual
+cycles use the same single-flight and safety gates as scheduled cycles: a request is refused `409` if the
+optimizer is disabled or that greenhouse is already planning, and a plan can still be held or escalated
+rather than applied.
 
 ### Authenticating the model-change endpoint
 
@@ -192,3 +198,38 @@ The two scopes compose as an **AND** with the **global taking precedence**: a gr
 service is globally enabled *and* the greenhouse is enabled, so a global pause overrides every per-greenhouse
 flag. Its in-memory default is "enabled" (there is no per-greenhouse config file —
 [configuration](./11-spec-optimizer-configuration.md)).
+
+### Pipeline stages
+
+A planning cycle advances through six ordered **stages**, the granularity the operator console renders as a
+live per-greenhouse pipeline tracker:
+
+`ingest` (read the planning context) → `quality_gate` (input-quality gate) → `forecast` (twin fidelity +
+baseline simulation) → `plan` (state-change gate, then the LLM proposal + contract validation) → `constrain`
+(the deterministic guardrails + the confidence gate) → `publish` (the single setpoint write).
+
+The stage a cycle is executing is tracked in-memory per greenhouse and surfaced on
+[`GET /api/optimizer/fleet`](#service-api-endpoints) as `current_stage`, paired with `in_flight` (whether a
+cycle is running *now*). The value is **retained after the cycle ends**, so an idle greenhouse still shows the
+stage its last cycle reached — where an escalation held, or `publish` for a clean apply. It is live progress,
+not durable state: a restart clears it until the next cycle, and the console falls back to deriving the failed
+stage from the last outcome's `reason_code`. `in_flight` also puts a greenhouse on the `/fleet` roster before
+its first record, so a first cycle's progress is visible immediately.
+
+### Outcome reporting (activity-feed audit path)
+
+Most cycle outcomes surface to the platform's [activity feed](../frontend/05-spec-frontend-data-model.md) on
+their own: an **applied** plan *is* a setpoint write, stamped `source: optimizer` — the platform relabels it
+`optimizer_plan_applied`. An **extended** cycle writes nothing and is deliberately not a feed kind. The two
+outcomes that reach the platform through **no** other channel — an **escalation** held for review, and a
+**run failure** (a cycle that produced no usable plan: `cycle_timeout` / `llm_unavailable` / `plan_unparseable` / `internal_error`)
+— are reported over a dedicated ingest, `POST /api/greenhouses/{id}/optimizer-outcomes`
+([contract](../../../../contracts/optimizer-platform-outcomes-rest/openapi.json)), the **audit twin of the
+setpoint write** and gated by the same config-gated `setpoints:write` service seam (RFC-011). The platform maps
+a run-failure reason to an `optimizer_run_failed` event and any other escalation reason to
+`optimizer_plan_escalated` (both `warning`, `source: optimizer`), composing the reason code, the short run id,
+and the cycle's own message into an operator-facing troubleshooting line. Reporting is **best-effort
+telemetry**: a report failure is logged and swallowed, never allowed to break the cycle — the escalation is
+already recorded in the optimizer's own store and served by the read proxy regardless. The remaining audit
+kind, `optimizer_resolved`, is emitted by the platform directly when an operator resolves an escalation
+through its proxy — no optimizer report needed.

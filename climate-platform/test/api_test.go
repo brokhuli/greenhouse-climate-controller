@@ -165,8 +165,12 @@ func TestProfileAssignmentHTTP(t *testing.T) {
 	}
 
 	// The optimizer's POST /setpoints submission is accepted (202) and records optimizer
-	// provenance (RFC-011). In the default trusted_network mode it needs no service token.
-	client.do(http.MethodPost, "/api/greenhouses/gh-a/setpoints", map[string]any{"temperature_day_c": 23.0}, http.StatusAccepted)
+	// provenance (RFC-011). In the default trusted_network mode it needs no service token. The
+	// X-Optimizer-Run-Id trace header is recorded on the revision so the bundle is traceable to its
+	// cycle (P3-OBS-1).
+	optimizerRunID := "018f9c2e-6b7a-7c31-9e4d-2a1b5c6d7e8f"
+	client.request(http.MethodPost, "/api/greenhouses/gh-a/setpoints", map[string]any{"temperature_day_c": 23.0},
+		map[string]string{"X-Optimizer-Run-Id": optimizerRunID}, http.StatusAccepted, nil)
 
 	current, found, err = st.CurrentRevision(ctx, "gh-a")
 	if err != nil || !found {
@@ -174,6 +178,9 @@ func TestProfileAssignmentHTTP(t *testing.T) {
 	}
 	if current.Revision != 3 || current.Source != domain.SourceOptimizer || current.Setpoints.TemperatureDayC != 23 {
 		t.Fatalf("current revision = %+v, want rev3 optimizer temp 23", current)
+	}
+	if current.OptimizerRunID == nil || *current.OptimizerRunID != optimizerRunID {
+		t.Fatalf("optimizer_run_id = %v, want %s recorded as provenance", current.OptimizerRunID, optimizerRunID)
 	}
 
 	// An optimizer submission outside the active stage's crop-safe envelope ([20, 26]) is rejected
@@ -191,6 +198,10 @@ func TestProfileAssignmentHTTP(t *testing.T) {
 	if err != nil || !found || current.Revision != 4 || current.Source != domain.SourceOperatorEdit || current.Setpoints.TemperatureDayC != 30 {
 		t.Fatalf("current revision = %+v, want rev4 operator_edit temp 30", current)
 	}
+	// An operator edit carries no run id, so this revision's provenance is left null.
+	if current.OptimizerRunID != nil {
+		t.Fatalf("operator edit must not carry an optimizer_run_id, got %v", *current.OptimizerRunID)
+	}
 }
 
 // apiClient is a tiny JSON HTTP helper for driving the platform under test.
@@ -201,10 +212,15 @@ type apiClient struct {
 
 func (a *apiClient) do(method, path string, body any, wantStatus int) {
 	a.t.Helper()
-	a.doInto(method, path, body, wantStatus, nil)
+	a.request(method, path, body, nil, wantStatus, nil)
 }
 
 func (a *apiClient) doInto(method, path string, body any, wantStatus int, out any) {
+	a.t.Helper()
+	a.request(method, path, body, nil, wantStatus, out)
+}
+
+func (a *apiClient) request(method, path string, body any, headers map[string]string, wantStatus int, out any) {
 	a.t.Helper()
 	var reader io.Reader
 	if body != nil {
@@ -220,6 +236,9 @@ func (a *apiClient) doInto(method, path string, body any, wantStatus int, out an
 	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
+	}
+	for name, value := range headers {
+		req.Header.Set(name, value)
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

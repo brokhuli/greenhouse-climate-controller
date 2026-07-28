@@ -51,6 +51,12 @@ export const eventKindSchema = z.enum([
   "profile_applied",
   "setpoint_edit",
   "drift",
+  // Phase 3 optimizer audit kinds (source: optimizer). The append-only feed records these
+  // transitions; the actionable open-hold set stays in the polled optimizer console queue.
+  "optimizer_plan_applied",
+  "optimizer_plan_escalated",
+  "optimizer_resolved",
+  "optimizer_run_failed",
 ]);
 export const eventSeveritySchema = z.enum(["info", "warning", "critical"]);
 export const analyticsIntervalSchema = z.enum(["5m", "15m", "1h", "6h", "1d"]);
@@ -234,6 +240,16 @@ export const wireEventEntry = z.object({
   source: z.string().optional(),
 });
 
+export const wireActiveAlert = z.object({
+  greenhouse_id: slug,
+  component: z.string(),
+  zone_id: slug.nullable(),
+  fault_type: z.string(),
+  kind: z.enum(["fault", "interlock"]),
+  severity: z.enum(["warning", "critical"]),
+  since: isoTimestamp,
+});
+
 export const wireTimeScalePatch = z.object({ scale: z.number().min(0.25).max(32) });
 
 export const wireTimeScale = z.object({
@@ -266,6 +282,7 @@ export const wireErrorBody = z.object({ error: z.string() });
 
 export const wireFleet = z.array(wireGreenhouseSummary);
 export const wireEventFeed = z.array(wireEventEntry);
+export const wireActiveAlertFeed = z.array(wireActiveAlert);
 
 // ---------------------------------------------------------------------------
 // WebSocket wire frames (contracts/platform-dashboard-live-ws) — flat envelope + payload, strictly closed.
@@ -340,19 +357,41 @@ export const eventFrame = z
   })
   .strict();
 
+export const activeAlertsFrame = z
+  .object({
+    ...wsEnvelope,
+    zone_id: z.null(),
+    type: z.literal("active_alerts"),
+    alerts: z.array(
+      z
+        .object({
+          component: z.string(),
+          zone_id: slug.nullable(),
+          fault_type: z.string(),
+          kind: z.enum(["fault", "interlock"]),
+          severity: z.enum(["warning", "critical"]),
+          since: isoTimestamp,
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+
 /** Known frame schemas keyed by `type`; `ws.ts` dispatches on this and ignores unknown types. */
 export const KNOWN_FRAME_SCHEMAS = {
   telemetry: telemetryFrame,
   status: statusFrame,
   drift: driftFrame,
   event: eventFrame,
+  active_alerts: activeAlertsFrame,
 } as const;
 
 export type TelemetryFrame = z.infer<typeof telemetryFrame>;
 export type StatusFrame = z.infer<typeof statusFrame>;
 export type DriftFrame = z.infer<typeof driftFrame>;
 export type EventFrame = z.infer<typeof eventFrame>;
-export type KnownFrame = TelemetryFrame | StatusFrame | DriftFrame | EventFrame;
+export type ActiveAlertsFrame = z.infer<typeof activeAlertsFrame>;
+export type KnownFrame = TelemetryFrame | StatusFrame | DriftFrame | EventFrame | ActiveAlertsFrame;
 export type FrameType = keyof typeof KNOWN_FRAME_SCHEMAS;
 
 // ---------------------------------------------------------------------------
@@ -475,6 +514,16 @@ export type EventEntry = {
   severity: EventSeverity;
   message: string;
   source?: string;
+};
+
+export type ActiveAlert = {
+  greenhouseId: string;
+  component: string;
+  zoneId: string | null;
+  faultType: string;
+  kind: "fault" | "interlock";
+  severity: "warning" | "critical";
+  since: Date;
 };
 
 export type TimeScale = { scale: number; tickIndex: number; updatedAt: Date };
@@ -623,6 +672,16 @@ export const toEventEntry = (w: z.infer<typeof wireEventEntry>): EventEntry => (
   severity: w.severity,
   message: w.message,
   source: w.source,
+});
+
+export const toActiveAlert = (w: z.infer<typeof wireActiveAlert>): ActiveAlert => ({
+  greenhouseId: w.greenhouse_id,
+  component: w.component,
+  zoneId: w.zone_id,
+  faultType: w.fault_type,
+  kind: w.kind,
+  severity: w.severity,
+  since: new Date(w.since),
 });
 
 export const toTimeScale = (w: z.infer<typeof wireTimeScale>): TimeScale => ({
@@ -892,4 +951,434 @@ export const toWireAssignmentInput = (
 ): { profile_id: string; stage: string } => ({
   profile_id: input.profileId,
   stage: input.stage,
+});
+
+// ---------------------------------------------------------------------------
+// Optimizer console (3) — contracts/platform-dashboard-rest optimizer.json
+//
+// The Go API proxies/aggregates the Phase 3 optimizer's own Service API into this versioned
+// surface; the SPA reaches the optimizer only through here (optimizer interfaces §The operator
+// dashboard reaches this surface through the platform Go API). These reads are polled, not streamed.
+// ---------------------------------------------------------------------------
+
+/** The three per-cycle outcome states (optimizer plan contract §3 PlanRecord.outcome). */
+export const optimizerOutcomeStatusSchema = z.enum(["applied", "escalated", "extended"]);
+/** The LLM provider — fixed per optimizer instance (an offline config change), read-only here. */
+export const optimizerProviderSchema = z.enum(["ollama", "anthropic", "openai"]);
+/** Canonical held-cycle reason code — the SPA renders whatever the API sends via `ReasonCodeChip`. */
+export const reasonCodeSchema = z.enum([
+  "input_stale",
+  "input_incomplete",
+  "sensor_fault",
+  "actuator_fault",
+  "clock_mode_unsupported",
+  "contract_drift",
+  "twin_diverged",
+  "twin_fidelity_fault",
+  "constraint_violation",
+  "low_confidence",
+  "bounds_mismatch",
+  "write_unauthorized",
+  "platform_unavailable",
+  "cycle_timeout",
+  "llm_unavailable",
+  "plan_unparseable",
+  "internal_error",
+]);
+/** Operator-triage hint travelling with a reason code. */
+export const reasonClassSchema = z.enum(["transient", "persistent"]);
+/** The ordered pipeline stage a planning cycle is executing (the live pipeline tracker). */
+export const cycleStageSchema = z.enum([
+  "ingest",
+  "quality_gate",
+  "forecast",
+  "plan",
+  "constrain",
+  "publish",
+]);
+/** Service-level degradation cause for `OptimizerStatus.degraded_reason`. */
+export const degradedReasonSchema = z.enum([
+  "platform_unreachable",
+  "llm_unreachable",
+  "cycle_stalled",
+  "cold_start",
+]);
+/** Service-level optimizer health (distinct from per-greenhouse cycle outcomes). */
+export const optimizerServiceStatusSchema = z.enum(["healthy", "degraded", "unavailable"]);
+/** Whether a plan's backend was the primary or the configured fallback. */
+export const backendRoleSchema = z.enum(["primary", "fallback"]);
+/** How an escalation closed (null while open). */
+export const escalationResolutionSchema = z.enum(["operator", "superseded", "expired"]);
+
+export const wireOptimizerOutcome = z.object({
+  status: optimizerOutcomeStatusSchema,
+  reason_code: reasonCodeSchema.nullable().optional(),
+  message: z.string().nullable().optional(),
+});
+
+export const wireOptimizerBackend = z.object({
+  provider: optimizerProviderSchema,
+  model: z.string(),
+  prompt_version: z.string(),
+  role: backendRoleSchema,
+});
+
+export const wireOptimizerObjectiveScores = z.object({
+  anticipation: z.number().min(0).max(1),
+  coupling: z.number().min(0).max(1),
+  efficiency: z.number().min(0).max(1),
+});
+
+export const wireOptimizerPlanBody = z.object({
+  confidence: z.number().min(0).max(1),
+  explanation: z.string(),
+  immediate_setpoints: wireSetpointsPatch,
+  objective_scores: wireOptimizerObjectiveScores.optional(),
+});
+
+export const wireOptimizerHorizon = z.object({ start: isoTimestamp, end: isoTimestamp });
+
+export const wireOptimizerPlanView = z.object({
+  optimizer_run_id: z.string(),
+  greenhouse_id: slug,
+  created_at: isoTimestamp,
+  horizon: wireOptimizerHorizon,
+  backend: wireOptimizerBackend,
+  outcome: wireOptimizerOutcome,
+  plan: wireOptimizerPlanBody.nullable(),
+});
+
+/** The crop-safe [min, max] for one scalar setpoint field (diff near-bound flag). */
+export const wireFieldBound = z.object({ min: z.number(), max: z.number() });
+
+export const wireSetpointDiff = z.object({
+  proposed: wireSetpointsPatch,
+  current: wireSetpoints,
+  bounds: z.record(wireFieldBound),
+});
+
+export const wireOptimizerPlanDetail = z.object({
+  plan: wireOptimizerPlanView,
+  diff: wireSetpointDiff.nullable(),
+});
+
+export const wireEscalation = z.object({
+  id: z.string(),
+  greenhouse_id: slug,
+  optimizer_run_id: z.string(),
+  reason_code: reasonCodeSchema,
+  reason_class: reasonClassSchema,
+  created_at: isoTimestamp,
+  message: z.string().nullable().optional(),
+  resolution: escalationResolutionSchema.nullable().optional(),
+});
+
+export const wireEscalationList = z.array(wireEscalation);
+
+export const wireFleetOptimizerGreenhouse = z.object({
+  greenhouse_id: slug,
+  // status/created_at are null when the greenhouse is known to the optimizer but has not yet
+  // completed a cycle (discovered or paused before its first) — its enabled flag still matters.
+  status: optimizerOutcomeStatusSchema.nullable(),
+  reason_code: reasonCodeSchema.nullable().optional(),
+  message: z.string().nullable().optional(),
+  enabled: z.boolean(),
+  created_at: isoTimestamp.nullable(),
+  // Live pipeline progress: whether a cycle is running now, and the stage its current-or-most-recent
+  // cycle reached (null before its first cycle). Drives the row's pipeline tracker.
+  in_flight: z.boolean(),
+  current_stage: cycleStageSchema.nullable(),
+});
+
+export const wireFleetOptimizerRollup = z.object({
+  backlog: z.number().int().min(0),
+  by_outcome: z.object({
+    applied: z.number().int().min(0),
+    escalated: z.number().int().min(0),
+    extended: z.number().int().min(0),
+  }),
+  oldest_open_age_secs: z.number().int().min(0).nullable(),
+});
+
+export const wireFleetOptimizerSummary = z.object({
+  greenhouses: z.array(wireFleetOptimizerGreenhouse),
+  rollup: wireFleetOptimizerRollup,
+});
+
+export const wireModelState = z.object({
+  provider: optimizerProviderSchema,
+  model: z.string(),
+  prompt_version: z.string(),
+  role: backendRoleSchema,
+  available_models: z.array(z.string()).min(1),
+});
+
+export const wireEnableState = z.object({ enabled: z.boolean() });
+
+export const wireGreenhouseEnableState = z.object({
+  greenhouse_id: slug,
+  enabled: z.boolean(),
+});
+
+export const wireOptimizerStatus = z.object({
+  status: optimizerServiceStatusSchema,
+  degraded_reason: degradedReasonSchema.nullable().optional(),
+  enabled: z.boolean(),
+  read_only_reason: z.string().nullable().optional(),
+  last_successful_cycle_at: isoTimestamp.nullable(),
+  cadence_secs: z.number().int().min(1),
+});
+
+export const wireCycleAccepted = z.object({
+  optimizer_run_id: z.string(),
+  greenhouse_id: slug,
+});
+
+// --- Optimizer view-model types (camelCase) ------------------------------------------------
+
+export type OptimizerOutcomeStatus = z.infer<typeof optimizerOutcomeStatusSchema>;
+export type OptimizerProvider = z.infer<typeof optimizerProviderSchema>;
+export type ReasonCode = z.infer<typeof reasonCodeSchema>;
+export type ReasonClass = z.infer<typeof reasonClassSchema>;
+export type CycleStage = z.infer<typeof cycleStageSchema>;
+export type DegradedReason = z.infer<typeof degradedReasonSchema>;
+export type OptimizerServiceStatus = z.infer<typeof optimizerServiceStatusSchema>;
+export type BackendRole = z.infer<typeof backendRoleSchema>;
+export type EscalationResolution = z.infer<typeof escalationResolutionSchema>;
+
+export type OptimizerOutcome = {
+  status: OptimizerOutcomeStatus;
+  reasonCode: ReasonCode | null;
+  message: string | null;
+};
+
+export type OptimizerBackend = {
+  provider: OptimizerProvider;
+  model: string;
+  promptVersion: string;
+  role: BackendRole;
+};
+
+export type OptimizerObjectiveScores = {
+  anticipation: number;
+  coupling: number;
+  efficiency: number;
+};
+
+export type OptimizerPlanBody = {
+  confidence: number;
+  explanation: string;
+  immediateSetpoints: SetpointsPatch;
+  objectiveScores: OptimizerObjectiveScores | null;
+};
+
+export type OptimizerHorizon = { start: Date; end: Date };
+
+export type OptimizerPlanView = {
+  optimizerRunId: string;
+  greenhouseId: string;
+  createdAt: Date;
+  horizon: OptimizerHorizon;
+  backend: OptimizerBackend;
+  outcome: OptimizerOutcome;
+  plan: OptimizerPlanBody | null;
+};
+
+export type FieldBound = { min: number; max: number };
+
+export type SetpointDiff = {
+  proposed: SetpointsPatch;
+  current: Setpoints;
+  /** Crop-safe range keyed by the wire (snake_case) setpoint field name, e.g. `temperature_day_c`. */
+  bounds: Record<string, FieldBound>;
+};
+
+export type OptimizerPlanDetail = { plan: OptimizerPlanView; diff: SetpointDiff | null };
+
+export type Escalation = {
+  id: string;
+  greenhouseId: string;
+  optimizerRunId: string;
+  reasonCode: ReasonCode;
+  reasonClass: ReasonClass;
+  createdAt: Date;
+  message: string | null;
+  resolution: EscalationResolution | null;
+};
+
+export type FleetOptimizerGreenhouse = {
+  greenhouseId: string;
+  // null when the greenhouse is known but has not yet completed a cycle (paired: status/createdAt).
+  status: OptimizerOutcomeStatus | null;
+  reasonCode: ReasonCode | null;
+  /** Human-readable reason for the most recent escalation or benign held cycle. */
+  message: string | null;
+  enabled: boolean;
+  createdAt: Date | null;
+  // Live pipeline progress: whether a cycle is running now, and the stage its current-or-most-recent
+  // cycle reached (null before its first cycle). Drives the row's pipeline tracker.
+  inFlight: boolean;
+  currentStage: CycleStage | null;
+};
+
+export type FleetOptimizerRollup = {
+  backlog: number;
+  byOutcome: { applied: number; escalated: number; extended: number };
+  oldestOpenAgeSecs: number | null;
+};
+
+export type FleetOptimizerSummary = {
+  greenhouses: FleetOptimizerGreenhouse[];
+  rollup: FleetOptimizerRollup;
+};
+
+export type ModelState = {
+  provider: OptimizerProvider;
+  model: string;
+  promptVersion: string;
+  role: BackendRole;
+  availableModels: string[];
+};
+
+export type EnableState = { enabled: boolean };
+export type GreenhouseEnableState = { greenhouseId: string; enabled: boolean };
+
+export type OptimizerStatus = {
+  status: OptimizerServiceStatus;
+  degradedReason: DegradedReason | null;
+  enabled: boolean;
+  readOnlyReason: string | null;
+  lastSuccessfulCycleAt: Date | null;
+  cadenceSecs: number;
+};
+
+export type CycleAccepted = { optimizerRunId: string; greenhouseId: string };
+
+// --- Optimizer adapters: wire (snake_case) → view-model (camelCase) -------------------------
+
+/** Decode a partial setpoint bundle (an optimizer proposal / diff patch) to the view shape. */
+export const toSetpointsPatch = (w: z.infer<typeof wireSetpointsPatch>): SetpointsPatch => {
+  const patch: SetpointsPatch = {};
+  if (w.temperature_day_c !== undefined) patch.temperatureDayC = w.temperature_day_c;
+  if (w.temperature_night_c !== undefined) patch.temperatureNightC = w.temperature_night_c;
+  if (w.day_start !== undefined) patch.dayStart = w.day_start;
+  if (w.day_end !== undefined) patch.dayEnd = w.day_end;
+  if (w.humidity_low_pct !== undefined) patch.humidityLowPct = w.humidity_low_pct;
+  if (w.humidity_high_pct !== undefined) patch.humidityHighPct = w.humidity_high_pct;
+  if (w.humidity_deadband_pct !== undefined) patch.humidityDeadbandPct = w.humidity_deadband_pct;
+  if (w.co2_target_ppm !== undefined) patch.co2TargetPpm = w.co2_target_ppm;
+  if (w.co2_vent_interlock_threshold_pct !== undefined)
+    patch.co2VentInterlockThresholdPct = w.co2_vent_interlock_threshold_pct;
+  if (w.vpd_target_kpa !== undefined) patch.vpdTargetKpa = w.vpd_target_kpa;
+  if (w.dli_target_mol !== undefined) patch.dliTargetMol = w.dli_target_mol;
+  if (w.zones !== undefined) patch.zones = w.zones.map(toZoneTargets);
+  return patch;
+};
+
+export const toOptimizerOutcome = (w: z.infer<typeof wireOptimizerOutcome>): OptimizerOutcome => ({
+  status: w.status,
+  reasonCode: w.reason_code ?? null,
+  message: w.message ?? null,
+});
+
+export const toOptimizerBackend = (w: z.infer<typeof wireOptimizerBackend>): OptimizerBackend => ({
+  provider: w.provider,
+  model: w.model,
+  promptVersion: w.prompt_version,
+  role: w.role,
+});
+
+export const toOptimizerPlanBody = (
+  w: z.infer<typeof wireOptimizerPlanBody>,
+): OptimizerPlanBody => ({
+  confidence: w.confidence,
+  explanation: w.explanation,
+  immediateSetpoints: toSetpointsPatch(w.immediate_setpoints),
+  objectiveScores: w.objective_scores ?? null,
+});
+
+export const toOptimizerPlanView = (
+  w: z.infer<typeof wireOptimizerPlanView>,
+): OptimizerPlanView => ({
+  optimizerRunId: w.optimizer_run_id,
+  greenhouseId: w.greenhouse_id,
+  createdAt: new Date(w.created_at),
+  horizon: { start: new Date(w.horizon.start), end: new Date(w.horizon.end) },
+  backend: toOptimizerBackend(w.backend),
+  outcome: toOptimizerOutcome(w.outcome),
+  plan: w.plan ? toOptimizerPlanBody(w.plan) : null,
+});
+
+export const toSetpointDiff = (w: z.infer<typeof wireSetpointDiff>): SetpointDiff => ({
+  proposed: toSetpointsPatch(w.proposed),
+  current: toSetpoints(w.current),
+  bounds: w.bounds,
+});
+
+export const toOptimizerPlanDetail = (
+  w: z.infer<typeof wireOptimizerPlanDetail>,
+): OptimizerPlanDetail => ({
+  plan: toOptimizerPlanView(w.plan),
+  diff: w.diff ? toSetpointDiff(w.diff) : null,
+});
+
+export const toEscalation = (w: z.infer<typeof wireEscalation>): Escalation => ({
+  id: w.id,
+  greenhouseId: w.greenhouse_id,
+  optimizerRunId: w.optimizer_run_id,
+  reasonCode: w.reason_code,
+  reasonClass: w.reason_class,
+  createdAt: new Date(w.created_at),
+  message: w.message ?? null,
+  resolution: w.resolution ?? null,
+});
+
+export const toFleetOptimizerSummary = (
+  w: z.infer<typeof wireFleetOptimizerSummary>,
+): FleetOptimizerSummary => ({
+  greenhouses: w.greenhouses.map((g) => ({
+    greenhouseId: g.greenhouse_id,
+    status: g.status ?? null,
+    reasonCode: g.reason_code ?? null,
+    message: g.message ?? null,
+    enabled: g.enabled,
+    createdAt: g.created_at ? new Date(g.created_at) : null,
+    inFlight: g.in_flight,
+    currentStage: g.current_stage ?? null,
+  })),
+  rollup: {
+    backlog: w.rollup.backlog,
+    byOutcome: { ...w.rollup.by_outcome },
+    oldestOpenAgeSecs: w.rollup.oldest_open_age_secs,
+  },
+});
+
+export const toModelState = (w: z.infer<typeof wireModelState>): ModelState => ({
+  provider: w.provider,
+  model: w.model,
+  promptVersion: w.prompt_version,
+  role: w.role,
+  availableModels: w.available_models,
+});
+
+export const toEnableState = (w: z.infer<typeof wireEnableState>): EnableState => ({
+  enabled: w.enabled,
+});
+
+export const toGreenhouseEnableState = (
+  w: z.infer<typeof wireGreenhouseEnableState>,
+): GreenhouseEnableState => ({ greenhouseId: w.greenhouse_id, enabled: w.enabled });
+
+export const toOptimizerStatus = (w: z.infer<typeof wireOptimizerStatus>): OptimizerStatus => ({
+  status: w.status,
+  degradedReason: w.degraded_reason ?? null,
+  enabled: w.enabled,
+  readOnlyReason: w.read_only_reason ?? null,
+  lastSuccessfulCycleAt: w.last_successful_cycle_at ? new Date(w.last_successful_cycle_at) : null,
+  cadenceSecs: w.cadence_secs,
+});
+
+export const toCycleAccepted = (w: z.infer<typeof wireCycleAccepted>): CycleAccepted => ({
+  optimizerRunId: w.optimizer_run_id,
+  greenhouseId: w.greenhouse_id,
 });

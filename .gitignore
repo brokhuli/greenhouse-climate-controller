@@ -1,6 +1,9 @@
 # Research notes (local only)
 research/
 
+# Generated architecture diagrams (local documentation artifacts)
+docs/specs/artifacts/*.excalidraw
+
 # Rust
 # Unanchored so it also matches climate-controller/target/ (the crate is not at repo root).
 target/

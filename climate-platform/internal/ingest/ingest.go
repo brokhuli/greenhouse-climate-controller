@@ -223,6 +223,11 @@ func (ing *Ingester) onActuator(payload []byte, topicID string, now time.Time) {
 	}
 	ing.metrics.IngestMessage("actuator")
 	ing.buf.push(record{actuator: &sample})
+	// Readback health is live-only state (never stored), so it goes straight to the fleet
+	// snapshot the planning-context read serves rather than through the write buffer.
+	if domain.ActuatorHealth[sample.Health] {
+		ing.fleet.SetActuatorHealth(sample.GreenhouseID, sample.Actuator, zoneKey(sample.ZoneID), sample.Health)
+	}
 	live, changed := ing.fleet.Observe(sample.GreenhouseID, now)
 	ing.hub.Broadcast(ws.NewTelemetryActuator(sample))
 	if changed {
@@ -281,6 +286,15 @@ func (ing *Ingester) onState(payload []byte, topicID string, now time.Time) {
 	if snapshot.DLI != nil {
 		dli := snapshot.DLI.Value
 		ing.fleet.SetDLI(snapshot.GreenhouseID, &dli)
+	}
+	// The retained state frame is the only carrier of the controller's mode and its whole
+	// active fault set — both data-quality signals the Phase 3 planning-context read serves.
+	ing.fleet.SetControllerMode(snapshot.GreenhouseID, snapshot.Controller.Mode)
+	ing.fleet.SetSensorFaults(snapshot.GreenhouseID, sensorFaults(snapshot), ts)
+	alertsChanged := ing.fleet.SetActiveFaults(snapshot.GreenhouseID, activeFaults(snapshot), ts)
+	if alertsChanged {
+		liveSnapshot, _ := ing.fleet.Snapshot(snapshot.GreenhouseID)
+		ing.hub.Broadcast(ws.NewActiveAlerts(snapshot.GreenhouseID, ts, liveSnapshot.ActiveFaults))
 	}
 	degraded := !snapshot.Controller.Healthy || snapshot.Controller.Mode != "normal"
 	live, statusChanged := ing.fleet.SetDegraded(snapshot.GreenhouseID, degraded, now)

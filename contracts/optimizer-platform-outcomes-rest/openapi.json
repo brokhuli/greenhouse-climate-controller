@@ -1,0 +1,91 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Greenhouse Platform — Optimizer Outcome-Report API (activity-feed audit path)",
+    "version": "1.0.0",
+    "description": "The platform Go API's ingest for optimizer cycle-outcome reports — the audit twin of the single-authority setpoint write (contract `optimizer-platform-setpoints-rest`). An applied plan already reaches the activity feed as its setpoint write, and an extended cycle writes nothing, so the outcomes the optimizer cannot otherwise surface — an escalation held for review, or a run that produced no usable plan — are reported here so the platform can emit the matching `optimizer_plan_escalated` / `optimizer_run_failed` activity event (`platform-dashboard-rest` EventEntry, spec 05 §Events). One endpoint: `POST /api/greenhouses/{greenhouse_id}/optimizer-outcomes`. Only escalations carry a feed event; a non-escalated report is accepted as a no-op. Reporting is best-effort telemetry — the optimizer never lets a failure here break a cycle. Identity, units, and field naming follow RFC-007 (snake_case, the same `greenhouse_id` slug). Authentication is the config-gated service boundary (RFC-011), the same seam as the setpoint write: `SERVICE_AUTH_MODE=trusted_network` (default) accepts the untokened internal call; `oidc` requires a Keycloak client-credentials token carrying the `setpoints:write` role (or an operator token). The `{}` scheme is listed first, so the token is optional at the contract level — enforcement is gated on config.",
+    "x-slice": "3"
+  },
+  "servers": [
+    {
+      "url": "http://{platform_host}:{port}",
+      "description": "The platform's nginx entry point, which reverse-proxies `/api` to the Go API. The optimizer reaches this ingest over the internal Docker network.",
+      "variables": {
+        "platform_host": { "default": "localhost" },
+        "port": { "default": "8080" }
+      }
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Config-gated service token (RFC-011) — the same `setpoints:write` service seam as the setpoint write. Required only under `SERVICE_AUTH_MODE=oidc`; the default `trusted_network` accepts the untokened internal call."
+      }
+    },
+    "schemas": {
+      "OptimizerOutcomeReport": {
+        "type": "object",
+        "description": "One cycle's outcome, reported for the activity feed. The platform maps an escalation whose `reason_code` is a run-failure code (`cycle_timeout` / `llm_unavailable` / `plan_unparseable` / `internal_error`) to an `optimizer_run_failed` event, and any other escalation reason to `optimizer_plan_escalated`; both warnings, sourced to the optimizer, with the reason + run id + `message` composed into the event message for troubleshooting.",
+        "properties": {
+          "optimizer_run_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The cycle's trace id (optimizer_run_id), correlating the event with the optimizer console and the escalation queue."
+          },
+          "status": {
+            "type": "string",
+            "enum": ["applied", "escalated", "extended"],
+            "description": "The cycle outcome. Only `escalated` produces an event; `applied` (surfaces via its setpoint write) and `extended` (writes nothing) are accepted as no-ops."
+          },
+          "reason_code": {
+            "type": ["string", "null"],
+            "description": "The escalation reason code (the optimizer's canonical ReasonCode set), or null. Selects `optimizer_run_failed` vs `optimizer_plan_escalated`."
+          },
+          "message": {
+            "type": ["string", "null"],
+            "description": "The cycle's own outcome detail (e.g. \"cycle exceeded cycle_timeout_seconds (240s)\"), folded into the event message. May be null."
+          }
+        },
+        "required": ["optimizer_run_id", "status"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "paths": {
+    "/api/greenhouses/{greenhouse_id}/optimizer-outcomes": {
+      "parameters": [
+        {
+          "name": "greenhouse_id",
+          "in": "path",
+          "required": true,
+          "schema": { "type": "string" },
+          "description": "The greenhouse the cycle ran for (the RFC-007 slug)."
+        }
+      ],
+      "post": {
+        "operationId": "submitOptimizerOutcome",
+        "summary": "Report a cycle outcome to the activity feed",
+        "x-slice": "3",
+        "security": [{}, { "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/OptimizerOutcomeReport" }
+            }
+          }
+        },
+        "responses": {
+          "202": { "description": "The report was accepted (an escalation emitted its event; a non-escalated report was a no-op)." },
+          "400": { "description": "Malformed body." },
+          "401": { "description": "Unauthenticated (oidc mode)." },
+          "403": { "description": "Authenticated but not privileged (oidc mode)." },
+          "404": { "description": "Unknown greenhouse." }
+        }
+      }
+    }
+  }
+}

@@ -22,6 +22,7 @@ function makeStream() {
       handlers.add(handler);
       return () => handlers.delete(handler);
     },
+    schemaDrift: { count: 0, lastType: null, lastIssue: null },
   };
   const emit = (telemetry: TelemetryFrame) => handlers.forEach((handler) => handler(telemetry));
   const wrapper = ({ children }: { children: ReactNode }) => (

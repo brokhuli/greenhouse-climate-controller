@@ -1,0 +1,299 @@
+"""Phase-2 data-access client (spec 06 §2; contracts #7 read, #3 write).
+
+The optimizer's only up/down channel to the platform: an async httpx client that reads one
+greenhouse's planning context and submits refined setpoints. It is decoupled from the platform's
+storage — the read is a REST contract (RFC-008). Reads validate the body against the wire schema and
+raise a typed ``PlatformError`` carrying a reason code; writes return a ``WriteOutcome`` mapping every
+response the setpoint path can return to its canonical outcome + reason code (spec 06 Write outcomes),
+so no status is silently unhandled.
+
+Auth is the config-gated service seam (RFC-011): ``trusted_network`` (default) sends the call
+untokened; ``oidc`` attaches a ``Bearer`` service token, acquired on demand from the
+:class:`~climate_optimizer.auth.TokenProvider` (or supplied directly as ``bearer_token``).
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from dataclasses import dataclass
+from types import TracebackType
+from typing import Protocol
+from uuid import UUID
+
+import httpx
+from jsonschema import ValidationError as SchemaValidationError
+from pydantic import ValidationError
+
+from ..config import Settings
+from ..models import PlanningContext, PlanRecord, ReasonCode, Setpoints, SetpointsPatch
+from . import schema_validation
+from .auth import TokenAcquisitionError
+
+_DEFAULT_TIMEOUT_SECONDS = 30.0
+
+# Trace header carrying the cycle's optimizer_run_id onto the applied bundle's provenance so a Phase 2
+# revision can be traced back to the optimizer run that produced it (spec 06 §2/§3, P3-OBS-1).
+_OPTIMIZER_RUN_ID_HEADER = "X-Optimizer-Run-Id"
+
+
+class TokenSource(Protocol):
+    """The async bearer-token source the write path consults in ``oidc`` mode."""
+
+    async def token(self) -> str | None: ...
+
+
+@dataclass(frozen=True)
+class FleetMember:
+    """One greenhouse in the registry, with the connectivity the scheduler gates dispatch on."""
+
+    greenhouse_id: str
+    online: bool
+
+
+class PlatformError(Exception):
+    """A read-path failure carrying the canonical escalation reason code (spec 06 / interfaces)."""
+
+    def __init__(self, reason_code: ReasonCode, message: str) -> None:
+        super().__init__(message)
+        self.reason_code = reason_code
+        self.message = message
+
+
+@dataclass(frozen=True)
+class WriteOutcome:
+    """The outcome of a setpoint submission, mapped from the Phase-2 response (spec 06 Write outcomes).
+
+    Three shapes: ``applied`` (Phase 2 accepted the bundle), ``escalated`` (a failure carrying its
+    reason code), and ``held`` — the write was *withheld before dispatch* because planning was paused
+    after the service token was acquired but before the request left the process. A hold is neither a
+    success nor a fault: the caller extends the baseline, without escalating.
+    """
+
+    applied: bool
+    reason_code: ReasonCode | None
+    message: str
+    setpoints: Setpoints | None = None
+    held: bool = False
+
+    @classmethod
+    def applied_ok(cls, *, setpoints: Setpoints | None, message: str) -> WriteOutcome:
+        return cls(applied=True, reason_code=None, message=message, setpoints=setpoints)
+
+    @classmethod
+    def escalated(cls, reason_code: ReasonCode, message: str) -> WriteOutcome:
+        return cls(applied=False, reason_code=reason_code, message=message)
+
+    @classmethod
+    def withheld(cls, message: str) -> WriteOutcome:
+        """Planning paused between token acquisition and dispatch; nothing was sent."""
+        return cls(applied=False, reason_code=None, message=message, held=True)
+
+
+class PlatformClient:
+    """Async client for the Phase-2 read and write paths."""
+
+    def __init__(
+        self,
+        settings: Settings,
+        *,
+        client: httpx.AsyncClient | None = None,
+        bearer_token: str | None = None,
+        token_source: TokenSource | None = None,
+    ) -> None:
+        self._settings = settings
+        self._base = settings.data.platform_api_url.rstrip("/")
+        self._bearer_token = bearer_token
+        self._token_source = token_source
+        self._owns_client = client is None
+        self._client = client or httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT_SECONDS)
+
+    async def __aenter__(self) -> PlatformClient:
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        await self.aclose()
+
+    async def aclose(self) -> None:
+        if self._owns_client:
+            await self._client.aclose()
+
+    async def _auth_headers(self) -> dict[str, str]:
+        # RFC-011: only oidc mode carries a token; trusted_network sends nothing.
+        if self._settings.platform_auth.mode != "oidc":
+            return {}
+        token = self._bearer_token
+        if token is None and self._token_source is not None:
+            token = await self._token_source.token()
+        if token:
+            return {"Authorization": f"Bearer {token}"}
+        return {}
+
+    async def list_fleet(self) -> list[FleetMember]:
+        """Discover the fleet the scheduler plans for, with each greenhouse's connectivity.
+
+        The optimizer stays a pure Phase-2 client: it reads the registry the platform already
+        serves rather than carrying its own fleet list in config. A greenhouse the platform
+        reports ``offline`` (no telemetry ever seen — e.g. registered but no controller running)
+        stays in the roster but is not actively planned: with no data it can only ever hold at the
+        input gate, so the scheduler skips it rather than escalating every cycle.
+        """
+        url = f"{self._base}/greenhouses"
+        try:
+            response = await self._client.get(url)
+        except (httpx.TimeoutException, httpx.TransportError) as err:
+            raise PlatformError(
+                ReasonCode.PLATFORM_UNAVAILABLE, f"fleet list read failed: {err}"
+            ) from err
+
+        if response.status_code != 200:
+            raise PlatformError(
+                ReasonCode.PLATFORM_UNAVAILABLE,
+                f"fleet list read returned {response.status_code}",
+            )
+
+        try:
+            payload = response.json()
+            # A ``degraded`` greenhouse is still planned — it has telemetry, and the input gate
+            # handles its staleness/faults; only a truly ``offline`` (never-reported) one is skipped.
+            return [
+                FleetMember(greenhouse_id=str(entry["id"]), online=entry.get("status") != "offline")
+                for entry in payload
+            ]
+        except (KeyError, TypeError, ValueError) as err:
+            raise PlatformError(
+                ReasonCode.CONTRACT_DRIFT, f"fleet list response invalid: {err}"
+            ) from err
+
+    async def list_greenhouse_ids(self) -> list[str]:
+        """Every greenhouse id in the registry, connectivity aside (spec 02 §Scheduling)."""
+        return [member.greenhouse_id for member in await self.list_fleet()]
+
+    async def get_planning_context(
+        self, greenhouse_id: str, *, window: str = "12h", interval: str = "1h"
+    ) -> PlanningContext:
+        """Read one greenhouse's planning context; raise ``PlatformError`` on any non-200."""
+        url = f"{self._base}/greenhouses/{greenhouse_id}/planning-context"
+        try:
+            response = await self._client.get(url, params={"window": window, "interval": interval})
+        except (httpx.TimeoutException, httpx.TransportError) as err:
+            raise PlatformError(
+                ReasonCode.PLATFORM_UNAVAILABLE, f"planning-context read failed: {err}"
+            ) from err
+
+        if response.status_code == 404:
+            raise PlatformError(
+                ReasonCode.CONTRACT_DRIFT, f"greenhouse {greenhouse_id} not found (404)"
+            )
+        if response.status_code != 200:
+            raise PlatformError(
+                ReasonCode.PLATFORM_UNAVAILABLE,
+                f"planning-context read returned {response.status_code}",
+            )
+
+        try:
+            payload = response.json()
+            schema_validation.validate_planning_context(payload)
+            return PlanningContext.model_validate(payload)
+        except (SchemaValidationError, ValidationError, ValueError) as err:
+            raise PlatformError(
+                ReasonCode.CONTRACT_DRIFT, f"planning-context response invalid: {err}"
+            ) from err
+
+    async def submit_setpoints(
+        self,
+        greenhouse_id: str,
+        patch: SetpointsPatch,
+        *,
+        optimizer_run_id: UUID,
+        still_active: Callable[[], bool] | None = None,
+    ) -> WriteOutcome:
+        """Submit refined setpoints; map every Phase-2 response to a canonical outcome.
+
+        ``optimizer_run_id`` rides an ``X-Optimizer-Run-Id`` trace header so Phase 2 can record it on
+        the applied bundle's provenance (spec 06 §2/§3, P3-OBS-1).
+
+        ``still_active`` is the caller's enable predicate, re-evaluated *after* the service token is
+        acquired (in ``oidc`` mode that acquisition can suspend on a network round-trip) and
+        immediately before the request is dispatched. This closes the acquire-then-send race: an
+        operator who pauses while the token is in flight must still see no write (spec 09). A pause
+        caught here returns :meth:`WriteOutcome.withheld` — nothing is sent.
+        """
+        url = f"{self._base}/greenhouses/{greenhouse_id}/setpoints"
+        body = patch.model_dump(mode="json", exclude_unset=True)
+        try:
+            headers = await self._auth_headers()
+        except TokenAcquisitionError as err:
+            # No service credential means the write cannot be authorized (RFC-011).
+            return WriteOutcome.escalated(
+                ReasonCode.WRITE_UNAUTHORIZED, f"could not acquire service token: {err}"
+            )
+        if still_active is not None and not still_active():
+            return WriteOutcome.withheld(
+                "planning paused after service-token acquisition; setpoint write withheld"
+            )
+        headers[_OPTIMIZER_RUN_ID_HEADER] = str(optimizer_run_id)
+        try:
+            response = await self._client.post(url, json=body, headers=headers)
+        except (httpx.TimeoutException, httpx.TransportError) as err:
+            return WriteOutcome.escalated(
+                ReasonCode.PLATFORM_UNAVAILABLE, f"setpoint write failed to reach platform: {err}"
+            )
+
+        code = response.status_code
+        if code == 202:
+            setpoints: Setpoints | None = None
+            try:
+                setpoints = Setpoints.model_validate(response.json())
+            except (ValidationError, ValueError):
+                setpoints = None
+            return WriteOutcome.applied_ok(setpoints=setpoints, message="setpoints accepted (202)")
+        if code == 503:
+            # A 503 is *not* the recorded-but-offline case (Phase 2 returns 202 for that, holding
+            # the bundle for reconnect). It means Phase 2 could not establish a baseline — cold start
+            # with the controller unreachable — so nothing was recorded. Treat it as a transient hold
+            # and never claim ownership of state Phase 2 does not hold (spec 06 Write outcomes).
+            return WriteOutcome.escalated(
+                ReasonCode.PLATFORM_UNAVAILABLE,
+                "platform could not establish a baseline (503); nothing recorded, retry next cadence",
+            )
+        if code == 422:
+            return WriteOutcome.escalated(
+                ReasonCode.BOUNDS_MISMATCH, f"platform rejected bounds (422): {response.text}"
+            )
+        if code in (401, 403):
+            return WriteOutcome.escalated(
+                ReasonCode.WRITE_UNAUTHORIZED, f"write not authorized ({code})"
+            )
+        if code == 404:
+            return WriteOutcome.escalated(
+                ReasonCode.CONTRACT_DRIFT, f"greenhouse {greenhouse_id} not found (404)"
+            )
+        return WriteOutcome.escalated(
+            ReasonCode.PLATFORM_UNAVAILABLE, f"unexpected setpoint-write status {code}"
+        )
+
+    async def report_outcome(self, record: PlanRecord) -> None:
+        """Report a cycle's outcome to the platform's activity feed (interfaces §Outcome reporting).
+
+        A second, audit-only channel alongside the setpoint write: it carries the outcomes that are
+        *not* setpoint writes — an escalation or a run failure — so the platform can emit the matching
+        ``optimizer_plan_escalated`` / ``optimizer_run_failed`` event. Authed by the same service seam
+        as the write (RFC-011). Raises on transport failure or a non-2xx status; the caller treats
+        reporting as best-effort and never lets a failure here break the cycle.
+        """
+        url = f"{self._base}/greenhouses/{record.greenhouse_id}/optimizer-outcomes"
+        outcome = record.outcome
+        body = {
+            "optimizer_run_id": str(record.optimizer_run_id),
+            "status": outcome.status.value,
+            "reason_code": outcome.reason_code.value if outcome.reason_code else None,
+            "message": outcome.message,
+        }
+        headers = await self._auth_headers()
+        response = await self._client.post(url, json=body, headers=headers)
+        response.raise_for_status()

@@ -75,13 +75,19 @@ var Actuators = map[string]bool{
 }
 
 // EventKinds is the closed set of activity-feed event kinds (platform-dashboard-rest EventEntry).
-// "drift" and "profile_applied" exist in the contract but are produced only in 2b.
+// "drift" and "profile_applied" exist in the contract but are produced only in 2b. The four
+// optimizer_* kinds are the Phase 3 optimizer audit events (source: optimizer): an applied plan, a
+// held (escalated) cycle, an operator-resolved escalation, and a run that produced no outcome.
 var EventKinds = map[string]bool{
-	"fault":           true,
-	"interlock":       true,
-	"profile_applied": true,
-	"setpoint_edit":   true,
-	"drift":           true,
+	"fault":                    true,
+	"interlock":                true,
+	"profile_applied":          true,
+	"setpoint_edit":            true,
+	"drift":                    true,
+	"optimizer_plan_applied":   true,
+	"optimizer_plan_escalated": true,
+	"optimizer_resolved":       true,
+	"optimizer_run_failed":     true,
 }
 
 // EventSeverities is the platform's dashboard grading (distinct from the controller's
@@ -90,6 +96,13 @@ var EventSeverities = map[string]bool{
 	"info":     true,
 	"warning":  true,
 	"critical": true,
+}
+
+// InterlockFaults are controller faults surfaced as the distinct dashboard interlock kind.
+var InterlockFaults = map[string]bool{
+	"critical_temperature":   true,
+	"co2_ceiling":            true,
+	"irrigation_no_response": true,
 }
 
 // Reading is one time-stamped sensor sample as stored and served.
@@ -110,7 +123,30 @@ type ActuatorSample struct {
 	Actuator     string
 	Commanded    float64
 	Observed     *float64
-	TS           time.Time
+	// Health is the reported readback health (ActuatorHealth). It feeds the live controller
+	// snapshot the planning-context read serves and is deliberately not persisted — history
+	// stores positions, and the optimizer's input gate asks only about the current state.
+	Health string
+	TS     time.Time
+}
+
+// ActuatorHealth is the closed set of actuator readback health values the controller reports
+// (contracts/controller-platform-telemetry-mqtt actuator-state), read by the Phase 3 input
+// gate: ok = tracking, stuck = readback not following commands, no_response = no readback.
+var ActuatorHealth = map[string]bool{
+	"ok":          true,
+	"stuck":       true,
+	"no_response": true,
+}
+
+// SensorFaultKinds is the subset of controller fault types that are per-sensor faults, as the
+// planning-context contract's SensorFault.kind enumerates them. Actuator and interlock fault
+// types are excluded — those reach the optimizer as actuator health, not as a sensor fault.
+var SensorFaultKinds = map[string]bool{
+	"stuck":                   true,
+	"out_of_range":            true,
+	"sensor_disagreement":     true,
+	"temperature_unavailable": true,
 }
 
 // Event is one activity-feed entry (fault, interlock, setpoint edit, …).

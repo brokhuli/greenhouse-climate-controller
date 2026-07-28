@@ -5,6 +5,8 @@ import type {
   DriftFrame,
   EventEntry,
   EventFrame,
+  ActiveAlert,
+  ActiveAlertsFrame,
   GreenhouseSummary,
   StatusFrame,
   TelemetryFrame,
@@ -12,6 +14,7 @@ import type {
 import {
   applyDriftFrame,
   applyEventFrame,
+  applyActiveAlertsFrame,
   applyStatusFrame,
   applyStatusToSummary,
   applyTelemetryToSummary,
@@ -44,6 +47,20 @@ const telemetryFrame: TelemetryFrame = {
     { metric: "temperature", value: 25, unit: "°C" },
     { metric: "humidity", value: 61, unit: "%RH" },
     { metric: "co2", value: 812, unit: "ppm" },
+  ],
+};
+const activeAlertsFrame: ActiveAlertsFrame = {
+  ...base,
+  type: "active_alerts",
+  alerts: [
+    {
+      component: "temperature",
+      zone_id: null,
+      fault_type: "critical_temperature",
+      kind: "interlock",
+      severity: "critical",
+      since: "2026-06-24T14:00:00.000Z",
+    },
   ],
 };
 
@@ -109,5 +126,27 @@ describe("cache patches", () => {
     expect(
       client.getQueryData<EventEntry[]>(queryKeys.events({ severity: "critical" })),
     ).toHaveLength(0);
+  });
+
+  it("replaces a greenhouse alert snapshot, including clears, in matching scopes", () => {
+    const client = new QueryClient();
+    const old: ActiveAlert = {
+      greenhouseId: "gh-a",
+      component: "humidity",
+      zoneId: null,
+      faultType: "stuck",
+      kind: "fault",
+      severity: "warning",
+      since: new Date(),
+    };
+    client.setQueryData(queryKeys.activeAlerts({}), [old]);
+    client.setQueryData(queryKeys.activeAlerts({ severity: "critical" }), []);
+    applyActiveAlertsFrame(client, activeAlertsFrame);
+    expect(client.getQueryData<ActiveAlert[]>(queryKeys.activeAlerts({}))).toHaveLength(1);
+    expect(
+      client.getQueryData<ActiveAlert[]>(queryKeys.activeAlerts({ severity: "critical" })),
+    ).toHaveLength(1);
+    applyActiveAlertsFrame(client, { ...activeAlertsFrame, alerts: [] });
+    expect(client.getQueryData<ActiveAlert[]>(queryKeys.activeAlerts({}))).toHaveLength(0);
   });
 });

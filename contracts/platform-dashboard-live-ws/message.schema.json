@@ -8,6 +8,7 @@
     { "$ref": "https://greenhouse.local/contracts/platform-dashboard-live-ws/status.schema.json" },
     { "$ref": "https://greenhouse.local/contracts/platform-dashboard-live-ws/drift.schema.json" },
     { "$ref": "https://greenhouse.local/contracts/platform-dashboard-live-ws/event.schema.json" },
+    { "$ref": "https://greenhouse.local/contracts/platform-dashboard-live-ws/active-alerts.schema.json" },
     {
       "title": "Unknown Forward-Compatible Frame",
       "description": "A future frame type unknown to this contract version. Consumers validate the common envelope, see that the type is not one they understand, and ignore the frame.",
@@ -19,7 +20,7 @@
             "type": {
               "type": "string",
               "not": {
-                "enum": ["telemetry", "status", "drift", "event"]
+                "enum": ["telemetry", "status", "drift", "event", "active_alerts"]
               }
             }
           },

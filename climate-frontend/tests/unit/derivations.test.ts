@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
-import type { Connectivity, EventEntry, GreenhouseSummary } from "../../src/api/schemas";
+import type {
+  ActiveAlert,
+  Connectivity,
+  EventEntry,
+  GreenhouseSummary,
+} from "../../src/api/schemas";
 import {
   activeTemperatureSetpoint,
   activeFaultCount,
+  activeAlertRollup,
   formatGreenhouseLabel,
   formatLastWatered,
   formatSchedule,
@@ -105,6 +111,46 @@ describe("activeFaultCount", () => {
   it("is zero for an empty or fault-free feed", () => {
     expect(activeFaultCount([])).toBe(0);
     expect(activeFaultCount([event("drift"), event("interlock")])).toBe(0);
+  });
+});
+
+describe("activeAlertRollup", () => {
+  it("counts alert severities, distinct affected houses, and selected clear houses", () => {
+    const alerts: ActiveAlert[] = [
+      {
+        greenhouseId: "gh-a",
+        component: "temperature",
+        zoneId: null,
+        faultType: "critical_temperature",
+        kind: "interlock",
+        severity: "critical",
+        since: new Date(),
+      },
+      {
+        greenhouseId: "gh-a",
+        component: "humidity",
+        zoneId: null,
+        faultType: "stuck",
+        kind: "fault",
+        severity: "warning",
+        since: new Date(),
+      },
+      {
+        greenhouseId: "gh-b",
+        component: "co2",
+        zoneId: null,
+        faultType: "stuck",
+        kind: "fault",
+        severity: "warning",
+        since: new Date(),
+      },
+    ];
+    expect(activeAlertRollup(alerts, ["gh-a", "gh-b", "gh-c"])).toEqual({
+      alarms: 1,
+      warnings: 2,
+      affected: 2,
+      clear: 1,
+    });
   });
 });
 

@@ -1,0 +1,26 @@
+{
+  "parameters": [
+    { "$ref": "../components/parameters.json#/EventGreenhouseId" },
+    { "$ref": "../components/parameters.json#/EventKind" },
+    { "$ref": "../components/parameters.json#/EventSeverity" }
+  ],
+  "get": {
+    "operationId": "listActiveAlerts",
+    "summary": "Current active alerts",
+    "description": "Current retained controller faults, filtered with the same greenhouse, kind, and minimum-severity semantics as the activity feed.",
+    "security": [],
+    "responses": {
+      "200": {
+        "description": "Current alerts.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "array",
+              "items": { "$ref": "../components/schemas/active-alerts.json#/ActiveAlert" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

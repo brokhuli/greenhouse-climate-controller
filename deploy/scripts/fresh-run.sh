@@ -37,8 +37,21 @@ bash "$SCRIPT_DIR/gen-controllers.sh" "$N"
 #    a bind-mount content change alone does not make `up` recreate them).
 "${COMPOSE[@]}" down
 
-# 3. Build + start everything; --wait blocks until healthchecked services (incl. db) are healthy.
+# 3. Build + start everything; --wait blocks until healthchecked services (incl. db, ollama) are healthy.
 "${COMPOSE[@]}" up -d --build --wait
+
+# 3b. In container-Ollama mode, pull the model into the ollama volume (idempotent — a no-op once cached);
+#     ollama is healthy after --wait. In host-Ollama mode the ollama profile is off, so there is no
+#     container — skip the pull and let the optimizer use the models already on your host. Resolve the
+#     model the way compose does: exported OLLAMA_MODEL, else deploy/.env, else the qwen2.5:7b default.
+if [ -n "$("${COMPOSE[@]}" ps -q ollama 2>/dev/null)" ]; then
+  OLLAMA_MODEL="${OLLAMA_MODEL:-$(sed -n 's/^OLLAMA_MODEL=//p' "$DEPLOY_DIR/.env" 2>/dev/null | tail -n1)}"
+  OLLAMA_MODEL="${OLLAMA_MODEL:-qwen2.5:7b}"
+  echo "==> pulling ollama model '$OLLAMA_MODEL' (first run downloads several GB) ..."
+  "${COMPOSE[@]}" exec -T ollama ollama pull "$OLLAMA_MODEL"
+else
+  echo "==> host-Ollama mode (no ollama container) — using your host models; skipping pull."
+fi
 
 # 4. Wait for the API (behind the proxy) to answer before the guarded reset / registration.
 echo "==> waiting for the API at $API ..."

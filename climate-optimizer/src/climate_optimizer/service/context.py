@@ -1,0 +1,228 @@
+"""The service's wired-up components, plus startup validation and the health probe.
+
+:class:`ServiceContext` is the single object the routes read from, built once in the app's lifespan
+and injectable wholesale so tests can substitute a fake planner and a mocked platform.
+
+**Fail-fast configuration validation** (spec 09) runs before anything starts: an invalid config
+*blocks the service from coming up* rather than letting it run on silent defaults — the same
+startup-gate discipline the platform applies to schema migrations. ``pydantic-settings`` already
+rejects out-of-range values at load; :func:`validate_startup` adds the cross-field checks it cannot
+express — a resolvable prompt template, a credential for a cloud provider, and a pinned model that is
+actually in the allowlist (the model id pins the evaluation baselines, so a mismatch is a reviewable
+event, not silent drift).
+"""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass
+from datetime import UTC, datetime
+
+import httpx
+
+from ..config import Settings
+from ..domain.twin import TwinParams, default_twin_params
+from ..infra.auth import JwtOperatorVerifier, OperatorVerifier, TokenProvider
+from ..infra.dataaccess import PlatformClient, PlatformError
+from ..models import Provider
+from ..orchestration.runtime import RuntimeState
+from ..orchestration.scheduler import Scheduler
+from ..orchestration.store import ServiceStore
+from ..planner import Planner, PromptNotFoundError, load_prompt_template
+from .schemas import DegradedReason, HealthResponse, HealthStatus
+
+logger = logging.getLogger(__name__)
+
+# A loop is only "stalled" once it has missed several cadences; one slow cycle is not a stall.
+_STALL_CADENCE_MULTIPLE = 3
+_PROBE_TIMEOUT_SECONDS = 5.0
+
+
+class ConfigurationError(Exception):
+    """The configuration cannot support a running service; startup is blocked (spec 09)."""
+
+
+def validate_startup(settings: Settings) -> None:
+    """Cross-field configuration checks that must pass before the service comes up.
+
+    The ``oidc`` block encodes the **confidential-client** assumption both auth seams implement: the
+    outbound token exchange (``TokenProvider._fetch``) sends ``PLANNER_OIDC_CLIENT_SECRET``, and the
+    inbound operator verifier (``JwtOperatorVerifier``) resolves signing keys from ``jwks_url`` — so
+    starting oidc mode without either would come up "healthy" while every write / operator call fails
+    at runtime. If a public-client or ``private_key_jwt`` flow is ever added, the secret check moves
+    behind an auth-method switch.
+    """
+    if not settings.data.platform_api_url.strip():
+        raise ConfigurationError("data.platform_api_url must be set")
+
+    try:
+        load_prompt_template(settings.llm.prompt_version)
+    except PromptNotFoundError as err:
+        raise ConfigurationError(str(err)) from err
+
+    if (
+        settings.llm.provider is not Provider.OLLAMA
+        and not settings.planner_api_key.get_secret_value()
+    ):
+        raise ConfigurationError(
+            f"provider {settings.llm.provider.value!r} requires PLANNER_API_KEY to be set"
+        )
+
+    allowlist = settings.llm.available_models.get(settings.llm.provider.value, [])
+    if settings.llm.model not in allowlist:
+        raise ConfigurationError(
+            f"llm.model {settings.llm.model!r} is not in available_models for provider "
+            f"{settings.llm.provider.value!r} — expand the allowlist (with its evaluation "
+            "baseline) before pinning it"
+        )
+
+    if settings.platform_auth.mode == "oidc":
+        if not settings.platform_auth.oidc_token_url:
+            raise ConfigurationError("platform_auth.oidc_token_url is required in oidc mode")
+        if not settings.planner_oidc_client_secret.get_secret_value():
+            raise ConfigurationError(
+                "PLANNER_OIDC_CLIENT_SECRET is required in oidc mode — the Phase-2 write path "
+                "uses the confidential-client credentials flow"
+            )
+        if not settings.operator_auth.jwks_url:
+            raise ConfigurationError(
+                "operator_auth.jwks_url is required in oidc mode — the operator-gated endpoints "
+                "cannot verify a token without it"
+            )
+
+
+@dataclass
+class ServiceContext:
+    """Everything the routes and background loops share."""
+
+    settings: Settings
+    runtime: RuntimeState
+    store: ServiceStore
+    client: PlatformClient
+    planner: Planner
+    scheduler: Scheduler
+    params: TwinParams
+    token_provider: TokenProvider | None = None
+    verifier: OperatorVerifier | None = None
+
+    async def aclose(self) -> None:
+        await self.scheduler.stop()
+        await self.client.aclose()
+        if self.token_provider is not None:
+            await self.token_provider.aclose()
+
+
+def build_context(settings: Settings) -> ServiceContext:
+    """Construct the production wiring from settings (tests build their own)."""
+    token_provider = TokenProvider(settings)
+    client = PlatformClient(settings, token_source=token_provider)
+    runtime = RuntimeState(settings)
+    store = ServiceStore()
+    planner = Planner(settings)
+    params = default_twin_params()
+    scheduler = Scheduler(
+        settings=settings,
+        client=client,
+        planner=planner,
+        runtime=runtime,
+        store=store,
+        params=params,
+    )
+    verifier = JwtOperatorVerifier(settings) if settings.platform_auth.mode == "oidc" else None
+    return ServiceContext(
+        settings=settings,
+        runtime=runtime,
+        store=store,
+        client=client,
+        planner=planner,
+        scheduler=scheduler,
+        params=params,
+        token_provider=token_provider,
+        verifier=verifier,
+    )
+
+
+async def probe_platform(client: PlatformClient) -> bool:
+    """Is Phase 2 reachable? Uses the registry read the scheduler already depends on."""
+    try:
+        await client.list_greenhouse_ids()
+    except PlatformError:
+        return False
+    return True
+
+
+async def probe_llm(settings: Settings) -> bool:
+    """Is the planning backend reachable?
+
+    The default local Ollama backend is probed directly (``/api/tags`` is free). A cloud backend has
+    no free liveness call, so a configured credential is treated as reachable rather than spending
+    tokens on a health check every scrape.
+    """
+    if settings.llm.provider is not Provider.OLLAMA:
+        return bool(settings.planner_api_key.get_secret_value())
+
+    url = settings.llm.endpoint.rstrip("/") + "/api/tags"
+    try:
+        async with httpx.AsyncClient(timeout=_PROBE_TIMEOUT_SECONDS) as probe:
+            response = await probe.get(url)
+    except (httpx.TimeoutException, httpx.TransportError):
+        return False
+    return response.status_code == 200
+
+
+def _planning_paused(ctx: ServiceContext) -> bool:
+    """Is *no* greenhouse planning right now? Then the growing last-successful-cycle age is expected,
+    not a stall — the same watchdog rule the global pause gets, extended to the case where every
+    greenhouse is individually disabled (spec 09 §Per-greenhouse pause).
+
+    An unknown fleet (nothing discovered or recorded yet) is **not** evidence of a pause: a genuine
+    cold-start stall must still surface, so ``bool(known)`` guards the all-disabled test.
+    """
+    if not ctx.runtime.enabled.enabled:
+        return True
+    known = ctx.store.known_greenhouse_ids | set(ctx.store.plans.all_latest())
+    return bool(known) and not any(ctx.runtime.is_greenhouse_active(g) for g in known)
+
+
+async def build_health(ctx: ServiceContext, *, now: datetime | None = None) -> HealthResponse:
+    """Compose the watchdog view (spec 09).
+
+    A **paused** optimizer is reported as healthy with its read-only reason: the last-successful-cycle
+    age is *expected* to grow while planning is disabled, so it must not be read as a stall. This
+    holds whether planning is paused service-wide or because every greenhouse is individually
+    disabled (:func:`_planning_paused`).
+    """
+    moment = now or datetime.now(UTC)
+    cadence_secs = ctx.settings.planning.cycle_interval_minutes * 60
+    enabled = ctx.runtime.enabled.enabled
+    last_cycle = ctx.store.last_successful_cycle_at
+
+    platform_reachable = await probe_platform(ctx.client)
+    llm_reachable = await probe_llm(ctx.settings)
+
+    degraded_reason: DegradedReason | None = None
+    if not platform_reachable:
+        degraded_reason = DegradedReason.PLATFORM_UNREACHABLE
+    elif not llm_reachable:
+        degraded_reason = DegradedReason.LLM_UNREACHABLE
+    elif _planning_paused(ctx):
+        # A read-only pause is a healthy, intentional state: both a never-run cold start and a
+        # growing last-successful-cycle age are *expected* while planning is disabled, so neither
+        # cold_start nor cycle_stalled applies (spec 09; contract: those reasons are enabled-only).
+        degraded_reason = None
+    elif last_cycle is None:
+        degraded_reason = DegradedReason.COLD_START
+    elif (moment - last_cycle).total_seconds() > cadence_secs * _STALL_CADENCE_MULTIPLE:
+        degraded_reason = DegradedReason.CYCLE_STALLED
+
+    return HealthResponse(
+        status=HealthStatus.DEGRADED if degraded_reason else HealthStatus.HEALTHY,
+        degraded_reason=degraded_reason,
+        enabled=enabled,
+        read_only_reason=ctx.runtime.read_only_reason,
+        platform_reachable=platform_reachable,
+        llm_reachable=llm_reachable,
+        last_successful_cycle_at=last_cycle,
+        escalation_backlog=ctx.store.escalations.backlog(),
+        cadence_secs=cadence_secs,
+    )

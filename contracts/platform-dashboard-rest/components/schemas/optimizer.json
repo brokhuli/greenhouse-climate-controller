@@ -16,7 +16,9 @@
       "write_unauthorized",
       "platform_unavailable",
       "cycle_timeout",
-      "llm_unavailable"
+      "llm_unavailable",
+      "plan_unparseable",
+      "internal_error"
     ],
     "description": "Canonical held-cycle reason code — a local copy of the optimizer's single-source-of-truth table (optimizer interfaces §Escalation reason codes), kept as a copy per this contract's self-contained convention. Required on an escalated outcome; the SPA renders it plus its class as a ReasonCodeChip."
   },
@@ -24,6 +26,11 @@
     "type": "string",
     "enum": ["transient", "persistent"],
     "description": "Operator-triage hint for a reason code: transient may clear on the next cycle once inputs/twin/clock/backend recover; persistent is a deployment/contract/model/bounds fault that will not self-heal (optimizer interfaces)."
+  },
+  "CycleStage": {
+    "type": "string",
+    "enum": ["ingest", "quality_gate", "forecast", "plan", "constrain", "publish"],
+    "description": "The ordered pipeline stage a planning cycle is executing (optimizer interfaces §Pipeline): read inputs, gate their quality, forecast under the twin, plan with the LLM, apply the constraint/confidence gate, publish the setpoint write. Surfaced per greenhouse on FleetOptimizerSummary so the console can render a live pipeline tracker."
   },
   "OptimizerOutcome": {
     "type": "object",
@@ -231,21 +238,39 @@
           "properties": {
             "greenhouse_id": { "$ref": "./common.json#/Slug" },
             "status": {
-              "type": "string",
-              "enum": ["applied", "escalated", "extended"],
-              "description": "The greenhouse's latest cycle outcome status."
+              "oneOf": [
+                { "type": "string", "enum": ["applied", "escalated", "extended"] },
+                { "type": "null" }
+              ],
+              "description": "The greenhouse's latest cycle outcome status, or null when it is known to the optimizer but has not yet completed a cycle (discovered or paused before its first cycle — the SPA renders this as No plan, unless a Disabled/Read-only pill takes precedence)."
             },
             "reason_code": {
               "oneOf": [{ "$ref": "#/ReasonCode" }, { "type": "null" }],
               "description": "The reason code when the latest cycle escalated, else null."
             },
+            "message": {
+              "type": ["string", "null"],
+              "description": "Operator-facing detail for the latest cycle outcome, including benign extended holds (for example, why planning stopped at Forecast)."
+            },
             "enabled": {
               "type": "boolean",
               "description": "Whether the optimizer is enabled for this greenhouse — the per-greenhouse operator pause (POST /api/optimizer/greenhouses/{id}/enabled). false = this greenhouse's scheduled cycles are skipped even while the service is globally enabled; the SPA shows a Disabled pill (overriding `status`). Independent of the global EnableState — effective planning requires both, and the global pause takes precedence."
             },
-            "created_at": { "type": "string", "format": "date-time" }
+            "created_at": {
+              "type": ["string", "null"],
+              "format": "date-time",
+              "description": "When the latest cycle ran, or null when the greenhouse has not yet completed one (paired with a null `status`)."
+            },
+            "in_flight": {
+              "type": "boolean",
+              "description": "Whether a planning cycle is executing for this greenhouse right now. Paired with `current_stage` to drive the console's live pipeline tracker: true = the stage is advancing, false = `current_stage` is where the last cycle settled."
+            },
+            "current_stage": {
+              "oneOf": [{ "$ref": "#/CycleStage" }, { "type": "null" }],
+              "description": "The pipeline stage this greenhouse's current-or-most-recent cycle reached, or null when it has not cycled since the optimizer started. Retained after a cycle ends so an idle greenhouse still shows where it stopped."
+            }
           },
-          "required": ["greenhouse_id", "status", "enabled", "created_at"],
+          "required": ["greenhouse_id", "status", "enabled", "created_at", "in_flight", "current_stage"],
           "additionalProperties": false
         }
       },

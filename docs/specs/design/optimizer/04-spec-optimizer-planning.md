@@ -40,7 +40,7 @@ while the rest of the horizon is held in memory as an **advisory artifact**
 only ever writes on a cadence where a fresh plan clears the gates, so on any other cadence the **last
 applied bundle stays in force** (Phase 2 already holds it) and the retained trajectory is surfaced for
 review, **never replayed point-by-point** — which is why the 30-minute cadence never has to interpolate
-against the hourly trajectory points. That setpoint horizon is **not** what the gate diffs — the gate
+against the sparse trajectory change points. That setpoint horizon is **not** what the gate diffs — the gate
 compares the twin's **predicted-climate** forecast across cycles (below), a climate series, not this
 setpoint series. A scheduled or multi-step plan contract that hands Phase 2 a future trajectory is
 deliberately out of Phase 3 scope ([scope](./13-spec-optimizer-scope.md)); the single-authority write

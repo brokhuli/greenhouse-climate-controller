@@ -105,4 +105,8 @@ type SetpointRevision struct {
 	Reason       string
 	Setpoints    Setpoints
 	CreatedAt    time.Time
+	// OptimizerRunID is the optimizer cycle's trace id (optimizer_run_id) for a SourceOptimizer
+	// revision, letting a stored bundle be traced back to the cycle that produced it (P3-OBS-1).
+	// Nil for profile resolutions and operator edits.
+	OptimizerRunID *string
 }

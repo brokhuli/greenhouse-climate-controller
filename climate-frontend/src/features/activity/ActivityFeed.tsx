@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useEvents } from "../../api/queries/events";
+import { useActiveAlerts } from "../../api/queries/activeAlerts";
 import { useFleet } from "../../api/queries/greenhouses";
 import type { EventKind, EventSeverity } from "../../api/schemas";
 import { Card } from "../../components/Card";
@@ -9,6 +10,8 @@ import { ErrorState } from "../../components/ui/ErrorState";
 import { EventList } from "../../components/ui/EventList";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { formatGreenhouseLabel } from "../../lib/derivations";
+import { activeAlertRollup } from "../../lib/derivations";
+import { ActivityAlertSummaryBar } from "./ActivityAlertSummaryBar";
 
 /**
  * Site-wide activity feed (components §2): faults, interlocks, setpoint edits, profile applies,
@@ -22,6 +25,10 @@ const KIND_OPTIONS: EventKind[] = [
   "profile_applied",
   "setpoint_edit",
   "drift",
+  "optimizer_plan_applied",
+  "optimizer_plan_escalated",
+  "optimizer_resolved",
+  "optimizer_run_failed",
 ];
 const SEVERITY_OPTIONS: EventSeverity[] = ["info", "warning", "critical"];
 
@@ -49,6 +56,16 @@ export default function ActivityFeed() {
     kind: kind || undefined,
     severity: severity || undefined,
   });
+  const scope = {
+    greenhouseId: greenhouseId || undefined,
+    kind: kind || undefined,
+    severity: severity || undefined,
+  };
+  const alerts = useActiveAlerts(scope);
+  const scopedGreenhouseIds = greenhouseId
+    ? [greenhouseId]
+    : (fleet.data ?? []).map((greenhouse) => greenhouse.id);
+  const alertRollup = activeAlertRollup(alerts.data ?? [], scopedGreenhouseIds);
 
   return (
     <div className="flex flex-col gap-4">
@@ -99,6 +116,18 @@ export default function ActivityFeed() {
           </select>
         </div>
       </div>
+
+      {alerts.isLoading || fleet.isLoading ? (
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          {Array.from({ length: 4 }, (_, index) => (
+            <Card key={index}>
+              <Skeleton height={96} />
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <ActivityAlertSummaryBar rollup={alertRollup} />
+      )}
 
       {events.isLoading ? (
         <Card>

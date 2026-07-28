@@ -1,0 +1,464 @@
+{
+  "uid": "optimizer",
+  "title": "Optimizer",
+  "tags": ["greenhouse", "optimizer"],
+  "editable": true,
+  "graphTooltip": 1,
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "15s",
+  "time": { "from": "now-6h", "to": "now" },
+  "timezone": "",
+  "annotations": { "list": [] },
+  "templating": {
+    "list": [
+      {
+        "name": "greenhouse",
+        "label": "Greenhouse",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": "label_values(optimizer_cycles_total, greenhouse_id)",
+        "definition": "label_values(optimizer_cycles_total, greenhouse_id)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".*",
+        "current": { "text": "All", "value": "$__all", "selected": false },
+        "options": [],
+        "regex": "",
+        "sort": 1,
+        "hide": 0
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "Right now",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "panels": []
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Planning",
+      "description": "Service enable flag. 'enabled' = scheduled cycles run and setpoints are written; 'read-only' = paused (no cycles, no writes). Service-wide, so unaffected by the greenhouse filter.",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "yellow", "value": null }, { "color": "green", "value": 1 } ] },
+          "mappings": [ { "type": "value", "options": { "0": { "text": "read-only", "index": 0 }, "1": { "text": "enabled", "index": 1 } } } ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "auto",
+        "orientation": "auto"
+      },
+      "targets": [
+        { "refId": "A", "expr": "optimizer_enabled", "legendFormat": "planning", "instant": true, "datasource": { "type": "prometheus", "uid": "prometheus" } }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Open escalations",
+      "description": "Current open-escalation backlog awaiting operator review (P3-USE-1). Service-wide.",
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 5 } ] }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "auto",
+        "orientation": "auto"
+      },
+      "targets": [
+        { "refId": "A", "expr": "optimizer_open_escalations", "legendFormat": "open", "instant": true, "datasource": { "type": "prometheus", "uid": "prometheus" } }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Last plan applied",
+      "description": "Age of the last cycle that applied a plan. Cadence is 30 min (P3-PERF-1); a growing age means no plan has been accepted recently. 'No data' before the first apply. Service-wide.",
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 2100 }, { "color": "red", "value": 3600 } ] }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "auto",
+        "orientation": "auto"
+      },
+      "targets": [
+        { "refId": "A", "expr": "time() - (optimizer_last_successful_cycle_timestamp_seconds > 0)", "legendFormat": "age", "instant": true, "datasource": { "type": "prometheus", "uid": "prometheus" } }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Cycles (range)",
+      "description": "Planning cycles completed over the selected time range, for the selected greenhouses.",
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "text", "value": null } ] }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "auto",
+        "orientation": "auto"
+      },
+      "targets": [
+        { "refId": "A", "expr": "sum(increase(optimizer_cycles_total{greenhouse_id=~\"$greenhouse\"}[$__range]))", "legendFormat": "cycles", "instant": true, "datasource": { "type": "prometheus", "uid": "prometheus" } }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Applied share (range)",
+      "description": "Fraction of cycles that auto-applied a plan (vs. escalated / extended) over the range. Low is not inherently bad — escalations are a legitimate outcome — so this tile is informational.",
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "text", "value": null } ] }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "auto",
+        "orientation": "auto"
+      },
+      "targets": [
+        { "refId": "A", "expr": "sum(increase(optimizer_cycles_total{status=\"applied\", greenhouse_id=~\"$greenhouse\"}[$__range])) / clamp_min(sum(increase(optimizer_cycles_total{greenhouse_id=~\"$greenhouse\"}[$__range])), 1)", "legendFormat": "applied share", "instant": true, "datasource": { "type": "prometheus", "uid": "prometheus" } }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "Twin failures (range)",
+      "description": "Digital-twin robustness failures (divergence + fidelity faults) over the range. Sustained failures cap confidence and force escalation.",
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 0.5 }, { "color": "red", "value": 3 } ] }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "auto",
+        "orientation": "auto"
+      },
+      "targets": [
+        { "refId": "A", "expr": "sum(increase(optimizer_twin_divergence_total{greenhouse_id=~\"$greenhouse\"}[$__range]))", "legendFormat": "twin failures", "instant": true, "datasource": { "type": "prometheus", "uid": "prometheus" } }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "row",
+      "title": "Cycle outcomes",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
+      "panels": []
+    },
+    {
+      "id": 9,
+      "type": "barchart",
+      "title": "Cycle outcomes (by status, over range)",
+      "description": "Cycles counted by the outcome the gates reached — applied / escalated / extended — over the selected range.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 1, "fillOpacity": 80, "gradientMode": "none", "axisPlacement": "auto" } },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "xTickLabelRotation": 0,
+        "showValue": "auto",
+        "stacking": "none",
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "single" }
+      },
+      "targets": [
+        { "refId": "A", "expr": "sum by (status) (increase(optimizer_cycles_total{greenhouse_id=~\"$greenhouse\"}[$__range]))", "legendFormat": "{{status}}", "instant": true, "datasource": { "type": "prometheus", "uid": "prometheus" } }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "barchart",
+      "title": "Escalations (by reason, over range)",
+      "description": "Escalations raised by canonical reason code over the selected range — why cycles were held for operator review, without opening the queue.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 1, "fillOpacity": 80, "gradientMode": "none", "axisPlacement": "auto" } },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "xTickLabelRotation": 0,
+        "showValue": "auto",
+        "stacking": "none",
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "single" }
+      },
+      "targets": [
+        { "refId": "A", "expr": "sum by (reason_code) (increase(optimizer_escalations_total{greenhouse_id=~\"$greenhouse\"}[$__range]))", "legendFormat": "{{reason_code}}", "instant": true, "datasource": { "type": "prometheus", "uid": "prometheus" } }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "row",
+      "title": "Planning & backlog over time",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 },
+      "panels": []
+    },
+    {
+      "id": 12,
+      "type": "state-timeline",
+      "title": "Planning enabled",
+      "description": "Service enable flag over time: enabled (cycles run) vs. read-only (paused). Service-wide.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 15 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "fillOpacity": 90, "lineWidth": 0 },
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null } ] },
+          "mappings": [
+            { "type": "value", "options": {
+              "0": { "text": "read-only", "color": "yellow", "index": 0 },
+              "1": { "text": "enabled", "color": "green", "index": 1 }
+            } }
+          ],
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "mergeValues": true,
+        "showValue": "auto",
+        "alignValue": "left",
+        "rowHeight": 0.9,
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        { "refId": "A", "expr": "optimizer_enabled", "legendFormat": "service", "datasource": { "type": "prometheus", "uid": "prometheus" } }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Open-escalation backlog",
+      "description": "Open escalations awaiting operator review over time (P3-USE-1). Service-wide.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 15 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "min": 0, "custom": { "drawStyle": "line", "fillOpacity": 10 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "expr": "optimizer_open_escalations", "legendFormat": "open escalations", "datasource": { "type": "prometheus", "uid": "prometheus" } }
+      ]
+    },
+    {
+      "id": 14,
+      "type": "row",
+      "title": "Cycle performance",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 },
+      "panels": []
+    },
+    {
+      "id": 15,
+      "type": "bargauge",
+      "title": "Cycle duration p95 by greenhouse",
+      "description": "Per-greenhouse planning-cycle p95 over the range. Budget P3-PERF-2 < 90 s (the cycle timeout); a cycle past it is abandoned and the last plan held.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 60 }, { "color": "red", "value": 90 } ] }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "legend": { "showLegend": false }
+      },
+      "targets": [
+        { "refId": "A", "expr": "histogram_quantile(0.95, sum by (le, greenhouse_id) (rate(optimizer_cycle_duration_seconds_bucket{greenhouse_id=~\"$greenhouse\"}[$__range])))", "legendFormat": "{{greenhouse_id}}", "instant": true, "datasource": { "type": "prometheus", "uid": "prometheus" } }
+      ]
+    },
+    {
+      "id": 16,
+      "type": "heatmap",
+      "title": "Cycle duration distribution",
+      "description": "Planning-cycle duration histogram over time; darker cells are hotter buckets. Reveals tail behavior against the 90 s bound that a single p95 hides.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "custom": { "hideFrom": { "tooltip": false, "viz": false, "legend": false }, "scaleDistribution": { "type": "linear" } } }, "overrides": [] },
+      "options": {
+        "calculate": false,
+        "cellGap": 1,
+        "cellValues": { "unit": "short" },
+        "color": { "mode": "scheme", "scheme": "Spectral", "steps": 64, "reverse": false, "exponent": 0.5, "fill": "dark-orange", "scale": "exponential" },
+        "exemplars": { "color": "rgba(255,0,255,0.7)" },
+        "filterValues": { "le": 1e-9 },
+        "legend": { "show": true },
+        "rowsFrame": { "layout": "auto" },
+        "tooltip": { "mode": "single", "showColorScale": false, "yHistogram": false },
+        "yAxis": { "axisPlacement": "left", "reverse": false, "unit": "s" }
+      },
+      "targets": [
+        { "refId": "A", "expr": "sum by (le) (rate(optimizer_cycle_duration_seconds_bucket{greenhouse_id=~\"$greenhouse\"}[$__range]))", "format": "heatmap", "legendFormat": "{{le}}", "datasource": { "type": "prometheus", "uid": "prometheus" } }
+      ]
+    },
+    {
+      "id": 17,
+      "type": "row",
+      "title": "Backend & twin health",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 32 },
+      "panels": []
+    },
+    {
+      "id": 18,
+      "type": "bargauge",
+      "title": "Twin failures by greenhouse (over range)",
+      "description": "Digital-twin divergence + fidelity faults per greenhouse over the range — which greenhouses' models are drifting from observed climate.",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 33 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 3 } ] }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "legend": { "showLegend": false }
+      },
+      "targets": [
+        { "refId": "A", "expr": "sum by (greenhouse_id) (increase(optimizer_twin_divergence_total{greenhouse_id=~\"$greenhouse\"}[$__range]))", "legendFormat": "{{greenhouse_id}}", "instant": true, "datasource": { "type": "prometheus", "uid": "prometheus" } }
+      ]
+    },
+    {
+      "id": 19,
+      "type": "barchart",
+      "title": "Twin failures by kind (over range)",
+      "description": "Twin robustness failures split by kind — one-step divergence vs. sustained fidelity fault — over the range.",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 33 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 1, "fillOpacity": 80, "gradientMode": "none", "axisPlacement": "auto" } },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "xTickLabelRotation": 0,
+        "showValue": "auto",
+        "stacking": "none",
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "single" }
+      },
+      "targets": [
+        { "refId": "A", "expr": "sum by (kind) (increase(optimizer_twin_divergence_total{greenhouse_id=~\"$greenhouse\"}[$__range]))", "legendFormat": "{{kind}}", "instant": true, "datasource": { "type": "prometheus", "uid": "prometheus" } }
+      ]
+    },
+    {
+      "id": 20,
+      "type": "barchart",
+      "title": "Planner backend events (over range)",
+      "description": "Fallback-backend invocations (primary LLM unreachable mid-cycle) and state-change-gate suppressions (cycle extended without an LLM call) over the range.",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 33 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 1, "fillOpacity": 80, "gradientMode": "none", "axisPlacement": "auto" } },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "xTickLabelRotation": 0,
+        "showValue": "auto",
+        "stacking": "none",
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "single" }
+      },
+      "targets": [
+        { "refId": "A", "expr": "sum(increase(optimizer_planner_failover_total{greenhouse_id=~\"$greenhouse\"}[$__range]))", "legendFormat": "fallback backend", "instant": true, "datasource": { "type": "prometheus", "uid": "prometheus" } },
+        { "refId": "B", "expr": "sum(increase(optimizer_planner_suppressed_total{greenhouse_id=~\"$greenhouse\"}[$__range]))", "legendFormat": "state-change suppressed", "instant": true, "datasource": { "type": "prometheus", "uid": "prometheus" } }
+      ]
+    }
+  ]
+}

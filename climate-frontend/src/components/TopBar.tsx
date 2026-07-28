@@ -6,6 +6,7 @@ import { useStream } from "../app/stream-context";
 import { UserMenu } from "../features/auth/UserMenu";
 import { ConnectionStatus } from "./ConnectionStatus";
 import { connectionStateFromWs } from "./connection";
+import { SchemaDriftBadge } from "./SchemaDriftBadge";
 import { ThemeToggle } from "./ThemeToggle";
 
 /**
@@ -13,10 +14,12 @@ import { ThemeToggle } from "./ThemeToggle";
  * route; the status reflects the single stream.
  */
 export function TopBar() {
-  const { connectionState } = useStream();
+  const { connectionState, schemaDrift } = useStream();
   const detailMatch = useMatch("/greenhouses/:id");
   const setpointsMatch = useMatch("/greenhouses/:id/setpoints");
   const activityMatch = useMatch("/activity");
+  const profilesMatch = useMatch("/profiles");
+  const optimizerMatch = useMatch("/optimizer");
   const greenhouseId = detailMatch?.params.id ?? setpointsMatch?.params.id ?? "";
   const greenhouse = useGreenhouse(greenhouseId);
   const assignment = useAssignment(detailMatch?.params.id ?? "");
@@ -32,6 +35,12 @@ export function TopBar() {
   } else if (activityMatch) {
     title = "Activity";
     subtitle = "Faults, interlocks & operator writes";
+  } else if (profilesMatch) {
+    title = "Crop Profiles";
+    subtitle = "Setpoint templates for greenhouse assignments";
+  } else if (optimizerMatch) {
+    title = "Verdant Force | Optimizer";
+    subtitle = "Autonomous setpoint tuning across the fleet";
   }
 
   const profileLabel = assignment.data
@@ -58,6 +67,7 @@ export function TopBar() {
         <p className="text-fg-muted truncate text-sm">{subtitle}</p>
       </div>
       <div className="flex items-center gap-3">
+        <SchemaDriftBadge drift={schemaDrift} />
         <ConnectionStatus state={connectionStateFromWs(connectionState)} />
         <ThemeToggle />
         <UserMenu />

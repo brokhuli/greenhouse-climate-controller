@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://greenhouse.local/contracts/platform-dashboard-live-ws/active-alerts.schema.json",
+  "title": "Active Alerts Frame",
+  "description": "A greenhouse-scoped replacement snapshot of currently active controller faults. Sent only when the set changes, including clears.",
+  "type": "object",
+  "allOf": [
+    { "$ref": "https://greenhouse.local/contracts/platform-dashboard-live-ws/envelope.schema.json" },
+    {
+      "properties": {
+        "type": { "const": "active_alerts" },
+        "zone_id": { "const": null },
+        "alerts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "component": { "type": "string" },
+              "zone_id": { "type": ["string", "null"] },
+              "fault_type": { "type": "string" },
+              "kind": { "enum": ["fault", "interlock"] },
+              "severity": { "enum": ["warning", "critical"] },
+              "since": { "type": "string", "format": "date-time" }
+            },
+            "required": ["component", "zone_id", "fault_type", "kind", "severity", "since"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["type", "alerts"]
+    }
+  ],
+  "unevaluatedProperties": false
+}

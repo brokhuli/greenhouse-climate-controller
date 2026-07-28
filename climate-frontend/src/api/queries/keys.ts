@@ -18,7 +18,17 @@ export const queryKeys = {
   analytics: (id: string, range: RangeParams, interval: AnalyticsInterval) =>
     ["analytics", id, range.window, interval] as const,
   events: (scope: EventScope) => ["events", scope] as const,
+  activeAlerts: (scope: EventScope) => ["active-alerts", scope] as const,
   profiles: () => ["profiles"] as const,
   profile: (id: string) => ["profile", id] as const,
   assignment: (greenhouseId: string) => ["assignment", greenhouseId] as const,
+  // Phase 3 optimizer console — all polled (no WS); the fleet summary is shared by the console
+  // table and each fleet card's optimizer pill (data-model §6).
+  optimizerStatus: () => ["optimizer-status"] as const,
+  optimizerFleet: () => ["optimizer-fleet"] as const,
+  optimizerEscalations: () => ["optimizer-escalations"] as const,
+  optimizerModel: () => ["optimizer-model"] as const,
+  optimizerEnabled: () => ["optimizer-enabled"] as const,
+  optimizerPlan: (id: string) => ["optimizer-plan", id] as const,
+  optimizerGreenhouseEnabled: (id: string) => ["optimizer-greenhouse-enabled", id] as const,
 };

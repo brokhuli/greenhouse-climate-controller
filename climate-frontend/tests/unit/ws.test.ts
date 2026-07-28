@@ -47,10 +47,11 @@ describe("StreamClient", () => {
     client.close();
   });
 
-  it("routes an unknown frame type to onUnknown, not a handler", () => {
+  it("routes an unknown frame type to onUnknown, not a handler or a rejection", () => {
     const onUnknown = vi.fn();
     const onTelemetry = vi.fn();
-    const { client, sockets } = setup({ handlers: { onUnknown, onTelemetry } });
+    const onFrameRejected = vi.fn();
+    const { client, sockets } = setup({ handlers: { onUnknown, onTelemetry, onFrameRejected } });
     client.connect();
     sockets[0].onmessage?.({
       data: JSON.stringify({
@@ -63,15 +64,27 @@ describe("StreamClient", () => {
     });
     expect(onUnknown).toHaveBeenCalledOnce();
     expect(onTelemetry).not.toHaveBeenCalled();
+    // An unknown type is forward-compatible, not drift: it must not raise the schema-mismatch signal.
+    expect(onFrameRejected).not.toHaveBeenCalled();
     client.close();
   });
 
-  it("drops an invalid known frame (bad unit) without dispatching", () => {
+  it("drops an invalid known frame (bad unit) but surfaces it loudly instead of silently", () => {
     const onTelemetry = vi.fn();
-    const { client, sockets } = setup({ handlers: { onTelemetry } });
+    const onFrameRejected = vi.fn();
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { client, sockets } = setup({ handlers: { onTelemetry, onFrameRejected } });
     client.connect();
     sockets[0].onmessage?.({ data: JSON.stringify(wsFixture("telemetry.bad-unit.json")) });
     expect(onTelemetry).not.toHaveBeenCalled();
+    // The regression the fix targets: a known-type frame that no longer validates is drift, so it
+    // must reach onFrameRejected (with the frame type + Zod issues) and log, not vanish silently.
+    expect(onFrameRejected).toHaveBeenCalledWith(
+      "telemetry",
+      expect.objectContaining({ issues: expect.any(Array) }),
+    );
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
     client.close();
   });
 

@@ -189,6 +189,16 @@ type eventEntryDTO struct {
 	Source       string `json:"source,omitempty"`
 }
 
+type activeAlertDTO struct {
+	GreenhouseID string  `json:"greenhouse_id"`
+	Component    string  `json:"component"`
+	ZoneID       *string `json:"zone_id"`
+	FaultType    string  `json:"fault_type"`
+	Kind         string  `json:"kind"`
+	Severity     string  `json:"severity"`
+	Since        string  `json:"since"`
+}
+
 // --- simulation time-scale ---
 
 type timeScalePatchDTO struct {

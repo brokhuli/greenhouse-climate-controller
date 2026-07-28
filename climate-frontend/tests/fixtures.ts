@@ -16,3 +16,7 @@ export const restFixture = (name: string): unknown =>
 
 export const wsFixture = (name: string): unknown =>
   readJson(resolve(contractsDir, "platform-dashboard-live-ws/examples", name));
+
+/** Load a WebSocket **contract schema** (not an example) — the source of truth the Zod schemas mirror. */
+export const wsSchema = (name: string): unknown =>
+  readJson(resolve(contractsDir, "platform-dashboard-live-ws", name));

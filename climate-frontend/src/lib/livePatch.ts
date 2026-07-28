@@ -3,6 +3,8 @@ import { queryKeys, type EventScope } from "../api/queries/keys";
 import type {
   DriftFrame,
   EventEntry,
+  ActiveAlert,
+  ActiveAlertsFrame,
   EventFrame,
   GreenhouseDetail,
   GreenhouseSummary,
@@ -147,6 +149,34 @@ export function applyEventFrame(queryClient: QueryClient, frame: EventFrame): vo
     if (!eventMatchesScope(entry, scope)) continue;
     queryClient.setQueryData<EventEntry[]>(query.queryKey, (list) =>
       list ? [entry, ...list] : list,
+    );
+  }
+}
+
+/** Replace one greenhouse's active-alert snapshot in every matching cached scope. */
+export function applyActiveAlertsFrame(queryClient: QueryClient, frame: ActiveAlertsFrame): void {
+  const alerts: ActiveAlert[] = frame.alerts.map((alert) => ({
+    greenhouseId: frame.greenhouse_id,
+    component: alert.component,
+    zoneId: alert.zone_id,
+    faultType: alert.fault_type,
+    kind: alert.kind,
+    severity: alert.severity,
+    since: new Date(alert.since),
+  }));
+  const queries = queryClient.getQueryCache().findAll({ queryKey: ["active-alerts"] });
+  for (const query of queries) {
+    const scope = (query.queryKey[1] as EventScope | undefined) ?? {};
+    if (scope.greenhouseId && scope.greenhouseId !== frame.greenhouse_id) continue;
+    const matching = alerts.filter((alert) => {
+      if (scope.kind && alert.kind !== scope.kind) return false;
+      const rank = { info: 0, warning: 1, critical: 2 } as const;
+      return !scope.severity || rank[alert.severity] >= rank[scope.severity];
+    });
+    queryClient.setQueryData<ActiveAlert[]>(query.queryKey, (current) =>
+      current
+        ? [...current.filter((alert) => alert.greenhouseId !== frame.greenhouse_id), ...matching]
+        : current,
     );
   }
 }

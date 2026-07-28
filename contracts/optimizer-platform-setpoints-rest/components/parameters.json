@@ -5,5 +5,12 @@
     "required": true,
     "description": "Site-unique greenhouse identity; the same slug used in MQTT topics, controller REST paths, and DB rows (RFC-007).",
     "schema": { "$ref": "./schemas/common.json#/Slug" }
+  },
+  "OptimizerRunId": {
+    "name": "X-Optimizer-Run-Id",
+    "in": "header",
+    "required": false,
+    "description": "The optimizer cycle's trace / provenance id (`optimizer_run_id`, a UUID). Optional and only meaningful for optimizer submissions: Phase 2 records it on the resulting `source = optimizer` intended-state revision so a stored bundle can be traced back to the cycle that produced it (P3-OBS-1, RFC-005). Absent on the operator's ad-hoc edit. As a trace header it never affects the write outcome — a present-but-malformed value is ignored (the submission still succeeds; provenance is simply not recorded).",
+    "schema": { "type": "string", "format": "uuid" }
   }
 }

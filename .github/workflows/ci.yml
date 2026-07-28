@@ -2,11 +2,10 @@ name: CI
 
 # Clean-environment gate (RFC-010 / spec-verification.md §6). Re-runs, away from a
 # developer's machine, the same gates the local .githooks/pre-commit hook fires —
-# the Rust gate and the contract-validation harness. The frontend gate (lint /
-# typecheck / unit tests + blocking Lighthouse CI against the static production
-# build) also runs here; its Playwright E2E stays local (needs the live stack).
-# Remaining per-phase gates (Python/load) and coverage enforcement land with the
-# phases they verify.
+# the Rust gate, the Python gate (climate-optimizer), and the contract-validation
+# harness. The frontend gate (lint / typecheck / unit tests + blocking Lighthouse CI
+# against the static production build) also runs here; its Playwright E2E stays
+# local (needs the live stack). Remaining: the load gate and coverage enforcement.
 
 on:
   push:
@@ -116,6 +115,33 @@ jobs:
         run: npm ci
       - name: Validate schemas + fixtures
         run: npm run validate:contracts
+
+  optimizer:
+    name: Optimizer gate (climate-optimizer)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: climate-optimizer
+    steps:
+      - uses: actions/checkout@v4
+
+      # uv honors climate-optimizer/.python-version (3.12) and installs from the committed uv.lock,
+      # the Python analog of the Rust rust-toolchain.toml / Go module version pins.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync
+        run: uv sync --frozen
+      - name: Format
+        run: uv run ruff format --check
+      - name: Lint
+        run: uv run ruff check
+      - name: Typecheck
+        run: uv run mypy
+      - name: Test
+        run: uv run pytest
 
   frontend:
     name: Frontend gate (climate-frontend)

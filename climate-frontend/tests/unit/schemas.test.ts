@@ -3,10 +3,12 @@ import type { z } from "zod";
 import {
   driftFrame,
   eventFrame,
+  activeAlertsFrame,
   statusFrame,
   telemetryFrame,
   wireAnalyticsResponse,
   wireEventEntry,
+  wireActiveAlertFeed,
   wireFleetTimeScaleResult,
   wireGreenhouseDetail,
   wireGreenhouseRegistration,
@@ -16,6 +18,13 @@ import {
   wireTelemetryRange,
   wireTimeScale,
   wireTimeScalePatch,
+  wireEnableState,
+  wireEscalation,
+  wireFleetOptimizerSummary,
+  wireGreenhouseEnableState,
+  wireModelState,
+  wireOptimizerPlanDetail,
+  wireOptimizerStatus,
 } from "../../src/api/schemas";
 import { restFixture, wsFixture } from "../fixtures";
 
@@ -45,10 +54,28 @@ describe("REST wire schemas vs contract fixtures", () => {
     { fixture: "analytics.json", schema: wireAnalyticsResponse, expect: "pass" },
     { fixture: "event.json", schema: wireEventEntry, expect: "pass" },
     { fixture: "event.bad-kind.json", schema: wireEventEntry, expect: "fail" },
+    { fixture: "active-alerts.json", schema: wireActiveAlertFeed, expect: "pass" },
     { fixture: "sim-time-scale.patch.json", schema: wireTimeScalePatch, expect: "pass" },
     { fixture: "sim-time-scale.json", schema: wireTimeScale, expect: "pass" },
     { fixture: "sim-time-scale.bad-range.json", schema: wireTimeScalePatch, expect: "fail" },
     { fixture: "sim-time-scale-all.json", schema: wireFleetTimeScaleResult, expect: "pass" },
+    // Optimizer console (3)
+    { fixture: "event.optimizer.json", schema: wireEventEntry, expect: "pass" },
+    { fixture: "optimizer-plan.json", schema: wireOptimizerPlanDetail, expect: "pass" },
+    { fixture: "optimizer-plan.held.json", schema: wireOptimizerPlanDetail, expect: "pass" },
+    { fixture: "optimizer-fleet.json", schema: wireFleetOptimizerSummary, expect: "pass" },
+    { fixture: "optimizer-status.json", schema: wireOptimizerStatus, expect: "pass" },
+    { fixture: "optimizer-status.degraded.json", schema: wireOptimizerStatus, expect: "pass" },
+    { fixture: "optimizer-status.bad-reason.json", schema: wireOptimizerStatus, expect: "fail" },
+    { fixture: "optimizer-escalation.json", schema: wireEscalation, expect: "pass" },
+    { fixture: "optimizer-escalation.bad-reason.json", schema: wireEscalation, expect: "fail" },
+    { fixture: "optimizer-model.json", schema: wireModelState, expect: "pass" },
+    { fixture: "optimizer-enabled.json", schema: wireEnableState, expect: "pass" },
+    {
+      fixture: "optimizer-greenhouse-enabled.json",
+      schema: wireGreenhouseEnableState,
+      expect: "pass",
+    },
   ];
 
   it.each(cases)("$fixture → $expect", ({ fixture, schema, expect: outcome }) => {
@@ -62,6 +89,7 @@ describe("WebSocket frame schemas vs contract fixtures", () => {
     { fixture: "status.json", schema: statusFrame, expect: "pass" },
     { fixture: "drift.json", schema: driftFrame, expect: "pass" },
     { fixture: "event.json", schema: eventFrame, expect: "pass" },
+    { fixture: "active-alerts.json", schema: activeAlertsFrame, expect: "pass" },
     { fixture: "telemetry.bad-unit.json", schema: telemetryFrame, expect: "fail" },
     { fixture: "telemetry.bad-extra.json", schema: telemetryFrame, expect: "fail" },
     { fixture: "event.bad-kind.json", schema: eventFrame, expect: "fail" },

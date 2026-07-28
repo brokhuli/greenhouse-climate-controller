@@ -9,6 +9,8 @@ import { MetricTile } from "../../components/ui/MetricTile";
 import { StatusBadge } from "../../components/ui/StatusBadge";
 import { TimeScaleIndicator } from "../../components/ui/TimeScaleControl";
 import { TimeSeriesChart } from "../../components/ui/TimeSeriesChart";
+import { OptimizerStatusPill } from "../optimizer/badges";
+import type { OptimizerCardState } from "../optimizer/derivations";
 
 const CHART_HEIGHT = 48;
 const TEMPERATURE_CHART_COLOR = "var(--chart-temperature)";
@@ -35,11 +37,14 @@ function GreenhouseCardImpl({
   summary,
   history = NO_HISTORY,
   windowMs,
+  optimizerState,
 }: {
   summary: GreenhouseSummary;
   history?: readonly Reading[];
   /** Visible span (ms), from the fleet range picker — keeps the merge bound matched to the fetched window. */
   windowMs: number;
+  /** (3) This greenhouse's resolved optimizer pill state; absent when the optimizer is not deployed. */
+  optimizerState?: OptimizerCardState;
 }) {
   const live = useLiveSeries(summary.id);
   const assignment = useAssignment(summary.id);
@@ -88,7 +93,10 @@ function GreenhouseCardImpl({
 
       <div className="flex items-center justify-between gap-2">
         <span className="text-fg-muted truncate text-sm">{profileLabel}</span>
-        <StatusBadge status={summary.status} drift={summary.drift} />
+        <div className="flex shrink-0 items-center gap-1.5">
+          {optimizerState ? <OptimizerStatusPill state={optimizerState} /> : null}
+          <StatusBadge status={summary.status} drift={summary.drift} />
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-2">

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/domain"
+	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/state"
 )
 
 // SchemaVersion is the platform-dashboard-live-ws frame schema major version (RFC-007 envelope).
@@ -65,6 +66,23 @@ type EventFrame struct {
 	Source   string `json:"source,omitempty"`
 }
 
+// ActiveAlertFrame replaces one greenhouse's active-alert snapshot (type="active_alerts").
+// It is emitted only when that set changes, including when the final alert clears.
+type ActiveAlertFrame struct {
+	envelope
+	Type   string             `json:"type"`
+	Alerts []ActiveAlertEntry `json:"alerts"`
+}
+
+type ActiveAlertEntry struct {
+	Component string  `json:"component"`
+	ZoneID    *string `json:"zone_id"`
+	FaultType string  `json:"fault_type"`
+	Kind      string  `json:"kind"`
+	Severity  string  `json:"severity"`
+	Since     string  `json:"since"`
+}
+
 // DriftFrame reports whether a greenhouse's controller-reported setpoints still match its
 // intended state (type="drift", greenhouse-scoped): drift=true on divergence, false when
 // reconciled (platform-dashboard-live-ws drift.schema.json, 2b).
@@ -114,6 +132,27 @@ func NewEvent(event domain.Event) EventFrame {
 		Message:  event.Message,
 		Source:   event.Source,
 	}
+}
+
+func NewActiveAlerts(greenhouseID string, ts time.Time, faults map[state.FaultKey]state.ActiveFault) ActiveAlertFrame {
+	alerts := make([]ActiveAlertEntry, 0, len(faults))
+	for key, fault := range faults {
+		var zoneID *string
+		if key.ZoneID != "" {
+			zone := key.ZoneID
+			zoneID = &zone
+		}
+		kind := "fault"
+		if domain.InterlockFaults[fault.FaultType] {
+			kind = "interlock"
+		}
+		severity := "warning"
+		if fault.Severity == "alarm" {
+			severity = "critical"
+		}
+		alerts = append(alerts, ActiveAlertEntry{Component: key.Component, ZoneID: zoneID, FaultType: fault.FaultType, Kind: kind, Severity: severity, Since: rfc3339ms(fault.Since)})
+	}
+	return ActiveAlertFrame{envelope: envelope{SchemaVersion, greenhouseID, nil, rfc3339ms(ts)}, Type: "active_alerts", Alerts: alerts}
 }
 
 // NewDrift builds a drift frame (greenhouse-scoped; zone_id null).

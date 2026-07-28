@@ -2,6 +2,7 @@ import type {
   AnalyticsInterval,
   Connectivity,
   EventEntry,
+  ActiveAlert,
   GreenhouseSummary,
   Reading,
   Setpoints,
@@ -96,6 +97,27 @@ export function activeFaultCount(events: readonly EventEntry[]): number {
     if (event.kind === "fault") count += 1;
   }
   return count;
+}
+
+export type ActiveAlertRollup = {
+  alarms: number;
+  warnings: number;
+  affected: number;
+  clear: number;
+};
+
+/** Counts current alerts and the selected greenhouse scope for the activity triage strip. */
+export function activeAlertRollup(
+  alerts: readonly ActiveAlert[],
+  greenhouseIds: readonly string[],
+): ActiveAlertRollup {
+  const affected = new Set(alerts.map((alert) => alert.greenhouseId));
+  return {
+    alarms: alerts.filter((alert) => alert.severity === "critical").length,
+    warnings: alerts.filter((alert) => alert.severity === "warning").length,
+    affected: affected.size,
+    clear: Math.max(0, greenhouseIds.length - affected.size),
+  };
 }
 
 // ---------------------------------------------------------------------------

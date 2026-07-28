@@ -23,7 +23,9 @@
         "write_unauthorized",
         "platform_unavailable",
         "cycle_timeout",
-        "llm_unavailable"
+        "llm_unavailable",
+        "plan_unparseable",
+        "internal_error"
       ]
     },
     "Backend": {
@@ -40,7 +42,7 @@
     },
     "Horizon": {
       "type": "object",
-      "description": "The adaptive window the service chose for the cycle: 12h by default, 24h near a day boundary. trajectory spans [start, end].",
+      "description": "The adaptive window the service chose for the cycle: 12h by default, 24h near a day boundary. trajectory starts at start and any optional future change points stay within [start, end].",
       "properties": {
         "start": { "type": "string", "format": "date-time", "description": "Horizon start (RFC 3339, UTC) - the cycle start." },
         "end": { "type": "string", "format": "date-time", "description": "Horizon end (RFC 3339, UTC)." }

@@ -1,4 +1,4 @@
-# Auto-provision the platform + controller dashboards from files mounted at
+# Auto-provision the platform, controller, container, and optimizer dashboards from files mounted at
 # /var/lib/grafana/dashboards (operations §1).
 apiVersion: 1
 

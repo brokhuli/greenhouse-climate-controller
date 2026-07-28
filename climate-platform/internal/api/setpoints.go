@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/auth"
@@ -23,7 +24,8 @@ import (
 // becomes sticky intended state — re-asserted on reconnect rather than silently reverted
 // (crop-profiles §5).
 func (s *Server) editSetpoints(c echo.Context) error {
-	return s.applySetpointWrite(c, domain.SourceOperatorEdit, "operator", "ad-hoc edit", http.StatusOK)
+	// Operator edits carry no optimizer_run_id — that provenance is optimizer-only.
+	return s.applySetpointWrite(c, domain.SourceOperatorEdit, "operator", "ad-hoc edit", http.StatusOK, nil)
 }
 
 // submitSetpoints is the optimizer's single-authority setpoint write path (RFC-005 / RFC-011,
@@ -33,7 +35,21 @@ func (s *Server) editSetpoints(c echo.Context) error {
 // untokened internal call; in oidc mode it requires a setpoints:write service token (or operator).
 func (s *Server) submitSetpoints(c echo.Context) error {
 	actor := s.setpointActor(c, "optimizer")
-	return s.applySetpointWrite(c, domain.SourceOptimizer, actor, "optimizer setpoint submission", http.StatusAccepted)
+	return s.applySetpointWrite(c, domain.SourceOptimizer, actor, "optimizer setpoint submission", http.StatusAccepted, optimizerRunID(c))
+}
+
+// optimizerRunID reads the optional X-Optimizer-Run-Id trace header (the cycle's optimizer_run_id)
+// and returns it for recording as provenance (P3-OBS-1). It is auxiliary metadata, never load-bearing:
+// absent or malformed (not a UUID) yields nil and the write proceeds regardless.
+func optimizerRunID(c echo.Context) *string {
+	raw := strings.TrimSpace(c.Request().Header.Get("X-Optimizer-Run-Id"))
+	if raw == "" {
+		return nil
+	}
+	if _, err := uuid.Parse(raw); err != nil {
+		return nil
+	}
+	return &raw
 }
 
 // resolveStageBounds returns the crop-safe envelope of the greenhouse's active profile stage, used to
@@ -76,7 +92,7 @@ func (s *Server) setpointActor(c echo.Context, fallback string) string {
 // controller with no prior intended state is 503; a controller that rejects the delivery has its
 // status/body passed through; otherwise the write is accepted (delivered, or held when offline) and
 // the resulting bundle returned with successStatus.
-func (s *Server) applySetpointWrite(c echo.Context, source domain.SetpointSource, actor, description string, successStatus int) error {
+func (s *Server) applySetpointWrite(c echo.Context, source domain.SetpointSource, actor, description string, successStatus int, optimizerRunID *string) error {
 	ctx := c.Request().Context()
 	id := c.Param("id")
 	exists, err := s.store.Exists(ctx, id)
@@ -135,7 +151,7 @@ func (s *Server) applySetpointWrite(c echo.Context, source domain.SetpointSource
 		}
 	}
 
-	outcome, err := s.reconcile.Apply(ctx, id, candidate, source, actor, description)
+	outcome, err := s.reconcile.Apply(ctx, id, candidate, source, actor, description, optimizerRunID)
 	if err != nil {
 		if errors.Is(err, reconcile.ErrUnknownGreenhouse) {
 			return respondNotFound(c, "greenhouse not found")

@@ -20,6 +20,7 @@ import (
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/config"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/ingest"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/metrics"
+	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/optimizer"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/reconcile"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/relay"
 	"github.com/brokhuli/greenhouse-climate-controller/climate-platform/internal/state"
@@ -112,6 +113,10 @@ func run(log *slog.Logger) error {
 	}
 
 	server := api.New(db, fleet, ing, relayClient, reconciler, hub, verifier, cfg.ServiceAuthMode, met, log)
+	// (3) Wire the optimizer console proxy. The client always points at the configured URL
+	// (default http://optimizer:8000); until the optimizer container is up, the status badge
+	// synthesizes "unavailable" and the console reads surface 502, never a proxy panic.
+	server = server.WithOptimizer(optimizer.New(cfg.OptimizerBaseURL, cfg.OptimizerTimeout), cfg.OptimizerCadenceSecs)
 
 	serverErr := make(chan error, 1)
 	go func() { serverErr <- server.Start(cfg.HTTPAddr) }()

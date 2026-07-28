@@ -69,6 +69,16 @@ type Config struct {
 	// setpoints:write client-credentials token, validated on the same path as human tokens. The
 	// oidc mode therefore requires OIDCIssuerURL to be set (platform security §5).
 	ServiceAuthMode string
+	// OptimizerBaseURL is the Phase 3 optimizer's FastAPI Service API, which the Go API
+	// proxies/aggregates into the versioned dashboard surface (platform interfaces §3). The
+	// SPA reaches the optimizer only through here, never a second origin.
+	OptimizerBaseURL string
+	// OptimizerTimeout bounds one proxied call to the optimizer Service API.
+	OptimizerTimeout time.Duration
+	// OptimizerCadenceSecs is the fallback planning cadence the status badge ages the
+	// last-successful-cycle time against before the optimizer has ever been reached; once it
+	// is reachable, the optimizer's own /health cadence supersedes this.
+	OptimizerCadenceSecs int
 }
 
 // Load resolves the configuration from the environment, applying defaults. It returns
@@ -93,6 +103,10 @@ func Load() (Config, error) {
 		OIDCAudience:     env("PLATFORM_OIDC_AUDIENCE", ""),
 
 		ServiceAuthMode: env("PLATFORM_SERVICE_AUTH_MODE", ServiceAuthModeTrustedNetwork),
+
+		OptimizerBaseURL:     env("PLATFORM_OPTIMIZER_URL", "http://optimizer:8000"),
+		OptimizerTimeout:     time.Duration(envInt("PLATFORM_OPTIMIZER_TIMEOUT_SECS", 5)) * time.Second,
+		OptimizerCadenceSecs: envInt("PLATFORM_OPTIMIZER_CADENCE_SECS", 1800),
 	}
 	if cfg.DatabaseURL == "" {
 		return Config{}, fmt.Errorf("PLATFORM_DATABASE_URL is required")
