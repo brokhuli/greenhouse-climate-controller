@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .chain import (
+    BackendDraft,
     BackendOutput,
     PlannerChain,
     PromptNotFoundError,
@@ -13,6 +14,7 @@ from .chain import (
 )
 from .planner import (
     Planner,
+    PlannerNoChange,
     PlannerParseError,
     PlannerUnavailableError,
     PlanProposal,
@@ -32,12 +34,14 @@ from .state_change import (
 )
 
 __all__ = [
+    "BackendDraft",
     "BackendOutput",
     "ContextBudgetExceededError",
     "PlanContextPayload",
     "PlanProposal",
     "Planner",
     "PlannerChain",
+    "PlannerNoChange",
     "PlannerParseError",
     "PlannerUnavailableError",
     "PromptNotFoundError",

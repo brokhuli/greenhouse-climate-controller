@@ -43,7 +43,9 @@ from climate_optimizer.models import (
     PlanRecord,
     Provider,
     SensorFault,
+    SetpointDecision,
     Setpoints,
+    SetpointsDraft,
     SetpointSource,
     SetpointsPatch,
     StageBounds,
@@ -52,7 +54,7 @@ from climate_optimizer.models import (
     ZoneBounds,
     ZoneTargets,
 )
-from climate_optimizer.planner import BackendOutput, PlannerChain
+from climate_optimizer.planner import BackendDraft, PlannerChain
 
 CONTRACTS_DIR = Path(__file__).resolve().parents[2] / "contracts"
 _TO = datetime(2026, 6, 17, 12, 0, 0, tzinfo=UTC)
@@ -283,21 +285,35 @@ def build_plan(
     )
 
 
-def build_output(
-    plan: OptimizerPlan | None = None, *, role: BackendRole = BackendRole.PRIMARY
-) -> BackendOutput:
-    """The chain's provenance-stamped output for a canned plan."""
-    return BackendOutput(
-        plan=plan or build_plan(),
+def build_draft(
+    *,
+    confidence: float = 0.95,
+    patch: SetpointsPatch | None = None,
+    setpoints: SetpointsDraft | None = None,
+    role: BackendRole = BackendRole.PRIMARY,
+    explanation: str = "test plan",
+) -> BackendDraft:
+    """The chain's provenance-stamped decision for a canned setpoint bundle.
+
+    ``patch`` is the convenient path — reuse :func:`build_patch` to shape the bundle; ``setpoints``
+    takes a raw :class:`SetpointsDraft` directly (e.g. an empty one to drive the no-change hold).
+    """
+    if setpoints is None:
+        source = patch if patch is not None else build_patch()
+        setpoints = SetpointsDraft(**source.model_dump(exclude_unset=True))
+    return BackendDraft(
+        decision=SetpointDecision(
+            setpoints=setpoints, confidence=confidence, explanation=explanation
+        ),
         provider=Provider.OLLAMA,
         model="qwen2.5:7b",
         role=role,
     )
 
 
-def fake_chain(output: BackendOutput | None = None) -> PlannerChain:
-    """A chain that returns a canned plan — keeps planner tests off a live LLM."""
-    resolved = output or build_output()
+def fake_chain(draft: BackendDraft | None = None) -> PlannerChain:
+    """A chain that returns a canned decision — keeps planner tests off a live LLM."""
+    resolved = draft or build_draft()
     return RunnableLambda(lambda _payload: resolved)
 
 
@@ -305,7 +321,7 @@ def failing_chain(error: Exception | None = None) -> PlannerChain:
     """A chain that raises, standing in for an unreachable or non-conforming backend."""
     failure = error or RuntimeError("backend unreachable")
 
-    def boom(_payload: Any) -> BackendOutput:
+    def boom(_payload: Any) -> BackendDraft:
         raise failure
 
     return RunnableLambda(boom)

@@ -76,3 +76,30 @@ class SetpointsPatch(StrictModel):
                 f"SetpointsPatch fields must not be explicitly null: {', '.join(explicit_nulls)}"
             )
         return self
+
+
+class SetpointsDraft(StrictModel):
+    """The *lenient* twin of :class:`SetpointsPatch` — the raw setpoint object the LLM emits.
+
+    Same optional fields and per-field ranges as ``SetpointsPatch``, but **without** its
+    ``minProperties: 1`` / no-explicit-null validators. This is the ingestion boundary for a
+    constrained-decoding backend (spec 04 §Determinism): JSON-Schema grammar constraints can enforce
+    field *names, types, and ranges*, but not a model-level "at least one field" or "no null" rule —
+    so a small model can legally emit ``{}`` or a null for a field it is not changing. Accepting that
+    here (rather than rejecting it as ``plan_unparseable``) lets the planner interpret it: an empty
+    draft is a deliberate "hold" and the nulls are dropped, in :meth:`Planner.propose`. The strict
+    ``SetpointsPatch`` is then rebuilt from the surviving fields, so nothing downstream loosens.
+    """
+
+    temperature_day_c: float | None = Field(default=None, ge=-20, le=60)
+    temperature_night_c: float | None = Field(default=None, ge=-20, le=60)
+    day_start: str | None = Field(default=None, pattern=r"^([01][0-9]|2[0-3]):[0-5][0-9]$")
+    day_end: str | None = Field(default=None, pattern=r"^([01][0-9]|2[0-3]):[0-5][0-9]$")
+    humidity_low_pct: float | None = Field(default=None, ge=0, le=100)
+    humidity_high_pct: float | None = Field(default=None, ge=0, le=100)
+    humidity_deadband_pct: float | None = Field(default=None, ge=0, le=50)
+    co2_target_ppm: int | None = Field(default=None, ge=0, le=5000)
+    co2_vent_interlock_threshold_pct: float | None = Field(default=None, ge=0, le=100)
+    vpd_target_kpa: float | None = Field(default=None, ge=0)
+    dli_target_mol: float | None = Field(default=None, ge=0)
+    zones: list[ZoneTargets] | None = None

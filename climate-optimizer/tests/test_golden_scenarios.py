@@ -37,9 +37,8 @@ from climate_optimizer.planner import Planner, choose_horizon
 from conftest import (
     StubPlatformClient,
     build_context,
-    build_output,
+    build_draft,
     build_patch,
-    build_plan,
     build_setpoints,
     chain_factory,
     fake_chain,
@@ -234,9 +233,14 @@ async def _residual_fidelity_fault() -> None:
 
 
 async def _contradictory_objectives() -> None:
-    """A proposal that leaves crop-safe range (no in-bounds way to satisfy every objective) is rejected."""
-    chain = fake_chain(build_output(build_plan(patch=build_patch(temperature_day_c=40.0))))
-    record = await _run_cycle(chain=chain)
+    """A self-contradictory bundle (no in-bounds way to satisfy every objective) is rejected.
+
+    An out-of-*range* target is now pulled to its crop-safe edge and applied (lever 2), so what still
+    escalates as a ``constraint_violation`` is an internally inconsistent bundle — here
+    ``humidity_low_pct`` above ``humidity_high_pct`` — which clamping deliberately does not repair.
+    """
+    patch = build_patch(humidity_low_pct=80.0, humidity_high_pct=40.0)
+    record = await _run_cycle(chain=fake_chain(build_draft(patch=patch)))
     assert record.outcome.reason_code is ReasonCode.CONSTRAINT_VIOLATION
     assert record.plan is not None
 

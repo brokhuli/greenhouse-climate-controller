@@ -17,7 +17,24 @@ from pydantic import Field, model_validator
 
 from .base import SLUG_PATTERN, StrictModel
 from .enums import BackendRole, OutcomeStatus, Provider, ReasonCode
-from .setpoints import SetpointsPatch
+from .setpoints import SetpointsDraft, SetpointsPatch
+
+
+class SetpointDecision(StrictModel):
+    """The planner LLM's *entire* output — the one semantic decision only the model can make.
+
+    This is **not** a wire contract: it is the shrunken structured-output shape the backend is asked
+    to produce (spec 04). The model chooses the immediate setpoint bundle and rates its own
+    confidence; everything mechanical — the ``horizon.start`` timestamp, the single-point trajectory,
+    and the ``immediate_setpoints ≡ trajectory[0]`` equality — is assembled deterministically in
+    :meth:`~climate_optimizer.planner.planner.Planner.propose`, so those failure modes can no longer
+    reach a small model. An empty ``setpoints`` is a valid "hold" (no change earns its cost), read as
+    an extend rather than an error; see :class:`~climate_optimizer.models.SetpointsDraft`.
+    """
+
+    setpoints: SetpointsDraft
+    confidence: float = Field(ge=0, le=1)
+    explanation: str = Field(min_length=1)
 
 
 class TrajectoryPoint(StrictModel):

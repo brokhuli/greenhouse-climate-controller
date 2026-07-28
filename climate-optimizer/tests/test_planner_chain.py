@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -11,11 +12,12 @@ from langchain_core.runnables import RunnableLambda
 from langchain_ollama import ChatOllama
 
 from climate_optimizer.config import Settings
-from climate_optimizer.models import BackendRole, PlanningContext, Provider
+from climate_optimizer.models import BackendRole, PlanningContext, Provider, SetpointsDraft
 from climate_optimizer.planner import (
     ContextBudgetExceededError,
     Planner,
     PlannerChain,
+    PlannerNoChange,
     PlannerParseError,
     PlannerUnavailableError,
     PlanProposal,
@@ -25,11 +27,11 @@ from climate_optimizer.planner import (
     choose_horizon,
     load_prompt_template,
 )
-from climate_optimizer.planner.chain import BackendOutput, ProviderNotConfiguredError
+from climate_optimizer.planner.chain import BackendDraft, ProviderNotConfiguredError
 from conftest import (
     build_context,
-    build_output,
-    build_plan,
+    build_draft,
+    build_patch,
     build_setpoints,
     chain_factory,
     failing_chain,
@@ -64,6 +66,16 @@ def test_the_pinned_prompt_version_resolves_to_a_checked_in_asset(version: str) 
     template = load_prompt_template(version)
     assert "immediate_setpoints" in template
     assert "crop-safe" in template
+
+
+def test_the_v4_prompt_asks_for_the_shrunk_decision() -> None:
+    # v4 asks only for the bundle, a confidence, and staying within the crop-safe bounds; it states
+    # the timestamp/trajectory/immediate_setpoints are assembled for the model, not produced by it.
+    template = load_prompt_template("v4")
+    assert "crop-safe" in template
+    assert "confidence" in template
+    assert '"setpoints"' in template
+    assert "assembled for you" in template
 
 
 def test_an_unknown_prompt_version_raises() -> None:
@@ -148,8 +160,8 @@ async def test_propose_returns_the_stamped_plan_and_context() -> None:
 
 
 async def test_a_fallback_response_is_recorded_as_such() -> None:
-    output = build_output(role=BackendRole.FALLBACK)
-    proposal = await _propose(_planner(fake_chain(output)))
+    draft = build_draft(role=BackendRole.FALLBACK)
+    proposal = await _propose(_planner(fake_chain(draft)))
 
     # Failover is recorded, not hidden: the fallback is a different model (spec 04).
     assert proposal.output.role is BackendRole.FALLBACK
@@ -214,12 +226,70 @@ async def test_chains_are_cached_per_model() -> None:
 async def test_the_plan_context_reaches_the_chain() -> None:
     seen: list[dict[str, Any]] = []
 
-    def capture(payload: dict[str, Any]) -> BackendOutput:
+    def capture(payload: dict[str, Any]) -> BackendDraft:
         seen.append(payload)
-        return build_output(build_plan())
+        return build_draft()
 
     chain: PlannerChain = RunnableLambda(capture)
     planner = Planner(Settings(), chain_factory=chain_factory(chain))
     await _propose(planner)
 
     assert "gh-a" in seen[0]["plan_context"]
+
+
+# -- assembling the plan from the shrunk decision ---------------------------
+
+
+async def test_propose_assembles_a_single_point_trajectory_at_horizon_start() -> None:
+    # The model owns only the bundle; the code stamps the timestamp, builds the one-point trajectory,
+    # and makes immediate_setpoints equal it — so those failure modes never reach the model.
+    ctx = build_context()
+    horizon = choose_horizon(NOW, ctx.setpoints.targets, Settings())
+    planner = _planner(fake_chain(build_draft(patch=build_patch(temperature_day_c=23.0))))
+
+    proposal = await planner.propose(
+        ctx, baseline_forecast=[], horizon=horizon, model="qwen2.5:7b", now=NOW
+    )
+
+    plan = proposal.output.plan
+    assert len(plan.trajectory) == 1
+    assert plan.trajectory[0].at == horizon.start
+    assert plan.immediate_setpoints == plan.trajectory[0].setpoints
+    assert proposal.clamped_fields == ()
+
+
+async def test_propose_clamps_an_out_of_bounds_target_and_flags_it() -> None:
+    ctx = build_context()  # build_bounds() caps temperature_day_c at 26.0
+    horizon = choose_horizon(NOW, ctx.setpoints.targets, Settings())
+    planner = _planner(fake_chain(build_draft(patch=build_patch(temperature_day_c=40.0))))
+
+    proposal = await planner.propose(
+        ctx, baseline_forecast=[], horizon=horizon, model="qwen2.5:7b", now=NOW
+    )
+
+    assert proposal.clamped_fields == ("temperature_day_c",)
+    assert proposal.output.plan.immediate_setpoints.temperature_day_c == 26.0
+    assert "clamped to crop-safe" in proposal.output.plan.explanation
+
+
+async def test_an_empty_decision_is_a_no_change_hold() -> None:
+    # An empty setpoints object is a first-class "hold" — surfaced as PlannerNoChange, not a parse
+    # error — so a constrained-decoding backend returning `{}` extends the baseline (spec 06 §1).
+    planner = _planner(fake_chain(build_draft(setpoints=SetpointsDraft())))
+    with pytest.raises(PlannerNoChange):
+        await _propose(planner)
+
+
+async def test_a_slow_backend_is_held_as_unavailable() -> None:
+    # The per-call llm.request_timeout_seconds bounds the chain invocation below the cycle timeout, so
+    # a slow backend is attributed to the LLM rather than surfacing as a whole-cycle timeout.
+    async def slow(_payload: dict[str, Any]) -> BackendDraft:
+        await asyncio.sleep(0.2)
+        return build_draft()
+
+    planner = Planner(
+        Settings(llm={"request_timeout_seconds": 0.01}),
+        chain_factory=chain_factory(RunnableLambda(slow)),
+    )
+    with pytest.raises(PlannerUnavailableError):
+        await _propose(planner)

@@ -16,6 +16,8 @@ from climate_optimizer.models import (
     PlanRecord,
     Provider,
     ReasonCode,
+    SetpointDecision,
+    SetpointsDraft,
     SetpointsPatch,
 )
 from conftest import load_fixture
@@ -106,6 +108,41 @@ def test_explicit_null_field_rejected() -> None:
 def test_partial_patch_still_valid() -> None:
     patch = SetpointsPatch(temperature_day_c=22.5)
     assert patch.model_dump(exclude_unset=True) == {"temperature_day_c": 22.5}
+
+
+# -- the lenient LLM-ingestion shapes (SetpointsDraft / SetpointDecision) ----
+
+
+def test_setpoints_draft_allows_empty() -> None:
+    # The lenient twin tolerates the empty "hold" object the strict patch rejects (constrained
+    # decoding can return `{}`); the planner reads it as a no-change decision.
+    assert SetpointsDraft().model_dump(exclude_none=True) == {}
+
+
+def test_setpoints_draft_tolerates_explicit_null() -> None:
+    # A backend may emit null for a field it is not changing; the draft accepts it and the planner
+    # drops it (exclude_none) rather than raising the strict patch's no-null error.
+    draft = SetpointsDraft.model_validate({"temperature_day_c": 22.5, "vpd_target_kpa": None})
+    assert draft.model_dump(exclude_none=True) == {"temperature_day_c": 22.5}
+
+
+def test_setpoints_draft_still_enforces_ranges_and_unknown_fields() -> None:
+    with pytest.raises(ValidationError):
+        SetpointsDraft(temperature_day_c=999.0)
+    with pytest.raises(ValidationError):
+        SetpointsDraft.model_validate({"nope": 1})
+
+
+def test_setpoint_decision_accepts_an_empty_bundle() -> None:
+    decision = SetpointDecision(setpoints=SetpointsDraft(), confidence=0.5, explanation="hold")
+    assert decision.setpoints.model_dump(exclude_none=True) == {}
+
+
+def test_setpoint_decision_enforces_confidence_and_explanation() -> None:
+    with pytest.raises(ValidationError):
+        SetpointDecision(setpoints=SetpointsDraft(), confidence=1.5, explanation="x")
+    with pytest.raises(ValidationError):
+        SetpointDecision(setpoints=SetpointsDraft(), confidence=0.5, explanation="")
 
 
 def _plan_payload(**overrides: object) -> dict[str, object]:

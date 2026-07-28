@@ -44,6 +44,11 @@ _ZONE_BOUNDED: tuple[str, ...] = (
     "drain_period_secs",
 )
 
+# Bounded targets whose type is integer — the clamped crop-safe edge is rounded back to an int so the
+# rebuilt patch still validates (``co2_target_ppm`` / zone ``drain_period_secs``).
+_INT_SCALARS: frozenset[str] = frozenset({"co2_target_ppm"})
+_INT_ZONE: frozenset[str] = frozenset({"drain_period_secs"})
+
 
 @dataclass(frozen=True)
 class ConstraintResult:
@@ -71,8 +76,64 @@ class ApplicationDecision:
     message: str | None = None
 
 
+@dataclass(frozen=True)
+class ClampResult:
+    """A patch pulled back inside the crop-safe envelope, and which fields moved."""
+
+    patch: SetpointsPatch
+    clamped_fields: tuple[str, ...]
+
+
 def _within(value: float, bound: Bound) -> bool:
     return bound.min <= value <= bound.max
+
+
+def _clamp(value: float, bound: Bound) -> float:
+    """Pull a value to the nearest crop-safe edge (the bound *is* the safe value)."""
+    return min(max(value, bound.min), bound.max)
+
+
+def clamp_to_bounds(patch: SetpointsPatch, bounds: StageBounds | None) -> ClampResult:
+    """Return ``patch`` with every out-of-bounds target pulled to its crop-safe edge (spec 06 §1).
+
+    A small model occasionally proposes a target just outside its envelope. Rather than discard the
+    whole cycle as a ``constraint_violation`` — control lost over a single stray field — we clamp the
+    field to the boundary and apply: the crop-safe edge is safe by definition, and Phase 2's write
+    path still backstops it. Only the bounded scalar/zone targets are clamped; cross-field
+    consistency (``humidity_low ≤ humidity_high`` …) is *not* repaired here — a self-contradictory
+    bundle is a genuine model error and still escalates. Returns the original patch unchanged (and an
+    empty ``clamped_fields``) when nothing was out of range or there are no bounds.
+    """
+    if bounds is None:
+        return ClampResult(patch, ())
+
+    data = patch.model_dump(exclude_unset=True)
+    clamped: list[str] = []
+
+    for field in _BOUNDED_SCALARS:
+        value = data.get(field)
+        bound = getattr(bounds, field)
+        if value is None or bound is None or _within(float(value), bound):
+            continue
+        edge = _clamp(float(value), bound)
+        data[field] = int(round(edge)) if field in _INT_SCALARS else edge
+        clamped.append(field)
+
+    zones = data.get("zones")
+    if zones and bounds.zones is not None:
+        for zone in zones:
+            for field in _ZONE_BOUNDED:
+                value = zone.get(field)
+                bound = getattr(bounds.zones, field)
+                if value is None or bound is None or _within(float(value), bound):
+                    continue
+                edge = _clamp(float(value), bound)
+                zone[field] = int(round(edge)) if field in _INT_ZONE else edge
+                clamped.append(f"zones[{zone['zone_id']}].{field}")
+
+    if not clamped:
+        return ClampResult(patch, ())
+    return ClampResult(SetpointsPatch(**data), tuple(clamped))
 
 
 def _patch_signature(patch: SetpointsPatch) -> tuple[tuple[tuple[str, object], ...], object]:

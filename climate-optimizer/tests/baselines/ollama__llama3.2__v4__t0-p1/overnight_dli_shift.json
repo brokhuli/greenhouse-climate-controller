@@ -1,0 +1,22 @@
+{
+  "confidence": 0.9,
+  "explanation": "Pre-position CO2 and VPD for the morning ramp while holding DLI within the crop-safe band.",
+  "objective_scores": { "anticipation": 0.7, "coupling": 0.5, "efficiency": 0.6 },
+  "immediate_setpoints": {
+    "temperature_day_c": 23.0,
+    "co2_target_ppm": 1000,
+    "vpd_target_kpa": 0.9,
+    "dli_target_mol": 18.0
+  },
+  "trajectory": [
+    {
+      "at": "2026-06-17T12:00:00.000Z",
+      "setpoints": {
+        "temperature_day_c": 23.0,
+        "co2_target_ppm": 1000,
+        "vpd_target_kpa": 0.9,
+        "dli_target_mol": 18.0
+      }
+    }
+  ]
+}

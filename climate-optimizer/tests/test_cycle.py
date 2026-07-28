@@ -22,20 +22,19 @@ from climate_optimizer.models import (
     OutcomeStatus,
     PlanRecord,
     ReasonCode,
+    SetpointsDraft,
     SetpointsPatch,
-    TrajectoryPoint,
 )
 from climate_optimizer.orchestration.cycle import plan_record_payload, run_cycle
 from climate_optimizer.orchestration.runtime import RuntimeState
 from climate_optimizer.orchestration.store import ServiceStore
 from climate_optimizer.planner import Planner, PlannerChain
-from climate_optimizer.planner.chain import BackendOutput
+from climate_optimizer.planner.chain import BackendDraft
 from conftest import (
     StubPlatformClient,
     build_context,
-    build_output,
+    build_draft,
     build_patch,
-    build_plan,
     chain_factory,
     failing_chain,
     fake_chain,
@@ -232,9 +231,9 @@ async def test_an_over_budget_context_holds_the_cycle() -> None:
 
 
 async def test_a_cycle_that_overruns_its_timeout_is_held() -> None:
-    async def slow(_payload: dict[str, Any]) -> BackendOutput:
+    async def slow(_payload: dict[str, Any]) -> BackendDraft:
         await asyncio.sleep(0.5)
-        return build_output()
+        return build_draft()
 
     slow_chain: PlannerChain = RunnableLambda(slow)
     record = await _run(
@@ -372,12 +371,12 @@ def _pausing_chain(runtime: RuntimeState, *, scope: str) -> PlannerChain:
     who pauses while the LLM is thinking. The plan still comes back, so the cycle can only hold the
     write by re-reading the enable gate at its commit point."""
 
-    def pause_then_plan(_payload: Any) -> BackendOutput:
+    def pause_then_plan(_payload: Any) -> BackendDraft:
         if scope == "global":
             runtime.set_enabled(False, reason="paused mid-cycle")
         else:
             runtime.set_greenhouse_enabled("gh-a", False, reason="paused mid-cycle")
-        return build_output()
+        return build_draft()
 
     return RunnableLambda(pause_then_plan)
 
@@ -439,7 +438,7 @@ async def test_a_pause_during_the_write_holds_it() -> None:
 
 async def test_a_low_confidence_plan_is_surfaced_not_applied() -> None:
     client = StubPlatformClient()
-    chain = fake_chain(build_output(build_plan(confidence=0.4)))
+    chain = fake_chain(build_draft(confidence=0.4))
 
     record = await _run(client=client, chain=chain)
 
@@ -459,7 +458,7 @@ async def test_a_post_planner_escalation_does_not_name_a_source_plan() -> None:
         client=client,
         store=store,
         on_demand=True,  # bypass state-change suppression so the planner actually runs
-        chain=fake_chain(build_output(build_plan(confidence=0.4))),
+        chain=fake_chain(build_draft(confidence=0.4)),
     )
 
     assert applied.source_plan_id is None
@@ -468,29 +467,42 @@ async def test_a_post_planner_escalation_does_not_name_a_source_plan() -> None:
     assert escalated.source_plan_id is None
 
 
-async def test_an_out_of_bounds_target_is_a_constraint_violation() -> None:
-    chain = fake_chain(build_output(build_plan(patch=build_patch(temperature_day_c=40.0))))
-    record = await _run(chain=chain)
+async def test_an_out_of_bounds_target_is_clamped_and_applied() -> None:
+    # A stray target is pulled back to its crop-safe edge and applied, not discarded (lever 2). In
+    # build_bounds() temperature_day_c is capped at 26.0, so a proposed 40.0 lands there.
+    from climate_optimizer.infra import metrics
 
-    assert record.outcome.reason_code is ReasonCode.CONSTRAINT_VIOLATION
+    before = metrics.PLANNER_CLAMPED_TOTAL.labels("gh-a")._value.get()
+    client = StubPlatformClient()
+    record = await _run(
+        client=client, chain=fake_chain(build_draft(patch=build_patch(temperature_day_c=40.0)))
+    )
+
+    assert record.outcome.status is OutcomeStatus.APPLIED
     assert record.plan is not None
+    assert record.plan.immediate_setpoints.temperature_day_c == 26.0
+    assert "clamped to crop-safe" in record.plan.explanation
+    assert len(client.submitted) == 1
+    assert metrics.PLANNER_CLAMPED_TOTAL.labels("gh-a")._value.get() == before + 1
 
 
 async def test_an_inconsistent_bundle_is_a_constraint_violation() -> None:
-    patch = SetpointsPatch(humidity_low_pct=80.0, humidity_high_pct=40.0)
-    record = await _run(chain=fake_chain(build_output(build_plan(patch=patch))))
+    # Clamping does not repair a self-contradictory bundle: humidity_low above humidity_high still
+    # escalates (both fields are unbounded in build_bounds(), so neither is pulled to an edge).
+    patch = build_patch(humidity_low_pct=80.0, humidity_high_pct=40.0)
+    record = await _run(chain=fake_chain(build_draft(patch=patch)))
     assert record.outcome.reason_code is ReasonCode.CONSTRAINT_VIOLATION
 
 
-async def test_immediate_setpoints_must_match_the_first_trajectory_point() -> None:
-    plan = build_plan()
-    # Desynchronize the head of the trajectory from the bundle that would be written.
-    plan.trajectory[0] = TrajectoryPoint(
-        at=plan.trajectory[0].at, setpoints=build_patch(temperature_day_c=22.0)
-    )
+async def test_a_no_change_decision_extends_the_baseline() -> None:
+    # An empty setpoints decision is the model choosing to hold — a benign extend, not an error.
+    client = StubPlatformClient()
+    record = await _run(client=client, chain=fake_chain(build_draft(setpoints=SetpointsDraft())))
 
-    record = await _run(chain=fake_chain(build_output(plan)))
-    assert record.outcome.reason_code is ReasonCode.CONSTRAINT_VIOLATION
+    assert record.outcome.status is OutcomeStatus.EXTENDED
+    assert record.outcome.reason_code is None
+    assert record.plan is None
+    assert client.submitted == []
 
 
 @pytest.mark.parametrize(
@@ -570,7 +582,7 @@ async def test_every_cycle_emits_a_contract_valid_record() -> None:
     for record in (
         await _run(),
         await _run(chain=failing_chain()),
-        await _run(chain=fake_chain(build_output(build_plan(confidence=0.1)))),
+        await _run(chain=fake_chain(build_draft(confidence=0.1))),
     ):
         schema_validation.validate_plan_record(plan_record_payload(record))
 
@@ -627,7 +639,7 @@ async def test_the_record_stamps_the_active_backend() -> None:
 
     # A held cycle still records which backend would have run it (P3-OBS-1).
     assert record.backend.model == "mistral"
-    assert record.backend.prompt_version == "v3"
+    assert record.backend.prompt_version == "v4"
 
 
 # -- live stage progress ----------------------------------------------------
@@ -676,7 +688,7 @@ async def test_an_unreachable_planner_stops_at_the_plan_stage() -> None:
 
 async def test_a_low_confidence_plan_stops_at_the_constrain_stage() -> None:
     store = ServiceStore()
-    await _run(store=store, chain=fake_chain(build_output(build_plan(confidence=0.4))))
+    await _run(store=store, chain=fake_chain(build_draft(confidence=0.4)))
     assert store.current_stage("gh-a") is CycleStage.CONSTRAIN
 
 

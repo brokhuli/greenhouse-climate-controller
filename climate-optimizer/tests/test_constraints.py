@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from climate_optimizer.domain.constraints import check_constraints, evaluate_application
+from climate_optimizer.domain.constraints import (
+    check_constraints,
+    clamp_to_bounds,
+    evaluate_application,
+)
 from climate_optimizer.models import (
     Horizon,
     OptimizerPlan,
@@ -12,6 +16,7 @@ from climate_optimizer.models import (
     ReasonCode,
     SetpointsPatch,
     TrajectoryPoint,
+    ZoneTargets,
 )
 from conftest import build_bounds
 
@@ -115,3 +120,76 @@ def test_trajectory_point_past_horizon_end_escalates() -> None:
     beyond = [_AT + timedelta(hours=i) for i in range(14)]  # last point sits an hour past a 12h end
     plan = _trajectory_plan(*beyond)
     assert check_constraints(plan, BOUNDS, HORIZON).reason_code is ReasonCode.CONSTRAINT_VIOLATION
+
+
+# -- clamping to the crop-safe envelope (spec 06 §1, lever 2) ----------------
+
+
+def test_clamp_leaves_an_in_bounds_patch_untouched() -> None:
+    patch = SetpointsPatch(temperature_day_c=23.0, co2_target_ppm=1000)
+    result = clamp_to_bounds(patch, BOUNDS)
+    assert result.patch is patch
+    assert result.clamped_fields == ()
+
+
+def test_clamp_pulls_a_value_above_max_to_the_edge() -> None:
+    # build_bounds() caps temperature_day_c at 26.0.
+    result = clamp_to_bounds(SetpointsPatch(temperature_day_c=40.0), BOUNDS)
+    assert result.patch.temperature_day_c == 26.0
+    assert result.clamped_fields == ("temperature_day_c",)
+
+
+def test_clamp_pulls_a_value_below_min_to_the_edge() -> None:
+    # build_bounds() floors temperature_day_c at 21.0.
+    result = clamp_to_bounds(SetpointsPatch(temperature_day_c=5.0), BOUNDS)
+    assert result.patch.temperature_day_c == 21.0
+    assert result.clamped_fields == ("temperature_day_c",)
+
+
+def test_clamp_keeps_an_int_target_an_int() -> None:
+    # co2_target_ppm bound is [900, 1100]; the clamped edge must stay an int for the patch to validate.
+    result = clamp_to_bounds(SetpointsPatch(co2_target_ppm=1500), BOUNDS)
+    assert result.patch.co2_target_ppm == 1100
+    assert isinstance(result.patch.co2_target_ppm, int)
+
+
+def test_clamp_ignores_an_unbounded_field() -> None:
+    # humidity_deadband_pct has no bound in build_bounds(): out of no range, so never clamped.
+    patch = SetpointsPatch(humidity_deadband_pct=40.0)
+    result = clamp_to_bounds(patch, BOUNDS)
+    assert result.patch is patch
+    assert result.clamped_fields == ()
+
+
+def test_clamp_without_bounds_is_a_no_op() -> None:
+    patch = SetpointsPatch(temperature_day_c=40.0)
+    result = clamp_to_bounds(patch, None)
+    assert result.patch is patch
+    assert result.clamped_fields == ()
+
+
+def test_clamp_pulls_a_zone_target_to_its_edge() -> None:
+    # build_bounds().zones floors moisture_low_threshold at 0.3.
+    patch = SetpointsPatch(
+        zones=[
+            ZoneTargets(
+                zone_id="bench-a",
+                moisture_low_threshold=0.1,
+                moisture_high_threshold=0.6,
+                drain_period_secs=300,
+                schedule="06:00",
+            )
+        ]
+    )
+    result = clamp_to_bounds(patch, BOUNDS)
+    assert result.patch.zones is not None
+    assert result.patch.zones[0].moisture_low_threshold == 0.3
+    assert result.clamped_fields == ("zones[bench-a].moisture_low_threshold",)
+
+
+def test_clamp_reports_every_field_it_moved() -> None:
+    result = clamp_to_bounds(
+        SetpointsPatch(temperature_day_c=40.0, co2_target_ppm=1500, vpd_target_kpa=0.9), BOUNDS
+    )
+    assert set(result.clamped_fields) == {"temperature_day_c", "co2_target_ppm"}
+    assert result.patch.vpd_target_kpa == 0.9  # in-bounds, untouched

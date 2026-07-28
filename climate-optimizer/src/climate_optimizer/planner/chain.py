@@ -1,10 +1,17 @@
 """The LangChain planner chain (spec 04 §1, spec 12 §LLM planning).
 
-The planner is the chain ``ChatPromptTemplate | LLM | StructuredOutputParser``, with structured plan
-output parsed via ``.with_structured_output(OptimizerPlan)`` and an optional secondary backend wired
-through ``.with_fallbacks([...])`` — LangChain's composition replacing bespoke prompt construction,
-output parsing, and try/catch failover, which keeps the invocation strategy backend-agnostic
-(P3-MOD-1, RFC-004).
+The planner is the chain ``ChatPromptTemplate | LLM | StructuredOutputParser``, with the model's
+one semantic decision parsed via ``.with_structured_output(SetpointDecision)`` — a deliberately
+*small* structured shape (the immediate setpoint bundle plus confidence and explanation) — and an
+optional secondary backend wired through ``.with_fallbacks([...])``. LangChain's composition
+replaces bespoke prompt construction, output parsing, and try/catch failover, keeping the invocation
+strategy backend-agnostic (P3-MOD-1, RFC-004). The full ``OptimizerPlan`` (timestamp, single-point
+trajectory, ``immediate_setpoints`` equality) is assembled deterministically downstream in
+:meth:`~climate_optimizer.planner.planner.Planner.propose`, not by the model.
+
+For the Ollama backend the structured output pins ``method="json_schema"`` — Ollama's JSON-Schema
+constrained decoding (grammar) — so a small local model's completion always parses and matches the
+shape; cloud backends keep their tool-calling default.
 
 Each backend leg stamps its own :class:`BackendOutput` provenance, so a failover is *recorded* rather
 than hidden: the fallback is a different model held to its own evaluation baseline, and every plan
@@ -33,7 +40,7 @@ from langchain_core.runnables import Runnable, RunnableLambda
 from pydantic import BaseModel
 
 from ..config import Settings
-from ..models import BackendRole, OptimizerPlan, Provider
+from ..models import BackendRole, OptimizerPlan, Provider, SetpointDecision
 
 
 class PromptNotFoundError(Exception):
@@ -45,8 +52,23 @@ class ProviderNotConfiguredError(Exception):
 
 
 @dataclass(frozen=True)
+class BackendDraft:
+    """The model's raw structured decision plus the backend provenance that produced it.
+
+    What the chain returns: the small :class:`SetpointDecision` the model emitted, stamped with the
+    ``(provider, model, role)`` it came from. :meth:`Planner.propose` clamps it to the crop-safe
+    bounds and assembles the full :class:`BackendOutput`.
+    """
+
+    decision: SetpointDecision
+    provider: Provider
+    model: str
+    role: BackendRole
+
+
+@dataclass(frozen=True)
 class BackendOutput:
-    """A parsed plan plus the backend provenance that produced it."""
+    """The assembled plan plus the backend provenance that produced it (built in ``propose``)."""
 
     plan: OptimizerPlan
     provider: Provider
@@ -54,8 +76,8 @@ class BackendOutput:
     role: BackendRole
 
 
-# The chain's input is the templated human turn; its output carries provenance alongside the plan.
-PlannerChain = Runnable[dict[str, Any], BackendOutput]
+# The chain's input is the templated human turn; its output is the model's decision plus provenance.
+PlannerChain = Runnable[dict[str, Any], BackendDraft]
 
 
 def _prompts_dir() -> Path:
@@ -131,20 +153,25 @@ def _leg(
     model: str,
     role: BackendRole,
 ) -> PlannerChain:
-    """One backend's chain: prompt → structured plan → provenance-stamped output."""
+    """One backend's chain: prompt → structured decision → provenance-stamped draft."""
 
-    def stamp(parsed: dict[str, Any] | BaseModel) -> BackendOutput:
+    def stamp(parsed: dict[str, Any] | BaseModel) -> BackendDraft:
         # ``with_structured_output`` may hand back either the parsed model or a raw dict depending
         # on the backend's tool-calling support; normalize to the validated model either way.
-        if isinstance(parsed, OptimizerPlan):
-            plan = parsed
+        if isinstance(parsed, SetpointDecision):
+            decision = parsed
         else:
             payload = parsed if isinstance(parsed, dict) else parsed.model_dump()
-            plan = OptimizerPlan.model_validate(payload)
-        return BackendOutput(plan=plan, provider=provider, model=model, role=role)
+            decision = SetpointDecision.model_validate(payload)
+        return BackendDraft(decision=decision, provider=provider, model=model, role=role)
 
-    structured = chat_model.with_structured_output(OptimizerPlan)
-    stamper = RunnableLambda[dict[str, Any] | BaseModel, BackendOutput](stamp)
+    # Ollama pins JSON-Schema constrained decoding (grammar) so the completion always parses and
+    # matches the shape; cloud backends keep their tool-calling default.
+    if provider is Provider.OLLAMA:
+        structured = chat_model.with_structured_output(SetpointDecision, method="json_schema")
+    else:
+        structured = chat_model.with_structured_output(SetpointDecision)
+    stamper = RunnableLambda[dict[str, Any] | BaseModel, BackendDraft](stamp)
     chain: PlannerChain = prompt | structured | stamper
     return chain
 

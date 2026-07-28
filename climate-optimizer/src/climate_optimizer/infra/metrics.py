@@ -53,6 +53,12 @@ PLANNER_SUPPRESSED_TOTAL = Counter(
     labelnames=("greenhouse_id",),
 )
 
+PLANNER_CLAMPED_TOTAL = Counter(
+    "optimizer_planner_clamped_total",
+    "Cycles where a proposed target was pulled back to its crop-safe edge before applying.",
+    labelnames=("greenhouse_id",),
+)
+
 LAST_SUCCESSFUL_CYCLE_TIMESTAMP = Gauge(
     "optimizer_last_successful_cycle_timestamp_seconds",
     "Unix timestamp of the last cycle that applied a plan (0 before the first).",

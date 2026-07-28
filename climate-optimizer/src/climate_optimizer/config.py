@@ -61,7 +61,7 @@ class LlmSettings(_Group):
 
     provider: Provider = Provider.OLLAMA
     model: str = "qwen2.5:7b"
-    prompt_version: str = Field(default="v3", min_length=1)
+    prompt_version: str = Field(default="v4", min_length=1)
     endpoint: str = "http://ollama:11434"
     fallback_provider: str = ""
     fallback_model: str = ""
@@ -69,6 +69,9 @@ class LlmSettings(_Group):
     temperature: float = Field(default=0.0, ge=0)
     top_p: float = Field(default=1.0, ge=0, le=1)
     output_token_budget: int = Field(default=2048, gt=0)
+    # Per-call budget for the chain invocation — a sub-budget under service.cycle_timeout_seconds so a
+    # slow backend is attributed to llm_unavailable rather than a whole-cycle cycle_timeout (spec 04).
+    request_timeout_seconds: float = Field(default=75.0, gt=0)
     available_models: dict[str, list[str]] = Field(
         default_factory=lambda: {
             "ollama": ["llama3.2", "mistral", "qwen2.5:7b", "llama3.1:8b"],

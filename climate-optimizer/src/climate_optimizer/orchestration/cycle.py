@@ -59,6 +59,7 @@ from ..models import (
 from ..planner import (
     ContextBudgetExceededError,
     Planner,
+    PlannerNoChange,
     PlannerParseError,
     PlannerUnavailableError,
     choose_horizon,
@@ -376,6 +377,14 @@ async def _deliberate(
             model=runtime.model,
             now=frame.now,
         )
+    except PlannerNoChange as err:
+        # The model deliberately proposed no change: a benign extend, not an escalation. The last
+        # applied bundle stays in force and nothing is written (spec 06 §1).
+        raise _Held(
+            OutcomeStatus.EXTENDED,
+            None,
+            "planner proposed no setpoint change; holding the baseline",
+        ) from err
     except PlannerParseError as err:
         raise _Held(OutcomeStatus.ESCALATED, ReasonCode.PLAN_UNPARSEABLE, str(err)) from err
     except (PlannerUnavailableError, ContextBudgetExceededError) as err:
@@ -390,6 +399,20 @@ async def _deliberate(
     )
     if proposal.output.role is BackendRole.FALLBACK:
         metrics.PLANNER_FAILOVER_TOTAL.labels(frame.greenhouse_id).inc()
+
+    # A stray target pulled back to its crop-safe edge (spec 06 §1) — applied, not escalated, but
+    # surfaced so a persistently-clamping model is visible without reading each plan's explanation.
+    if proposal.clamped_fields:
+        metrics.PLANNER_CLAMPED_TOTAL.labels(frame.greenhouse_id).inc()
+        logger.info(
+            "planner output clamped to crop-safe bounds",
+            extra={
+                "event": "optimizer_plan_clamped",
+                "optimizer_run_id": str(frame.run_id),
+                "greenhouse_id": frame.greenhouse_id,
+                "clamped_fields": list(proposal.clamped_fields),
+            },
+        )
 
     try:
         schema_validation.validate_optimizer_plan(plan.model_dump(mode="json", exclude_none=True))
