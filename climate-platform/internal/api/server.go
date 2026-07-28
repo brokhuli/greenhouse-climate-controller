@@ -124,6 +124,7 @@ func (s *Server) routes(router *echo.Echo) {
 	api.PUT("/greenhouses/:id/assignment", s.setAssignment, operator)
 
 	api.GET("/events", s.listEvents)
+	api.GET("/active-alerts", s.listActiveAlerts)
 	api.GET("/stream", s.stream) // WebSocket live fan-out (platform-dashboard-live-ws)
 
 	// (3) Optimizer operator console: the Go API proxies/aggregates the optimizer's own

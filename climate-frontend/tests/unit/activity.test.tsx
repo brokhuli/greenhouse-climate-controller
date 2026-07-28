@@ -20,6 +20,42 @@ describe("ActivityFeed", () => {
     expect(screen.getByText(/info \(1\)/i)).toBeInTheDocument();
   });
 
+  it("shows a filter-scoped active-alert triage summary", () => {
+    const client = makeClient();
+    client.setQueryData(queryKeys.fleet(), [
+      sampleSummary({ id: "gh-a" }),
+      sampleSummary({ id: "gh-b" }),
+    ]);
+    client.setQueryData(queryKeys.events({}), [sampleEvent()]);
+    client.setQueryData(queryKeys.activeAlerts({}), [
+      {
+        greenhouseId: "gh-a",
+        component: "temperature",
+        zoneId: null,
+        faultType: "critical_temperature",
+        kind: "interlock",
+        severity: "critical",
+        since: new Date(),
+      },
+      {
+        greenhouseId: "gh-a",
+        component: "humidity",
+        zoneId: null,
+        faultType: "stuck",
+        kind: "fault",
+        severity: "warning",
+        since: new Date(),
+      },
+    ]);
+    renderWithProviders(<ActivityFeed />, { client });
+
+    expect(screen.getByText("Active Alarms").parentElement).toHaveTextContent("1");
+    expect(screen.getByText("Active Warnings").parentElement).toHaveTextContent("1");
+    expect(screen.getByText("Affected Greenhouses").parentElement).toHaveTextContent("1");
+    expect(screen.getByText("Clear Greenhouses").parentElement).toHaveTextContent("1");
+    expect(screen.getByText("No matching active alerts")).toBeInTheDocument();
+  });
+
   it("renders the kind and severity filter controls", () => {
     const client = makeClient();
     client.setQueryData(queryKeys.fleet(), [sampleSummary()]);

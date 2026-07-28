@@ -81,6 +81,26 @@ func TestSetSensorFaultsClearsAbsent(t *testing.T) {
 	}
 }
 
+func TestSetActiveFaultsPreservesSinceAndReportsChanges(t *testing.T) {
+	f := NewFleet(10 * time.Second)
+	t0 := time.Date(2026, 7, 22, 12, 0, 0, 0, time.UTC)
+	key := FaultKey{Component: "temperature"}
+	faults := map[FaultKey]ActiveFault{key: {FaultType: "critical_temperature", Severity: "alarm"}}
+	if !f.SetActiveFaults("gh-a", faults, t0) {
+		t.Fatal("initial active fault should be a change")
+	}
+	if f.SetActiveFaults("gh-a", faults, t0.Add(time.Minute)) {
+		t.Fatal("unchanged active fault should not emit an update")
+	}
+	snapshot, _ := f.Snapshot("gh-a")
+	if !snapshot.ActiveFaults[key].Since.Equal(t0) {
+		t.Fatalf("since = %v, want %v", snapshot.ActiveFaults[key].Since, t0)
+	}
+	if !f.SetActiveFaults("gh-a", map[FaultKey]ActiveFault{}, t0.Add(2*time.Minute)) {
+		t.Fatal("cleared active fault should be a change")
+	}
+}
+
 func TestSnapshotMapsAreCopies(t *testing.T) {
 	f := NewFleet(10 * time.Second)
 	t0 := time.Date(2026, 7, 22, 12, 0, 0, 0, time.UTC)

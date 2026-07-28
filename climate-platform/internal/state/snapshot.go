@@ -23,6 +23,14 @@ type SensorFault struct {
 	Since time.Time
 }
 
+// ActiveFault is one fault in the controller's complete retained fault set. Severity is the
+// controller grading (warning/alarm), not the dashboard's event grading.
+type ActiveFault struct {
+	FaultType string
+	Severity  string
+	Since     time.Time
+}
+
 // ControllerSnapshot is a greenhouse's last-observed controller state: its operating mode,
 // per-actuator readback health, and active sensor faults. It backs the planning-context
 // read's data-quality block (contracts/platform-optimizer-planning-rest DataQuality), whose
@@ -33,6 +41,7 @@ type ControllerSnapshot struct {
 	Mode           string
 	ActuatorHealth map[ActuatorKey]string
 	SensorFaults   map[FaultKey]SensorFault
+	ActiveFaults   map[FaultKey]ActiveFault
 }
 
 // SetControllerMode records a greenhouse's operating mode from its system-state frame.
@@ -80,6 +89,27 @@ func (f *Fleet) SetSensorFaults(id string, faults map[FaultKey]string, ts time.T
 	ent.sensorFaults = active
 }
 
+// SetActiveFaults replaces the complete active fault set from a retained controller state frame.
+// It returns true when a raise, clear, or changed fault should be published to dashboard clients.
+func (f *Fleet) SetActiveFaults(id string, faults map[FaultKey]ActiveFault, ts time.Time) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	ent := f.ensure(id)
+	active := make(map[FaultKey]ActiveFault, len(faults))
+	changed := len(ent.activeFaults) != len(faults)
+	for key, fault := range faults {
+		fault.Since = ts
+		if previous, ok := ent.activeFaults[key]; ok && previous.FaultType == fault.FaultType && previous.Severity == fault.Severity {
+			fault.Since = previous.Since
+		} else {
+			changed = true
+		}
+		active[key] = fault
+	}
+	ent.activeFaults = active
+	return changed
+}
+
 // Snapshot returns a greenhouse's controller snapshot. The maps are copies, so a caller may
 // read them without holding the lock. found is false for an unknown greenhouse.
 func (f *Fleet) Snapshot(id string) (ControllerSnapshot, bool) {
@@ -93,12 +123,16 @@ func (f *Fleet) Snapshot(id string) (ControllerSnapshot, bool) {
 		Mode:           ent.controllerMode,
 		ActuatorHealth: make(map[ActuatorKey]string, len(ent.actuatorHealth)),
 		SensorFaults:   make(map[FaultKey]SensorFault, len(ent.sensorFaults)),
+		ActiveFaults:   make(map[FaultKey]ActiveFault, len(ent.activeFaults)),
 	}
 	for key, health := range ent.actuatorHealth {
 		snapshot.ActuatorHealth[key] = health
 	}
 	for key, fault := range ent.sensorFaults {
 		snapshot.SensorFaults[key] = fault
+	}
+	for key, fault := range ent.activeFaults {
+		snapshot.ActiveFaults[key] = fault
 	}
 	return snapshot, true
 }

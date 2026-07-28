@@ -43,6 +43,7 @@ type entry struct {
 	controllerMode string
 	actuatorHealth map[ActuatorKey]string
 	sensorFaults   map[FaultKey]SensorFault
+	activeFaults   map[FaultKey]ActiveFault
 }
 
 // Fleet is the concurrency-safe live view, keyed by greenhouse id.

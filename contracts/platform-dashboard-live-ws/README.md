@@ -16,7 +16,7 @@ This contract formalizes the *client's working contract* previously sketched in
 [`05-spec-frontend-data-model.md §5`](../../docs/specs/design/frontend/05-spec-frontend-data-model.md#5-websocket-message-taxonomy);
 the SPA's Zod schemas in `src/api/schemas.ts` validate against it.
 
-**Scope — server→client push only.** This contract is the four fan-out frames the platform sends. The
+**Scope — server→client push only.** This contract is the five fan-out frames the platform sends. The
 SPA subscribes to "the greenhouses currently in view," but that **subscription granularity is
 server-decided** ([architecture §4](../../docs/specs/design/frontend/03-spec-frontend-architecture.md#4-runtime-data-flow))
 and is **not** a wire contract here — there are no client→server frames. The direction is
@@ -35,6 +35,7 @@ telemetry.schema.json      # type:"telemetry" — readings[] (+ optional actuato
 status.schema.json         # type:"status"    — status: connectivity (+ optional time_scale, sim-only)
 drift.schema.json          # type:"drift"     — drift: boolean            (2b)
 event.schema.json          # type:"event"     — kind / severity / message / source
+active-alerts.schema.json  # type:"active_alerts" — replacement snapshot of active faults
 examples/                  # fixtures used as tests (see below)
 ```
 
@@ -53,6 +54,7 @@ One socket; every frame is discriminated by `type`. The effect-on-client column 
 | `status` | envelope + `status` (connectivity) (+ optional `time_scale`, sim-only) | patch `greenhouseSummary.status` — and, when present, `greenhouseSummary.time_scale` (the per-greenhouse speed indicator) — in the fleet cache | 2a | [`status.schema.json`](./status.schema.json) |
 | `drift` | envelope + `drift` (boolean) | patch `greenhouseSummary.drift`; raise a drift event | 2b | [`drift.schema.json`](./drift.schema.json) |
 | `event` | envelope + `kind` / `severity` / `message` / `source` | prepend to the activity feed; raise a toast if `critical` | 2a | [`event.schema.json`](./event.schema.json) |
+| `active_alerts` | envelope + current `alerts[]` | replace the greenhouse's active-alert snapshot used by the Activity triage summary | 2b | [`active-alerts.schema.json`](./active-alerts.schema.json) |
 
 `message.schema.json` is the consumer entry point: a `oneOf` of the four known frames plus an
 unknown-type fallback. A consumer validates each received frame against it, dispatches known `type`

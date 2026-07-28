@@ -291,6 +291,11 @@ func (ing *Ingester) onState(payload []byte, topicID string, now time.Time) {
 	// active fault set — both data-quality signals the Phase 3 planning-context read serves.
 	ing.fleet.SetControllerMode(snapshot.GreenhouseID, snapshot.Controller.Mode)
 	ing.fleet.SetSensorFaults(snapshot.GreenhouseID, sensorFaults(snapshot), ts)
+	alertsChanged := ing.fleet.SetActiveFaults(snapshot.GreenhouseID, activeFaults(snapshot), ts)
+	if alertsChanged {
+		liveSnapshot, _ := ing.fleet.Snapshot(snapshot.GreenhouseID)
+		ing.hub.Broadcast(ws.NewActiveAlerts(snapshot.GreenhouseID, ts, liveSnapshot.ActiveFaults))
+	}
 	degraded := !snapshot.Controller.Healthy || snapshot.Controller.Mode != "normal"
 	live, statusChanged := ing.fleet.SetDegraded(snapshot.GreenhouseID, degraded, now)
 	if statusChanged {

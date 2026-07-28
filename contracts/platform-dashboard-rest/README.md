@@ -87,6 +87,7 @@ nginx-proxied prefix.
 | `PATCH /api/greenhouses/{greenhouse_id}/sim/time-scale` | Set one controller's sim-clock speed *(sim-only)* | 2a | 200 `TimeScale` | 404, 422 |
 | `PATCH /api/sim/time-scale` | Set the whole fleet's sim-clock speed *(sim-only)* | 2a | 200 `FleetTimeScaleResult` | 422 |
 | `GET /api/events?greenhouse_id&kind&severity` | Activity feed | 2a | 200 `EventEntry[]` | — |
+| `GET /api/active-alerts?greenhouse_id&kind&severity` | Current controller-reported alerts | 2b | 200 `ActiveAlert[]` | — |
 | `GET /api/profiles` | Crop-profile library | 2b | 200 `CropProfile[]` | — |
 | `POST /api/profiles` | Create a profile | 2b | 201 `CropProfile` | 401, 403, 422 |
 | `GET /api/profiles/{profile_id}` | One profile | 2b | 200 `CropProfile` | 404 |

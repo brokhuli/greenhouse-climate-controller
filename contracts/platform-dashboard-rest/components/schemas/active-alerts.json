@@ -1,0 +1,16 @@
+{
+  "ActiveAlert": {
+    "type": "object",
+    "required": ["greenhouse_id", "component", "zone_id", "fault_type", "kind", "severity", "since"],
+    "properties": {
+      "greenhouse_id": { "$ref": "./common.json#/Slug" },
+      "component": { "type": "string" },
+      "zone_id": { "anyOf": [{ "$ref": "./common.json#/Slug" }, { "type": "null" }] },
+      "fault_type": { "type": "string" },
+      "kind": { "enum": ["fault", "interlock"] },
+      "severity": { "enum": ["warning", "critical"] },
+      "since": { "type": "string", "format": "date-time" }
+    },
+    "additionalProperties": false
+  }
+}

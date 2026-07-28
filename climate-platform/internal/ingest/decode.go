@@ -126,13 +126,6 @@ type faultPayload struct {
 	Message   string `json:"message"`
 }
 
-// interlockFaults are the safety-interlock triggers surfaced as kind "interlock".
-var interlockFaults = map[string]bool{
-	"critical_temperature":   true,
-	"co2_ceiling":            true,
-	"irrigation_no_response": true,
-}
-
 func decodeFault(data []byte) (domain.Event, error) {
 	var payload faultPayload
 	if err := json.Unmarshal(data, &payload); err != nil {
@@ -143,7 +136,7 @@ func decodeFault(data []byte) (domain.Event, error) {
 		return domain.Event{}, err
 	}
 	kind := "fault"
-	if interlockFaults[payload.FaultType] {
+	if domain.InterlockFaults[payload.FaultType] {
 		kind = "interlock"
 	}
 	// Map the controller's warning/alarm to the platform's dashboard grading.
@@ -214,6 +207,17 @@ func sensorFaults(payload systemStatePayload) map[state.FaultKey]string {
 			continue
 		}
 		faults[state.FaultKey{Component: fault.Component, ZoneID: zoneKey(fault.ZoneID)}] = fault.FaultType
+	}
+	return faults
+}
+
+func activeFaults(payload systemStatePayload) map[state.FaultKey]state.ActiveFault {
+	faults := make(map[state.FaultKey]state.ActiveFault, len(payload.Faults))
+	for _, fault := range payload.Faults {
+		faults[state.FaultKey{Component: fault.Component, ZoneID: zoneKey(fault.ZoneID)}] = state.ActiveFault{
+			FaultType: fault.FaultType,
+			Severity:  fault.Severity,
+		}
 	}
 	return faults
 }

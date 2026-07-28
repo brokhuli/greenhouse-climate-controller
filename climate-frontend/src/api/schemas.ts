@@ -240,6 +240,16 @@ export const wireEventEntry = z.object({
   source: z.string().optional(),
 });
 
+export const wireActiveAlert = z.object({
+  greenhouse_id: slug,
+  component: z.string(),
+  zone_id: slug.nullable(),
+  fault_type: z.string(),
+  kind: z.enum(["fault", "interlock"]),
+  severity: z.enum(["warning", "critical"]),
+  since: isoTimestamp,
+});
+
 export const wireTimeScalePatch = z.object({ scale: z.number().min(0.25).max(32) });
 
 export const wireTimeScale = z.object({
@@ -272,6 +282,7 @@ export const wireErrorBody = z.object({ error: z.string() });
 
 export const wireFleet = z.array(wireGreenhouseSummary);
 export const wireEventFeed = z.array(wireEventEntry);
+export const wireActiveAlertFeed = z.array(wireActiveAlert);
 
 // ---------------------------------------------------------------------------
 // WebSocket wire frames (contracts/platform-dashboard-live-ws) — flat envelope + payload, strictly closed.
@@ -346,19 +357,41 @@ export const eventFrame = z
   })
   .strict();
 
+export const activeAlertsFrame = z
+  .object({
+    ...wsEnvelope,
+    zone_id: z.null(),
+    type: z.literal("active_alerts"),
+    alerts: z.array(
+      z
+        .object({
+          component: z.string(),
+          zone_id: slug.nullable(),
+          fault_type: z.string(),
+          kind: z.enum(["fault", "interlock"]),
+          severity: z.enum(["warning", "critical"]),
+          since: isoTimestamp,
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+
 /** Known frame schemas keyed by `type`; `ws.ts` dispatches on this and ignores unknown types. */
 export const KNOWN_FRAME_SCHEMAS = {
   telemetry: telemetryFrame,
   status: statusFrame,
   drift: driftFrame,
   event: eventFrame,
+  active_alerts: activeAlertsFrame,
 } as const;
 
 export type TelemetryFrame = z.infer<typeof telemetryFrame>;
 export type StatusFrame = z.infer<typeof statusFrame>;
 export type DriftFrame = z.infer<typeof driftFrame>;
 export type EventFrame = z.infer<typeof eventFrame>;
-export type KnownFrame = TelemetryFrame | StatusFrame | DriftFrame | EventFrame;
+export type ActiveAlertsFrame = z.infer<typeof activeAlertsFrame>;
+export type KnownFrame = TelemetryFrame | StatusFrame | DriftFrame | EventFrame | ActiveAlertsFrame;
 export type FrameType = keyof typeof KNOWN_FRAME_SCHEMAS;
 
 // ---------------------------------------------------------------------------
@@ -481,6 +514,16 @@ export type EventEntry = {
   severity: EventSeverity;
   message: string;
   source?: string;
+};
+
+export type ActiveAlert = {
+  greenhouseId: string;
+  component: string;
+  zoneId: string | null;
+  faultType: string;
+  kind: "fault" | "interlock";
+  severity: "warning" | "critical";
+  since: Date;
 };
 
 export type TimeScale = { scale: number; tickIndex: number; updatedAt: Date };
@@ -629,6 +672,16 @@ export const toEventEntry = (w: z.infer<typeof wireEventEntry>): EventEntry => (
   severity: w.severity,
   message: w.message,
   source: w.source,
+});
+
+export const toActiveAlert = (w: z.infer<typeof wireActiveAlert>): ActiveAlert => ({
+  greenhouseId: w.greenhouse_id,
+  component: w.component,
+  zoneId: w.zone_id,
+  faultType: w.fault_type,
+  kind: w.kind,
+  severity: w.severity,
+  since: new Date(w.since),
 });
 
 export const toTimeScale = (w: z.infer<typeof wireTimeScale>): TimeScale => ({

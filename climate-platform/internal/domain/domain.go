@@ -98,6 +98,13 @@ var EventSeverities = map[string]bool{
 	"critical": true,
 }
 
+// InterlockFaults are controller faults surfaced as the distinct dashboard interlock kind.
+var InterlockFaults = map[string]bool{
+	"critical_temperature":   true,
+	"co2_ceiling":            true,
+	"irrigation_no_response": true,
+}
+
 // Reading is one time-stamped sensor sample as stored and served.
 type Reading struct {
 	GreenhouseID string

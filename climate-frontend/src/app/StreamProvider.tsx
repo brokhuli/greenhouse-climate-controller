@@ -6,6 +6,7 @@ import { useToast } from "../components/ui/toast-context";
 import {
   applyDriftFrame,
   applyEventFrame,
+  applyActiveAlertsFrame,
   applyStatusFrame,
   applyTelemetryFrame,
   eventFrameToEntry,
@@ -54,6 +55,7 @@ export function StreamProvider({ children }: { children: ReactNode }) {
             });
           }
         },
+        onActiveAlerts: (frame) => applyActiveAlertsFrame(queryClientRef.current, frame),
         // A known-type frame the platform sent but our schema rejects: the wire has drifted. Tally it
         // so the TopBar can flag that live surfaces may be stale (setSchemaDrift is stable, so the
         // once-created handler can call it directly without a ref).

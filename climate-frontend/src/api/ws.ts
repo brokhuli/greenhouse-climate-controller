@@ -1,10 +1,12 @@
 import type { ZodError } from "zod";
 import {
   driftFrame,
+  activeAlertsFrame,
   eventFrame,
   statusFrame,
   telemetryFrame,
   type DriftFrame,
+  type ActiveAlertsFrame,
   type EventFrame,
   type FrameType,
   type StatusFrame,
@@ -34,6 +36,7 @@ export type FrameHandlers = {
   onStatus?: (frame: StatusFrame) => void;
   onDrift?: (frame: DriftFrame) => void;
   onEvent?: (frame: EventFrame) => void;
+  onActiveAlerts?: (frame: ActiveAlertsFrame) => void;
   /** Called for envelope-valid-but-unknown frame types (forward compatibility). */
   onUnknown?: (raw: unknown) => void;
   /**
@@ -191,6 +194,12 @@ export class StreamClient {
         const parsed = eventFrame.safeParse(raw);
         if (parsed.success) this.handlers.onEvent?.(parsed.data);
         else this.reject("event", parsed.error);
+        return;
+      }
+      case "active_alerts": {
+        const parsed = activeAlertsFrame.safeParse(raw);
+        if (parsed.success) this.handlers.onActiveAlerts?.(parsed.data);
+        else this.reject("active_alerts", parsed.error);
         return;
       }
       default:
