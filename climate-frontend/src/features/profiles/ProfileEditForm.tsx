@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type InputHTMLAttributes } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { ApiError } from "../../api/client";
 import { useCreateProfile, useUpdateProfile } from "../../api/queries/profiles";
@@ -325,7 +325,7 @@ export function ProfileEditForm({
   };
 
   return (
-    <div className="flex max-h-[70vh] flex-col gap-4 overflow-y-auto pr-1">
+    <div className="flex max-h-[80vh] flex-col gap-4 overflow-x-hidden overflow-y-auto pr-1">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <TextField
           label="Profile id"
@@ -400,34 +400,46 @@ export function ProfileEditForm({
                 The optimizer may refine each target within its crop-safe min/max; the target itself
                 must sit inside the range.
               </p>
+              <div className="hidden gap-x-3 sm:grid sm:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
+                <span />
+                <span className="section-label">Target</span>
+                <span className="section-label">Crop-safe min</span>
+                <span className="section-label">Crop-safe max</span>
+              </div>
               {SCALARS.map((field) => {
                 const bound = stage.bounds?.[field.key];
                 return (
                   <div
                     key={field.key}
-                    className="grid grid-cols-1 gap-2 sm:grid-cols-[1.4fr_1fr_1fr]"
+                    className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] sm:items-center sm:gap-x-3 sm:gap-y-0"
                   >
-                    <TextField
-                      label={field.label}
-                      type="number"
-                      step={field.step}
+                    <label
+                      htmlFor={`stage-${index}-${field.key}`}
+                      className="text-fg-default text-sm"
+                    >
+                      {field.label}
+                    </label>
+                    <NumberInput
+                      id={`stage-${index}-${field.key}`}
                       name={`stage-${index}-${field.key}`}
+                      label={`${field.label} target`}
+                      step={field.step}
                       value={stage.targets[field.key]}
                       onChange={(e) => setTarget(index, field.key, Number(e.target.value))}
                     />
-                    <TextField
-                      label="Crop-safe min"
-                      type="number"
-                      step={field.step}
+                    <RangeCell
+                      caption="Crop-safe min"
                       name={`stage-${index}-${field.key}-min`}
+                      label={`${field.label} crop-safe min`}
+                      step={field.step}
                       value={bound?.min ?? ""}
                       onChange={(e) => setBound(index, field.key, "min", Number(e.target.value))}
                     />
-                    <TextField
-                      label="Crop-safe max"
-                      type="number"
-                      step={field.step}
+                    <RangeCell
+                      caption="Crop-safe max"
                       name={`stage-${index}-${field.key}-max`}
+                      label={`${field.label} crop-safe max`}
+                      step={field.step}
                       value={bound?.max ?? ""}
                       onChange={(e) => setBound(index, field.key, "max", Number(e.target.value))}
                     />
@@ -445,29 +457,34 @@ export function ProfileEditForm({
                   The optimizer may refine every zone's irrigation targets within these bounds; each
                   zone's target must sit inside the range.
                 </p>
+                <div className="hidden gap-x-3 sm:grid sm:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)]">
+                  <span />
+                  <span className="section-label">Crop-safe min</span>
+                  <span className="section-label">Crop-safe max</span>
+                </div>
                 {ZONE_BOUND_FIELDS.map((field) => {
                   const bound = stage.bounds?.zones?.[field.key];
                   return (
                     <div
                       key={field.key}
-                      className="grid grid-cols-1 gap-2 sm:grid-cols-[1.4fr_1fr_1fr]"
+                      className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)] sm:items-center sm:gap-x-3 sm:gap-y-0"
                     >
-                      <div className="text-fg-muted flex items-end pb-2 text-sm">{field.label}</div>
-                      <TextField
-                        label="Crop-safe min"
-                        type="number"
-                        step={field.step}
+                      <div className="text-fg-default text-sm">{field.label}</div>
+                      <RangeCell
+                        caption="Crop-safe min"
                         name={`stage-${index}-zone-${field.key}-min`}
+                        label={`${field.label} crop-safe min`}
+                        step={field.step}
                         value={bound?.min ?? ""}
                         onChange={(e) =>
                           setZoneBound(index, field.key, "min", Number(e.target.value))
                         }
                       />
-                      <TextField
-                        label="Crop-safe max"
-                        type="number"
-                        step={field.step}
+                      <RangeCell
+                        caption="Crop-safe max"
                         name={`stage-${index}-zone-${field.key}-max`}
+                        label={`${field.label} crop-safe max`}
+                        step={field.step}
                         value={bound?.max ?? ""}
                         onChange={(e) =>
                           setZoneBound(index, field.key, "max", Number(e.target.value))
@@ -587,6 +604,39 @@ function ZoneEditor({
           Add zone
         </Button>
       </div>
+    </div>
+  );
+}
+
+// A label-less numeric input matching the app's field styling. The visible column caption names the
+// column; `label` supplies the accessible name in place of a per-input <label>. `w-full min-w-0` lets
+// it shrink inside the spec-table's `minmax(0, …)` grid tracks so the row never overflows the dialog.
+function NumberInput({
+  label,
+  className = "",
+  ...rest
+}: InputHTMLAttributes<HTMLInputElement> & { label: string }) {
+  return (
+    <input
+      type="number"
+      aria-label={label}
+      className={`border-border bg-surface-2 text-fg-default focus:border-accent w-full min-w-0 rounded-md border px-3 text-base outline-none ${className}`}
+      style={{ height: "var(--size-control-md)" }}
+      {...rest}
+    />
+  );
+}
+
+// One crop-safe min/max cell: the numeric input plus a caption that shows only on the stacked mobile
+// layout (the shared column header names it on wider screens, so the caption is `sm:hidden`).
+function RangeCell({
+  caption,
+  ...input
+}: InputHTMLAttributes<HTMLInputElement> & { label: string; caption: string }) {
+  return (
+    <div className="flex flex-col gap-1 sm:block">
+      <span className="section-label sm:hidden">{caption}</span>
+      <NumberInput {...input} />
     </div>
   );
 }
