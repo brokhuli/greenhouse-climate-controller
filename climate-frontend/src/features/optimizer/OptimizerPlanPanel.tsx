@@ -210,7 +210,6 @@ export function OptimizerPlanPanel({
                 : "Cycle ran; nothing applied."}
             </p>
           )}
-
         </div>
       )}
     </Card>

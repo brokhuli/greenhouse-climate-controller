@@ -66,13 +66,13 @@ func TestOptimizerOutcomeIngestHTTP(t *testing.T) {
 
 	runID := "018f9c2e-6b7a-7c31-9e4d-2a1b5c6d7e8f"
 
-	// A run-failure reason maps to optimizer_run_failed; a held reason to optimizer_plan_escalated.
+	// Failed outcomes map to optimizer_run_failed; held outcomes map to optimizer_plan_held.
 	client.do(http.MethodPost, "/api/greenhouses/gh-a/optimizer-outcomes", map[string]any{
-		"optimizer_run_id": runID, "status": "escalated", "reason_code": "llm_unavailable",
+		"optimizer_run_id": runID, "status": "failed", "reason_code": "llm_unavailable",
 		"message": "planner backend unreachable",
 	}, http.StatusAccepted)
 	client.do(http.MethodPost, "/api/greenhouses/gh-a/optimizer-outcomes", map[string]any{
-		"optimizer_run_id": runID, "status": "escalated", "reason_code": "low_confidence",
+		"optimizer_run_id": runID, "status": "held", "reason_code": "low_confidence",
 		"message": "confidence 0.42",
 	}, http.StatusAccepted)
 	// An applied report is a no-op on this channel (its write already emitted the event).
@@ -95,9 +95,9 @@ func TestOptimizerOutcomeIngestHTTP(t *testing.T) {
 		}
 	}
 
-	var escalated []eventRow
-	client.doInto(http.MethodGet, "/api/events?kind=optimizer_plan_escalated", nil, http.StatusOK, &escalated)
-	if len(escalated) != 1 {
-		t.Fatalf("want one optimizer_plan_escalated event, got %d: %+v", len(escalated), escalated)
+	var held []eventRow
+	client.doInto(http.MethodGet, "/api/events?kind=optimizer_plan_held", nil, http.StatusOK, &held)
+	if len(held) != 1 {
+		t.Fatalf("want one optimizer_plan_held event, got %d: %+v", len(held), held)
 	}
 }

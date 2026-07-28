@@ -104,8 +104,7 @@ export function FleetOptimizerRow({
   // have horizontal room. Offline greenhouses are not planning, so they show no pipeline.
   const pipeline = pipelineStages(entry, state, outcomeMessage);
   const terminalNode = pipeline.find(
-    (node) =>
-      node.state === "failed" || node.state === "held" || node.state === "unchanged",
+    (node) => node.state === "failed" || node.state === "held" || node.state === "unchanged",
   );
   const outcomeFeedback = outcomeMessage
     ? entry.status === "applied"

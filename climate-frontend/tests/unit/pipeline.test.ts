@@ -72,7 +72,11 @@ describe("pipelineStages — settled outcomes", () => {
 
   it("an unchanged cycle is marked unchanged at its stage", () => {
     const s = statesFor(
-      sampleFleetOptimizerGreenhouse({ status: "unchanged", inFlight: false, currentStage: "plan" }),
+      sampleFleetOptimizerGreenhouse({
+        status: "unchanged",
+        inFlight: false,
+        currentStage: "plan",
+      }),
     );
     expect(s.plan).toBe("unchanged");
     expect(s.forecast).toBe("done");
